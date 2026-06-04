@@ -1,0 +1,10 @@
+import { useQuery } from '@tanstack/react-query'
+import { getDashboardStats, getLowStock } from '../api/dashboard'
+
+export function useDashboardStats() {
+  return useQuery({ queryKey: ['admin', 'dashboard', 'stats'], queryFn: () => getDashboardStats() })
+}
+
+export function useLowStock() {
+  return useQuery({ queryKey: ['admin', 'dashboard', 'low-stock'], queryFn: () => getLowStock() })
+}

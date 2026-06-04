@@ -1,0 +1,61 @@
+import { apiClient } from '@/lib/api-client'
+import type { ApiResponse, PaginationMeta, Product, FulfillmentType } from '@/types'
+
+export interface ProductListParams {
+  page?: number
+  limit?: number
+  category?: string
+  fulfillmentType?: FulfillmentType
+  status?: 'active' | 'draft' | 'out'
+  available?: boolean
+  search?: string
+}
+
+export interface ProductInput {
+  title: { en: string; ar: string; tr: string }
+  category: string
+  images: string[]
+  variants: { denomination: string; price: number; resellerPrice?: number }[]
+  fulfillmentType: FulfillmentType
+  stock: number
+  available: boolean
+}
+
+const ADMIN = '/api/admin/products'
+
+export async function listProducts(
+  params: ProductListParams
+): Promise<ApiResponse<Product[]> & { meta?: PaginationMeta }> {
+  const q = new URLSearchParams()
+  if (params.page !== undefined) q.set('page', String(params.page))
+  if (params.limit !== undefined) q.set('limit', String(params.limit))
+  if (params.category) q.set('category', params.category)
+  if (params.fulfillmentType) q.set('fulfillmentType', params.fulfillmentType)
+  if (params.status) q.set('status', params.status)
+  if (params.available !== undefined) q.set('available', String(params.available))
+  if (params.search) q.set('search', params.search)
+  const qs = q.toString()
+  return apiClient.get<Product[]>(qs ? `${ADMIN}?${qs}` : ADMIN)
+}
+
+export function getProduct(id: string): Promise<ApiResponse<Product>> {
+  return apiClient.get<Product>(`${ADMIN}/${id}`)
+}
+
+export function createProduct(input: ProductInput): Promise<ApiResponse<Product>> {
+  return apiClient.post<Product>(ADMIN, input)
+}
+
+export function updateProduct(id: string, input: Partial<ProductInput>): Promise<ApiResponse<Product>> {
+  return apiClient.put<Product>(`${ADMIN}/${id}`, input)
+}
+
+export function deleteProduct(id: string): Promise<ApiResponse<unknown>> {
+  return apiClient.delete(`${ADMIN}/${id}`)
+}
+
+export type BulkAction = 'activate' | 'deactivate' | 'delete'
+
+export function bulkProductAction(ids: string[], action: BulkAction): Promise<ApiResponse<{ modified: number }>> {
+  return apiClient.post<{ modified: number }>(`${ADMIN}/bulk`, { ids, action })
+}

@@ -18,5 +18,9 @@ services:
   #   build: { context: ../web }
   #   ports: ["5173:80"]
   #   depends_on: [api]
+  # admin:
+  #   build: { context: ../admin }
+  #   ports: ["5174:80"]   # admin dashboard runs on its own port, separate from /web
+  #   depends_on: [api]
 volumes:
   mongo_data:

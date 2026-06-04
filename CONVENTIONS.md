@@ -3,7 +3,8 @@
 ## Repository Layout
 ```
 /api      Go backend
-/web      React + TypeScript frontend
+/web      React + TypeScript storefront (customer-facing)
+/admin    React + TypeScript admin console
 /deploy   Docker Compose, env examples
 ```
 
@@ -81,3 +82,38 @@ The visual identity ported from the Claude Design prototype is a **CSS-variable 
 
 ### Dark Mode
 Driven by the `[data-theme]` attribute on `<html>` (the CSS keys on it). `useThemeStore().setTheme('dark'|'light')` sets `data-theme` **and** toggles the `dark` class (so Tailwind `dark:` still works). Theme persists; **locale does not** — the app forces English on every load (handoff requirement), with Arabic/Turkish available via the language switcher.
+
+## Admin App (`/admin`)
+
+A **separate** Vite + React + TS app (port **5174**) for the internal team — ported from the Claude Design admin prototype. Same brand DNA as `/web`, adapted for a dense control-panel context (sidebar shell, compact tables, tighter radii). **Do not modify `/web` when changing `/admin`.**
+
+### Structure
+```
+/admin/src
+  app/          entry, providers, router (react-router-dom), RequireAdmin guard, nav config
+  components/   typed design-system primitives (Icon, Art, Badges, Charts, Controls,
+                Table, PageHead, Modal, States) + layout/ (Sidebar, Topbar, AdminLayout)
+  features/<area>/   one folder per admin area: pages/ (+ api/ hooks/ where wired)
+  lib/          api-client, query-client, utils (money/stockLevel), mock/demo.ts
+  i18n/         config + en (default) / ar / tr — chrome strings only (table data stays English)
+  stores/       zustand: auth, theme, locale, ui (sidebar collapsed)
+  styles/       base.css (brand tokens + primitives) + admin.css (admin chrome), ported verbatim
+  types/        shared API + domain types
+```
+
+### Key decisions (this slice)
+- **Design tokens are duplicated, not shared.** Chosen the pragmatic option over a `/packages/tokens` package: `admin/src/styles/base.css` + `admin/src/tailwind.config.ts` carry the same brand tokens as `/web`, mapped to the same CSS variables, plus admin-only fulfillment accents (`--ff-code/credit/transfer`). If a third consumer appears, promote these to a shared package.
+- **Auth logic is duplicated** (`admin/src/lib/api-client.ts`) rather than imported from `/web` — same in-memory-token rule.
+- **Design system = ported CSS** (`base.css` + `admin.css`), NOT Tailwind `dark:` utilities — same approach as `/web`. Components emit the design classNames (`.abtn`, `.acard`, `.tbl`, `.bdg`, `.st-*`, `.ff-*`, `.kpi`, `.sidebar`, …); don't restyle them with Tailwind.
+- **Routing** uses `react-router-dom` (CONVENTIONS feature pattern), not the prototype's localStorage view-state. `RequireAdmin` redirects unauthenticated/non-admin users to `/login`. Theme persists; locale forced to English on load (same handoff rule as `/web`).
+- **Fulfillment color-coding** is consistent everywhere via `<FfBadge>`: blue = `code`, green = `account_credit` (`credit`), orange = `transfer`.
+
+### What is wired vs mock
+- **Wired to the Go API:** `products` (list/create/edit/delete/bulk), `inventory` (code stock, bulk upload, threshold config, code audit), and the dashboard's KPIs + low-stock panel.
+- **Mock-driven (with `// TODO` + a `ComingSoonNote` banner):** orders, users, resellers, finance, promos, reviews, settings. Mock data lives in `lib/mock/demo.ts` (ported from the prototype's `data.js`).
+
+### Admin backend (`/api`)
+- `internal/platform/auth/middleware.go` → `AdminOnly(secret)` guards the `/api/admin` group: requires `role == "admin"` on the JWT; **bypasses with a synthetic admin in dev when `JWT_SECRET` is empty** (logs a one-time warning), enforces when a secret is set.
+- **Fully implemented:** product admin CRUD + bulk (`internal/modules/product/admin.go`), the inventory/code module (`internal/modules/code/`), and dashboard stats + low-stock (`internal/modules/dashboard/`).
+- **Stubbed (501) with the full route map:** each area registers `RegisterAdminRoutes(r, db)` returning `response.Stub("…")` — `order`, `user`, `reseller`, `wallet` (finance), `promo`, `review`, and `settings`. Fill these in following the existing module pattern (model → repository → service → handler).
+- All admin routes are wired in `internal/server/server.go` under `r.Route("/api/admin", …)`.

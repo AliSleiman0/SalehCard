@@ -69,3 +69,26 @@ func BadRequest(w http.ResponseWriter, msg string) {
 func InternalError(w http.ResponseWriter) {
 	Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "an unexpected error occurred")
 }
+
+// Forbidden writes a 403 Response.
+func Forbidden(w http.ResponseWriter, msg string) {
+	Error(w, http.StatusForbidden, "FORBIDDEN", msg)
+}
+
+// Unauthorized writes a 401 Response.
+func Unauthorized(w http.ResponseWriter, msg string) {
+	Error(w, http.StatusUnauthorized, "UNAUTHORIZED", msg)
+}
+
+// NotImplemented writes a 501 Response for stubbed admin endpoints.
+func NotImplemented(w http.ResponseWriter, feature string) {
+	Error(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", feature+" is not implemented yet")
+}
+
+// Stub returns an http.HandlerFunc that always responds 501 NotImplemented.
+// Used to register the admin route map for modules whose handlers are TODO.
+func Stub(feature string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		NotImplemented(w, feature)
+	}
+}
