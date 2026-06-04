@@ -1,0 +1,15 @@
+/* Brand design system (ported verbatim from the Claude Design admin prototype):
+   base.css = brand tokens + storefront primitives, admin.css = dense admin chrome.
+   Imported before Tailwind so the @tailwind layers can use the same CSS vars. */
+@import './styles/base.css';
+@import './styles/admin.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* topbar admin identity is hidden on narrow viewports (referenced by the shell) */
+@media (max-width: 720px) {
+  .desktop-only {
+    display: none !important;
+  }
+}

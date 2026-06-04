@@ -77,7 +77,27 @@ type UpdateProductInput struct {
 }
 
 // ListFilter holds the optional query filters for listing products.
+// Category/Available are used by the customer-facing list; FulfillmentType,
+// Status, and Search are additional filters used by the admin list.
 type ListFilter struct {
-	Category  string
-	Available *bool
+	Category        string
+	Available       *bool
+	FulfillmentType FulfillmentType
+	Status          string // "active" | "draft" | "out"
+	Search          string
+}
+
+// BulkAction is a bulk operation applied to a set of product IDs.
+type BulkAction string
+
+const (
+	BulkActivate   BulkAction = "activate"
+	BulkDeactivate BulkAction = "deactivate"
+	BulkDelete     BulkAction = "delete"
+)
+
+// BulkInput is the request body for POST /api/admin/products/bulk.
+type BulkInput struct {
+	IDs    []string   `json:"ids"`
+	Action BulkAction `json:"action"`
 }

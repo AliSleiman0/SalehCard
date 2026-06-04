@@ -18,6 +18,8 @@ type Repository interface {
 	Create(ctx context.Context, in CreateProductInput) (*Product, error)
 	Update(ctx context.Context, id string, in UpdateProductInput) (*Product, error)
 	Delete(ctx context.Context, id string) error
+	BulkSetAvailable(ctx context.Context, ids []string, available bool) (int64, error)
+	BulkDelete(ctx context.Context, ids []string) (int64, error)
 }
 
 // MongoRepository is a MongoDB-backed implementation of Repository.
@@ -59,7 +61,71 @@ func buildFilter(f ListFilter) bson.D {
 	if f.Available != nil {
 		filter = append(filter, bson.E{Key: "available", Value: *f.Available})
 	}
+	if f.FulfillmentType != "" {
+		filter = append(filter, bson.E{Key: "fulfillmentType", Value: f.FulfillmentType})
+	}
+	switch f.Status {
+	case "active":
+		filter = append(filter, bson.E{Key: "available", Value: true})
+	case "draft":
+		filter = append(filter, bson.E{Key: "available", Value: false})
+	case "out":
+		filter = append(filter, bson.E{Key: "stock", Value: 0})
+		filter = append(filter, bson.E{Key: "fulfillmentType", Value: FulfillmentCode})
+	}
+	if f.Search != "" {
+		rx := bson.Regex{Pattern: f.Search, Options: "i"}
+		filter = append(filter, bson.E{Key: "$or", Value: bson.A{
+			bson.D{{Key: "title.en", Value: rx}},
+			bson.D{{Key: "title.ar", Value: rx}},
+			bson.D{{Key: "title.tr", Value: rx}},
+			bson.D{{Key: "category", Value: rx}},
+		}})
+	}
 	return filter
+}
+
+// objectIDs converts hex id strings to ObjectIDs, skipping any that are invalid.
+func objectIDs(ids []string) []bson.ObjectID {
+	out := make([]bson.ObjectID, 0, len(ids))
+	for _, id := range ids {
+		if oid, err := bson.ObjectIDFromHex(id); err == nil {
+			out = append(out, oid)
+		}
+	}
+	return out
+}
+
+// BulkSetAvailable sets the availability flag on every product in ids.
+func (r *MongoRepository) BulkSetAvailable(ctx context.Context, ids []string, available bool) (int64, error) {
+	oids := objectIDs(ids)
+	if len(oids) == 0 {
+		return 0, nil
+	}
+	res, err := r.col.UpdateMany(ctx,
+		bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "available", Value: available},
+			{Key: "updatedAt", Value: time.Now().UTC()},
+		}}},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+// BulkDelete removes every product in ids.
+func (r *MongoRepository) BulkDelete(ctx context.Context, ids []string) (int64, error) {
+	oids := objectIDs(ids)
+	if len(oids) == 0 {
+		return 0, nil
+	}
+	res, err := r.col.DeleteMany(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}})
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
 }
 
 // FindAll retrieves a paginated list of products matching the given filter.
@@ -168,7 +234,16 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 		set = append(set, bson.E{Key: "images", Value: in.Images})
 	}
 	if in.Variants != nil {
-		set = append(set, bson.E{Key: "variants", Value: in.Variants})
+		// Generate IDs for any variant added through the admin editor (which
+		// submits variants without an _id).
+		variants := make([]Variant, len(in.Variants))
+		for i, v := range in.Variants {
+			if v.ID.IsZero() {
+				v.ID = bson.NewObjectID()
+			}
+			variants[i] = v
+		}
+		set = append(set, bson.E{Key: "variants", Value: variants})
 	}
 	if in.FulfillmentType != nil {
 		set = append(set, bson.E{Key: "fulfillmentType", Value: *in.FulfillmentType})

@@ -67,6 +67,20 @@ func (m *mockRepo) Delete(_ context.Context, _ string) error {
 	return m.err
 }
 
+func (m *mockRepo) BulkSetAvailable(_ context.Context, ids []string, _ bool) (int64, error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+	return int64(len(ids)), nil
+}
+
+func (m *mockRepo) BulkDelete(_ context.Context, ids []string) (int64, error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+	return int64(len(ids)), nil
+}
+
 // ---------------------------------------------------------------------------
 // Service tests
 // ---------------------------------------------------------------------------
@@ -156,4 +170,52 @@ func TestHandler_GetByID_NotFound(t *testing.T) {
 	errObj, ok := body["error"].(map[string]interface{})
 	require.True(t, ok, "expected error field in response")
 	assert.Equal(t, "NOT_FOUND", errObj["code"])
+}
+
+// ---------------------------------------------------------------------------
+// Bulk action tests
+// ---------------------------------------------------------------------------
+
+func TestProductService_Bulk(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       product.BulkInput
+		wantN    int64
+		wantErr  bool
+	}{
+		{
+			name:  "activate two",
+			in:    product.BulkInput{IDs: []string{"a", "b"}, Action: product.BulkActivate},
+			wantN: 2,
+		},
+		{
+			name:  "delete three",
+			in:    product.BulkInput{IDs: []string{"a", "b", "c"}, Action: product.BulkDelete},
+			wantN: 3,
+		},
+		{
+			name:    "empty ids is a bad request",
+			in:      product.BulkInput{IDs: nil, Action: product.BulkActivate},
+			wantErr: true,
+		},
+		{
+			name:    "unknown action is a bad request",
+			in:      product.BulkInput{IDs: []string{"a"}, Action: product.BulkAction("explode")},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := product.NewProductService(&mockRepo{})
+			n, err := svc.Bulk(context.Background(), tc.in)
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantN, n)
+		})
+	}
 }

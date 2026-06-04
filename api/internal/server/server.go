@@ -12,7 +12,17 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/dashboard"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
 	product "github.com/AliSleiman0/salehcard/api/internal/modules/product"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/reseller"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/review"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -59,7 +69,28 @@ func (s *Server) Routes() {
 
 	s.router.Get("/health", s.handleHealth)
 
+	// Customer-facing routes (read-only product catalog stays separate).
 	product.RegisterRoutes(s.router, s.db)
+
+	// Admin route group — every /api/admin/* route requires an `admin` JWT role
+	// (AdminOnly bypasses in dev when no JWT secret is configured).
+	s.router.Route("/api/admin", func(r chi.Router) {
+		r.Use(auth.AdminOnly(s.cfg.JWTSecret))
+
+		// Fully implemented (extends the product reference slice):
+		product.RegisterAdminRoutes(r, s.db)
+		code.RegisterAdminRoutes(r, s.db)
+		dashboard.RegisterAdminRoutes(r, s.db)
+
+		// Route map registered; handlers stubbed (501) pending implementation:
+		order.RegisterAdminRoutes(r, s.db)
+		user.RegisterAdminRoutes(r, s.db)
+		reseller.RegisterAdminRoutes(r, s.db)
+		wallet.RegisterAdminRoutes(r, s.db)
+		promo.RegisterAdminRoutes(r, s.db)
+		review.RegisterAdminRoutes(r, s.db)
+		settings.RegisterAdminRoutes(r, s.db)
+	})
 }
 
 // handleHealth pings MongoDB and returns a status response.

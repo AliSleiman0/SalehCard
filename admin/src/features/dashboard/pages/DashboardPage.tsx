@@ -1,0 +1,389 @@
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
+import { Icon, PageHead, Spark, AreaChart, Donut, Avatar, FfBadge, StatusBadge, Art, artForCategory } from '@/components'
+import { money } from '@/lib/utils'
+import { useDashboardStats, useLowStock } from '../hooks/useDashboard'
+import { orders, revSeries, revLabels, ffBreakdown, inventory as mockInventory } from '@/lib/mock/demo'
+import type { InventoryStats } from '@/types'
+
+type Range = 'daily' | 'weekly' | 'monthly'
+
+interface KpiProps {
+  icon: React.ReactNode
+  iconBg: string
+  label: string
+  value: string
+  delta?: string
+  deltaDir?: 'up' | 'down' | 'flat'
+  since?: string
+  spark?: number[]
+  sparkColor?: string
+  cls?: string
+}
+
+function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkColor, cls }: KpiProps) {
+  return (
+    <div className={'kpi' + (cls ? ' ' + cls : '')}>
+      <div className="k-top">
+        <div className="k-ic" style={{ background: iconBg }}>
+          {icon}
+        </div>
+        <div className="k-label">{label}</div>
+      </div>
+      <div className="k-val">{value}</div>
+      <div className="k-foot">
+        {delta != null && (
+          <span className={'delta ' + deltaDir}>
+            <Icon name={deltaDir === 'up' ? 'arrowup' : deltaDir === 'down' ? 'arrowdown' : 'minus'} size={12} stroke={2.6} />
+            {delta}
+          </span>
+        )}
+        {since && <span className="k-since">{since}</span>}
+      </div>
+      {spark && (
+        <div style={{ position: 'absolute', inset: 'auto 0 0 0', opacity: 0.5 }}>
+          <Spark data={spark} color={sparkColor} h={30} fill />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function DashboardPage() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [range, setRange] = useState<Range>('daily')
+  const { data: statsRes } = useDashboardStats()
+  const { data: lowRes } = useLowStock()
+  const s = statsRes?.data
+
+  // Revenue area chart + fulfillment donut remain mock-driven.
+  // TODO: wire to /api/admin/dashboard/revenue-chart once orders revenue lands.
+  const rev = revSeries[range]
+  const lab = revLabels[range]
+  const ffTotal = ffBreakdown.reduce((a, d) => a + d.value, 0)
+
+  // Low-stock panel: real data when available, else mock.
+  const lowStock: InventoryStats[] =
+    lowRes?.data && lowRes.data.length > 0
+      ? lowRes.data
+      : mockInventory
+          .filter((i) => i.level !== 'hi')
+          .slice(0, 4)
+          .map((i) => ({
+            productId: i.id,
+            title: i.title,
+            category: '',
+            uploaded: i.uploaded,
+            available: i.available,
+            delivered: i.delivered,
+            expired: i.expired,
+            threshold: i.threshold,
+            level: i.level,
+          }))
+
+  return (
+    <div className="page page-wide">
+      <PageHead
+        crumbs={[t('nav_dashboard')]}
+        title="Good morning, Omar"
+        sub="Here's what's happening across SalehCard today — June 5, 2026."
+      >
+        <button className="abtn">
+          <Icon name="download" size={15} /> {t('export')}
+        </button>
+        <button className="abtn primary" onClick={() => navigate('/products/new')}>
+          <Icon name="plus" size={15} /> {t('new_product')}
+        </button>
+      </PageHead>
+
+      <div className="kpigrid">
+        <Kpi
+          icon={<Icon name="wallet" size={17} />}
+          iconBg="var(--grad)"
+          label="Today's revenue"
+          value={s ? money(s.revenueToday) : '$12,148'}
+          delta={s ? `${s.revenueDeltaPct}%` : '14.2%'}
+          deltaDir="up"
+          since="vs yesterday"
+          spark={[6, 7, 6.5, 8, 7.5, 9, 8.7, 10, 9.6, 11.4, 12.1]}
+          sparkColor="#8a3bff"
+        />
+        <Kpi
+          icon={<Icon name="bag" size={17} />}
+          iconBg="linear-gradient(135deg,#3b5bff,#22e3c8)"
+          label="Today's orders"
+          value={s ? s.ordersToday.toLocaleString() : '842'}
+          delta={s ? `${s.ordersDeltaPct}%` : '8.1%'}
+          deltaDir="up"
+          since="vs yesterday"
+          spark={[40, 42, 48, 46, 52, 58, 61, 67]}
+          sparkColor="#3b5bff"
+        />
+        <Kpi
+          icon={<Icon name="users" size={17} />}
+          iconBg="linear-gradient(135deg,#2fd47a,#22e3c8)"
+          label="Active users"
+          value={s ? s.activeUsers.toLocaleString() : '3,610'}
+          delta="2.4%"
+          deltaDir="up"
+          since="last 24h"
+          spark={[28, 30, 32, 31, 34, 36, 35, 38]}
+          sparkColor="#2fd47a"
+        />
+        <Kpi
+          icon={<Icon name="coins" size={17} />}
+          iconBg="linear-gradient(135deg,#8a3bff,#d633ff)"
+          label="Wallet top-ups"
+          value={s ? money(s.walletTopups) : '$48,920'}
+          delta="5.7%"
+          deltaDir="up"
+          since="today"
+          spark={[20, 24, 22, 28, 26, 30, 34, 33]}
+          sparkColor="#d633ff"
+        />
+        <Kpi
+          icon={<Icon name="send" size={17} />}
+          iconBg="rgba(255,155,61,.2)"
+          label="Pending transfers"
+          value={s ? String(s.pendingTransfers) : '4'}
+          delta="2 new"
+          deltaDir="flat"
+          since="needs action"
+          cls="alert"
+        />
+        <Kpi
+          icon={<Icon name="alert" size={17} />}
+          iconBg="rgba(255,77,109,.2)"
+          label="Low-stock alerts"
+          value={s ? String(s.lowStockCount) : '8'}
+          delta="2 critical"
+          deltaDir="down"
+          since="codes running out"
+          cls="crit"
+        />
+      </div>
+
+      <div className="dash-2col mb16">
+        <div className="acard">
+          <div className="panelhead">
+            <Icon name="activity" size={18} />
+            <h3>{t('revenue')}</h3>
+            <div className="ph-act">
+              <div className="aseg">
+                {(['daily', 'weekly', 'monthly'] as Range[]).map((k) => (
+                  <button key={k} className={range === k ? 'on' : ''} onClick={() => setRange(k)}>
+                    {t(k)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: '16px 16px 8px' }}>
+            <div className="row" style={{ gap: 22, marginBottom: 4, paddingInline: 6 }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 700 }}>
+                  This {range === 'daily' ? 'week' : range === 'weekly' ? 'quarter' : 'year'}
+                </div>
+                <div className="num" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.02em' }}>
+                  ${range === 'monthly' ? '1.91M' : range === 'weekly' ? '624K' : '118.4K'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 700 }}>Avg order</div>
+                <div className="num" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.02em' }}>
+                  $24.80
+                </div>
+              </div>
+              <div className="spacer" />
+              <span className="delta up" style={{ fontSize: 13 }}>
+                <Icon name="arrowup" size={13} stroke={2.6} /> 18.6% growth
+              </span>
+            </div>
+            <AreaChart data={rev} labels={lab} height={210} />
+          </div>
+        </div>
+
+        <div className="acard">
+          <div className="panelhead">
+            <Icon name="pkg" size={18} />
+            <h3>Orders by fulfillment</h3>
+          </div>
+          <div style={{ padding: 22 }}>
+            <div className="donut-wrap">
+              <Donut
+                data={ffBreakdown}
+                size={148}
+                thickness={22}
+                center={
+                  <div>
+                    <div className="num" style={{ fontSize: 23, fontWeight: 800 }}>
+                      {s ? s.ordersToday : 842}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>orders</div>
+                  </div>
+                }
+              />
+              <div className="legend" style={{ flex: 1 }}>
+                {ffBreakdown.map((d) => (
+                  <div className="li" key={d.key}>
+                    <span className="sw" style={{ background: d.color }} />
+                    <span style={{ fontWeight: 700 }}>{d.label}</span>
+                    <span className="lv num">{Math.round((d.value / ffTotal) * (s ? s.ordersToday : 842))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div
+              style={{
+                marginTop: 18,
+                paddingTop: 16,
+                borderTop: '1px solid var(--border)',
+                fontSize: 12.5,
+                color: 'var(--text-dim)',
+                display: 'flex',
+                gap: 7,
+                alignItems: 'center',
+              }}
+            >
+              <Icon name="bolt" size={14} /> Account-credit orders settle instantly — code orders depend on inventory.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="dash-2col">
+        <div className="acard">
+          <div className="panelhead">
+            <Icon name="clock" size={18} />
+            <h3>Recent orders</h3>
+            <div className="ph-act">
+              <button className="abtn xs" onClick={() => navigate('/orders')}>
+                View all <Icon name="chevright" size={13} />
+              </button>
+            </div>
+          </div>
+          <div className="tablewrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Customer</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>{t('status')}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.slice(0, 7).map((o) => (
+                  <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
+                    <td>
+                      <span className="mono strong">{o.id}</span>
+                      <div className="faint" style={{ fontSize: 11 }}>
+                        {o.date}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="cellprod">
+                        <Avatar name={o.customer} />
+                        <div className="pn">
+                          <b>{o.customer}</b>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <FfBadge ff={o.ff} />
+                    </td>
+                    <td className="num strong">{money(o.amount, o.cur)}</td>
+                    <td>
+                      <StatusBadge s={o.status} />
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        <span className="iact">
+                          <Icon name="chevright" size={16} />
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="acard">
+            <div className="panelhead">
+              <Icon name="alert" size={18} />
+              <h3>Low-stock alerts</h3>
+              <span className="sb-badge" style={{ marginInlineStart: 6 }}>
+                {s ? s.lowStockCount : lowStock.length}
+              </span>
+              <div className="ph-act">
+                <button className="abtn xs" onClick={() => navigate('/inventory')}>
+                  Manage
+                </button>
+              </div>
+            </div>
+            <div>
+              {lowStock.slice(0, 4).map((it) => {
+                const pct = Math.min(100, Math.round((it.available / Math.max(1, it.threshold)) * 100))
+                return (
+                  <div className="lsrow" key={it.productId}>
+                    <Art art={artForCategory(it.category || it.title)} size={32} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{it.title}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>Threshold {it.threshold} codes</div>
+                    </div>
+                    <div className={'stock ' + it.level} style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                      <span className="num">{it.available} left</span>
+                      <div className="bar" style={{ width: 60 }}>
+                        <i style={{ width: pct + '%' }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="acard">
+            <div className="panelhead">
+              <Icon name="server" size={18} />
+              <h3>System health</h3>
+            </div>
+            <div>
+              {(
+                [
+                  ['Payment gateway · Visa', 'ok', 'Operational'],
+                  ['Payment gateway · USDT', 'ok', 'Operational'],
+                  ['Code delivery API', 'ok', '99.98% uptime'],
+                  ['Webhook queue', 'warn', 'Slight delay · 1.2s'],
+                ] as const
+              ).map(([name, st, note], i) => (
+                <div className="health" key={i}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 99,
+                        background: st === 'ok' ? 'var(--ok)' : 'var(--warn)',
+                        boxShadow: st === 'ok' ? '0 0 8px var(--ok)' : 'none',
+                      }}
+                    />
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{name}</span>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: st === 'ok' ? 'var(--ok)' : 'var(--warn)' }}>{note}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
