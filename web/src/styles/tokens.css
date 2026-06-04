@@ -1,0 +1,118 @@
+/* ============================================================
+   SalehCard — Design System
+   Neon arcade energy, payment-grade trust. Dark-first + light.
+   ============================================================ */
+
+/* ---------- Tokens ---------- */
+:root {
+  /* Brand */
+  --brand-1: #3b5bff;   /* electric blue */
+  --brand-2: #d633ff;   /* magenta */
+  --accent: #22e3c8;    /* cyan */
+  --accent-lime: #b6ff3a;
+  --grad: linear-gradient(135deg, #3b5bff 0%, #8a3bff 50%, #d633ff 100%);
+  --grad-soft: linear-gradient(135deg, rgba(59,91,255,.18), rgba(214,51,255,.18));
+  --grad-cyan: linear-gradient(135deg, #22e3c8, #3b5bff);
+
+  /* Status */
+  --ok: #2fd47a;
+  --warn: #ffb02e;
+  --danger: #ff4d6d;
+  --agent: #ffb02e; /* reseller gold */
+
+  /* Radii — chunky */
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 30px;
+  --r-pill: 999px;
+
+  /* Type */
+  --font-display: "DM Serif Display", Georgia, serif;
+  --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
+
+  /* Spacing rhythm */
+  --gap: 16px;
+
+  /* Motion */
+  --ease: cubic-bezier(.22,.61,.36,1);
+}
+
+/* Dark (default) */
+:root, [data-theme="dark"] {
+  --bg: #08080f;
+  --bg-grad: radial-gradient(1200px 600px at 80% -10%, rgba(214,51,255,.12), transparent 60%),
+             radial-gradient(1000px 500px at -10% 0%, rgba(59,91,255,.14), transparent 55%),
+             #08080f;
+  --surface: #11111c;
+  --surface-2: #181826;
+  --surface-3: #20203020;
+  --card: #12121e;
+  --border: rgba(255,255,255,.08);
+  --border-strong: rgba(255,255,255,.16);
+  --text: #f3f3fb;
+  --text-dim: #9b9bb4;
+  --text-faint: #6a6a82;
+  --shadow: 0 20px 50px -20px rgba(0,0,0,.7);
+  --glow: 0 0 0 1px rgba(255,255,255,.04), 0 18px 40px -18px rgba(59,91,255,.45);
+  --on-grad: #ffffff;
+}
+
+/* Light */
+[data-theme="light"] {
+  --bg: #eef0f8;
+  --bg-grad: radial-gradient(1100px 560px at 82% -12%, rgba(214,51,255,.10), transparent 60%),
+             radial-gradient(900px 480px at -8% -5%, rgba(59,91,255,.12), transparent 55%),
+             #eef0f8;
+  --surface: #ffffff;
+  --surface-2: #f4f5fb;
+  --surface-3: #eceefa;
+  --card: #ffffff;
+  --border: rgba(14,14,38,.09);
+  --border-strong: rgba(14,14,38,.16);
+  --text: #14141f;
+  --text-dim: #565672;
+  --text-faint: #8c8ca6;
+  --shadow: 0 22px 48px -24px rgba(40,40,90,.32);
+  --glow: 0 0 0 1px rgba(20,20,50,.05), 0 18px 38px -20px rgba(59,91,255,.30);
+  --on-grad: #ffffff;
+}
+
+/* ---------- Reset / base ---------- */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+[lang="ar"], [dir="rtl"] { --font-body: "IBM Plex Sans Arabic", "Plus Jakarta Sans", sans-serif; }
+[dir="rtl"] { --font-display: "Aref Ruqaa", "DM Serif Display", serif; }
+
+h1,h2,h3,h4 { font-family: var(--font-display); font-weight: 400; margin: 0; line-height: 1.08; letter-spacing: -.01em; }
+[dir="rtl"] h1,[dir="rtl"] h2,[dir="rtl"] h3,[dir="rtl"] h4 { font-weight: 700; line-height: 1.3; }
+p { margin: 0; }
+button { font-family: inherit; }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+::selection { background: var(--brand-2); color: #fff; }
+
+/* scrollbars */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+
+/* ---------- Type scale ---------- */
+.display-xl { font-family: var(--font-display); font-size: clamp(40px, 6vw, 76px); line-height: .98; }
+.display-l  { font-family: var(--font-display); font-size: clamp(32px, 4.4vw, 54px); }
+.h1 { font-family: var(--font-display); font-size: clamp(28px,3.4vw,40px); }
+.h2 { font-family: var(--font-display); font-size: clamp(22px,2.6vw,30px); }
+.h3 { font-family: var(--font-display); font-size: 21px; }
+.eyebrow { font-family: var(--font-body); font-weight: 700; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-dim); }
+[dir="rtl"] .eyebrow { letter-spacing: .04em; }
+.body { font-size: 15px; color: var(--text-dim); }
+.small { font-size: 13px; }
+.tiny { font-size: 11.5px; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.grad-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }

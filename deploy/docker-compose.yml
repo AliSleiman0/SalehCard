@@ -1,0 +1,22 @@
+version: '3.9'
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: salehcard-mongo
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    volumes: [mongo_data:/data/db]
+    environment: { MONGO_INITDB_DATABASE: salehcard }
+    healthcheck: { test: ["CMD","mongosh","--eval","db.runCommand('ping').ok"], interval: 10s, timeout: 5s, retries: 5 }
+  # Uncomment to run full stack locally:
+  # api:
+  #   build: { context: ../api }
+  #   ports: ["8080:8080"]
+  #   env_file: ../api/.env
+  #   depends_on: { mongodb: { condition: service_healthy } }
+  # web:
+  #   build: { context: ../web }
+  #   ports: ["5173:80"]
+  #   depends_on: [api]
+volumes:
+  mongo_data:
