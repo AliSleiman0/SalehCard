@@ -48,3 +48,30 @@ type UpdateProfileInput struct {
 	Locale         *string  `json:"locale,omitempty"`
 	SavedPlayerIDs []string `json:"savedPlayerIds,omitempty"`
 }
+
+// RefreshToken is a server-side record of an issued refresh token. Only the
+// SHA-256 hash of the opaque token is stored; the raw value lives solely in the
+// client's httpOnly cookie. Tokens are rotated on every use.
+type RefreshToken struct {
+	ID        bson.ObjectID `bson:"_id,omitempty" json:"-"`
+	UserID    bson.ObjectID `bson:"userId"        json:"-"`
+	TokenHash string        `bson:"tokenHash"     json:"-"`
+	ExpiresAt time.Time     `bson:"expiresAt"     json:"-"`
+	CreatedAt time.Time     `bson:"createdAt"     json:"-"`
+	RevokedAt *time.Time    `bson:"revokedAt,omitempty" json:"-"`
+}
+
+// AuthResult is the internal result of an authentication operation. The raw
+// RefreshToken is handed to the handler so it can set the httpOnly cookie; it is
+// never serialized to JSON.
+type AuthResult struct {
+	User         *User
+	AccessToken  string
+	RefreshToken string
+}
+
+// AuthResponse is the public JSON body returned by register/login/refresh.
+type AuthResponse struct {
+	AccessToken string `json:"accessToken"`
+	User        *User  `json:"user"`
+}

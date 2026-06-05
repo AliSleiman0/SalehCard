@@ -3,6 +3,7 @@ package order
 import (
 	"time"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -26,13 +27,29 @@ const (
 	OrderStatusRefunded   OrderStatus = "refunded"
 )
 
-// OrderItem represents a single line within an order.
+// RecipientInput identifies the destination for a manual transfer fulfillment.
+type RecipientInput struct {
+	Name    string `bson:"name"    json:"name"`
+	Country string `bson:"country" json:"country"`
+	Detail  string `bson:"detail"  json:"detail"`
+}
+
+// OrderItem represents a single line within an order. Price and FulfillmentType
+// are server-derived (never trusted from the client); PlayerID/Recipient carry
+// the fulfillment target for account_credit / transfer lines. Title, Denomination
+// and Category are snapshots of the product at purchase time so order history
+// renders correctly even if the catalog later changes.
 type OrderItem struct {
-	ProductID       bson.ObjectID `bson:"productId"       json:"productId"`
-	VariantID       bson.ObjectID `bson:"variantId"       json:"variantId"`
-	Qty             int           `bson:"qty"             json:"qty"`
-	Price           float64       `bson:"price"           json:"price"`
-	FulfillmentType string        `bson:"fulfillmentType" json:"fulfillmentType"`
+	ProductID       bson.ObjectID      `bson:"productId"          json:"productId"`
+	VariantID       bson.ObjectID      `bson:"variantId"          json:"variantId"`
+	Title           product.I18nString `bson:"title"              json:"title"`
+	Denomination    string             `bson:"denomination"       json:"denomination"`
+	Category        string             `bson:"category"           json:"category"`
+	Qty             int                `bson:"qty"                json:"qty"`
+	Price           float64            `bson:"price"              json:"price"`
+	FulfillmentType string             `bson:"fulfillmentType"    json:"fulfillmentType"`
+	PlayerID        string             `bson:"playerId,omitempty" json:"playerId,omitempty"`
+	Recipient       *RecipientInput    `bson:"recipient,omitempty" json:"recipient,omitempty"`
 }
 
 // TimelineEvent records a status transition on a fulfillment.
@@ -52,23 +69,35 @@ type Fulfillment struct {
 
 // Order is the root aggregate for a customer purchase.
 type Order struct {
-	ID            bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	UserID        bson.ObjectID `bson:"userId"        json:"userId"`
-	Items         []OrderItem   `bson:"items"         json:"items"`
-	Subtotal      float64       `bson:"subtotal"      json:"subtotal"`
-	Total         float64       `bson:"total"         json:"total"`
-	Currency      string        `bson:"currency"      json:"currency"`
-	PaymentMethod PaymentMethod `bson:"paymentMethod" json:"paymentMethod"`
-	Status        OrderStatus   `bson:"status"        json:"status"`
-	Fulfillment   Fulfillment   `bson:"fulfillment"   json:"fulfillment"`
-	CreatedAt     time.Time     `bson:"createdAt"     json:"createdAt"`
-	UpdatedAt     time.Time     `bson:"updatedAt"     json:"updatedAt"`
+	ID             bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID         bson.ObjectID `bson:"userId"        json:"userId"`
+	Items          []OrderItem   `bson:"items"         json:"items"`
+	Subtotal       float64       `bson:"subtotal"      json:"subtotal"`
+	Total          float64       `bson:"total"         json:"total"`
+	Currency       string        `bson:"currency"      json:"currency"`
+	PaymentMethod  PaymentMethod `bson:"paymentMethod" json:"paymentMethod"`
+	Status         OrderStatus   `bson:"status"        json:"status"`
+	Fulfillment    Fulfillment   `bson:"fulfillment"   json:"fulfillment"`
+	IdempotencyKey string        `bson:"idempotencyKey,omitempty" json:"-"`
+	CreatedAt      time.Time     `bson:"createdAt"     json:"createdAt"`
+	UpdatedAt      time.Time     `bson:"updatedAt"     json:"updatedAt"`
+}
+
+// PlaceOrderItemInput is a single requested line. The client sends only what it
+// is allowed to choose — product, variant, quantity, and the fulfillment target
+// — never the price or fulfillment type (the server derives those).
+type PlaceOrderItemInput struct {
+	ProductID string          `json:"productId"`
+	VariantID string          `json:"variantId"`
+	Qty       int             `json:"qty"`
+	PlayerID  string          `json:"playerId,omitempty"`
+	Recipient *RecipientInput `json:"recipient,omitempty"`
 }
 
 // PlaceOrderInput carries the data needed to create a new order.
 type PlaceOrderInput struct {
-	Items         []OrderItem   `json:"items"`
-	Currency      string        `json:"currency"`
-	PaymentMethod PaymentMethod `json:"paymentMethod"`
-	PromoCode     string        `json:"promoCode,omitempty"`
+	Items         []PlaceOrderItemInput `json:"items"`
+	Currency      string                `json:"currency"`
+	PaymentMethod PaymentMethod         `json:"paymentMethod"`
+	PromoCode     string                `json:"promoCode,omitempty"`
 }

@@ -1,25 +1,39 @@
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Icon, Button } from '@/components'
 import { AcctSidebar } from '@/features/auth/components/AcctSidebar'
 import { OrderRow } from '@/features/auth/components/OrderRow'
 import { SavedIdCard } from '@/features/auth/components/SavedIdCard'
-import { useWalletStore } from '@/stores/wallet'
 import { useCurrencyStore } from '@/stores/currency'
+import { useLocaleStore } from '@/stores/locale'
+import { useAuthStore } from '@/stores/auth'
+import { useWallet } from '@/features/wallet/hooks/useWallet'
+import { useOrders } from '@/features/orders/hooks/useOrders'
+import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import { displayName } from '@/features/auth/userDisplay'
 import { fmtPrice } from '@/lib/utils'
 import { DEMO } from '@/lib/mock/demo'
 
 export default function DashboardPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const balance = useWalletStore((s) => s.balance)
   const cur = useCurrencyStore((s) => s.currency)
+  const locale = useLocaleStore((s) => s.locale)
+  const user = useAuthStore((s) => s.user)
+  const balance = useWallet().data?.balance ?? 0
+  const ordersQuery = useOrders()
+  const recentOrders = useMemo(
+    () => (ordersQuery.data ?? []).slice(0, 3).map((o) => adaptOrder(o, locale)),
+    [ordersQuery.data, locale],
+  )
+  // cashback and saved IDs remain mock until the loyalty/profile work lands.
   const u = DEMO.user
 
   return (
     <div className="wrap" style={{ padding: '26px 0 50px' }}>
       <h1 className="h1" style={{ marginBottom: 6 }}>
-        {t('hi')}, {u.name.split(' ')[0]} 👋
+        {t('hi')}, {displayName(user).split(' ')[0] || u.name.split(' ')[0]} 👋
       </h1>
       <p className="muted" style={{ marginBottom: 24 }}>
         {t('overview')}
@@ -49,7 +63,7 @@ export default function DashboardPage() {
             <div className="stat">
               <span className="eyebrow">{t('loyalty')}</span>
               <div className="h1 num" style={{ marginTop: 8 }}>
-                {u.loyalty.toLocaleString()}
+                {(user?.loyaltyPoints ?? u.loyalty).toLocaleString()}
               </div>
               <span className="tiny faint">pts</span>
             </div>
@@ -66,9 +80,13 @@ export default function DashboardPage() {
                 {t('view_all')} →
               </a>
             </div>
-            {DEMO.orders.slice(0, 3).map((o) => (
-              <OrderRow key={o.id} o={o} />
-            ))}
+            {recentOrders.length === 0 ? (
+              <p className="muted" style={{ padding: '12px 4px' }}>
+                {t('no_orders')}
+              </p>
+            ) : (
+              recentOrders.map((o) => <OrderRow key={o.id} o={o} />)
+            )}
           </div>
 
           <div className="panel card-pad">

@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Icon, Logo } from '@/components'
 import { ControlsMenu } from './ControlsMenu'
 import { useUiStore } from '@/stores/ui'
-import { useWalletStore } from '@/stores/wallet'
+import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useCurrencyStore } from '@/stores/currency'
 import { useCartCount } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
@@ -16,10 +16,10 @@ export function Header() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { agent } = useUiStore()
-  const { balance } = useWalletStore()
   const { currency } = useCurrencyStore()
   const cartCount = useCartCount()
   const { isAuthenticated } = useAuthStore()
+  const balance = useWallet(isAuthenticated).data?.balance ?? 0
   const [menu, setMenu] = useState(false)
 
   useEffect(() => {
@@ -49,12 +49,14 @@ export function Header() {
         </div>
 
         <div className="header-right">
-          <div className="wallet-pill desktop-only" onClick={() => navigate('/wallet')}>
-            <span className="dot-grad">
-              <Icon name="wallet" size={15} />
-            </span>
-            <span className="num">{fmtPrice(balance, currency)}</span>
-          </div>
+          {isAuthenticated && (
+            <div className="wallet-pill desktop-only" onClick={() => navigate('/wallet')}>
+              <span className="dot-grad">
+                <Icon name="wallet" size={15} />
+              </span>
+              <span className="num">{fmtPrice(balance, currency)}</span>
+            </div>
+          )}
 
           <div style={{ position: 'relative' }}>
             <button

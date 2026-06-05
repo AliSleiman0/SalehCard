@@ -1,21 +1,57 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Icon, Button, useToast } from '@/components'
+import { Icon, Button, useToast, LoadingSpinner } from '@/components'
 import { AcctSidebar } from '@/features/auth/components/AcctSidebar'
-import { useWalletStore } from '@/stores/wallet'
 import { useCurrencyStore } from '@/stores/currency'
 import { fmtPrice } from '@/lib/utils'
-import { DEMO } from '@/lib/mock/demo'
+import { useWallet } from '../hooks/useWallet'
+import { useTopUp } from '../hooks/useTopUp'
+import type { WalletTransaction } from '@/types'
 
 const PRESETS = [25, 50, 100, 250]
+
+// txLabel renders a human label for a ledger row from its type.
+function txLabel(tx: WalletTransaction, t: (k: string) => string): string {
+  switch (tx.type) {
+    case 'topup':
+      return t('topup')
+    case 'purchase':
+      return t('checkout')
+    case 'refund':
+      return t('refunded')
+    default:
+      return tx.type
+  }
+}
+
+function fmtTxDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 export default function WalletPage() {
   const { t } = useTranslation()
   const toast = useToast()
-  const balance = useWalletStore((s) => s.balance)
   const cur = useCurrencyStore((s) => s.currency)
+  const walletQuery = useWallet()
+  const topUp = useTopUp()
   const [amt, setAmt] = useState(50)
   const [via, setVia] = useState<'visa' | 'usdt'>('visa')
+
+  const balance = walletQuery.data?.balance ?? 0
+  const txs = walletQuery.data?.transactions ?? []
+
+  const onTopUp = (): void => {
+    if (topUp.isPending) return
+    topUp.mutate(
+      { amount: amt, method: via === 'visa' ? 'card' : 'usdt' },
+      {
+        onSuccess: () => toast(`+${fmtPrice(amt, cur)}`, 'wallet'),
+        onError: (err) => toast(err.message || 'Top-up failed', 'user'),
+      },
+    )
+  }
 
   return (
     <div className="wrap" style={{ padding: '26px 0 50px' }}>
@@ -83,12 +119,10 @@ export default function WalletPage() {
                   variant="primary"
                   size="lg"
                   block
-                  onClick={() => {
-                    useWalletStore.getState().topUp(amt)
-                    toast(`+${fmtPrice(amt, cur)}`, 'wallet')
-                  }}
+                  disabled={topUp.isPending}
+                  onClick={onTopUp}
                 >
-                  {t('topup')} {fmtPrice(amt, cur)}
+                  {topUp.isPending ? t('processing') : `${t('topup')} ${fmtPrice(amt, cur)}`}
                 </Button>
               </div>
             </div>
@@ -97,31 +131,39 @@ export default function WalletPage() {
               <h3 className="h3" style={{ marginBottom: 8 }}>
                 {t('tx_history')}
               </h3>
-              {DEMO.walletTx.map((tx) => (
-                <div className="lrow" key={tx.id}>
-                  <span
-                    className="icon-btn"
-                    style={{
-                      width: 38,
-                      height: 38,
-                      color: tx.amt > 0 ? 'var(--ok)' : 'var(--text-dim)',
-                    }}
-                  >
-                    <Icon name={tx.amt > 0 ? 'plus' : 'minus'} size={16} />
-                  </span>
-                  <div className="col" style={{ gap: 1, flex: 1 }}>
-                    <span style={{ fontWeight: 700, fontSize: 14 }}>{tx.t}</span>
-                    <span className="tiny faint num">{tx.date}</span>
+              {walletQuery.isLoading ? (
+                <LoadingSpinner />
+              ) : txs.length === 0 ? (
+                <p className="muted" style={{ padding: '16px 4px' }}>
+                  {t('no_tx')}
+                </p>
+              ) : (
+                txs.map((tx) => (
+                  <div className="lrow" key={tx.id}>
+                    <span
+                      className="icon-btn"
+                      style={{
+                        width: 38,
+                        height: 38,
+                        color: tx.amount > 0 ? 'var(--ok)' : 'var(--text-dim)',
+                      }}
+                    >
+                      <Icon name={tx.amount > 0 ? 'plus' : 'minus'} size={16} />
+                    </span>
+                    <div className="col" style={{ gap: 1, flex: 1 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14 }}>{txLabel(tx, t)}</span>
+                      <span className="tiny faint num">{fmtTxDate(tx.createdAt)}</span>
+                    </div>
+                    <span
+                      className="num"
+                      style={{ fontWeight: 800, color: tx.amount > 0 ? 'var(--ok)' : 'var(--text)' }}
+                    >
+                      {tx.amount > 0 ? '+' : '−'}
+                      {fmtPrice(Math.abs(tx.amount), cur)}
+                    </span>
                   </div>
-                  <span
-                    className="num"
-                    style={{ fontWeight: 800, color: tx.amt > 0 ? 'var(--ok)' : 'var(--text)' }}
-                  >
-                    {tx.amt > 0 ? '+' : '−'}
-                    {fmtPrice(Math.abs(tx.amt), cur)}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

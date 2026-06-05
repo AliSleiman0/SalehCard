@@ -3,6 +3,7 @@ import { create } from 'zustand'
 export interface CartItem {
   key: string
   id: string
+  variantId: string
   brand: string
   title: string
   art: string
@@ -26,7 +27,7 @@ export const useCartStore = create<CartState>((set) => ({
   items: [],
   add(item: Omit<CartItem, 'key'>) {
     set((state) => {
-      const key = `${item.id}|${item.variant}`
+      const key = `${item.id}|${item.variantId}`
       const existing = state.items.find((x) => x.key === key)
       if (existing) {
         return {

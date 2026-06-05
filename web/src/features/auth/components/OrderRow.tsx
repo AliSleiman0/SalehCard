@@ -2,13 +2,13 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Icon, ImageArt, Price, Badge, Button } from '@/components'
 import { useCurrencyStore } from '@/stores/currency'
-import type { MockOrder } from '@/lib/mock/demo'
+import type { OrderView } from '@/features/orders/types'
 
-export function OrderRow({ o }: { o: MockOrder }) {
+export function OrderRow({ o }: { o: OrderView }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const cur = useCurrencyStore((s) => s.currency)
-  const done = ['delivered', 'completed'].includes(o.status)
+  const done = ['delivered', 'completed'].includes(o.status ?? '')
   return (
     <div className="lrow">
       <ImageArt
@@ -27,7 +27,7 @@ export function OrderRow({ o }: { o: MockOrder }) {
       </div>
       <Badge variant={done ? 'instant' : 'soft'}>
         {done ? <Icon name="check" size={11} /> : null}
-        {t(o.status)}
+        {t(o.status ?? '')}
       </Badge>
       <Price usd={o.total} cur={cur} className="num small" />
       <Button variant="ghost" size="sm" onClick={() => navigate('/orders/' + o.id)}>

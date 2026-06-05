@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Layout from './Layout'
+import { RequireAuth, RedirectIfAuthed } from './RequireAuth'
 
 const HomePage = lazy(() => import('@/features/catalog/pages/HomePage'))
 const CategoryPage = lazy(() => import('@/features/catalog/pages/CategoryPage'))
@@ -32,14 +33,70 @@ export default function AppRouter() {
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/order-success/:orderId" element={<OrderSuccessPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/wallet" element={<WalletPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/orders/:id" element={<OrderDetailPage />} />
-          <Route path="/saved-ids" element={<SavedIDsPage />} />
-          <Route path="/reseller" element={<ResellerDashboardPage />} />
+          <Route
+            path="/login"
+            element={
+              <RedirectIfAuthed>
+                <LoginPage />
+              </RedirectIfAuthed>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <RedirectIfAuthed>
+                <RegisterPage />
+              </RedirectIfAuthed>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <RequireAuth>
+                <DashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/wallet"
+            element={
+              <RequireAuth>
+                <WalletPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <RequireAuth>
+                <OrdersPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/orders/:id"
+            element={
+              <RequireAuth>
+                <OrderDetailPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/saved-ids"
+            element={
+              <RequireAuth>
+                <SavedIDsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/reseller"
+            element={
+              <RequireAuth>
+                <ResellerDashboardPage />
+              </RequireAuth>
+            }
+          />
         </Route>
       </Routes>
     </Suspense>

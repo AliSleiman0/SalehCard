@@ -2,6 +2,7 @@ import { artForCategory } from '@/lib/art'
 import type { Product } from '@/types'
 
 export interface ViewVariant {
+  id: string
   l: string
   p: number
   agentP?: number
@@ -51,6 +52,7 @@ function humanize(cat: string): string {
 export function adaptProduct(api: Product, locale: 'en' | 'ar' | 'tr'): ViewProduct {
   const brand = api.title[locale] || api.title.en
   const variants: ViewVariant[] = api.variants.map((v) => ({
+    id: v.id,
     l: v.denomination,
     p: v.price,
     agentP: v.resellerPrice,
