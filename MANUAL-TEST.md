@@ -110,10 +110,13 @@ Do these *before* creating your account (you start logged out).
 
 | # | Route / action | Expected |
 |---|---|---|
-| 4.1 | `/` (home) | product grid renders from the API |
-| 4.2 | click a category / `/category/:slug` | filtered list |
-| 4.3 | open **Steam Wallet** | product detail page |
+| 4.1 | `/` (home) | landing page loads: hero + **category tiles (mock)** + the **Best sellers** and **Featured** sections, whose product cards come from the **API** (3 seeded products → 3 cards) |
+| 4.2 | `/category/:slug` (e.g. `/category/games`) | products filtered by category from the API (e.g. Steam Wallet + PUBG under `games`) |
+| 4.3 | open **Steam Wallet** (from a product card) | product detail page |
 | 4.4 | pick a denomination ($5 / $10 / $20) | variant highlights; total updates |
+
+> Note: the home **category tiles** and the category **taxonomy** are still mock
+> (`lib/mock/demo.ts`); only the **product cards/lists** are API-backed.
 
 ## Phase 5 — Cart
 
