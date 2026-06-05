@@ -39,7 +39,7 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 				Ar: "محفظة ستيم",
 				Tr: "Steam Cüzdanı",
 			},
-			Category: "gaming",
+			Category: "giftcards",
 			Images: []string{
 				"https://cdn.salehcard.com/images/steam-wallet.png",
 			},
@@ -77,7 +77,7 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 				Ar: "يوسي ببجي موبايل",
 				Tr: "PUBG Mobile UC",
 			},
-			Category: "gaming",
+			Category: "games",
 			Images: []string{
 				"https://cdn.salehcard.com/images/pubg-uc.png",
 			},
@@ -109,7 +109,7 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 				Ar: "تحويل بنكي",
 				Tr: "Banka Transferi",
 			},
-			Category: "finance",
+			Category: "transfer",
 			Images: []string{
 				"https://cdn.salehcard.com/images/bank-transfer.png",
 			},
