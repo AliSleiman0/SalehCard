@@ -31,8 +31,22 @@ export default function AppRouter() {
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/cart" element={<CartPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/order-success/:orderId" element={<OrderSuccessPage />} />
+          <Route
+            path="/checkout"
+            element={
+              <RequireAuth>
+                <CheckoutPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/order-success/:orderId"
+            element={
+              <RequireAuth>
+                <OrderSuccessPage />
+              </RequireAuth>
+            }
+          />
           <Route
             path="/login"
             element={
