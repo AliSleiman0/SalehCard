@@ -12,6 +12,13 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// ErrOutOfStock is returned when no available code can be claimed for a product.
+var ErrOutOfStock = &apperrors.AppError{
+	Code:    "OUT_OF_STOCK",
+	Message: "no codes available for this product",
+	Err:     apperrors.ErrConflict,
+}
+
 // Repository is the persistence contract for the code/inventory domain.
 type Repository interface {
 	BulkInsert(ctx context.Context, productID string, items []UploadItem, batch string) (inserted, duplicates int, err error)
@@ -23,6 +30,12 @@ type Repository interface {
 	GetThreshold(ctx context.Context, productID string) (int, error)
 	SetThreshold(ctx context.Context, productID string, threshold int) error
 	SetProductStock(ctx context.Context, productID string, stock int) error
+	// ClaimOne atomically marks one available code for the product as delivered,
+	// stamping the order/recipient. Returns ErrOutOfStock when none is available.
+	ClaimOne(ctx context.Context, productID, orderID, deliveredTo string, now time.Time) (*Code, error)
+	// ReleaseByOrder reverses a claim, returning the delivered codes of an order
+	// to the available pool. Used to compensate a failed order.
+	ReleaseByOrder(ctx context.Context, orderID string) error
 }
 
 // ProductMeta is the minimal product info the inventory views need.
@@ -283,6 +296,43 @@ func (r *MongoRepository) SetProductStock(ctx context.Context, productID string,
 	_, err = r.products.UpdateOne(ctx,
 		bson.D{{Key: "_id", Value: oid}},
 		bson.D{{Key: "$set", Value: bson.D{{Key: "stock", Value: stock}, {Key: "updatedAt", Value: time.Now().UTC()}}}},
+	)
+	return err
+}
+
+// ClaimOne atomically transitions one available code to delivered. The single
+// FindOneAndUpdate is the concurrency guard against double-selling — never
+// select-then-update. Returns ErrOutOfStock when the product has no available code.
+func (r *MongoRepository) ClaimOne(ctx context.Context, productID, orderID, deliveredTo string, now time.Time) (*Code, error) {
+	var c Code
+	err := r.codes.FindOneAndUpdate(ctx,
+		bson.D{{Key: "productId", Value: productID}, {Key: "status", Value: StatusAvailable}},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "status", Value: StatusDelivered},
+			{Key: "orderId", Value: orderID},
+			{Key: "deliveredTo", Value: deliveredTo},
+			{Key: "deliveredAt", Value: now},
+		}}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&c)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrOutOfStock
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+// ReleaseByOrder returns every delivered code claimed under orderID to the
+// available pool, clearing its delivery metadata.
+func (r *MongoRepository) ReleaseByOrder(ctx context.Context, orderID string) error {
+	_, err := r.codes.UpdateMany(ctx,
+		bson.D{{Key: "orderId", Value: orderID}, {Key: "status", Value: StatusDelivered}},
+		bson.D{
+			{Key: "$set", Value: bson.D{{Key: "status", Value: StatusAvailable}}},
+			{Key: "$unset", Value: bson.D{{Key: "orderId", Value: ""}, {Key: "deliveredTo", Value: ""}, {Key: "deliveredAt", Value: ""}}},
+		},
 	)
 	return err
 }

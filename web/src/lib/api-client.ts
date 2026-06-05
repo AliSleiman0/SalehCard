@@ -16,11 +16,13 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
+  extraHeaders?: Record<string, string>,
 ): Promise<ApiResponse<T>> {
   const url = `${BASE()}${path}`
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...extraHeaders,
   }
 
   if (_accessToken) {
@@ -82,6 +84,7 @@ async function request<T>(
     // Retry original request with new token
     const retryHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...extraHeaders,
     }
     if (_accessToken) {
       retryHeaders['Authorization'] = `Bearer ${_accessToken}`
@@ -106,8 +109,12 @@ export const apiClient = {
   get<T>(path: string): Promise<ApiResponse<T>> {
     return request<T>('GET', path)
   },
-  post<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
-    return request<T>('POST', path, body)
+  post<T>(
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<ApiResponse<T>> {
+    return request<T>('POST', path, body, headers)
   },
   patch<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
     return request<T>('PATCH', path, body)

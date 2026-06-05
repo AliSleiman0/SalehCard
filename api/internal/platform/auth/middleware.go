@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // ctxKey is an unexported type for context keys defined in this package.
@@ -65,8 +66,49 @@ func AdminOnly(secret string) func(http.Handler) http.Handler {
 	}
 }
 
+// AuthRequired returns middleware that authorizes any request carrying a valid
+// (non-expired) JWT, attaching the verified Claims to the request context. Unlike
+// AdminOnly it has no dev-bypass and no role restriction — it is the gate for
+// customer-facing authenticated routes (e.g. /api/v1/users/me).
+func AuthRequired(secret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			header := r.Header.Get("Authorization")
+			if header == "" || !strings.HasPrefix(header, "Bearer ") {
+				response.Unauthorized(w, "missing bearer token")
+				return
+			}
+			token := strings.TrimPrefix(header, "Bearer ")
+
+			claims, err := VerifyToken(secret, token)
+			if err != nil {
+				response.Unauthorized(w, "invalid or expired token")
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), claimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 // ClaimsFromContext returns the Claims attached by AdminOnly, if present.
 func ClaimsFromContext(ctx context.Context) (*Claims, bool) {
 	c, ok := ctx.Value(claimsKey).(*Claims)
 	return c, ok
+}
+
+// UserIDFromContext returns the authenticated user's ObjectID from the Claims
+// attached by AuthRequired/AdminOnly. The bool is false when no valid claims are
+// present or the UserID is not a valid ObjectID.
+func UserIDFromContext(ctx context.Context) (bson.ObjectID, bool) {
+	c, ok := ClaimsFromContext(ctx)
+	if !ok {
+		return bson.NilObjectID, false
+	}
+	id, err := bson.ObjectIDFromHex(c.UserID)
+	if err != nil {
+		return bson.NilObjectID, false
+	}
+	return id, true
 }

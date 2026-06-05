@@ -51,12 +51,36 @@ export type OrderStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'r
 
 export type PaymentMethod = 'wallet' | 'card' | 'usdt'
 
+export interface Recipient {
+  name: string
+  country: string
+  detail: string
+}
+
 export interface OrderItem {
   productId: string
   variantId: string
+  title: I18nString
+  denomination: string
+  category: string
   qty: number
   price: number
   fulfillmentType: FulfillmentType
+  playerId?: string
+  recipient?: Recipient
+}
+
+export interface TimelineEvent {
+  status: string
+  note: string
+  at: string
+}
+
+export interface Fulfillment {
+  deliveredCode?: string
+  creditedToId?: string
+  transferRef?: string
+  statusTimeline: TimelineEvent[]
 }
 
 export interface Order {
@@ -68,7 +92,44 @@ export interface Order {
   currency: string
   paymentMethod: PaymentMethod
   status: OrderStatus
+  fulfillment: Fulfillment
   createdAt: string
+  updatedAt: string
+}
+
+// PlaceOrderInput is the request body for POST /api/v1/orders. The client sends
+// only product/variant/qty (+ fulfillment target); the server re-prices.
+export interface PlaceOrderItemInput {
+  productId: string
+  variantId: string
+  qty: number
+  playerId?: string
+  recipient?: Recipient
+}
+
+export interface PlaceOrderInput {
+  items: PlaceOrderItemInput[]
+  currency: string
+  paymentMethod: PaymentMethod
+  promoCode?: string
+}
+
+export type WalletTxType = 'topup' | 'purchase' | 'refund' | 'adjustment'
+
+export interface WalletTransaction {
+  id: string
+  userId: string
+  type: WalletTxType
+  amount: number
+  balanceAfter: number
+  method: string
+  ref: string
+  createdAt: string
+}
+
+export interface WalletView {
+  balance: number
+  transactions: WalletTransaction[]
 }
 
 export interface PaginationMeta {
@@ -86,4 +147,9 @@ export interface ApiResponse<T> {
     message: string
   }
   meta?: PaginationMeta
+}
+
+export interface AuthResponse {
+  accessToken: string
+  user: User
 }

@@ -1,98 +1,83 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Icon, Price, Button, Panel, Badge, Input } from '@/components'
+import { Icon, Price, Button, Panel, Badge, Input, useToast } from '@/components'
 import { LineItem } from '@/features/checkout/components/LineItem'
 import { PromoField } from '@/features/checkout/components/OrderSummary'
 import { fmtPrice } from '@/lib/utils'
 import { useCartStore } from '@/stores/cart'
-import type { CartItem } from '@/stores/cart'
-import { useWalletStore } from '@/stores/wallet'
 import { useCurrencyStore } from '@/stores/currency'
 import { useUiStore } from '@/stores/ui'
-import type { OrderView } from '@/features/orders/types'
+import { useLocaleStore } from '@/stores/locale'
+import { useWallet } from '@/features/wallet/hooks/useWallet'
+import { usePlaceOrder } from '@/features/orders/hooks/usePlaceOrder'
+import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import type { PaymentMethod, PlaceOrderInput } from '@/types'
 
 type Method = 'wallet' | 'visa' | 'usdt'
 
-function genCode(brand: string): string {
-  const seg = (): string => Math.random().toString(36).slice(2, 6).toUpperCase()
-  const pre = (brand.split(' ')[0] || 'SC').slice(0, 4).toUpperCase()
-  return `${pre}-${seg()}-${seg()}-${seg()}`
-}
-
-const DEMO_ITEM: CartItem = {
-  key: 'demo',
-  id: 'pubg-uc',
-  brand: 'PUBG MOBILE',
-  title: 'UC Top-up',
-  art: 'battle',
-  variant: '1800 UC',
-  price: 24.99,
-  qty: 1,
-  pid: '5129384761',
-  fulfill: 'credit',
+// methodToPayment maps the UI's method labels to the API's payment methods
+// ('visa' is the card path).
+const methodToPayment: Record<Method, PaymentMethod> = {
+  wallet: 'wallet',
+  visa: 'card',
+  usdt: 'usdt',
 }
 
 export default function CheckoutPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const toast = useToast()
   const cartItems = useCartStore((s) => s.items)
-  const balance = useWalletStore((s) => s.balance)
   const currency = useCurrencyStore((s) => s.currency)
+  const locale = useLocaleStore((s) => s.locale)
   const agent = useUiStore((s) => s.agent)
+  const walletQuery = useWallet()
+  const placeOrder = usePlaceOrder()
 
-  const items = cartItems.length ? cartItems : [DEMO_ITEM]
-  const sub = items.reduce((s, x) => s + x.price * x.qty, 0)
+  const balance = walletQuery.data?.balance ?? 0
+  const sub = cartItems.reduce((s, x) => s + x.price * x.qty, 0)
   const total = sub
 
   const [method, setMethod] = useState<Method>('wallet')
   const insufficient = method === 'wallet' && balance < total
+  // One idempotency key per checkout attempt; held in a ref so React re-renders
+  // while the request is in flight don't regenerate it (React-Query retries reuse it).
+  const keyRef = useRef<string | null>(null)
+
+  const empty = cartItems.length === 0
 
   const pay = (): void => {
-    if (method === 'wallet' && !insufficient) useWalletStore.getState().charge(total)
-    const it0 = items[0]
-    const fulfill: OrderView['fulfill'] = it0.fulfill || 'code'
-    const now = new Date()
-    const stamp =
-      now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-      ' · ' +
-      now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    if (empty || placeOrder.isPending) return
 
-    const order: OrderView = {
-      id: 'SC-' + Math.floor(90000 + Math.random() * 9999),
-      product: `${it0.brand} — ${it0.variant}${items.length > 1 ? ` +${items.length - 1}` : ''}`,
-      art: it0.art,
-      total,
-      method: method === 'wallet' ? 'Wallet' : method === 'visa' ? 'Visa' : 'USDT',
-      fulfill,
+    const input: PlaceOrderInput = {
+      items: cartItems.map((it) => ({
+        productId: it.id,
+        variantId: it.variantId,
+        qty: it.qty,
+        playerId: it.pid || undefined,
+        recipient: it.recipient ?? undefined,
+      })),
+      currency: 'USD', // prices are USD; display currency is applied at render time
+      paymentMethod: methodToPayment[method],
     }
 
-    if (fulfill === 'code') {
-      order.code = genCode(it0.brand)
-      order.pin = it0.brand.includes('PUBG') ? '4471' : ''
-      order.status = 'delivered'
-    } else if (fulfill === 'credit') {
-      order.account = it0.pid || '—'
-      order.amount = it0.variant
-      order.ts = stamp
-      order.status = 'delivered'
-    } else {
-      order.ref =
-        'MT-' +
-        Math.floor(1000 + Math.random() * 8999) +
-        '-' +
-        Math.floor(1000 + Math.random() * 8999)
-      order.recipient = it0.recipient || { name: 'Ayşe Yılmaz', country: 'Türkiye', detail: '' }
-      order.status = 'processing'
-      order.steps = [
-        { k: 'submitted', ts: stamp },
-        { k: 'processing', ts: stamp },
-        { k: 'completed', ts: '' },
-      ]
-    }
+    // Fresh key per click (a corrective re-submit after an error is a new attempt).
+    keyRef.current = crypto.randomUUID()
 
-    useCartStore.getState().clear()
-    navigate('/order-success/' + order.id, { state: { order } })
+    placeOrder.mutate(
+      { input, idempotencyKey: keyRef.current },
+      {
+        onSuccess: (order) => {
+          const view = adaptOrder(order, locale)
+          useCartStore.getState().clear()
+          navigate('/order-success/' + order.id, { state: { order: view } })
+        },
+        onError: (err) => {
+          toast(err.message || t('failed_title'), 'user')
+        },
+      },
+    )
   }
 
   const methods: {
@@ -115,6 +100,26 @@ export default function CheckoutPage() {
     { k: 'visa', icon: null, c: '#1a1f71', l: t('pay_visa'), badge: 'VISA', sub: '•••• 4242' },
     { k: 'usdt', icon: null, c: '#26a17b', l: t('pay_usdt'), badge: '₮', sub: 'TRC-20 / ERC-20' },
   ]
+
+  if (empty) {
+    return (
+      <div className="wrap" style={{ padding: '26px 0 50px' }}>
+        <h1 className="h1" style={{ marginBottom: 22 }}>
+          {t('checkout')}
+        </h1>
+        <Panel style={{ textAlign: 'center', padding: 40 }}>
+          <p className="muted" style={{ marginBottom: 16 }}>
+            {t('cart_empty')}
+          </p>
+          <Button variant="primary" onClick={() => navigate('/')}>
+            {t('continue_shop')}
+          </Button>
+        </Panel>
+      </div>
+    )
+  }
+
+  const placing = placeOrder.isPending
 
   return (
     <div className="wrap" style={{ padding: '26px 0 50px' }}>
@@ -232,7 +237,7 @@ export default function CheckoutPage() {
 
           {/* items recap */}
           <Panel>
-            {items.map((it) => (
+            {cartItems.map((it) => (
               <LineItem key={it.key} it={it} />
             ))}
           </Panel>
@@ -266,9 +271,19 @@ export default function CheckoutPage() {
             <span style={{ fontWeight: 800, fontSize: 18 }}>{t('total')}</span>
             <Price usd={total} cur={currency} className="display-l" />
           </div>
-          <Button variant="primary" size="lg" block onClick={pay} disabled={insufficient}>
+          <Button
+            variant="primary"
+            size="lg"
+            block
+            onClick={pay}
+            disabled={insufficient || placing}
+          >
             <Icon name="shield" size={18} />
-            {method === 'wallet' ? t('place_order') : `${t('pay')} ${fmtPrice(total, currency)}`}
+            {placing
+              ? t('processing')
+              : method === 'wallet'
+                ? t('place_order')
+                : `${t('pay')} ${fmtPrice(total, currency)}`}
           </Button>
           <div className="row center" style={{ gap: 8, color: 'var(--ok)' }}>
             <Icon name="bolt" size={14} />

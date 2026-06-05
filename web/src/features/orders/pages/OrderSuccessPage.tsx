@@ -1,33 +1,42 @@
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { Icon, Card, Button, Badge, CodeVault } from '@/components'
+import { useNavigate, useLocation, useParams } from 'react-router-dom'
+import { Icon, Card, Button, Badge, CodeVault, LoadingSpinner, ErrorState } from '@/components'
 import { OrderHead, CreditConfirm, TransferDetail } from '@/features/orders/components/OrderParts'
 import type { OrderView } from '@/features/orders/types'
-import { useWalletStore } from '@/stores/wallet'
+import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useCurrencyStore } from '@/stores/currency'
+import { useLocaleStore } from '@/stores/locale'
+import { useOrder } from '@/features/orders/hooks/useOrder'
+import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import { fmtPrice } from '@/lib/utils'
-
-const FALLBACK_ORDER: OrderView = {
-  id: 'SC-90421',
-  product: 'PUBG MOBILE — 1800 UC',
-  art: 'battle',
-  total: 24.99,
-  method: 'Wallet',
-  fulfill: 'credit',
-  account: '5129384761',
-  amount: '1800 UC',
-  ts: 'Jun 4, 2026 · 14:22',
-  status: 'delivered',
-}
 
 export default function OrderSuccessPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const loc = useLocation()
-  const balance = useWalletStore((s) => s.balance)
+  const { id } = useParams()
+  const locale = useLocaleStore((s) => s.locale)
+  const balance = useWallet().data?.balance ?? 0
   const currency = useCurrencyStore((s) => s.currency)
 
-  const order = (loc.state as { order?: OrderView } | null)?.order ?? FALLBACK_ORDER
+  // Prefer the order handed over via router state (fresh from checkout); fall
+  // back to fetching it by id (e.g. on a hard reload of this page).
+  const stateOrder = (loc.state as { order?: OrderView } | null)?.order
+  const query = useOrder(stateOrder ? '' : (id ?? ''))
+
+  if (!stateOrder && query.isLoading) return <LoadingSpinner />
+  if (!stateOrder && (query.isError || !query.data)) {
+    return (
+      <ErrorState
+        title={t('no_results')}
+        sub={t('no_results_sub')}
+        onRetry={() => query.refetch()}
+        retryLabel={t('retry')}
+      />
+    )
+  }
+
+  const order = stateOrder ?? adaptOrder(query.data!, locale)
   const f = order.fulfill
 
   const title =

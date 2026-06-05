@@ -82,6 +82,7 @@ export default function ProductDetailPage() {
     }
     addToCart({
       id: p.id,
+      variantId: v.id,
       brand: p.brand,
       title: p.title,
       art: p.art,

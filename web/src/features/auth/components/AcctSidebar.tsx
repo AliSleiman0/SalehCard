@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { Icon } from '@/components'
 import type { IconName } from '@/components'
 import { useUiStore } from '@/stores/ui'
-import { DEMO } from '@/lib/mock/demo'
+import { useAuthStore } from '@/stores/auth'
+import { useLogout } from '@/features/auth/hooks/useLogout'
+import { displayName, initials } from '@/features/auth/userDisplay'
 
 type SidebarKey = 'dashboard' | 'wallet' | 'orders' | 'savedids' | 'reseller'
 
@@ -17,6 +19,8 @@ const PATHS: Record<Exclude<SidebarKey, 'reseller'>, string> = {
 export function AcctSidebar({ active }: { active: SidebarKey }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const logout = useLogout()
   const items: { v: Exclude<SidebarKey, 'reseller'>; icon: IconName; l: string }[] = [
     { v: 'dashboard', icon: 'home', l: t('dashboard') },
     { v: 'wallet', icon: 'wallet', l: t('nav_wallet') },
@@ -30,12 +34,12 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
         style={{ marginBottom: 14, display: 'flex', gap: 12, alignItems: 'center' }}
       >
         <span className="avatar" style={{ width: 46, height: 46 }}>
-          {DEMO.user.initials}
+          {initials(user)}
         </span>
         <div className="col" style={{ gap: 2, minWidth: 0 }}>
-          <span style={{ fontWeight: 800 }}>{DEMO.user.name}</span>
+          <span style={{ fontWeight: 800 }}>{displayName(user)}</span>
           <span className="tiny faint" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {DEMO.user.email}
+            {user?.email}
           </span>
         </div>
       </div>
@@ -59,6 +63,14 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
       >
         <Icon name="shield" size={18} />
         {t('agent_dash')}
+      </a>
+      <a
+        onClick={() => {
+          logout.mutate(undefined, { onSuccess: () => navigate('/') })
+        }}
+      >
+        <Icon name="arrow" size={18} />
+        {t('sign_out')}
       </a>
     </aside>
   )

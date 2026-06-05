@@ -8,8 +8,9 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
-	mongoplatform "github.com/AliSleiman0/salehcard/api/internal/platform/mongo"
 	seed "github.com/AliSleiman0/salehcard/api/internal/modules/product/seed"
+	userseed "github.com/AliSleiman0/salehcard/api/internal/modules/user/seed"
+	mongoplatform "github.com/AliSleiman0/salehcard/api/internal/platform/mongo"
 )
 
 func main() {
@@ -32,7 +33,13 @@ func main() {
 	log.Println("running product seed...")
 
 	if err := seed.Seed(ctx, db); err != nil {
-		log.Fatalf("seed failed: %v", err)
+		log.Fatalf("product seed failed: %v", err)
+	}
+
+	log.Println("running user seed...")
+
+	if err := userseed.Seed(ctx, db); err != nil {
+		log.Fatalf("user seed failed: %v", err)
 	}
 
 	log.Println("seed completed successfully")

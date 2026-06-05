@@ -15,6 +15,16 @@ type Service interface {
 	SetThreshold(ctx context.Context, productID string, threshold int) (*InventoryStats, error)
 	Inventory(ctx context.Context) ([]InventoryStats, error)
 	LowStock(ctx context.Context) ([]InventoryStats, error)
+	// ClaimForOrder claims qty available codes for a product against an order,
+	// re-mirroring product stock. On any shortfall it releases what it claimed
+	// and returns ErrOutOfStock (the order claims nothing).
+	ClaimForOrder(ctx context.Context, productID, orderID, deliveredTo string, qty int) ([]Code, error)
+	// ReleaseForOrder returns an order's claimed codes to the pool and
+	// re-mirrors stock. Used to compensate a failed order.
+	ReleaseForOrder(ctx context.Context, orderID string, productIDs []string) error
+	// CountAvailable returns the number of available codes for a product, for a
+	// pre-charge stock check.
+	CountAvailable(ctx context.Context, productID string) (int, error)
 }
 
 // CodeService is the concrete Service implementation.
@@ -133,6 +143,55 @@ func (s *CodeService) LowStock(ctx context.Context) ([]InventoryStats, error) {
 		}
 	}
 	return low, nil
+}
+
+// ClaimForOrder claims qty codes for a product atomically, one at a time. If any
+// claim fails (e.g. the pool runs dry mid-loop), it releases everything already
+// claimed for this order so the order ends up claiming nothing, then returns the
+// error. On success it re-mirrors the product's available count onto stock.
+func (s *CodeService) ClaimForOrder(ctx context.Context, productID, orderID, deliveredTo string, qty int) ([]Code, error) {
+	now := time.Now().UTC()
+	claimed := make([]Code, 0, qty)
+	for i := 0; i < qty; i++ {
+		c, err := s.repo.ClaimOne(ctx, productID, orderID, deliveredTo, now)
+		if err != nil {
+			_ = s.repo.ReleaseByOrder(ctx, orderID)
+			s.remirror(ctx, productID)
+			return nil, err
+		}
+		claimed = append(claimed, *c)
+	}
+	s.remirror(ctx, productID)
+	return claimed, nil
+}
+
+// ReleaseForOrder returns an order's claimed codes to the pool and re-mirrors
+// stock for each affected product (best effort).
+func (s *CodeService) ReleaseForOrder(ctx context.Context, orderID string, productIDs []string) error {
+	if err := s.repo.ReleaseByOrder(ctx, orderID); err != nil {
+		return err
+	}
+	for _, pid := range productIDs {
+		s.remirror(ctx, pid)
+	}
+	return nil
+}
+
+// CountAvailable returns the number of available codes for a product.
+func (s *CodeService) CountAvailable(ctx context.Context, productID string) (int, error) {
+	counts, err := s.repo.CountsByProduct(ctx, productID)
+	if err != nil {
+		return 0, err
+	}
+	return counts[StatusAvailable], nil
+}
+
+// remirror recomputes the product's available-code count onto its stock field
+// (best effort; matches the mirror Upload performs).
+func (s *CodeService) remirror(ctx context.Context, productID string) {
+	if counts, err := s.repo.CountsByProduct(ctx, productID); err == nil {
+		_ = s.repo.SetProductStock(ctx, productID, counts[StatusAvailable])
+	}
 }
 
 // statsFor builds the InventoryStats for one product given its threshold.

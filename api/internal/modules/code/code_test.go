@@ -3,6 +3,7 @@ package code
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,6 +78,27 @@ func (f *fakeRepo) SetProductStock(_ context.Context, productID string, stock in
 	f.stock[productID] = stock
 	return nil
 }
+
+// ClaimOne pops one available code for the product, decrementing the available
+// count and incrementing delivered, mirroring the Mongo claim's effect.
+func (f *fakeRepo) ClaimOne(_ context.Context, productID, orderID, deliveredTo string, now time.Time) (*Code, error) {
+	if f.counts[productID] == nil || f.counts[productID][StatusAvailable] <= 0 {
+		return nil, ErrOutOfStock
+	}
+	f.counts[productID][StatusAvailable]--
+	f.counts[productID][StatusDelivered]++
+	return &Code{
+		ProductID:   productID,
+		Code:        "CODE-" + orderID,
+		Status:      StatusDelivered,
+		OrderID:     orderID,
+		DeliveredTo: deliveredTo,
+		DeliveredAt: &now,
+	}, nil
+}
+
+// ReleaseByOrder is a no-op for the fake (tests assert via stock mirror).
+func (f *fakeRepo) ReleaseByOrder(_ context.Context, _ string) error { return nil }
 
 func TestComputeLevel(t *testing.T) {
 	assert.Equal(t, LevelLo, computeLevel(0, 100))
