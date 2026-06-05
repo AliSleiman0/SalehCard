@@ -21,6 +21,7 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const logout = useLogout()
+  const closeDrawer = () => useUiStore.getState().setAcctDrawer(false)
   const items: { v: Exclude<SidebarKey, 'reseller'>; icon: IconName; l: string }[] = [
     { v: 'dashboard', icon: 'home', l: t('dashboard') },
     { v: 'wallet', icon: 'wallet', l: t('nav_wallet') },
@@ -28,7 +29,10 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
     { v: 'savedids', icon: 'user', l: t('saved_players') },
   ]
   return (
-    <aside className="sidenav">
+    <aside className="sidenav acct-drawer">
+      <button className="icon-btn sidenav-close" onClick={closeDrawer} title="Close">
+        <Icon name="close" size={18} />
+      </button>
       <div
         className="panel card-pad"
         style={{ marginBottom: 14, display: 'flex', gap: 12, alignItems: 'center' }}
@@ -47,7 +51,10 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
         <a
           key={it.v}
           className={active === it.v ? 'on' : ''}
-          onClick={() => navigate(PATHS[it.v])}
+          onClick={() => {
+            closeDrawer()
+            navigate(PATHS[it.v])
+          }}
         >
           <Icon name={it.icon} size={18} />
           {it.l}

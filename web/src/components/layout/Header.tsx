@@ -30,11 +30,26 @@ export function Header() {
 
   const onCat = pathname.startsWith('/category/') ? pathname.split('/')[2] : null
   const showCatNav = pathname === '/' || pathname.startsWith('/category')
+  const onAcctPage = ['/dashboard', '/wallet', '/orders', '/saved-ids'].some((p) =>
+    pathname.startsWith(p),
+  )
 
   return (
     <header className="appheader">
       <div className="wrap">
         <div className="header-left">
+          {isAuthenticated && onAcctPage && (
+            <button
+              className="icon-btn acct-menu-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                useUiStore.getState().toggleAcctDrawer()
+              }}
+              title="Account menu"
+            >
+              <Icon name="user" size={19} />
+            </button>
+          )}
           <div className="clickable" onClick={() => navigate('/')}>
             <Logo size={30} agent={agent} />
           </div>

@@ -11,7 +11,6 @@ import { useAuthStore } from '@/stores/auth'
 import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
-import { displayName } from '@/features/auth/userDisplay'
 import { fmtPrice } from '@/lib/utils'
 import { DEMO } from '@/lib/mock/demo'
 
@@ -32,17 +31,11 @@ export default function DashboardPage() {
 
   return (
     <div className="wrap" style={{ padding: '26px 0 50px' }}>
-      <h1 className="h1" style={{ marginBottom: 6 }}>
-        {t('hi')}, {displayName(user).split(' ')[0] || u.name.split(' ')[0]} 👋
-      </h1>
-      <p className="muted" style={{ marginBottom: 24 }}>
-        {t('overview')}
-      </p>
       <div className="cols-acct">
         <AcctSidebar active="dashboard" />
         <div className="col" style={{ gap: 24 }}>
           <div className="statgrid">
-            <div className="stat bigbal" style={{ gridColumn: 'span 1' }}>
+            <div className="stat bigbal">
               <span className="eyebrow" style={{ color: 'rgba(255,255,255,.8)' }}>
                 <Icon name="wallet" size={13} /> {t('current_balance')}
               </span>
@@ -100,7 +93,7 @@ export default function DashboardPage() {
                 {t('manage')} →
               </a>
             </div>
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+            <div className="savedgrid">
               {DEMO.savedIds.map((s) => (
                 <SavedIdCard key={s.id} s={s} compact />
               ))}
