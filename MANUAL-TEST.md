@@ -5,18 +5,20 @@ A full click-through of everything implemented in the purchase funnel:
 wallet → dashboard**, plus access-control guards and the manual-fulfillment
 (`processing`) path.
 
+> **Run the phases in order, top to bottom** — they build on each other (e.g. you
+> must fund the wallet before paying with it, and the logged-out checks must come
+> before you log in). Each step lists the route/action and what to expect.
+>
 > Scope: this covers what's wired to the **real backend**. Items still mocked or
-> deferred are listed under [Known limitations](#known-limitations).
+> deferred are under [Known limitations](#known-limitations).
 
 ---
 
 ## 1. Prerequisites
 
-- **MongoDB** running on `localhost:27017` (the dev default; reuse your existing one).
-- **Go** (for the API) and **pnpm** (for the web app — installed at `~/.local/bin`).
+- **MongoDB** running on `localhost:27017` (dev default; reuse your existing one).
+- **Go** (API) and **pnpm** (web — installed at `~/.local/bin`).
 - A browser.
-
----
 
 ## 2. Start the stack
 
@@ -36,27 +38,21 @@ cd web && pnpm dev
 
 Open **http://localhost:5173**. Health check: `curl localhost:8090/health` → `{"status":"ok"}`.
 
-### 2d. Make sure a code product has codes
+### 2d. Load codes onto the code product (required for the code flow)
 
-Code products ship with **no codes** until you upload some. Steam Wallet is the
-code product. Upload a batch (admin token required):
+Code products ship with **no codes**. Steam Wallet is the code product — upload a
+batch (admin token required):
 
 ```bash
 B=localhost:8090
 ATOK=$(curl -s $B/api/v1/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"admin@salehcard.local","password":"password123"}' | jq -r '.data.accessToken')
-
-# find the Steam Wallet product id (IDs are regenerated on a fresh seed)
 PID=$(curl -s "$B/api/v1/products?limit=50" | jq -r '.data[]|select(.title.en=="Steam Wallet")|.id')
-
 curl -s "$B/api/admin/products/$PID/codes" -H "Authorization: Bearer $ATOK" \
   -H 'Content-Type: application/json' \
   -d '{"codes":[{"code":"TEST-1111-2222","pin":"4471"},{"code":"TEST-3333-4444"},{"code":"TEST-5555-6666"}],"batch":"manual-test"}'
-
 curl -s "$B/api/v1/products/$PID" | jq '.data.stock'   # confirm stock > 0
 ```
-
----
 
 ## 3. Seeded accounts
 
@@ -65,98 +61,106 @@ curl -s "$B/api/v1/products/$PID" | jq '.data.stock'   # confirm stock > 0
 | `customer@salehcard.local` | customer | `password123` |
 | `admin@salehcard.local` | admin | `password123` |
 
-For a clean run, **register a fresh account** (also exercises registration and
-starts you at a $0 wallet).
+You'll **register a fresh account** in Phase 2. The seeded `customer@…` account is
+used in Phase 1 for the "wrong password" / "duplicate email" checks.
 
-### Seeded products (pick by name in the UI; IDs change on a fresh re-seed)
+### Seeded products (open by name in the catalog; IDs regenerate on a fresh re-seed)
 | Product | Fulfillment | Behavior |
 |---|---|---|
-| **Steam Wallet** | `code` | instant coded delivery — use this for the code flow |
-| **PUBG Mobile UC** | `account_credit` | order goes **processing**, asks for a Player ID, no code |
-| **Bank Transfer** | `transfer` | order goes **processing**, asks for recipient, no code |
+| **Steam Wallet** | `code` | instant coded delivery — the code flow |
+| **PUBG Mobile UC** | `account_credit` | order goes **Processing**, asks for a Player ID, no code |
+| **Bank Transfer** | `transfer` | order goes **Processing**, asks for recipient, no code |
 
 ---
 
-## A. Authentication
+# Test phases (run in order)
 
-| Step | Route / action | Expected |
+## Phase 1 — While logged OUT
+
+Do these *before* creating your account (you start logged out).
+
+| # | Route / action | Expected |
 |---|---|---|
-| A1 | `/register` → email + password (≥8 chars) → **Create account** | redirected to `/dashboard` |
-| A2 | short password (<8) | inline validation error, no submit |
-| A3 | register an email that already exists | error message ("email already exists") |
-| A4 | **Sign out** (left sidebar on `/dashboard`) | back to a guest view (no wallet pill in header) |
-| A5 | `/login` → seeded `customer@salehcard.local` / `password123` | redirected to `/dashboard` |
-| A6 | wrong password at `/login` | "invalid credentials" error |
-| A7 | while logged in, visit `/login` or `/register` | auto-redirected to `/dashboard` |
-| A8 | reload the page while logged in | session restored (still logged in — refresh cookie) |
+| 1.1 | visit `/orders` | redirected to `/login` |
+| 1.2 | visit `/wallet` | redirected to `/login` |
+| 1.3 | visit `/dashboard` | redirected to `/login` |
+| 1.4 | visit `/checkout` | redirected to `/login` |
+| 1.5 | visit `/order-success/abc` | redirected to `/login` |
+| 1.6 | `/login` → `customer@salehcard.local` + **wrong** password | "invalid credentials" error, stays on `/login` |
+| 1.7 | `/register` → password shorter than 8 chars | inline validation error, no submit |
+| 1.8 | `/register` → email `customer@salehcard.local` (already exists) + valid password | "email already exists" error |
 
-## B. Catalog
+## Phase 2 — Register & session
 
-| Step | Route / action | Expected |
+| # | Route / action | Expected |
 |---|---|---|
-| B1 | `/` (home) | product grid renders from the API |
-| B2 | click a category / `/category/:slug` | filtered list |
-| B3 | click **Steam Wallet** | product detail page |
-| B4 | on detail, pick a denomination ($5 / $10 / $20) | selected variant highlights; total updates |
+| 2.1 | `/register` → a **fresh** email + password (≥8) → **Create account** | redirected to `/dashboard`, balance **$0.00** |
+| 2.2 | now logged in, visit `/login` (or `/register`) | auto-redirected to `/dashboard` |
+| 2.3 | reload the page | still logged in (session restored via refresh cookie) |
 
-## C. Cart & Checkout
+## Phase 3 — Fund the wallet (do this before paying by wallet)
 
-| Step | Route / action | Expected |
+| # | Route / action | Expected |
 |---|---|---|
-| C1 | product detail → **Add to cart** | toast; cart count in header increments |
-| C2 | `/cart` | line item(s) with correct price/qty; adjust qty |
-| C3 | `/cart` → **Checkout** (or **Buy now** on detail) | `/checkout` with matching total |
-| C4 | checkout shows payment methods | **Wallet**, **Visa**, **USDT** tiles |
+| 3.1 | `/wallet` | balance **$0.00**, empty transaction history |
+| 3.2 | pick an amount (default $50) → **Top up** | balance → **$50.00**; ledger row **Top up +$50.00** |
+| 3.3 | look at the header wallet pill | shows the live balance ($50.00) |
 
-## D. Payment methods (each places a real order)
+## Phase 4 — Catalog
 
-| Step | Route / action | Expected |
+| # | Route / action | Expected |
 |---|---|---|
-| D1 | **Wallet** selected, balance ≥ total → **Place order** | success page with a delivered code |
-| D2 | **Wallet** selected, balance < total | inline **insufficient** notice + **Top up** CTA; button blocked; no charge |
-| D3 | **Visa** tile → button reads **Pay $X** → click | mock-approved → success page with code |
-| D4 | **USDT** tile → **Pay $X** | mock-approved → success page with code |
-| D5 | double-click **Place order** quickly | only **one** order is created (button disables while in-flight; idempotency key dedupes) |
+| 4.1 | `/` (home) | product grid renders from the API |
+| 4.2 | click a category / `/category/:slug` | filtered list |
+| 4.3 | open **Steam Wallet** | product detail page |
+| 4.4 | pick a denomination ($5 / $10 / $20) | variant highlights; total updates |
 
-## E. Fulfillment & order history
+## Phase 5 — Cart
 
-| Step | Route / action | Expected |
+| # | Route / action | Expected |
 |---|---|---|
-| E1 | after a code order → `/order-success/:id` | "Payment confirmed"; product, total, method |
-| E2 | click **Reveal** in the code vault | the real delivered code unmasks; **Copy** works |
-| E3 | `/orders` | the order listed as **Completed** with id + timestamp |
-| E4 | **reload** `/orders` | order still there (persisted server-side) |
-| E5 | click an order row → `/orders/:id` | detail shows the same code |
-| E6 | buy **PUBG Mobile UC** (enter a Player ID) | order = **Processing**, no code (awaits admin) |
-| E7 | buy **Bank Transfer** (enter recipient) | order = **Processing**, reference + recipient shown |
+| 5.1 | on detail → **Add to cart** | toast; header cart count increments |
+| 5.2 | `/cart` | line item with correct price/qty; adjust qty |
+| 5.3 | **Checkout** | lands on `/checkout` with matching total |
 
-## F. Wallet
+## Phase 6 — Checkout & payment
 
-| Step | Route / action | Expected |
+> You have ~$50 in the wallet from Phase 3.
+
+| # | Route / action | Expected |
 |---|---|---|
-| F1 | `/wallet` | current balance + transaction history |
-| F2 | choose an amount → **Top up** | balance increases; a **Top up +$X** ledger row appears |
-| F3 | after a wallet purchase | balance **decreased** by the price; a **Checkout −$X** ledger row appears |
-| F4 | header wallet pill | reflects the live balance on every page |
+| 6.1 | method = **Wallet** (balance ≥ total) → **Place order** | `/order-success/:id`, "Payment confirmed", a delivered code |
+| 6.2 | (repeat a checkout) double-click **Place order** fast | only **one** order created (button disables in-flight + idempotency key) |
+| 6.3 | (repeat) select **Visa** → button reads **Pay $X** → click | mock-approved → success page with code |
+| 6.4 | (repeat) select **USDT** → **Pay $X** | mock-approved → success page with code |
+| 6.5 | (repeat) **Wallet**, choose qty/denomination so **total > current balance** | inline **insufficient** notice + **Top up** CTA; order blocked; no charge |
 
-## G. Dashboard
+## Phase 7 — Fulfillment & order history
 
-| Step | Route / action | Expected |
+| # | Route / action | Expected |
 |---|---|---|
-| G1 | `/dashboard` | greeting, live wallet balance, **Recent orders** (real), loyalty points |
-| G2 | a fresh account before any order | "No orders yet" |
+| 7.1 | on a code success page → **Reveal** | the real code unmasks; **Copy** works |
+| 7.2 | `/orders` | your orders listed as **Completed** with id + timestamp |
+| 7.3 | **reload** `/orders` | orders still there (persisted server-side) |
+| 7.4 | click an order → `/orders/:id` | detail shows the same code |
+| 7.5 | buy **PUBG Mobile UC** (enter a Player ID) → checkout | order = **Processing**, no code (awaits admin) |
+| 7.6 | buy **Bank Transfer** (enter recipient) → checkout | order = **Processing**, reference + recipient shown |
 
-## H. Access control (guards)
+## Phase 8 — Wallet & dashboard recheck
 
-| Step | Route / action | Expected |
+| # | Route / action | Expected |
 |---|---|---|
-| H1 | logged **out**, visit `/orders` | redirected to `/login` |
-| H2 | logged **out**, visit `/wallet` | redirected to `/login` |
-| H3 | logged **out**, visit `/dashboard` | redirected to `/login` |
-| H4 | logged **out**, visit `/checkout` | redirected to `/login` |
-| H5 | logged **out**, visit `/order-success/:id` | redirected to `/login` |
+| 8.1 | `/wallet` | balance **decreased** by your wallet purchases; ledger shows **Top up +$X** and **Checkout −$X** rows |
+| 8.2 | `/dashboard` | live balance + **Recent orders** (real) + loyalty points |
 
-## I. Admin reads (optional — via API)
+## Phase 9 — Sign out & re-confirm guard
+
+| # | Route / action | Expected |
+|---|---|---|
+| 9.1 | **Sign out** (left sidebar on `/dashboard`) | guest view; header wallet pill gone |
+| 9.2 | visit `/orders` | redirected to `/login` again |
+
+## Phase 10 — Admin reads (optional, via API)
 
 The admin **console** is a separate app, but you can confirm the read endpoints
 the funnel lit up:
@@ -175,21 +179,18 @@ Expected: a paginated list of all orders (was `501` before this work).
 
 - **Logs:** API → `/tmp/sc-api.log`, web → `/tmp/sc-web.log`.
 - **Out of codes** (one consumed per code order): re-run step **2d** to upload more.
-- **Stop servers:** `kill` the PIDs holding ports 8090 / 5173 (e.g.
-  `ss -ltnp | grep -E ':8090|:5173'`).
-- **Fresh data:** orders/wallet/codes accumulate. Ask before dropping the DB —
-  it removes seeded products/users too (re-run the seed afterward).
-
----
+- **Stop servers:** `kill` the PIDs on ports 8090 / 5173 (`ss -ltnp | grep -E ':8090|:5173'`).
+- **Fresh data:** orders/wallet/codes accumulate. Ask before dropping the DB — it
+  removes seeded products/users too (re-run the seed afterward).
 
 ## Known limitations
 
-These are **expected** to be incomplete (next steps, not bugs):
+Expected to be incomplete (next steps, not bugs):
 
 - **Refunds** and **admin manual-completion** of `processing` (credit/transfer)
-  orders are not built yet — those orders sit in `processing`.
+  orders aren't built yet — those orders stay in `processing`.
 - **USDT** is an auto-approve mock (no real on-chain settlement).
-- For a multi-quantity code order, the success page reveals the **first** code
-  (the rest are recorded on the inventory side).
+- A multi-quantity code order reveals the **first** code on the success page (the
+  rest are recorded on the inventory side).
 - **Loyalty/cashback** figures and **Saved IDs** on the dashboard are still mock.
 - **Admin Finance** screen is still a stub (the wallet ledger feed exists in the API).
