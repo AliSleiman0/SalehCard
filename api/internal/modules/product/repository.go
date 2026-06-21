@@ -292,27 +292,54 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 }
 
 // Upsert inserts or updates a product keyed on legacyId (the catalog migration
-// loader). Insert-only fields (_id, createdAt, legacyId, variants, stock,
-// ratings) live in $setOnInsert so re-import never clobbers admin-managed stock
-// or churns the variant _id that order history references; everything else is
-// refreshed each run via $set.
+// loader). It uses an aggregation-pipeline update so re-import can refresh
+// catalog-owned fields (including the synthetic variant's price, which the order
+// engine charges from) while preserving operational state owned by the app:
+//   - the existing variant's _id is kept (order history references it) — only a
+//     fresh insert generates one; price/denomination are always refreshed.
+//   - createdAt/legacyId/stock/ratings/available are insert-only ($ifNull): a
+//     re-import never clobbers admin-managed stock or a hand-toggled
+//     availability. available is derived from status only on first insert.
 func (r *MongoRepository) Upsert(ctx context.Context, in UpsertProductInput) (*Product, error) {
 	now := time.Now().UTC()
-
-	variants := make([]Variant, len(in.Variants))
-	for i, v := range in.Variants {
-		if v.ID.IsZero() {
-			v.ID = bson.NewObjectID()
-		}
-		variants[i] = v
-	}
 
 	mode := in.FulfillmentMode
 	if mode == "" {
 		mode = DeriveMode(in.FulfillmentType)
 	}
 
+	label := "Default"
+	var price float64
+	if len(in.Variants) > 0 {
+		label = in.Variants[0].Denomination
+		price = in.Variants[0].Price
+	}
+	newVariantID := bson.NewObjectID()
+
+	// Single synthetic variant: on re-import keep the existing element (its _id
+	// and any resellerPrice) and overlay the refreshed price/denomination; on
+	// first insert build a new one.
+	variantExpr := bson.D{{Key: "$cond", Value: bson.D{
+		{Key: "if", Value: bson.D{{Key: "$gt", Value: bson.A{
+			bson.D{{Key: "$size", Value: bson.D{{Key: "$ifNull", Value: bson.A{"$variants", bson.A{}}}}}}, 0,
+		}}}},
+		{Key: "then", Value: bson.A{bson.D{{Key: "$mergeObjects", Value: bson.A{
+			bson.D{{Key: "$arrayElemAt", Value: bson.A{"$variants", 0}}},
+			bson.D{{Key: "price", Value: price}, {Key: "denomination", Value: label}},
+		}}}}},
+		{Key: "else", Value: bson.A{bson.D{
+			{Key: "_id", Value: newVariantID},
+			{Key: "denomination", Value: label},
+			{Key: "price", Value: price},
+		}}},
+	}}}
+
+	ifNull := func(field string, fallback any) bson.D {
+		return bson.D{{Key: "$ifNull", Value: bson.A{"$" + field, fallback}}}
+	}
+
 	set := bson.D{
+		// Catalog-owned: refreshed every run.
 		{Key: "updatedAt", Value: now},
 		{Key: "title", Value: in.Title},
 		{Key: "category", Value: in.Category},
@@ -331,25 +358,23 @@ func (r *MongoRepository) Upsert(ctx context.Context, in UpsertProductInput) (*P
 		{Key: "amountConstraints", Value: in.AmountConstraints},
 		{Key: "inputFields", Value: in.InputFields},
 		{Key: "verification", Value: in.Verification},
-		{Key: "available", Value: in.Available},
 		{Key: "status", Value: in.Status},
 		{Key: "sortOrder", Value: in.SortOrder},
 		{Key: "flags", Value: in.Flags},
-	}
-	setOnInsert := bson.D{
-		{Key: "_id", Value: bson.NewObjectID()},
-		{Key: "createdAt", Value: now},
-		{Key: "legacyId", Value: in.LegacyID},
-		{Key: "variants", Value: variants},
-		{Key: "stock", Value: 0},
-		{Key: "ratings", Value: RatingsSummary{}},
+		{Key: "variants", Value: variantExpr},
+		// Insert-only (admin/operational): preserved on re-import via $ifNull.
+		{Key: "createdAt", Value: ifNull("createdAt", now)},
+		{Key: "legacyId", Value: ifNull("legacyId", in.LegacyID)},
+		{Key: "stock", Value: ifNull("stock", 0)},
+		{Key: "ratings", Value: ifNull("ratings", RatingsSummary{})},
+		{Key: "available", Value: ifNull("available", in.Available)},
 	}
 
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
 	var updated Product
 	err := r.col.FindOneAndUpdate(ctx,
 		bson.D{{Key: "legacyId", Value: in.LegacyID}},
-		bson.D{{Key: "$set", Value: set}, {Key: "$setOnInsert", Value: setOnInsert}},
+		mongo.Pipeline{bson.D{{Key: "$set", Value: set}}},
 		opts,
 	).Decode(&updated)
 	if err != nil {

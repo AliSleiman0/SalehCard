@@ -26,7 +26,9 @@ export default function CategoryPage() {
   const locale = useLocaleStore((s) => s.locale)
 
   const [sort, setSort] = useState<Sort>('pop')
-  const [maxP, setMaxP] = useState(110)
+  // null = no cap (show everything). The slider's ceiling is derived from the
+  // actual product prices below, so high-priced items are never hidden by default.
+  const [maxP, setMaxP] = useState<number | null>(null)
 
   const query = useProducts({ rootDomain: cat, limit: 50 })
   const view = (useCategories({ depth: 0 }).data?.data ?? [])
@@ -39,13 +41,22 @@ export default function CategoryPage() {
     [query.data, locale],
   )
 
+  // Ceiling for the price slider: the most expensive product in view (rounded
+  // up), with a sane floor so the control is usable when the list is small/empty.
+  const priceCeiling = useMemo(() => {
+    const prices = all.map((p) => fromPrice(p, agent))
+    return Math.max(10, Math.ceil(prices.length ? Math.max(...prices) : 100))
+  }, [all, agent])
+  // Effective cap: the user's choice, clamped to the ceiling, or no cap (= show all).
+  const effectiveMax = maxP === null ? priceCeiling : Math.min(maxP, priceCeiling)
+
   const items = useMemo(() => {
-    let r = all.filter((p) => fromPrice(p, agent) <= maxP)
+    let r = all.filter((p) => fromPrice(p, agent) <= effectiveMax)
     if (sort === 'low') r = [...r].sort((a, b) => fromPrice(a, agent) - fromPrice(b, agent))
     if (sort === 'high') r = [...r].sort((a, b) => fromPrice(b, agent) - fromPrice(a, agent))
     if (sort === 'rating') r = [...r].sort((a, b) => b.rating - a.rating)
     return r
-  }, [all, sort, maxP, agent])
+  }, [all, sort, effectiveMax, agent])
 
   const brands = [...new Set(all.map((p) => p.brand))].slice(0, 6)
 
@@ -93,7 +104,7 @@ export default function CategoryPage() {
               className="tiny clickable"
               style={{ color: 'var(--brand-1)', fontWeight: 700 }}
               onClick={() => {
-                setMaxP(110)
+                setMaxP(null)
                 setSort('pop')
               }}
             >
@@ -101,13 +112,13 @@ export default function CategoryPage() {
             </a>
           </div>
           <div className="label">
-            {t('price_range')}: ≤ {fmtPrice(maxP, 'USD')}
+            {t('price_range')}: ≤ {fmtPrice(effectiveMax, 'USD')}
           </div>
           <input
             type="range"
             min="1"
-            max="110"
-            value={maxP}
+            max={priceCeiling}
+            value={effectiveMax}
             onChange={(e) => setMaxP(+e.target.value)}
             style={{ width: '100%', accentColor: 'var(--brand-1)' }}
           />
