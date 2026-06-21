@@ -29,7 +29,10 @@ func main() {
 	}
 	cfg := config.Load()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Generous budget for the whole load: ~700 records, each a couple of
+	// round-trips. 120s is fine against localhost but times out on a remote
+	// cluster (e.g. Atlas at ~125ms/op), so allow plenty of headroom.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	client, db, err := mongoplatform.Connect(cfg.MongoURI, cfg.DBName)
