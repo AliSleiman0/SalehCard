@@ -1,0 +1,1292 @@
+[
+  {
+    "legacyId": 7,
+    "parentLegacyId": 63,
+    "slug": "pupg-mobile-id-uc",
+    "name": {
+      "en": "PUPG MOBILE ID UC",
+      "ar": "PUPG MOBILE ID UC",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1720636918.webp",
+    "sortOrder": 1,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 17,
+    "parentLegacyId": 61,
+    "slug": "tiktok",
+    "name": {
+      "en": "TIKTOK",
+      "ar": "TIKTOK",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1726347784.webp",
+    "sortOrder": 60,
+    "rootDomain": "app_topups",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 23,
+    "parentLegacyId": 63,
+    "slug": "free-fire",
+    "name": {
+      "en": "FREE FIRE",
+      "ar": "FREE FIRE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1720741270.webp",
+    "sortOrder": 2,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 35,
+    "parentLegacyId": 63,
+    "slug": "yalla-ludo",
+    "name": {
+      "en": "YALLA LUDO",
+      "ar": "YALLA LUDO",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1720741361.webp",
+    "sortOrder": 4,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 61,
+    "parentLegacyId": null,
+    "slug": "charging-application",
+    "name": {
+      "en": "Charging application",
+      "ar": "شحن التطبيقات",
+      "tr": null
+    },
+    "image": "",
+    "sortOrder": 0,
+    "rootDomain": "app_topups",
+    "depth": 0,
+    "visible": true
+  },
+  {
+    "legacyId": 63,
+    "parentLegacyId": null,
+    "slug": "games",
+    "name": {
+      "en": "Games",
+      "ar": "شحن الألعاب",
+      "tr": null
+    },
+    "image": "",
+    "sortOrder": 0,
+    "rootDomain": "games",
+    "depth": 0,
+    "visible": true
+  },
+  {
+    "legacyId": 65,
+    "parentLegacyId": null,
+    "slug": "telecom",
+    "name": {
+      "en": "TELECOM",
+      "ar": "قسم الرصيد",
+      "tr": null
+    },
+    "image": "",
+    "sortOrder": 0,
+    "rootDomain": "telecom",
+    "depth": 0,
+    "visible": true
+  },
+  {
+    "legacyId": 105,
+    "parentLegacyId": 63,
+    "slug": "mobile-legends",
+    "name": {
+      "en": "MOBILE LEGENDS",
+      "ar": "MOBILE LEGENDS",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1725832603.webp",
+    "sortOrder": 11,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 107,
+    "parentLegacyId": null,
+    "slug": "cryptocurrency-section",
+    "name": {
+      "en": "Cryptocurrency Section",
+      "ar": "قسم العملات الرقمية",
+      "tr": null
+    },
+    "image": "",
+    "sortOrder": 0,
+    "rootDomain": "wallets_crypto",
+    "depth": 0,
+    "visible": true
+  },
+  {
+    "legacyId": 108,
+    "parentLegacyId": 107,
+    "slug": "imo",
+    "name": {
+      "en": "IMO",
+      "ar": "IMO",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735580327.webp",
+    "sortOrder": 108,
+    "rootDomain": "wallets_crypto",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 110,
+    "parentLegacyId": 63,
+    "slug": "brawl-stars",
+    "name": {
+      "en": "BRAWL STARS",
+      "ar": "BRAWL STARS",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735585271.webp",
+    "sortOrder": 13,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 111,
+    "parentLegacyId": 63,
+    "slug": "call-of-duty",
+    "name": {
+      "en": "CALL OF DUTY",
+      "ar": "CALL OF DUTY",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735585043.webp",
+    "sortOrder": 14,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 112,
+    "parentLegacyId": 63,
+    "slug": "clash-of-clans",
+    "name": {
+      "en": "CLASH OF CLANS",
+      "ar": "CLASH OF CLANS",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735582627.webp",
+    "sortOrder": 15,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 113,
+    "parentLegacyId": 63,
+    "slug": "clash-royale",
+    "name": {
+      "en": "CLASH ROYALE",
+      "ar": "CLASH ROYALE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735579809.webp",
+    "sortOrder": 16,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 114,
+    "parentLegacyId": 443,
+    "slug": "alfa-gift",
+    "name": {
+      "en": "ALFA GIFT",
+      "ar": "ALFA GIFT",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1729730047.webp",
+    "sortOrder": 3,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 115,
+    "parentLegacyId": null,
+    "slug": "cat-115",
+    "name": {
+      "en": "قسم البطاقات",
+      "ar": "قسم البطاقات",
+      "tr": null
+    },
+    "image": "",
+    "sortOrder": 0,
+    "rootDomain": "giftcards",
+    "depth": 0,
+    "visible": true
+  },
+  {
+    "legacyId": 116,
+    "parentLegacyId": 115,
+    "slug": "itunes-usa",
+    "name": {
+      "en": "ITUNES USA",
+      "ar": "ITUNES USA",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735579370.webp",
+    "sortOrder": 116,
+    "rootDomain": "giftcards",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 117,
+    "parentLegacyId": 178,
+    "slug": "psn-usa",
+    "name": {
+      "en": "PSN USA",
+      "ar": "PSN USA",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1764071460.webp",
+    "sortOrder": 117,
+    "rootDomain": "giftcards",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 118,
+    "parentLegacyId": 115,
+    "slug": "steam",
+    "name": {
+      "en": "STEAM",
+      "ar": "STEAM",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1729997503.webp",
+    "sortOrder": 118,
+    "rootDomain": "giftcards",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 119,
+    "parentLegacyId": 118,
+    "slug": "steam-usa",
+    "name": {
+      "en": "STEAM USA",
+      "ar": "STEAM USA",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1729997564.webp",
+    "sortOrder": 119,
+    "rootDomain": "giftcards",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 124,
+    "parentLegacyId": 63,
+    "slug": "neda2-alharb",
+    "name": {
+      "en": "NEDA2 ALHARB",
+      "ar": "NEDA2 ALHARB",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735580594.webp",
+    "sortOrder": 17,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 125,
+    "parentLegacyId": 115,
+    "slug": "shein",
+    "name": {
+      "en": "SHEIN",
+      "ar": "SHEIN",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735583917.webp",
+    "sortOrder": 125,
+    "rootDomain": "giftcards",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 127,
+    "parentLegacyId": 115,
+    "slug": "ea-sport-global",
+    "name": {
+      "en": "EA SPORT GLOBAL",
+      "ar": "EA SPORT GLOBAL",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1735583883.webp",
+    "sortOrder": 127,
+    "rootDomain": "giftcards",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 128,
+    "parentLegacyId": 115,
+    "slug": "razer-gold",
+    "name": {
+      "en": "RAZER GOLD",
+      "ar": "RAZER GOLD",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1740591415.webp",
+    "sortOrder": 128,
+    "rootDomain": "giftcards",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 130,
+    "parentLegacyId": 61,
+    "slug": "star-lite",
+    "name": {
+      "en": "STAR LITE",
+      "ar": "STAR LITE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1740614724.webp",
+    "sortOrder": 130,
+    "rootDomain": "app_topups",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 132,
+    "parentLegacyId": 443,
+    "slug": "alfa-direct",
+    "name": {
+      "en": "ALFA DIRECT",
+      "ar": "ALFA DIRECT",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1744205175.webp",
+    "sortOrder": 2,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 133,
+    "parentLegacyId": 63,
+    "slug": "8ball-pool-coins",
+    "name": {
+      "en": "8BALL POOL COINS",
+      "ar": "8BALL POOL COINS",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757759255.webp",
+    "sortOrder": 18,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 134,
+    "parentLegacyId": 63,
+    "slug": "8ball-pool-cash",
+    "name": {
+      "en": "8BALL POOL CASH",
+      "ar": "8BALL POOL CASH",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743851082.webp",
+    "sortOrder": 19,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 135,
+    "parentLegacyId": 63,
+    "slug": "fc-mobile",
+    "name": {
+      "en": "FC MOBILE",
+      "ar": "FC MOBILE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743852386.webp",
+    "sortOrder": 20,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 136,
+    "parentLegacyId": 115,
+    "slug": "roblox",
+    "name": {
+      "en": "ROBLOX",
+      "ar": "ROBLOX",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743854324.webp",
+    "sortOrder": 136,
+    "rootDomain": "giftcards",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 137,
+    "parentLegacyId": 63,
+    "slug": "cat-137",
+    "name": {
+      "en": "انتقام السلاطين",
+      "ar": "انتقام السلاطين",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743855416.webp",
+    "sortOrder": 21,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 138,
+    "parentLegacyId": 63,
+    "slug": "fortnite",
+    "name": {
+      "en": "FORTNITE",
+      "ar": "FORTNITE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743856663.webp",
+    "sortOrder": 22,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 139,
+    "parentLegacyId": 63,
+    "slug": "king-of-avalon",
+    "name": {
+      "en": "KING OF AVALON",
+      "ar": "KING OF AVALON",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743859455.webp",
+    "sortOrder": 23,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 140,
+    "parentLegacyId": 63,
+    "slug": "blood-strike",
+    "name": {
+      "en": "BLOOD STRIKE",
+      "ar": "BLOOD STRIKE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743860175.webp",
+    "sortOrder": 24,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 141,
+    "parentLegacyId": 63,
+    "slug": "farlight",
+    "name": {
+      "en": "FARLIGHT",
+      "ar": "FARLIGHT",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743861207.webp",
+    "sortOrder": 25,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 142,
+    "parentLegacyId": 63,
+    "slug": "merge-kingdom",
+    "name": {
+      "en": "MERGE KINGDOM",
+      "ar": "MERGE KINGDOM",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743863523.webp",
+    "sortOrder": 26,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 143,
+    "parentLegacyId": 63,
+    "slug": "infinity-kingdom",
+    "name": {
+      "en": "INFINITY KINGDOM",
+      "ar": "INFINITY KINGDOM",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743865061.webp",
+    "sortOrder": 27,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 144,
+    "parentLegacyId": 63,
+    "slug": "age-of-legand",
+    "name": {
+      "en": "AGE OF LEGAND",
+      "ar": "AGE OF LEGAND",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743865944.webp",
+    "sortOrder": 28,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 146,
+    "parentLegacyId": 63,
+    "slug": "war-robots",
+    "name": {
+      "en": "WAR ROBOTS",
+      "ar": "WAR ROBOTS",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743870967.webp",
+    "sortOrder": 29,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 147,
+    "parentLegacyId": 63,
+    "slug": "un-dawn",
+    "name": {
+      "en": "UN DAWN",
+      "ar": "UN DAWN",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743940046.webp",
+    "sortOrder": 30,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 149,
+    "parentLegacyId": 115,
+    "slug": "google-play",
+    "name": {
+      "en": "GOOGLE PLAY",
+      "ar": "GOOGLE PLAY",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743941834.webp",
+    "sortOrder": 149,
+    "rootDomain": "giftcards",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 150,
+    "parentLegacyId": 63,
+    "slug": "genshin-impact",
+    "name": {
+      "en": "GENSHIN IMPACT",
+      "ar": "GENSHIN IMPACT",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743943892.webp",
+    "sortOrder": 31,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 151,
+    "parentLegacyId": 63,
+    "slug": "arena-breakout",
+    "name": {
+      "en": "ARENA BREAKOUT",
+      "ar": "ARENA BREAKOUT",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1743944949.webp",
+    "sortOrder": 32,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 152,
+    "parentLegacyId": 63,
+    "slug": "we-play",
+    "name": {
+      "en": "WE PLAY",
+      "ar": "WE PLAY",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1744037255.webp",
+    "sortOrder": 33,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 154,
+    "parentLegacyId": 152,
+    "slug": "we-play-gold",
+    "name": {
+      "en": "WE PLAY GOLD",
+      "ar": "WE PLAY GOLD",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1744037506.webp",
+    "sortOrder": 154,
+    "rootDomain": "games",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 155,
+    "parentLegacyId": 152,
+    "slug": "red-package",
+    "name": {
+      "en": "RED PACKAGE",
+      "ar": "RED PACKAGE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1744037672.webp",
+    "sortOrder": 155,
+    "rootDomain": "games",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 156,
+    "parentLegacyId": 444,
+    "slug": "mtc-direct",
+    "name": {
+      "en": "MTC DIRECT",
+      "ar": "MTC DIRECT",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1744206921.webp",
+    "sortOrder": 6,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 157,
+    "parentLegacyId": 443,
+    "slug": "alfa-ushare",
+    "name": {
+      "en": "ALFA USHARE",
+      "ar": "ALFA USHARE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1744207956.webp",
+    "sortOrder": 4,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 158,
+    "parentLegacyId": 443,
+    "slug": "alfa-voucher",
+    "name": {
+      "en": "ALFA VOUCHER",
+      "ar": "ALFA VOUCHER",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1752371045.webp",
+    "sortOrder": 1,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 159,
+    "parentLegacyId": 444,
+    "slug": "mtc-voucher",
+    "name": {
+      "en": "MTC VOUCHER",
+      "ar": "MTC VOUCHER",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1762031490.webp",
+    "sortOrder": 5,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 178,
+    "parentLegacyId": 115,
+    "slug": "playstation-gift-cards",
+    "name": {
+      "en": "Playstation Gift Cards",
+      "ar": "Playstation Gift Cards",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1764075051.webp",
+    "sortOrder": 0,
+    "rootDomain": "giftcards",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 181,
+    "parentLegacyId": 178,
+    "slug": "psn-leb",
+    "name": {
+      "en": "PSN LEB",
+      "ar": "PSN LEB",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1764071719.webp",
+    "sortOrder": 0,
+    "rootDomain": "giftcards",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 184,
+    "parentLegacyId": 178,
+    "slug": "psn-uae",
+    "name": {
+      "en": "PSN  UAE",
+      "ar": "PSN  UAE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1764071760.webp",
+    "sortOrder": 0,
+    "rootDomain": "giftcards",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 216,
+    "parentLegacyId": null,
+    "slug": "gsm-tool",
+    "name": {
+      "en": "GSM Tool",
+      "ar": "قسم ادوات السوفت وير",
+      "tr": null
+    },
+    "image": "",
+    "sortOrder": 0,
+    "rootDomain": "gsm_tools",
+    "depth": 0,
+    "visible": true
+  },
+  {
+    "legacyId": 217,
+    "parentLegacyId": 216,
+    "slug": "dft-pro-tool",
+    "name": {
+      "en": "DFT Pro Tool",
+      "ar": "DFT Pro Tool",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757760387.webp",
+    "sortOrder": 59,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 218,
+    "parentLegacyId": 216,
+    "slug": "chimera-tool-pro",
+    "name": {
+      "en": "Chimera Tool Pro",
+      "ar": "Chimera Tool Pro",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757760671.webp",
+    "sortOrder": 36,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 219,
+    "parentLegacyId": 216,
+    "slug": "pandora-tool-pro",
+    "name": {
+      "en": "Pandora Tool Pro",
+      "ar": "Pandora Tool Pro",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757761593.webp",
+    "sortOrder": 37,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 221,
+    "parentLegacyId": 216,
+    "slug": "unlocktool",
+    "name": {
+      "en": "UnlockTool",
+      "ar": "UnlockTool",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757761916.webp",
+    "sortOrder": 38,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 223,
+    "parentLegacyId": 216,
+    "slug": "tsm-tool-pro",
+    "name": {
+      "en": "TSM Tool Pro",
+      "ar": "TSM Tool Pro",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757761743.webp",
+    "sortOrder": 39,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 231,
+    "parentLegacyId": 216,
+    "slug": "hydra-tool",
+    "name": {
+      "en": "Hydra Tool",
+      "ar": "Hydra Tool",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757761522.webp",
+    "sortOrder": 40,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 232,
+    "parentLegacyId": 216,
+    "slug": "android-multi-tool-amt",
+    "name": {
+      "en": "Android Multi Tool (AMT)",
+      "ar": "Android Multi Tool (AMT)",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757762059.webp",
+    "sortOrder": 41,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 233,
+    "parentLegacyId": 216,
+    "slug": "eft-pro-tool",
+    "name": {
+      "en": "EFT Pro Tool",
+      "ar": "EFT Pro Tool",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757761660.webp",
+    "sortOrder": 42,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 234,
+    "parentLegacyId": 216,
+    "slug": "sigma-plus-box-dongle",
+    "name": {
+      "en": "Sigma Plus / Box / Dongle",
+      "ar": "Sigma Plus / Box / Dongle",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757762349.webp",
+    "sortOrder": 43,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 235,
+    "parentLegacyId": null,
+    "slug": "software-apps",
+    "name": {
+      "en": "Software \u0026 Apps",
+      "ar": "Software \u0026 Apps",
+      "tr": null
+    },
+    "image": "",
+    "sortOrder": 0,
+    "rootDomain": "software",
+    "depth": 0,
+    "visible": true
+  },
+  {
+    "legacyId": 237,
+    "parentLegacyId": 216,
+    "slug": "uni-android-tool-uat-pro",
+    "name": {
+      "en": "Uni Android Tool (UAT PRO)",
+      "ar": "Uni Android Tool (UAT PRO)",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757761982.webp",
+    "sortOrder": 44,
+    "rootDomain": "gsm_tools",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 443,
+    "parentLegacyId": 65,
+    "slug": "alfa",
+    "name": {
+      "en": "ALFA",
+      "ar": "ALFA",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/1618-1756178449.webp",
+    "sortOrder": 443,
+    "rootDomain": "telecom",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 444,
+    "parentLegacyId": 65,
+    "slug": "touch",
+    "name": {
+      "en": "TOUCH",
+      "ar": "TOUCH",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1762032051.webp",
+    "sortOrder": 444,
+    "rootDomain": "telecom",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 445,
+    "parentLegacyId": 444,
+    "slug": "airtime-touch",
+    "name": {
+      "en": "AIRTIME TOUCH",
+      "ar": "AIRTIME TOUCH",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1762031618.webp",
+    "sortOrder": 445,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 446,
+    "parentLegacyId": 443,
+    "slug": "airtime-alfa",
+    "name": {
+      "en": "AIRTIME ALFA",
+      "ar": "AIRTIME ALFA",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757937348.webp",
+    "sortOrder": 446,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 447,
+    "parentLegacyId": null,
+    "slug": "cat-447",
+    "name": {
+      "en": "حوالات مالية",
+      "ar": "حوالات مالية",
+      "tr": null
+    },
+    "image": "",
+    "sortOrder": 0,
+    "rootDomain": "money_transfers",
+    "depth": 0,
+    "visible": true
+  },
+  {
+    "legacyId": 448,
+    "parentLegacyId": 63,
+    "slug": "honor-of-kings",
+    "name": {
+      "en": "HONOR OF KINGS",
+      "ar": "HONOR OF KINGS",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757925818.webp",
+    "sortOrder": 34,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 449,
+    "parentLegacyId": 63,
+    "slug": "pokemon-go",
+    "name": {
+      "en": "POKEMON GO",
+      "ar": "POKEMON GO",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757924213.webp",
+    "sortOrder": 35,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 451,
+    "parentLegacyId": 235,
+    "slug": "chatgpt",
+    "name": {
+      "en": "CHATGPT",
+      "ar": "CHATGPT",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1758387373.webp",
+    "sortOrder": 451,
+    "rootDomain": "software",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 453,
+    "parentLegacyId": 235,
+    "slug": "youtube",
+    "name": {
+      "en": "YOUTUBE",
+      "ar": "YOUTUBE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1758374693.webp",
+    "sortOrder": 453,
+    "rootDomain": "software",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 455,
+    "parentLegacyId": 63,
+    "slug": "lords-mobile",
+    "name": {
+      "en": "LORDS MOBILE",
+      "ar": "LORDS MOBILE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757588931.webp",
+    "sortOrder": 36,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 456,
+    "parentLegacyId": 235,
+    "slug": "playstaion-plus-membership",
+    "name": {
+      "en": "PLAYSTAION PLUS MEMBERSHIP",
+      "ar": "PLAYSTAION PLUS MEMBERSHIP",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1758374308.webp",
+    "sortOrder": 456,
+    "rootDomain": "software",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 458,
+    "parentLegacyId": 235,
+    "slug": "anghami",
+    "name": {
+      "en": "ANGHAMI",
+      "ar": "ANGHAMI",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1758373490.webp",
+    "sortOrder": 458,
+    "rootDomain": "software",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 459,
+    "parentLegacyId": 458,
+    "slug": "anghami-pins",
+    "name": {
+      "en": "ANGHAMI PINS",
+      "ar": "ANGHAMI PINS",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1758373532.webp",
+    "sortOrder": 459,
+    "rootDomain": "software",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 460,
+    "parentLegacyId": 458,
+    "slug": "anghami-account",
+    "name": {
+      "en": "ANGHAMI ACCOUNT",
+      "ar": "ANGHAMI ACCOUNT",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1758373803.webp",
+    "sortOrder": 460,
+    "rootDomain": "software",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 462,
+    "parentLegacyId": 61,
+    "slug": "meyo",
+    "name": {
+      "en": "MEYO",
+      "ar": "MEYO",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757924791.webp",
+    "sortOrder": 462,
+    "rootDomain": "app_topups",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 463,
+    "parentLegacyId": 443,
+    "slug": "alfa-validity",
+    "name": {
+      "en": "ALFA VALIDITY",
+      "ar": "ALFA VALDELITY",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757927035.webp",
+    "sortOrder": 463,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 464,
+    "parentLegacyId": 444,
+    "slug": "mtc-valdelity",
+    "name": {
+      "en": "MTC VALDELITY",
+      "ar": "MTC VALDELITY",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1757934735.webp",
+    "sortOrder": 464,
+    "rootDomain": "telecom",
+    "depth": 2,
+    "visible": true
+  },
+  {
+    "legacyId": 478,
+    "parentLegacyId": 63,
+    "slug": "jawaker",
+    "name": {
+      "en": "JAWAKER",
+      "ar": "JAWAKER",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1758891461.webp",
+    "sortOrder": 5,
+    "rootDomain": "games",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 479,
+    "parentLegacyId": 447,
+    "slug": "cat-479",
+    "name": {
+      "en": "صندوق",
+      "ar": "صندوق",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1759758343.webp",
+    "sortOrder": 479,
+    "rootDomain": "money_transfers",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 480,
+    "parentLegacyId": 61,
+    "slug": "gomeet-today",
+    "name": {
+      "en": "GOMEET TODAY",
+      "ar": "GOMEET TODAY",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1780086938.webp",
+    "sortOrder": 480,
+    "rootDomain": "app_topups",
+    "depth": 1,
+    "visible": true
+  },
+  {
+    "legacyId": 482,
+    "parentLegacyId": 61,
+    "slug": "dd-live",
+    "name": {
+      "en": "DD LIVE",
+      "ar": "DD LIVE",
+      "tr": null
+    },
+    "image": "https://api.salehcard.com/images/category/2519-1780152030.webp",
+    "sortOrder": 482,
+    "rootDomain": "app_topups",
+    "depth": 1,
+    "visible": true
+  }
+]

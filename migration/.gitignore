@@ -1,0 +1,2 @@
+# Import-time fetch cache of legacy-API responses (regenerable via --refresh).
+_raw/

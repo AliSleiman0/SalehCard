@@ -15,8 +15,10 @@ import (
 type Repository interface {
 	FindAll(ctx context.Context, f ListFilter, p pagination.Params) ([]Product, int64, error)
 	FindByID(ctx context.Context, id string) (*Product, error)
+	FindByLegacyID(ctx context.Context, legacyID int) (*Product, error)
 	Create(ctx context.Context, in CreateProductInput) (*Product, error)
 	Update(ctx context.Context, id string, in UpdateProductInput) (*Product, error)
+	Upsert(ctx context.Context, in UpsertProductInput) (*Product, error)
 	Delete(ctx context.Context, id string) error
 	BulkSetAvailable(ctx context.Context, ids []string, available bool) (int64, error)
 	BulkDelete(ctx context.Context, ids []string) (int64, error)
@@ -41,10 +43,20 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 			Keys: bson.D{{Key: "category", Value: 1}},
 		},
 		{
+			// Top-level domain browse (storefront category tiles filter on this).
+			Keys: bson.D{{Key: "rootDomain", Value: 1}},
+		},
+		{
 			Keys: bson.D{
 				{Key: "available", Value: 1},
 				{Key: "createdAt", Value: -1},
 			},
+		},
+		{
+			// Sparse so products without a legacyId (admin-created / dev seed)
+			// don't collide on a single null; unique so re-import upserts by id.
+			Keys:    bson.D{{Key: "legacyId", Value: 1}},
+			Options: options.Index().SetUnique(true).SetSparse(true),
 		},
 	}
 
@@ -58,11 +70,17 @@ func buildFilter(f ListFilter) bson.D {
 	if f.Category != "" {
 		filter = append(filter, bson.E{Key: "category", Value: f.Category})
 	}
+	if f.RootDomain != "" {
+		filter = append(filter, bson.E{Key: "rootDomain", Value: f.RootDomain})
+	}
 	if f.Available != nil {
 		filter = append(filter, bson.E{Key: "available", Value: *f.Available})
 	}
 	if f.FulfillmentType != "" {
 		filter = append(filter, bson.E{Key: "fulfillmentType", Value: f.FulfillmentType})
+	}
+	if f.FulfillmentMode != "" {
+		filter = append(filter, bson.E{Key: "fulfillmentMode", Value: f.FulfillmentMode})
 	}
 	switch f.Status {
 	case "active":
@@ -71,6 +89,8 @@ func buildFilter(f ListFilter) bson.D {
 		filter = append(filter, bson.E{Key: "available", Value: false})
 	case "out":
 		filter = append(filter, bson.E{Key: "stock", Value: 0})
+		// TODO(mode): re-key onto fulfillmentMode==inventory once products are
+		// backfilled (code↔inventory is 1:1 under DeriveMode, so this is correct today).
 		filter = append(filter, bson.E{Key: "fulfillmentType", Value: FulfillmentCode})
 	}
 	if f.Search != "" {
@@ -179,6 +199,53 @@ func (r *MongoRepository) FindByID(ctx context.Context, id string) (*Product, er
 	return &p, nil
 }
 
+// FindByLegacyID retrieves a product by its migration legacyId, or ErrNotFound.
+func (r *MongoRepository) FindByLegacyID(ctx context.Context, legacyID int) (*Product, error) {
+	var p Product
+	err := r.col.FindOne(ctx, bson.D{{Key: "legacyId", Value: legacyID}}).Decode(&p)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
+// CountByRootDomain returns rootDomain -> number of available products, used by
+// the category service to annotate the storefront's root tiles with live counts.
+// Products with an empty rootDomain (dev seed / admin-created) are excluded.
+func (r *MongoRepository) CountByRootDomain(ctx context.Context) (map[string]int64, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{
+			{Key: "available", Value: true},
+			{Key: "rootDomain", Value: bson.D{{Key: "$ne", Value: ""}}},
+		}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$rootDomain"},
+			{Key: "n", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var rows []struct {
+		ID string `bson:"_id"`
+		N  int64  `bson:"n"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		out[row.ID] = row.N
+	}
+	return out, nil
+}
+
 // Create inserts a new product document built from the supplied input.
 // Variant IDs are generated automatically; CreatedAt and UpdatedAt are stamped now.
 func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*Product, error) {
@@ -193,18 +260,28 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		variants[i] = v
 	}
 
+	// Always persist a fulfillmentMode: honor an explicit value, else derive a
+	// behavior-preserving default from the type so the dispatcher never sees an
+	// empty mode for admin-created products.
+	mode := in.FulfillmentMode
+	if mode == "" {
+		mode = DeriveMode(in.FulfillmentType)
+	}
+
 	p := Product{
-		ID:              bson.NewObjectID(),
-		Title:           in.Title,
-		Category:        in.Category,
-		Images:          in.Images,
-		Variants:        variants,
-		FulfillmentType: in.FulfillmentType,
-		Stock:           in.Stock,
-		Available:       in.Available,
-		Ratings:         in.Ratings,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		ID:                  bson.NewObjectID(),
+		Title:               in.Title,
+		Category:            in.Category,
+		Images:              in.Images,
+		Variants:            variants,
+		FulfillmentType:     in.FulfillmentType,
+		FulfillmentMode:     mode,
+		FulfillmentProvider: in.FulfillmentProvider,
+		Stock:               in.Stock,
+		Available:           in.Available,
+		Ratings:             in.Ratings,
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 
 	if _, err := r.col.InsertOne(ctx, p); err != nil {
@@ -212,6 +289,73 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 	}
 
 	return &p, nil
+}
+
+// Upsert inserts or updates a product keyed on legacyId (the catalog migration
+// loader). Insert-only fields (_id, createdAt, legacyId, variants, stock,
+// ratings) live in $setOnInsert so re-import never clobbers admin-managed stock
+// or churns the variant _id that order history references; everything else is
+// refreshed each run via $set.
+func (r *MongoRepository) Upsert(ctx context.Context, in UpsertProductInput) (*Product, error) {
+	now := time.Now().UTC()
+
+	variants := make([]Variant, len(in.Variants))
+	for i, v := range in.Variants {
+		if v.ID.IsZero() {
+			v.ID = bson.NewObjectID()
+		}
+		variants[i] = v
+	}
+
+	mode := in.FulfillmentMode
+	if mode == "" {
+		mode = DeriveMode(in.FulfillmentType)
+	}
+
+	set := bson.D{
+		{Key: "updatedAt", Value: now},
+		{Key: "title", Value: in.Title},
+		{Key: "category", Value: in.Category},
+		{Key: "categorySlug", Value: in.CategorySlug},
+		{Key: "rootDomain", Value: in.RootDomain},
+		{Key: "legacyCategoryId", Value: in.LegacyCategoryID},
+		{Key: "images", Value: in.Images},
+		{Key: "description", Value: in.Description},
+		{Key: "descriptionHadMarkup", Value: in.DescriptionHadMarkup},
+		{Key: "fulfillmentType", Value: in.FulfillmentType},
+		{Key: "fulfillmentMode", Value: mode},
+		{Key: "fulfillmentProvider", Value: in.FulfillmentProvider},
+		{Key: "fulfillmentConfidence", Value: in.FulfillmentConfidence},
+		{Key: "fulfillmentCancellable", Value: in.FulfillmentCancellable},
+		{Key: "pricing", Value: in.Pricing},
+		{Key: "amountConstraints", Value: in.AmountConstraints},
+		{Key: "inputFields", Value: in.InputFields},
+		{Key: "verification", Value: in.Verification},
+		{Key: "available", Value: in.Available},
+		{Key: "status", Value: in.Status},
+		{Key: "sortOrder", Value: in.SortOrder},
+		{Key: "flags", Value: in.Flags},
+	}
+	setOnInsert := bson.D{
+		{Key: "_id", Value: bson.NewObjectID()},
+		{Key: "createdAt", Value: now},
+		{Key: "legacyId", Value: in.LegacyID},
+		{Key: "variants", Value: variants},
+		{Key: "stock", Value: 0},
+		{Key: "ratings", Value: RatingsSummary{}},
+	}
+
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	var updated Product
+	err := r.col.FindOneAndUpdate(ctx,
+		bson.D{{Key: "legacyId", Value: in.LegacyID}},
+		bson.D{{Key: "$set", Value: set}, {Key: "$setOnInsert", Value: setOnInsert}},
+		opts,
+	).Decode(&updated)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
 }
 
 // Update applies a partial update to the product identified by id.
@@ -247,6 +391,12 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	}
 	if in.FulfillmentType != nil {
 		set = append(set, bson.E{Key: "fulfillmentType", Value: *in.FulfillmentType})
+	}
+	if in.FulfillmentMode != nil {
+		set = append(set, bson.E{Key: "fulfillmentMode", Value: *in.FulfillmentMode})
+	}
+	if in.FulfillmentProvider != nil {
+		set = append(set, bson.E{Key: "fulfillmentProvider", Value: *in.FulfillmentProvider})
 	}
 	if in.Stock != nil {
 		set = append(set, bson.E{Key: "stock", Value: *in.Stock})

@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
-	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 )
 
 // ---------------------------------------------------------------------------
@@ -81,6 +81,23 @@ func (m *mockRepo) BulkDelete(_ context.Context, ids []string) (int64, error) {
 	return int64(len(ids)), nil
 }
 
+func (m *mockRepo) FindByLegacyID(_ context.Context, _ int) (*product.Product, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if len(m.products) == 0 {
+		return nil, apperrors.ErrNotFound
+	}
+	return &m.products[0], nil
+}
+
+func (m *mockRepo) Upsert(_ context.Context, in product.UpsertProductInput) (*product.Product, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &product.Product{Title: in.Title, Category: in.Category}, nil
+}
+
 // ---------------------------------------------------------------------------
 // Service tests
 // ---------------------------------------------------------------------------
@@ -102,11 +119,11 @@ func TestProductService_List(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		repo          *mockRepo
-		wantCount     int
-		wantTotal     int64
-		wantErr       bool
+		name      string
+		repo      *mockRepo
+		wantCount int
+		wantTotal int64
+		wantErr   bool
 	}{
 		{
 			name:      "returns two products",
@@ -178,10 +195,10 @@ func TestHandler_GetByID_NotFound(t *testing.T) {
 
 func TestProductService_Bulk(t *testing.T) {
 	tests := []struct {
-		name     string
-		in       product.BulkInput
-		wantN    int64
-		wantErr  bool
+		name    string
+		in      product.BulkInput
+		wantN   int64
+		wantErr bool
 	}{
 		{
 			name:  "activate two",

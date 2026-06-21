@@ -1,0 +1,5993 @@
+{
+  "note": "Human worklist: every product/category needing a decision and why. Resolve via overrides.json, then re-run.",
+  "totalProducts": 635,
+  "totalCategories": 86,
+  "flagCounts": {
+    "amount_corruption": 1,
+    "fulfillment_review": 524,
+    "fx_rate_review": 31,
+    "markup_stripped": 106,
+    "needs_translation": 721,
+    "pricing_review": 311,
+    "sensitive_input": 12
+  },
+  "productsByRootDomain": {
+    "app_topups": 255,
+    "games": 178,
+    "giftcards": 46,
+    "gsm_tools": 52,
+    "money_transfers": 14,
+    "software": 27,
+    "telecom": 52,
+    "wallets_crypto": 11
+  },
+  "notes": [
+    "Category 107 \"Cryptocurrency Section\" is mislabeled — recommend splitting/renaming into Crypto and E-Wallets, and moving IMO under app top-ups. Emitted with rootDomain=wallets_crypto; do not silently rename.",
+    "Provider IDs behind check_name (e.g. provider 5 = PUBG verifier) need owner confirmation before real api adapters are wired.",
+    "Money-transfer and Syrian-telecom pricing carries embedded/stale FX (flag fx_rate_review) — owner decision: live FX vs manual updates.",
+    "Products flagged fulfillment_review default to manual_operator (safer) — confirm or set fulfillment.mode in overrides.json."
+  ],
+  "items": [
+    {
+      "kind": "product",
+      "legacyId": 18,
+      "title": "UC 60",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 22,
+      "title": "100 FREE FIRE DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 45,
+      "title": "325 UC",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 47,
+      "title": "210+21 Free Fire Diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 48,
+      "title": "YOHO WAKA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 63,
+      "title": "530+53 FREE FIRE DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 64,
+      "title": "AHLAN CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 72,
+      "title": "LIKEE LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 75,
+      "title": "660 UC",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 76,
+      "title": "FREE FIRE DIAMOND 1080+108",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 109,
+      "title": "BIGO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 118,
+      "title": "TIKTOK",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 119,
+      "title": "1800 UC",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 124,
+      "title": "UC 3850",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 128,
+      "title": "8100 UC",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 129,
+      "title": "LAMA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 134,
+      "title": "TALK TALK",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 137,
+      "title": "SUPER LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 139,
+      "title": "HIYA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 141,
+      "title": "UP LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 143,
+      "title": "OOHLA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 145,
+      "title": "BEELA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 147,
+      "title": "4FUN CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 148,
+      "title": "XENA LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 149,
+      "title": "AZAL LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 151,
+      "title": "LIGO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 152,
+      "title": "POPPO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 153,
+      "title": "LIGHT CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 154,
+      "title": "LAMI CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 155,
+      "title": "HAKI CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 156,
+      "title": "HAWA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 157,
+      "title": "YOYO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 159,
+      "title": "TADA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 162,
+      "title": "MIGO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 163,
+      "title": "Lit Chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 165,
+      "title": "HONEY JAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 167,
+      "title": "HABBY CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 168,
+      "title": "HAYA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 169,
+      "title": "FANCY LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 170,
+      "title": "MICO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 172,
+      "title": "BOBO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 175,
+      "title": "SOUL U",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 176,
+      "title": "SKY CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 177,
+      "title": "KIYO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 178,
+      "title": "BINMO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 185,
+      "title": "SOUL CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 192,
+      "title": "JAWAKER TOKEN",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 344,
+      "title": "DIMO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 364,
+      "title": "PIKA STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 367,
+      "title": "TAMI CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 376,
+      "title": "WYAK CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 377,
+      "title": "DITTO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 378,
+      "title": "IFUN CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 385,
+      "title": "PARTY STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 387,
+      "title": "SOULCHILL",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 391,
+      "title": "GIMME LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 392,
+      "title": "YOOY CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 394,
+      "title": "WAHO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 397,
+      "title": "TOPTOP",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 398,
+      "title": "VICO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 402,
+      "title": "AYOME CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 408,
+      "title": "SABA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 413,
+      "title": "WEGO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 416,
+      "title": "NABD CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 417,
+      "title": "ALULU CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 418,
+      "title": "GOLD CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 421,
+      "title": "2320 LUDO DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 422,
+      "title": "5150 LUDO DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 423,
+      "title": "13580 LUDO DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 424,
+      "title": "27640 LUDO DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 425,
+      "title": "55800 LUDO DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 432,
+      "title": "DIAMONDS 38+4",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 433,
+      "title": "254+30 Diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 435,
+      "title": "Diamonds  504+66",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 436,
+      "title": "383+46 DIAMONS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 437,
+      "title": "HIYOO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 438,
+      "title": "YAAHLAN CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 448,
+      "title": "CART MTC 7.5$ VOUCHER",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 450,
+      "title": "Diamonds 625+81",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 453,
+      "title": "SUGO lite",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 459,
+      "title": "TANGO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 460,
+      "title": "USDT TRC20",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "pricing_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 461,
+      "title": "USDT BEP20",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "pricing_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 462,
+      "title": "PERFECT MONEY",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "pricing_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 463,
+      "title": "WHISH MONEY",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "pricing_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 464,
+      "title": "PAYEER",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "pricing_review",
+        "sensitive_input",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 465,
+      "title": "IMO 100",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 467,
+      "title": "IMO 200",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 468,
+      "title": "IMO 500",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 469,
+      "title": "IMO 1000",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 470,
+      "title": "IMO 2000",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 471,
+      "title": "IMO 5000",
+      "rootDomain": "wallets_crypto",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 472,
+      "title": "CART MTC 4.5$ VOUCHER",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 477,
+      "title": "33 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 478,
+      "title": "80 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 479,
+      "title": "170 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 480,
+      "title": "360 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 481,
+      "title": "950 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 483,
+      "title": "BRAWL STAR PASS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 484,
+      "title": "31 CP",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 485,
+      "title": "63 CP",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 487,
+      "title": "960 CP",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 488,
+      "title": "2600 CP",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 489,
+      "title": "5400 CP",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 490,
+      "title": "80 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 491,
+      "title": "500 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 492,
+      "title": "1200 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 493,
+      "title": "2500 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 494,
+      "title": "6500 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 495,
+      "title": "14000 GEMS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 496,
+      "title": "GOLD PASS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 497,
+      "title": "GEMS 80",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 498,
+      "title": "GEMS 500",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 499,
+      "title": "GEMS 2500",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 500,
+      "title": "GEMS 6500",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 501,
+      "title": "GEMS 14000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 502,
+      "title": "DIAMOND PASS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 527,
+      "title": "TAGS 500",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 528,
+      "title": "TAGS 1000",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 529,
+      "title": "TAGS 2000",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 530,
+      "title": "TAGS 5000",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 531,
+      "title": "TAGS 10000",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 536,
+      "title": "LAYLA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 537,
+      "title": "Somatch",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 539,
+      "title": "HOBY CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 540,
+      "title": "COCCO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 541,
+      "title": "OLAMET CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 542,
+      "title": "HABI CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 568,
+      "title": "OPA LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 569,
+      "title": "MANGO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 570,
+      "title": "TOP VOICE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 571,
+      "title": "HAMI PARTY",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 572,
+      "title": "CHAMET",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 573,
+      "title": "LIONS CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 574,
+      "title": "MAZYOUN ZINA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 576,
+      "title": "SAWALFNA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 577,
+      "title": "SPARTY CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 579,
+      "title": "YOBI CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 580,
+      "title": "MAAN CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 584,
+      "title": "HOKI CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 585,
+      "title": "STAR LITE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 587,
+      "title": "STAR LITE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 588,
+      "title": "HIPLAY CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 589,
+      "title": "HALA ME",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 590,
+      "title": "ASHA LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 591,
+      "title": "WASLA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 594,
+      "title": "NIMO TV",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 595,
+      "title": "LAYAM",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 596,
+      "title": "SYRIATEL",
+      "rootDomain": "telecom",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "fx_rate_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 597,
+      "title": "MTN",
+      "rootDomain": "telecom",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "fx_rate_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 605,
+      "title": "SOUL STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 607,
+      "title": "NAWA LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 611,
+      "title": "MOLI STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 613,
+      "title": "SAMA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 615,
+      "title": "DANA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 616,
+      "title": "HIGO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 617,
+      "title": "IMU CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 618,
+      "title": "AMAR CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 619,
+      "title": "MAJLIS CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 626,
+      "title": "8BALL POOL COINS 20000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 627,
+      "title": "8ball pool coins 52000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 628,
+      "title": "8ball pool coins 112000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 629,
+      "title": "8ball pool coins 256000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 630,
+      "title": "8ball pool coins 800000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 631,
+      "title": "8ball pool coins 2000000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 632,
+      "title": "8BALLPOOL CASH 50",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 633,
+      "title": "8BALLPOOL CASH 110",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 634,
+      "title": "8BALLPOOL CASH 250",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 635,
+      "title": "8BALLPOOL CASH  800",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 636,
+      "title": "8BALLPOOL CASH  2000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 637,
+      "title": "FC 40 POINTS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 638,
+      "title": "FC 100POINTS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 639,
+      "title": "FC  520 POINTS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 640,
+      "title": "FC 1070 POINTS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 641,
+      "title": "FC 2200 POINTS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 642,
+      "title": "FC 5750 POINTS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 643,
+      "title": "FC 12000 POINTS",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 649,
+      "title": "عملة سلطانية 10",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 650,
+      "title": "عملة سلطانية 20",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 651,
+      "title": "عملة سلطانية 30",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 652,
+      "title": "عملة سلطانية 40",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 653,
+      "title": "عملة سلطانية 50",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 654,
+      "title": "عملة سلطانية 100",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 655,
+      "title": "عملة سلطانية 200",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 656,
+      "title": "عملة سلطانية 500",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 657,
+      "title": "عملة سلطانية 1000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 658,
+      "title": "V-BUCKS  1000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 659,
+      "title": "V-BUCKS  2800",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 660,
+      "title": "V-BUCKS  5000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 661,
+      "title": "KING OF AVLON 500 DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 662,
+      "title": "KING OF AVLON 1000 DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 663,
+      "title": "KING OF AVLON 2000 DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 664,
+      "title": "KING OF AVLON 5000 DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 665,
+      "title": "KING OF AVLON 10000 DIAMOND",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 666,
+      "title": "BLOOD STRIKE 300 GOLD",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 667,
+      "title": "BLOOD STRIKE 500 GOLD",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 668,
+      "title": "BLOOD STRIKE 1000 GOLD",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 669,
+      "title": "BLOOD STRIKE 2000 GOLD",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 670,
+      "title": "BLOOD STRIKE 5000 GOLD",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 671,
+      "title": "FARLIGHT  80",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 672,
+      "title": "FARLIGHT  100",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 673,
+      "title": "FARLIGHT  165",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 674,
+      "title": "FARLIGHT  220",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 675,
+      "title": "FARLIGHT  330",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 676,
+      "title": "FARLIGHT  880",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 677,
+      "title": "FARLIGHT  2240",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 678,
+      "title": "FARLIGHT  4700",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 679,
+      "title": "MERGE 1",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 680,
+      "title": "MERGE 5",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 681,
+      "title": "MERGE 30",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 682,
+      "title": "INFINITY KINGDOM 1",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 684,
+      "title": "INFINITY KINGDOM 2",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 686,
+      "title": "INFINITY KINGDOM 3",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 687,
+      "title": "INFINITY KINGDOM 4",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 688,
+      "title": "AGE OF LEGENDS -USD 1",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 689,
+      "title": "AGE OF LEGENDS -USD 5",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 690,
+      "title": "AGE OF LEGENDS -USD 15",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 698,
+      "title": "WAR ROBOTS 250",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 699,
+      "title": "WAR ROBOTS 500",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 700,
+      "title": "WAR ROBOTS 787",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 701,
+      "title": "WAR ROBOTS 1575",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 702,
+      "title": "WAR ROBOTS 2625",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 703,
+      "title": "UN DAWN 50 +5 RC",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 704,
+      "title": "UN DAWN 150+20 RC",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 705,
+      "title": "UN DAWN250+35 RC",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 707,
+      "title": "WHATS APP",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 714,
+      "title": "GC 60",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 715,
+      "title": "GC 330",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 716,
+      "title": "G C 1090",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 717,
+      "title": "G C  3880",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 718,
+      "title": "G C   8080",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 719,
+      "title": "WELKIN MOON",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 720,
+      "title": "ARENA BREAKOUT 60CP(INT)",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 721,
+      "title": "ARENA BREAKOUT  310 P(INT)",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 722,
+      "title": "ARENA BREAKOUT   630  P(INT)",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 723,
+      "title": "ARENA BREAKOUT    1580 CP(INT)",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 724,
+      "title": "WE PLAY GOLD 3000",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 725,
+      "title": "WE PLAY GOLD 10000",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 726,
+      "title": "WE PLAY GOLD 50000",
+      "rootDomain": "games",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 727,
+      "title": "RED PACKAGE 3000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 728,
+      "title": "RED PACKAGE 10000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 735,
+      "title": "MTC MAGIC 3.79DIRECT",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 736,
+      "title": "MTC MAGIC 4.50DIRECT",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 737,
+      "title": "MTC MAGIC 7.58 DIRECT",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 738,
+      "title": "MTC MAGIC 15.15 DIRECT",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 739,
+      "title": "MTC MAGIC 22.73 DIRECT",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 740,
+      "title": "MTC MAGIC 77.28 DIRECT",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 744,
+      "title": "Kwai live",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 745,
+      "title": "Pockat chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 746,
+      "title": "Waki star",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 747,
+      "title": "Allo chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 748,
+      "title": "Soyo",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 749,
+      "title": "Gala star",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 750,
+      "title": "Yolo",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 751,
+      "title": "Junko",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 752,
+      "title": "Salam chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 753,
+      "title": "Taka live",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 754,
+      "title": "Hi party",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 755,
+      "title": "Marhaba chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 756,
+      "title": "Sodfa chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 757,
+      "title": "Karawan",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 758,
+      "title": "Yami star",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 762,
+      "title": "Kiti chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 763,
+      "title": "MTC MAGIC 15.15 VOUCHER",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 764,
+      "title": "MTC MAGIC 3.79",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 765,
+      "title": "MTC MAGIC 22.73",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 766,
+      "title": "MTC MAGIC 77.28",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 767,
+      "title": "Saada",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 768,
+      "title": "Pep live",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 769,
+      "title": "Saya likee",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 772,
+      "title": "7star",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 774,
+      "title": "Westar",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 775,
+      "title": "Yudo fun",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 776,
+      "title": "Star chat1",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 777,
+      "title": "Hayuki",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 778,
+      "title": "4party chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 779,
+      "title": "Dream chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 780,
+      "title": "Hati",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 781,
+      "title": "Pawa live",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 782,
+      "title": "Ghanny live",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 783,
+      "title": "Arza live",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 784,
+      "title": "Party hero",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 785,
+      "title": "Shila chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 786,
+      "title": "Fofo chat",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 788,
+      "title": "Vova",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 789,
+      "title": "POTA LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 790,
+      "title": "LOTFUN CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 791,
+      "title": "BOLI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 792,
+      "title": "HOOB LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 793,
+      "title": "AMO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 794,
+      "title": "FUN STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 795,
+      "title": "FUN UP",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 796,
+      "title": "ROSTAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 797,
+      "title": "JOYO LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 798,
+      "title": "MAZA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 799,
+      "title": "1STAR CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 800,
+      "title": "LADO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 801,
+      "title": "YOPARTI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 803,
+      "title": "WAAW CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 808,
+      "title": "Chimera Tool Basic 100 device",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 809,
+      "title": "TSM-TOOL Pro 6 Months",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 810,
+      "title": "Uni Android Tool 3 Months / Renewal",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 821,
+      "title": "Chimera Tool Professional 1500 device",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 822,
+      "title": "TSM-TOOL Pro 1 Year",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 824,
+      "title": "Uni Android Tool 6 Months New / Renew",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 835,
+      "title": "Chimera Tool Premium 5000 device",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 836,
+      "title": "TSM-TOOL Pro 2 Years",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 838,
+      "title": "Uni Android Tool 12 Months / Renewal",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 849,
+      "title": "Chimera Tool  Credits (Any Quantity)",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "fulfillment_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 850,
+      "title": "TSM-Pro Add Credits",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 851,
+      "title": "Uni Android Tool 12 Months New Active",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 860,
+      "title": "Uni Android Tool 2 Year Activation New",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 870,
+      "title": "Uni Android Tool  2 Year / Renewal",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1131,
+      "title": "DFT PRO -  12 Months Activation ( NEW USER )",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1132,
+      "title": "DFT PRO -  12 Months Activation ( OLD USER )",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1133,
+      "title": "Pandora Tool Online Digital Licens ( 1 Year ) Renewal { Without Box }",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1134,
+      "title": "Active Pandora For ( Z3X Box/Dongle / Easy Jtag / Easy Jtag Plus ) { 1 Year Only }",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1135,
+      "title": "Pandora Tool Online Digital Licens ( 1 Year ) { Without Box - بدون بوكس }",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1136,
+      "title": "UnlockTool 3 Months NEW / RENEW License",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1137,
+      "title": "UnlockTool (6 Months) Activation License",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1138,
+      "title": "UnlockTool (12 Months Activation) License",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1152,
+      "title": "Hydra Tool Digital License (3 Months) Without Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1153,
+      "title": "Hydra Tool Digital License (6 Months) Without Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1154,
+      "title": "Hydra Tool Digital License (12 Months) Without Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1155,
+      "title": "Hydra Tool PRO PACK With Hydra Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1156,
+      "title": "( EFT Pro Tool Activation ( 1 Month Without Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1157,
+      "title": "( EFT Pro Tool Activation ( 3 Month Without Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1158,
+      "title": "( EFT Pro Tool Activation ( 6 Month Without Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1159,
+      "title": "( EFT Pro Tool Activation ( 1 Year Without Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1160,
+      "title": "EFT Pro Tool Activation [ 1 Year ] Renew Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1161,
+      "title": "( EFT Pro Tool Activation ( 1 Year Without Dongle Renew Expired User",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1162,
+      "title": "EFT Pro Dongle Activation 2 Year Renew Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1163,
+      "title": "Sigma Plus 3 Days License",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1164,
+      "title": "Sigma Plus 1 Month License",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1165,
+      "title": "Sigma Plus 3 Months License",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1199,
+      "title": "Z3x Samsung (Box or Dongle) Activation",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "fulfillment_review",
+        "amount_corruption",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1209,
+      "title": "(Griffin Tool Unlocker  (12 Months",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1219,
+      "title": "(KG Fix Tool  Activation (12 Month",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1230,
+      "title": "Cheetah Tool PRO (12 Month)  Auto API",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1287,
+      "title": "XiaomiKEY Generate MTK KEY by Token mmtk",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1293,
+      "title": "(MotoKingPRO (3 month 1 PC",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1297,
+      "title": "Xaiomi Fix Pro (Existing User)",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1306,
+      "title": "Global Unlocker Pro unlock (New User)",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "fulfillment_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1410,
+      "title": "HXRU Auth Tool Credit Existing User",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1462,
+      "title": "(Sigma Plus 6 Month Activation (Box/Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1463,
+      "title": "(Sigma Plus 1 Year Activation (Box/Dongle",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1596,
+      "title": "Android Multi Tool (AMT) 3 Months Activation",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1597,
+      "title": "Android Multi Tool (AMT) 6 Months Activation",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1598,
+      "title": "Android Multi Tool (AMT) 12 Months Activation",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1599,
+      "title": "Android Multi Tool (AMT) Credits",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "fulfillment_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1672,
+      "title": "Hydra Tool - Credit",
+      "rootDomain": "gsm_tools",
+      "flags": [
+        "fulfillment_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1763,
+      "title": "MTC MAGIC 10 DIRECT",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1764,
+      "title": "MTC MAGIC 10",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1780,
+      "title": "حوالات الدولار الأمريكي",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1781,
+      "title": "UP FUN",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1782,
+      "title": "8.000 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1783,
+      "title": "4.000 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1784,
+      "title": "2.400 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1786,
+      "title": "1.200 +bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1787,
+      "title": "800 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1788,
+      "title": "560 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1789,
+      "title": "400 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1791,
+      "title": "240 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1792,
+      "title": "80 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1793,
+      "title": "16 + bonus tokens",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1794,
+      "title": "100+10pokecoins",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1795,
+      "title": "550+50pokecoins",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1796,
+      "title": "1.200+100pokecoins",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1797,
+      "title": "2.500+200pokecoins",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1798,
+      "title": "5.200+400pokecoins",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1799,
+      "title": "14.500+1.000pokecoins",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1800,
+      "title": "ChatGPT plus 12 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1801,
+      "title": "ChatGPT plus 6 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1802,
+      "title": "ChatGPT team 12 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1803,
+      "title": "ChatGPT pro 1 month",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1804,
+      "title": "ChatGPT plus 9 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1805,
+      "title": "Chat GPT plus 3 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1806,
+      "title": "Chat GPT plus 1 month",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1807,
+      "title": "ChatGPT pro 3 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1808,
+      "title": "ChatGPT team 1 month",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1809,
+      "title": "ChatGPT pro 12 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1810,
+      "title": "ChatGPT pro 6 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1814,
+      "title": "youtube premium 1 year",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1815,
+      "title": "youtube premium 1 month",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1816,
+      "title": "youtube premium 3 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1818,
+      "title": "99 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1819,
+      "title": "195 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1820,
+      "title": "weekly pass",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1821,
+      "title": "199 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1822,
+      "title": "201 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1823,
+      "title": "395 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1824,
+      "title": "499 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1825,
+      "title": "500 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1826,
+      "title": "785 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1827,
+      "title": "999 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1828,
+      "title": "1045 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1829,
+      "title": "1179 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1830,
+      "title": "1999 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1831,
+      "title": "2090 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1832,
+      "title": "1964 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1833,
+      "title": "monthly pass",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1834,
+      "title": "2505 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1835,
+      "title": "4016 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1836,
+      "title": "4999 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1837,
+      "title": "6265 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1838,
+      "title": "7857 diamond",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1839,
+      "title": "9999 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1840,
+      "title": "11.785 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1841,
+      "title": "19.642 diamonds",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1842,
+      "title": "palystaion premium 12 month",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1843,
+      "title": "playstaion plus extra 12 Months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1844,
+      "title": "playstaion plus essential 12 Months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1845,
+      "title": "playstaion plus premium 6 Months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1846,
+      "title": "playstaion plus essential 6 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1847,
+      "title": "plystaion plus essential 1 monaths",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1848,
+      "title": "playstaion plus essential 3 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1849,
+      "title": "Anghami plus 12 months (global)",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1850,
+      "title": "Anghami plus 1 months (global)",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1851,
+      "title": "Anghami plus 1 month",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1852,
+      "title": "Anghami plus 3 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1853,
+      "title": "Anghami plus 6 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1854,
+      "title": "Anghami plus 12 months",
+      "rootDomain": "software",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1856,
+      "title": "حوالات الهرم المركزي",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1857,
+      "title": "محافظ و بنوك تركيا",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1858,
+      "title": "محافظ و بنوك العراق",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1859,
+      "title": "محافظ و بنوك مصر",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "sensitive_input",
+        "markup_stripped",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1860,
+      "title": "ويش موني لبنان",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1862,
+      "title": "whish money cash out",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1871,
+      "title": "MEYO 490",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1872,
+      "title": "MEYO 980",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1873,
+      "title": "MEYO 1960",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1874,
+      "title": "MEYO 4900",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1875,
+      "title": "MEYO 9800",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1876,
+      "title": "MEYO 19600",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1877,
+      "title": "MEYO VIP 7 DAYS",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1878,
+      "title": "MEYO VIP 30 DAYS",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1879,
+      "title": "MEYO VIP 90 DAYS",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1880,
+      "title": "MEYO CARD MONTH",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1881,
+      "title": "MEYO FAMILY PASS",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1883,
+      "title": "MTC VALDELITY 1 YEAR",
+      "rootDomain": "telecom",
+      "flags": [
+        "fulfillment_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1885,
+      "title": "JAWAKER 400.000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1886,
+      "title": "JAWAKER 230000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1887,
+      "title": "JAWAKER 150.000",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1888,
+      "title": "BLUE BOOSTER",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1889,
+      "title": "RED BOOSTER",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1892,
+      "title": "BLACK BOOSTER",
+      "rootDomain": "games",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1893,
+      "title": "WESTERN UNION",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1894,
+      "title": "SHAM CASH",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1896,
+      "title": "BOB",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1900,
+      "title": "BINANCE",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1902,
+      "title": "شركة تايغر",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "pricing_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1903,
+      "title": "شركة تواصل",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "pricing_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1904,
+      "title": "شركة دهب",
+      "rootDomain": "money_transfers",
+      "flags": [
+        "pricing_review",
+        "fx_rate_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1905,
+      "title": "LUDO FUN",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1906,
+      "title": "SUPERMEET",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1908,
+      "title": "Chirp",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1909,
+      "title": "LEESKI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1910,
+      "title": "SAHRA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1911,
+      "title": "YOHOO STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1912,
+      "title": "HALO STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1913,
+      "title": "NAHKI CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1914,
+      "title": "HAGO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1915,
+      "title": "MANGO STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1916,
+      "title": "INFUN",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1917,
+      "title": "VOCA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1918,
+      "title": "CARNI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1919,
+      "title": "GAMET",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1920,
+      "title": "HALALA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1921,
+      "title": "VILAA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1922,
+      "title": "HILLA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1923,
+      "title": "HAMSTER",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1924,
+      "title": "SALA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1925,
+      "title": "YEEHA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1926,
+      "title": "ROOH",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1927,
+      "title": "NADDY STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1928,
+      "title": "WILL CHILL",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1929,
+      "title": "DAWA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1930,
+      "title": "YAZA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1931,
+      "title": "DIDO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1932,
+      "title": "TOMOHI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1933,
+      "title": "MAZAG",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1935,
+      "title": "DOLI LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1936,
+      "title": "ZAAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1937,
+      "title": "HART LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1938,
+      "title": "OUR TALK",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1939,
+      "title": "YO2",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1941,
+      "title": "HOPI STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1942,
+      "title": "LKLK",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1944,
+      "title": "YOKI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1945,
+      "title": "HAPI ARAB",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1947,
+      "title": "DIKA LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1949,
+      "title": "YAYYA CAHT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1950,
+      "title": "CRUSH LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1951,
+      "title": "OLOO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1953,
+      "title": "YENA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1954,
+      "title": "SOUL CHAT 1",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1955,
+      "title": "TUMILE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1956,
+      "title": "WEGO PARTY",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1957,
+      "title": "VO STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1958,
+      "title": "LIVU",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1959,
+      "title": "ARIA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1960,
+      "title": "STARMAKER",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1961,
+      "title": "KESSMET CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1962,
+      "title": "JACO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1963,
+      "title": "YOPPO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1964,
+      "title": "ANDROID",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1965,
+      "title": "FALLA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1968,
+      "title": "YOSO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1969,
+      "title": "VONE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1970,
+      "title": "4CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1971,
+      "title": "AMISU PARTY",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1973,
+      "title": "BEST LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1974,
+      "title": "CHATI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1975,
+      "title": "FABY STAR",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1976,
+      "title": "LITME",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1977,
+      "title": "MIKOO CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1978,
+      "title": "MOMA LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1979,
+      "title": "NAFASS",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1980,
+      "title": "NIU CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1981,
+      "title": "NIVI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1982,
+      "title": "OHLA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1983,
+      "title": "RIXO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1984,
+      "title": "SILLAGCC",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1985,
+      "title": "SOPHIA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1986,
+      "title": "TAYA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1987,
+      "title": "TI LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1988,
+      "title": "UM NOW",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1989,
+      "title": "VOOLAA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1990,
+      "title": "WAHDA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1991,
+      "title": "SHAGHAF CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1992,
+      "title": "WIKOO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1993,
+      "title": "WINKO",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1994,
+      "title": "YULA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1995,
+      "title": "ZAFFA LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1996,
+      "title": "ezzo",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1997,
+      "title": "Gomeet Today 360",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1998,
+      "title": "Gomeet Today 650",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 1999,
+      "title": "Gomeet Today 1250",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2000,
+      "title": "Gomeet Today 1800",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2001,
+      "title": "Gomeet Today 3500",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2002,
+      "title": "Gomeet Today 7000",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2003,
+      "title": "Gomeet Today 15000",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2004,
+      "title": "Gomeet Today 35000",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2005,
+      "title": "DD LIVE 8904",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2006,
+      "title": "VVSTAR LIVE",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2008,
+      "title": "DD LIVE 44874",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2009,
+      "title": "DD LIVE 89853",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2010,
+      "title": "DD LIVE 449685",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2011,
+      "title": "DD LIVE 899695",
+      "rootDomain": "app_topups",
+      "flags": [
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2013,
+      "title": "SAHI",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2014,
+      "title": "LAKA CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2015,
+      "title": "SHABAB CHAT",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    },
+    {
+      "kind": "product",
+      "legacyId": 2016,
+      "title": "BULALA",
+      "rootDomain": "app_topups",
+      "flags": [
+        "pricing_review",
+        "fulfillment_review",
+        "needs_translation"
+      ]
+    }
+  ]
+}
