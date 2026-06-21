@@ -8,6 +8,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -26,18 +27,20 @@ type Service interface {
 
 // OrderService is the concrete implementation of Service. It orchestrates
 // pricing (from the product catalog), payment (wallet/card/usdt), and
-// fulfillment (claiming codes from inventory).
+// fulfillment — dispatching each order down one of four paths keyed on the
+// product's fulfillment mode (inventory / api / manual_operator / bridge_device).
 type OrderService struct {
-	repo     Repository
-	products product.Service
-	codes    code.Service
-	wallet   wallet.Service
+	repo      Repository
+	products  product.Service
+	codes     code.Service
+	wallet    wallet.Service
+	providers *provider.Registry
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
-// inventory, and wallet services it depends on.
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt}
+// inventory, wallet, and upstream-provider registry it depends on.
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, providers *provider.Registry) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, providers: providers}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -69,11 +72,11 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		}
 	}
 
-	// 3. Re-price every line from the catalog (never trust client prices).
+	// 3. Re-price every line from the catalog (never trust client prices) and
+	//    snapshot the fulfillment classification (type + execution mode).
 	items := make([]OrderItem, 0, len(input.Items))
 	var subtotal float64
-	autoFulfill := true
-	codeNeed := map[string]int{} // productID(hex) -> qty for code items
+	codeNeed := map[string]int{} // productID(hex) -> qty for inventory items
 	for _, in := range input.Items {
 		if in.Qty <= 0 {
 			return nil, badRequest("item quantity must be positive")
@@ -94,22 +97,28 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			price = *variant.ResellerPrice
 		}
 		ft := string(p.FulfillmentType)
-		if p.FulfillmentType != product.FulfillmentCode {
-			autoFulfill = false
-		} else {
+		// Resolve the execution mode, deriving a behavior-preserving default for
+		// legacy products that predate the fulfillmentMode field.
+		mode := p.FulfillmentMode
+		if mode == "" {
+			mode = product.DeriveMode(p.FulfillmentType)
+		}
+		if mode == product.FulfillmentModeInventory {
 			codeNeed[p.ID.Hex()] += in.Qty
 		}
 		items = append(items, OrderItem{
-			ProductID:       p.ID,
-			VariantID:       variant.ID,
-			Title:           p.Title,
-			Denomination:    variant.Denomination,
-			Category:        p.Category,
-			Qty:             in.Qty,
-			Price:           price,
-			FulfillmentType: ft,
-			PlayerID:        in.PlayerID,
-			Recipient:       in.Recipient,
+			ProductID:           p.ID,
+			VariantID:           variant.ID,
+			Title:               p.Title,
+			Denomination:        variant.Denomination,
+			Category:            p.Category,
+			Qty:                 in.Qty,
+			Price:               price,
+			FulfillmentType:     ft,
+			FulfillmentMode:     string(mode),
+			FulfillmentProvider: p.FulfillmentProvider,
+			PlayerID:            in.PlayerID,
+			Recipient:           in.Recipient,
 		})
 		subtotal += price * float64(in.Qty)
 	}
@@ -156,16 +165,47 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	}
 	// card / usdt are mock-approved: nothing to charge.
 
-	// 7. Fulfill.
-	if autoFulfill {
-		return s.fulfillCodes(ctx, userID, order, charged)
+	// 7. Dispatch on the order's fulfillment mode (spec §2.2).
+	switch resolveOrderMode(order.Items) {
+	case product.FulfillmentModeInventory:
+		return s.fulfillInventory(ctx, userID, order, charged)
+	case product.FulfillmentModeAPI:
+		return s.fulfillAPI(ctx, userID, order, charged)
+	case product.FulfillmentModeBridgeDevice:
+		return s.fulfillBridge(ctx, order)
+	default: // manual_operator (and the safe fallback for mixed carts)
+		return s.fulfillProcessing(ctx, order)
 	}
-	return s.fulfillProcessing(ctx, order)
 }
 
-// fulfillCodes claims a code per unit for every (code) item, compensating on
-// failure (releasing claimed codes and refunding any wallet charge).
-func (s *OrderService) fulfillCodes(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
+// resolveOrderMode collapses a cart's per-item modes into the single path the
+// order takes. A homogeneous cart routes down its shared mode; a mixed cart
+// falls back to manual_operator (preserving today's "park the whole order"
+// behavior — no auto-delivery of part of a mixed order). Item modes are derived
+// from the type when an item's snapshot is empty (legacy-order safety).
+func resolveOrderMode(items []OrderItem) product.FulfillmentMode {
+	var mode product.FulfillmentMode
+	for i, it := range items {
+		m := product.FulfillmentMode(it.FulfillmentMode)
+		if m == "" {
+			m = product.DeriveMode(product.FulfillmentType(it.FulfillmentType))
+		}
+		if i == 0 {
+			mode = m
+			continue
+		}
+		if m != mode {
+			return product.FulfillmentModeManualOperator
+		}
+	}
+	return mode
+}
+
+// fulfillInventory claims a code per unit for every item, compensating on
+// failure (releasing claimed codes and refunding any wallet charge). It loops
+// all order items unconditionally — safe because resolveOrderMode only routes
+// here when every item is inventory-mode (so every product has a code pool).
+func (s *OrderService) fulfillInventory(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
 	claimedProducts := make([]string, 0, len(order.Items))
 	var firstCode string
 	for _, it := range order.Items {
@@ -209,6 +249,64 @@ func (s *OrderService) fulfillProcessing(ctx context.Context, order *Order) (*Or
 		return nil, err
 	}
 	return s.repo.FindByID(ctx, order.ID)
+}
+
+// park records an order as processing with an explanatory timeline note. It is
+// the shared shape for modes whose backend fulfilment isn't wired yet (api with
+// no real provider, bridge_device): the order is queued, not failed.
+func (s *OrderService) park(ctx context.Context, order *Order, note string) (*Order, error) {
+	fulfillment := order.Fulfillment
+	now := time.Now().UTC()
+	fulfillment.StatusTimeline = append(fulfillment.StatusTimeline,
+		TimelineEvent{Status: "submitted", At: now},
+		TimelineEvent{Status: "processing", Note: note, At: now},
+	)
+	if err := s.repo.UpdateFulfillment(ctx, order.ID, OrderStatusProcessing, fulfillment); err != nil {
+		return nil, err
+	}
+	return s.repo.FindByID(ctx, order.ID)
+}
+
+// fulfillAPI dispatches an api-mode order to its upstream provider. This is the
+// §5 seam: today every provider id resolves to a stub returning ErrNotImplemented,
+// so the order parks. A real adapter that succeeds completes the order; one that
+// hard-fails compensates (refund + mark failed).
+func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
+	var provID *int
+	var in provider.FulfillInput
+	for _, it := range order.Items {
+		if it.FulfillmentMode == string(product.FulfillmentModeAPI) {
+			provID = it.FulfillmentProvider
+			in = provider.FulfillInput{ProductID: it.ProductID.Hex(), PlayerID: it.PlayerID, Qty: it.Qty}
+			break
+		}
+	}
+
+	res, err := s.providers.Resolve(provID).Fulfill(ctx, in)
+	switch {
+	case errors.Is(err, provider.ErrNotImplemented):
+		// No real upstream wired yet → queue for future/manual completion.
+		return s.park(ctx, order, "awaiting provider integration")
+	case err != nil:
+		// A wired provider hard-failed → reverse the charge and fail the order.
+		s.compensate(ctx, userID, order, nil, charged)
+		return nil, err
+	default:
+		fulfillment := order.Fulfillment
+		fulfillment.TransferRef = res.Reference
+		fulfillment.StatusTimeline = append(fulfillment.StatusTimeline, TimelineEvent{Status: "completed", At: time.Now().UTC()})
+		if uerr := s.repo.UpdateFulfillment(ctx, order.ID, OrderStatusCompleted, fulfillment); uerr != nil {
+			return nil, uerr
+		}
+		return s.repo.FindByID(ctx, order.ID)
+	}
+}
+
+// fulfillBridge dispatches a bridge_device-mode order (Lebanese mobile recharge).
+// The bridge module (spec §10) is not built yet, so the order parks queued for a
+// device; a bridge device is just another operator type that will pick it up.
+func (s *OrderService) fulfillBridge(ctx context.Context, order *Order) (*Order, error) {
+	return s.park(ctx, order, "queued for bridge device")
 }
 
 // compensate reverses a partially-fulfilled order: releases any claimed codes,

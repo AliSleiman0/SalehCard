@@ -12,6 +12,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
@@ -196,6 +197,7 @@ func codeProduct(price float64, resellerPrice *float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
 		FulfillmentType: product.FulfillmentCode,
+		FulfillmentMode: product.FulfillmentModeInventory,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "1x", Price: price, ResellerPrice: resellerPrice}},
 	}
 }
@@ -204,14 +206,51 @@ func creditProduct(price float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
 		FulfillmentType: product.FulfillmentCredit,
+		FulfillmentMode: product.FulfillmentModeManualOperator,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "1800 UC", Price: price}},
 	}
 }
 
+func apiProduct(price float64, providerID *int) *product.Product {
+	return &product.Product{
+		ID:                  bson.NewObjectID(),
+		FulfillmentType:     product.FulfillmentCredit,
+		FulfillmentMode:     product.FulfillmentModeAPI,
+		FulfillmentProvider: providerID,
+		Variants:            []product.Variant{{ID: bson.NewObjectID(), Denomination: "60 UC", Price: price}},
+	}
+}
+
+func bridgeProduct(price float64) *product.Product {
+	return &product.Product{
+		ID:              bson.NewObjectID(),
+		FulfillmentType: product.FulfillmentCredit,
+		FulfillmentMode: product.FulfillmentModeBridgeDevice,
+		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "Touch $5", Price: price}},
+	}
+}
+
+func transferProduct(price float64) *product.Product {
+	return &product.Product{
+		ID:              bson.NewObjectID(),
+		FulfillmentType: product.FulfillmentTransfer,
+		FulfillmentMode: product.FulfillmentModeManualOperator,
+		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "Variable", Price: price}},
+	}
+}
+
 func newSUT(p *product.Product, codeSvc *fakeCodeSvc, walletSvc *fakeWalletSvc) (*OrderService, *fakeOrderRepo) {
+	return newSUTMulti([]*product.Product{p}, codeSvc, walletSvc)
+}
+
+func newSUTMulti(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc *fakeWalletSvc) (*OrderService, *fakeOrderRepo) {
 	repo := newFakeOrderRepo()
-	prodSvc := &fakeProductSvc{byID: map[string]*product.Product{p.ID.Hex(): p}}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc)
+	byID := make(map[string]*product.Product, len(prods))
+	for _, p := range prods {
+		byID[p.ID.Hex()] = p
+	}
+	prodSvc := &fakeProductSvc{byID: byID}
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, provider.NewRegistry())
 	return svc, repo
 }
 
@@ -357,6 +396,101 @@ func TestPlaceOrder_RejectsUnknownVariant(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, apperrors.ErrBadRequest))
+}
+
+func hasTimelineNote(o *Order, note string) bool {
+	for _, e := range o.Fulfillment.StatusTimeline {
+		if e.Note == note {
+			return true
+		}
+	}
+	return false
+}
+
+func TestPlaceOrder_APIModeParks(t *testing.T) {
+	pid := 5
+	p := apiProduct(2.5, &pid)
+	codeSvc := &fakeCodeSvc{available: map[string]int{}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUT(p, codeSvc, walletSvc)
+
+	item := itemFor(p, 1)
+	item.PlayerID = "player-9"
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{item},
+		PaymentMethod: PaymentMethodCard,
+	})
+	require.NoError(t, err)
+	// No real provider wired → the stub reports not-implemented → order parks.
+	assert.Equal(t, OrderStatusProcessing, order.Status)
+	assert.Equal(t, 0, codeSvc.claimCalls)
+	assert.True(t, hasTimelineNote(order, "awaiting provider integration"))
+}
+
+func TestPlaceOrder_BridgeModeParks(t *testing.T) {
+	p := bridgeProduct(5)
+	codeSvc := &fakeCodeSvc{available: map[string]int{}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUT(p, codeSvc, walletSvc)
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodCard,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusProcessing, order.Status)
+	assert.Equal(t, 0, codeSvc.claimCalls)
+	assert.True(t, hasTimelineNote(order, "queued for bridge device"))
+}
+
+func TestPlaceOrder_MixedCartGoesProcessing(t *testing.T) {
+	codeP := codeProduct(10, nil)
+	transferP := transferProduct(20)
+	codeSvc := &fakeCodeSvc{available: map[string]int{codeP.ID.Hex(): 5}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUTMulti([]*product.Product{codeP, transferP}, codeSvc, walletSvc)
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(codeP, 1), itemFor(transferP, 1)},
+		PaymentMethod: PaymentMethodCard,
+	})
+	require.NoError(t, err)
+	// A mixed cart parks the whole order; no partial code delivery.
+	assert.Equal(t, OrderStatusProcessing, order.Status)
+	assert.Equal(t, 0, codeSvc.claimCalls)
+}
+
+func TestPlaceOrder_EmptyModeFallsBackToInventory(t *testing.T) {
+	p := codeProduct(10, nil)
+	p.FulfillmentMode = "" // legacy product persisted before the mode field existed
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUT(p, codeSvc, walletSvc)
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	// Read-time DeriveMode fallback still routes type=code to inventory.
+	assert.Equal(t, OrderStatusCompleted, order.Status)
+	assert.NotEmpty(t, order.Fulfillment.DeliveredCode)
+	assert.Equal(t, 1, codeSvc.claimCalls)
+}
+
+func TestDeriveMode(t *testing.T) {
+	cases := []struct {
+		in   product.FulfillmentType
+		want product.FulfillmentMode
+	}{
+		{product.FulfillmentCode, product.FulfillmentModeInventory},
+		{product.FulfillmentCredit, product.FulfillmentModeManualOperator},
+		{product.FulfillmentTransfer, product.FulfillmentModeManualOperator},
+		{product.FulfillmentType("unknown"), product.FulfillmentModeManualOperator},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, product.DeriveMode(c.in))
+	}
 }
 
 func TestGetOrder_EnforcesOwnership(t *testing.T) {
