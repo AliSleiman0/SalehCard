@@ -1,40 +1,67 @@
 import { create } from 'zustand'
-import { setAccessToken } from '@/lib/api-client'
+import { setAccessToken, ApiError } from '@/lib/api-client'
+import { login as apiLogin, refresh as apiRefresh, type AuthUser } from '@/features/auth/api/auth'
 import type { AdminUser } from '@/types'
 
 interface AuthState {
   user: AdminUser | null
   isAuthenticated: boolean
   isAdmin: boolean
+  // hydrated flips true once the on-load session-restore attempt completes
+  // (success or failure). RequireAdmin waits for it so a reload doesn't bounce
+  // an authenticated admin to /login before the refresh resolves.
+  hydrated: boolean
   login(email: string, password: string): Promise<void>
+  restore(): Promise<void>
   logout(): void
 }
 
-// NOTE: Token issuance / a real login endpoint is NOT part of this slice's
-// backend scope (the backend work here is the AdminOnly middleware + admin
-// route map). For local development the AdminOnly middleware bypasses auth when
-// no JWT secret is configured, so this store performs a *mock* admin login that
-// lets the wired product/inventory pages work end-to-end against the API.
-//
-// TODO: replace `login()` with a real call to the auth module once it lands
-// (POST /api/v1/auth/login → { accessToken, user }); keep the access token in
-// memory only (never localStorage), exactly as set up here.
+// Map the backend auth user onto the admin identity shape (the API user has no
+// `name` field — fall back to the email).
+function toAdminUser(u: AuthUser): AdminUser {
+  return { id: u.id, name: u.name ?? u.email, email: u.email, role: 'admin' }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
   isAdmin: false,
-  async login(email: string) {
-    // Mock admin session for dev. The api-client will send this token; the
-    // dev-mode AdminOnly middleware ignores it (and enforces in production).
-    const user: AdminUser = {
-      id: 'U-9005',
-      name: 'Omar Farouk',
-      email: email || 'omar.f@proton.me',
-      role: 'admin',
+  hydrated: false,
+
+  // Real login: POST /api/v1/auth/login. Non-admins are rejected here (the
+  // AdminOnly middleware would 401 them on every admin call anyway).
+  async login(email: string, password: string) {
+    const res = await apiLogin(email, password)
+    const u = res.data?.user
+    if (!u || !res.data?.accessToken) {
+      throw new ApiError(500, 'invalid_response', 'Login failed — unexpected response.')
     }
-    setAccessToken('dev-admin-token')
-    set({ user, isAuthenticated: true, isAdmin: true })
+    if (u.role !== 'admin') {
+      setAccessToken(null)
+      set({ user: null, isAuthenticated: false, isAdmin: false })
+      throw new ApiError(403, 'forbidden', 'This account is not an administrator.')
+    }
+    setAccessToken(res.data.accessToken)
+    set({ user: toAdminUser(u), isAuthenticated: true, isAdmin: true })
   },
+
+  // On-load session restore from the httpOnly refresh cookie. Marks hydrated
+  // either way so the route guard can resolve.
+  async restore() {
+    try {
+      const res = await apiRefresh()
+      const u = res.data?.user
+      if (u && res.data?.accessToken && u.role === 'admin') {
+        setAccessToken(res.data.accessToken)
+        set({ user: toAdminUser(u), isAuthenticated: true, isAdmin: true })
+      }
+    } catch {
+      /* no/expired session — remain logged out */
+    } finally {
+      set({ hydrated: true })
+    }
+  },
+
   logout() {
     setAccessToken(null)
     set({ user: null, isAuthenticated: false, isAdmin: false })
