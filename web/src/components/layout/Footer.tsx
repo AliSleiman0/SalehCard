@@ -1,11 +1,17 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Icon, Logo, Badge } from '@/components'
-import { CATEGORIES } from '@/lib/mock/demo'
+import { useLocaleStore } from '@/stores/locale'
+import { useCategories } from '@/features/catalog/hooks/useCategories'
+import { adaptRootCategory } from '@/features/catalog/lib/adaptCategory'
 
 export function Footer() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const locale = useLocaleStore((s) => s.locale)
+  const cats = (useCategories({ depth: 0 }).data?.data ?? [])
+    .map((c) => adaptRootCategory(c, locale))
+    .sort((a, b) => a.order - b.order)
 
   return (
     <footer className="footer desktop-only">
@@ -29,13 +35,13 @@ export function Footer() {
         <div className="row wrap-gap" style={{ gap: 40, alignItems: 'flex-start' }}>
           <div className="col" style={{ gap: 10 }}>
             <span className="eyebrow">Store</span>
-            {CATEGORIES.slice(0, 4).map((c) => (
+            {cats.slice(0, 4).map((c) => (
               <a
-                key={c.id}
+                key={c.key}
                 className="small muted clickable"
-                onClick={() => navigate('/category/' + c.id)}
+                onClick={() => navigate('/category/' + c.key)}
               >
-                {t(c.key)}
+                {c.name}
               </a>
             ))}
           </div>

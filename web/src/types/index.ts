@@ -22,6 +22,9 @@ export interface Product {
   id: string
   title: I18nString
   category: string
+  // Top-level domain (games, app_topups, …) the product's category resolves to.
+  // Optional: only migrated products carry it. Used for browse-by-domain.
+  rootDomain?: string
   images: string[]
   variants: Variant[]
   fulfillmentType: FulfillmentType
@@ -30,6 +33,22 @@ export interface Product {
   ratings: RatingsSummary
   createdAt: string
   updatedAt: string
+}
+
+// Category mirrors the API's GET /api/v1/categories item (the migrated taxonomy).
+// productCount is only present for root domains (depth 0) when withCounts is set.
+export interface Category {
+  id: string
+  legacyId: number
+  parentLegacyId?: number
+  slug: string
+  name: I18nString
+  image?: string
+  sortOrder: number
+  rootDomain: string
+  depth: number
+  visible: boolean
+  productCount?: number
 }
 
 export type UserRole = 'customer' | 'reseller' | 'admin'

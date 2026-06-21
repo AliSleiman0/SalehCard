@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/category"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/dashboard"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
@@ -71,6 +72,9 @@ func (s *Server) Routes() {
 
 	// Customer-facing routes (read-only product catalog stays separate).
 	product.RegisterRoutes(s.router, s.db)
+
+	// Read-only category taxonomy (storefront browses by root domain).
+	category.RegisterRoutes(s.router, s.db)
 
 	// Customer auth + profile (public; /users/* guarded by AuthRequired).
 	user.RegisterRoutes(s.router, s.db, s.cfg)

@@ -5,6 +5,7 @@ export interface ProductsParams {
   page?: number
   limit?: number
   category?: string
+  rootDomain?: string
   available?: boolean
 }
 
@@ -16,6 +17,7 @@ export async function fetchProducts(
   if (params.page !== undefined) query.set('page', String(params.page))
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   if (params.category !== undefined) query.set('category', params.category)
+  if (params.rootDomain !== undefined) query.set('rootDomain', params.rootDomain)
   if (params.available !== undefined) query.set('available', String(params.available))
 
   const qs = query.toString()

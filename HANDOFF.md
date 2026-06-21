@@ -1,3 +1,98 @@
+# Handoff — Catalog migration + storefront browse (2026-06-21)
+
+> **Read this first.** This is the live state. The Purchase-Funnel handoff (Steps
+> 1–2) is preserved below as earlier context. Plans referenced live under
+> `~/.claude/plans/` (latest: `a-bubbly-volcano.md` — categories API + rootDomain).
+
+## TL;DR — where we are
+
+The legacy SalehCard catalog is **migrated, loaded, and browsable**. Three increments
+sit **uncommitted on `main`** (git constraint: commit only when asked). Everything
+builds and is verified (`go build/vet/test`, `pnpm build/lint/test`, curl/live).
+
+**Servers may still be running from last session:** Mongo `:27017`, API `:8090`,
+storefront **`:5174`** (5173 is held by another project `zakkerni`; CORS allows 5174).
+
+## The three uncommitted increments (newest first)
+
+### 3. Category API + storefront browse-by-domain (this session)
+- **`GET /api/v1/categories`** — new read surface on the `category` module
+  (`service.go`/`handler.go`/`routes.go` + `FindAll`; wired in `server.go`).
+  Params `?depth=0` (8 root domains), `?rootDomain=`, `?parentLegacyId=`,
+  `?withCounts=true`. Counts via new `product` `CountByRootDomain` aggregation.
+- **`rootDomain` on products** — denormalized field + `ListFilter`/`buildFilter`
+  + index; `GET /api/v1/products?rootDomain=games` returns a whole domain. The
+  loader stamps it from each product's category; **re-ran `loadseed` (0 ins / 635
+  upd)** to backfill.
+- **Storefront** now DB-driven: `useCategories` + `fetchCategories` +
+  `adaptRootCategory` + `lib/categoryPresentation.ts` (8-entry curated art/label/
+  tagline keyed on the stable root domains). Tiles, header nav, footer, and the
+  product-page breadcrumb browse by root domain. Names: curated English / **Arabic
+  from the DB**; counts live. New `art` gradient `tools` for gsm_tools.
+- Result: all 8 domains browsable incl. **GSM Tools (52)** that the old 7 mock
+  tiles couldn't reach.
+
+### 2. Catalog importer + full loader (prior session)
+- **`/migration`** — standalone Go module (stdlib-only) that fetches the legacy
+  API (`api.salehcard.com`, **import-time only — not a runtime dependency**),
+  transforms per the spec rules, and writes `migration/seed/{categories,products,
+  _review}.json` + `run-summary.md`. Re-runnable (`_raw/` cache; `--refresh`).
+- **`api/cmd/loadseed` + `api/internal/migration/loadseed`** — idempotent upsert
+  (keyed on `legacyId`) into Mongo. **`api/internal/modules/category`** (new) +
+  rich schema on `product` (pricing, inputFields, verification, etc.) with a
+  synthetic single Variant so the order engine/frontends are untouched.
+- Dataset now in Mongo: **86 categories + 635 products** (coexisting with 3 dev-seed
+  products). `_review.json` worklist: **553 flagged products** (biggest: 524
+  `fulfillment_review`, 311 `pricing_review`) — resolve via `migration/overrides.json`,
+  then re-run importer + loadseed.
+
+### 1. Fulfillment-mode dispatcher + Provider seam (prior session)
+- `product` gains `FulfillmentMode` (`api`/`manual_operator`/`inventory`/
+  `bridge_device`) + `DeriveMode` + `FulfillmentProvider`; the order engine
+  dispatches on mode. `api/internal/platform/provider/` is a minimal seam
+  (`StubProvider` → `ErrNotImplemented` → order parks in the manual queue).
+  Documented in **`MIGRATION-READINESS.md`** (untracked).
+
+## Pick up here — immediate next steps
+
+1. **Commit the three increments** (offered, awaiting the user's go-ahead + whether
+   one branch/PR or split). Commit trailer: `Co-Authored-By: Claude Opus 4.8 (1M
+   context) <noreply@anthropic.com>`.
+2. **Triage `migration/seed/_review.json`** → fill `migration/overrides.json`
+   (force `fulfillment.{type,mode,provider}` / `pricing.mode`, clear flags) → re-run
+   `cd migration && go run ./cmd/import` then `cd api && go run ./cmd/loadseed`. The
+   524 `fulfillment_review` products (which "manual" top-ups are really `api`) are
+   the key owner decision.
+3. **Admin parity** (deferred this session): wire the admin's hardcoded `CATS`
+   (`admin/src/lib/mock/demo.ts`) to `GET /api/v1/categories`.
+4. **Subcategory drill-down** (depth 1/2) — today's storefront browse is flat
+   (root → all products under it).
+5. Optional: surface rich fields (`description`, `inputFields`, `pricing.cost`) in
+   the PDP / admin editor.
+6. Still open from the funnel work below: refunds, admin manual-complete of
+   `processing` orders, admin Finance feed.
+
+## Run / verify (this increment)
+
+```bash
+# Mongo on :27017 (reuse). Catalog already loaded; re-load is idempotent:
+cd api && go run ./cmd/loadseed            # 0 inserts / 635 updates
+cd api && PORT=8090 go run ./cmd/server
+cd web && pnpm dev                          # → :5173 (or :5174 if taken)
+
+# Gates:
+cd api && go build ./... && go vet ./... && go test ./...
+cd web && pnpm build && pnpm lint && pnpm test   # 2 harmless react-refresh warnings
+
+# Smoke:
+curl 'http://localhost:8090/api/v1/categories?depth=0&withCounts=true'   # 8 roots + counts
+curl 'http://localhost:8090/api/v1/products?rootDomain=gsm_tools&limit=1' # total=52
+```
+Browser check still un-automated: open the storefront, confirm 8 tiles with counts,
+click GSM Tools → 52 products, toggle locale to Arabic → tile names switch to DB Arabic.
+
+---
+
 # Handoff — Purchase Funnel (Steps 1–2 DONE, Step 3 remainder)
 
 > For the next session. Read alongside [`PURCHASE-FUNNEL.md`](PURCHASE-FUNNEL.md)

@@ -8,8 +8,11 @@ import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useCurrencyStore } from '@/stores/currency'
 import { useCartCount } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
+import { useLocaleStore } from '@/stores/locale'
 import { fmtPrice } from '@/lib/utils'
-import { CATEGORIES, DEMO } from '@/lib/mock/demo'
+import { DEMO } from '@/lib/mock/demo'
+import { useCategories } from '@/features/catalog/hooks/useCategories'
+import { adaptRootCategory } from '@/features/catalog/lib/adaptCategory'
 
 export function Header() {
   const { t } = useTranslation()
@@ -20,6 +23,10 @@ export function Header() {
   const cartCount = useCartCount()
   const { isAuthenticated } = useAuthStore()
   const balance = useWallet(isAuthenticated).data?.balance ?? 0
+  const locale = useLocaleStore((s) => s.locale)
+  const cats = (useCategories({ depth: 0 }).data?.data ?? [])
+    .map((c) => adaptRootCategory(c, locale))
+    .sort((a, b) => a.order - b.order)
   const [menu, setMenu] = useState(false)
 
   useEffect(() => {
@@ -104,13 +111,13 @@ export function Header() {
       {showCatNav && (
         <div className="wrap">
           <nav className="catnav">
-            {CATEGORIES.map((c) => (
+            {cats.map((c) => (
               <a
-                key={c.id}
-                className={onCat === c.id ? 'on' : ''}
-                onClick={() => navigate('/category/' + c.id)}
+                key={c.key}
+                className={onCat === c.key ? 'on' : ''}
+                onClick={() => navigate('/category/' + c.key)}
               >
-                {t(c.key)}
+                {c.name}
               </a>
             ))}
           </nav>

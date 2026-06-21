@@ -9,6 +9,7 @@ export const ART: Record<string, [string, string]> = {
   transfer: ['#22e3c8', '#3b5bff'],
   sand: ['#8a3bff', '#d633ff'],
   ice: ['#5b9bff', '#22d3e3'],
+  tools: ['#22c1c3', '#3a7bd5'],
 }
 
 export type FulfillKind = 'code' | 'credit' | 'transfer'

@@ -1,24 +1,31 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Icon, ImageArt, LoadingSpinner, ErrorState, EmptyState } from '@/components'
-import { CATEGORIES, type MockCategory } from '@/lib/mock/demo'
 import { fmtPrice } from '@/lib/utils'
 import { useCurrencyStore } from '@/stores/currency'
 import { useLocaleStore } from '@/stores/locale'
 import { useProducts } from '../hooks/useProducts'
+import { useCategories } from '../hooks/useCategories'
 import { adaptProduct } from '../lib/adaptProduct'
+import { adaptRootCategory, type ViewCategory } from '../lib/adaptCategory'
 import { ProductCard } from '../components/ProductCard'
 import { ProductGrid } from '../components/ProductGrid'
 
-function CategoryTile({ c }: { c: MockCategory }) {
+function CategoryTile({ c }: { c: ViewCategory }) {
   const navigate = useNavigate()
-  const { t } = useTranslation()
   return (
-    <div className="cattile hover-pop" onClick={() => navigate('/category/' + c.id)}>
-      <ImageArt art={c.art} word={t(c.key)} sub={`${c.count}+`} h={120} radius={0} wordSize={22} />
+    <div className="cattile hover-pop" onClick={() => navigate('/category/' + c.key)}>
+      <ImageArt
+        art={c.art}
+        word={c.name}
+        sub={c.count !== undefined ? `${c.count}+` : ''}
+        h={120}
+        radius={0}
+        wordSize={22}
+      />
       <div className="cap">
-        <div style={{ fontWeight: 800, fontSize: 15 }}>{t(c.key)}</div>
-        <div className="tiny faint">{t(c.tagKey)}</div>
+        <div style={{ fontWeight: 800, fontSize: 15 }}>{c.name}</div>
+        <div className="tiny faint">{c.tag}</div>
       </div>
     </div>
   )
@@ -44,6 +51,9 @@ export default function HomePage() {
   const cur = useCurrencyStore((s) => s.currency)
   const locale = useLocaleStore((s) => s.locale)
   const query = useProducts({ limit: 20 })
+  const cats = (useCategories({ depth: 0, withCounts: true }).data?.data ?? [])
+    .map((c) => adaptRootCategory(c, locale))
+    .sort((a, b) => a.order - b.order)
 
   const products = (query.data?.data ?? []).map((p) => adaptProduct(p, locale))
   const firstId = products[0]?.id
@@ -135,13 +145,13 @@ export default function HomePage() {
       <section className="section">
         <SectionHead title={t('shop_cat')} />
         <div className="catgrid">
-          {CATEGORIES.slice(0, 4).map((c) => (
-            <CategoryTile key={c.id} c={c} />
+          {cats.slice(0, 4).map((c) => (
+            <CategoryTile key={c.key} c={c} />
           ))}
         </div>
         <div className="catgrid" style={{ marginTop: 16 }}>
-          {CATEGORIES.slice(4).map((c) => (
-            <CategoryTile key={c.id} c={c} />
+          {cats.slice(4).map((c) => (
+            <CategoryTile key={c.key} c={c} />
           ))}
         </div>
       </section>

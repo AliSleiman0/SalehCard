@@ -2,19 +2,23 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Icon, LoadingSpinner, ErrorState, EmptyState, Segmented } from '@/components'
-import { CATEGORIES } from '@/lib/mock/demo'
+import { rootMeta } from '@/lib/categoryPresentation'
 import { fmtPrice } from '@/lib/utils'
 import { fromPrice } from '@/lib/pricing'
 import { useUiStore } from '@/stores/ui'
 import { useLocaleStore } from '@/stores/locale'
 import { useProducts } from '../hooks/useProducts'
+import { useCategories } from '../hooks/useCategories'
 import { adaptProduct } from '../lib/adaptProduct'
+import { adaptRootCategory } from '../lib/adaptCategory'
 import { ProductGrid } from '../components/ProductGrid'
 
 type Sort = 'pop' | 'low' | 'high' | 'rating'
 
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>()
+  // The :slug is a rootDomain (games, app_topups, …); the storefront browses a
+  // whole top-level domain at once.
   const cat = slug ?? 'games'
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -24,9 +28,11 @@ export default function CategoryPage() {
   const [sort, setSort] = useState<Sort>('pop')
   const [maxP, setMaxP] = useState(110)
 
-  const query = useProducts({ category: cat, limit: 50 })
-  const c = CATEGORIES.find((x) => x.id === cat)
-  const title = c ? t(c.key) : cat
+  const query = useProducts({ rootDomain: cat, limit: 50 })
+  const view = (useCategories({ depth: 0 }).data?.data ?? [])
+    .map((x) => adaptRootCategory(x, locale))
+    .find((v) => v.key === cat)
+  const title = view?.name || rootMeta(cat).label || cat
 
   const all = useMemo(
     () => (query.data?.data ?? []).map((p) => adaptProduct(p, locale)),
@@ -59,7 +65,7 @@ export default function CategoryPage() {
           <h1 className="h1">{title}</h1>
           <p className="muted small">
             {items.length} {t('results')}
-            {c ? ` · ${t(c.tagKey)}` : ''}
+            {view?.tag ? ` · ${view.tag}` : ''}
           </p>
         </div>
         <Segmented<Sort>

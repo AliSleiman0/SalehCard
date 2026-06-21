@@ -13,6 +13,7 @@ export interface ViewProduct {
   brand: string
   title: string
   cat: string
+  rootDomain: string
   art: string
   variants: ViewVariant[]
   rating: number
@@ -77,6 +78,7 @@ export function adaptProduct(api: Product, locale: 'en' | 'ar' | 'tr'): ViewProd
     brand,
     title: humanize(api.category),
     cat: api.category,
+    rootDomain: api.rootDomain ?? '',
     art: artForCategory(api.category),
     variants,
     rating: api.ratings.average || 4.8,
