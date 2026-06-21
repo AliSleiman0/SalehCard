@@ -123,6 +123,20 @@ func (h *Handler) writeAuth(w http.ResponseWriter, res *AuthResult) {
 	response.OK(w, AuthResponse{AccessToken: res.AccessToken, User: res.User})
 }
 
+// refreshCookieSameSite picks the SameSite policy for the refresh cookie. In
+// production the storefront/admin SPAs and the API are served from different
+// sites (*.azurestaticapps.net vs *.azurewebsites.net), so the cookie must be
+// SameSite=None (always paired with Secure) to be sent on the SPA's cross-site
+// /auth/refresh and authenticated requests. In local dev everything is
+// same-site on localhost and Secure is off — where browsers reject None — so
+// fall back to Lax.
+func (h *Handler) refreshCookieSameSite() http.SameSite {
+	if h.secure {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
 func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshCookieName,
@@ -130,7 +144,7 @@ func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string) {
 		Path:     refreshCookiePath,
 		HttpOnly: true,
 		Secure:   h.secure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: h.refreshCookieSameSite(),
 	})
 }
 
@@ -141,7 +155,7 @@ func (h *Handler) clearRefreshCookie(w http.ResponseWriter) {
 		Path:     refreshCookiePath,
 		HttpOnly: true,
 		Secure:   h.secure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: h.refreshCookieSameSite(),
 		MaxAge:   -1,
 	})
 }
