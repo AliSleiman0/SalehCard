@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { User } from '@/types'
 import { setAccessToken } from '@/lib/api-client'
+import { clearSessionHint } from '@/lib/sessionHint'
 
 interface AuthState {
   user: User | null
@@ -28,5 +29,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout() {
     set({ user: null, isAuthenticated: false })
     setAccessToken(null)
+    // Drop the session hint so the next cold load stays silent (no refresh probe).
+    clearSessionHint()
   },
 }))
