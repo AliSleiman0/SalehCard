@@ -30,3 +30,7 @@ pnpm-debug.log*
 
 # Design reference (handoff bundle, not source)
 .design-ref/
+
+# Deployment secrets (never commit — keep local only)
+*.secrets.md
+DEPLOY-CREDS.local.md

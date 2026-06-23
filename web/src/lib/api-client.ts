@@ -47,7 +47,12 @@ async function request<T>(
     throw new Error(`Network error: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  if (response.status === 401 && !_didRetry) {
+  // The refresh endpoint is exempt: a 401 from it means the session is gone, so
+  // there is nothing to retry — re-entering the refresh flow would just POST
+  // /auth/refresh a second time and log a duplicate 401.
+  const isRefreshCall = path === '/api/v1/auth/refresh'
+
+  if (response.status === 401 && !_didRetry && !isRefreshCall) {
     _didRetry = true
 
     if (!_isRefreshing) {

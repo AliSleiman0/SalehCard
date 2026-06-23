@@ -227,9 +227,19 @@ type productDoc struct {
 	FulfillmentType string `bson:"fulfillmentType"`
 }
 
-// CodeProducts returns metadata for every code-type product.
+// CodeProducts returns metadata for every inventory-mode product. The query is
+// backfill-tolerant: it matches products explicitly keyed to inventory mode, and
+// (for products that predate fulfillmentMode) falls back to the legacy
+// fulfillmentType=="code" — so the admin inventory view is never blank before
+// `go run ./cmd/seed` backfills the mode.
 func (r *MongoRepository) CodeProducts(ctx context.Context) ([]ProductMeta, error) {
-	cur, err := r.products.Find(ctx, bson.D{{Key: "fulfillmentType", Value: "code"}})
+	cur, err := r.products.Find(ctx, bson.D{{Key: "$or", Value: bson.A{
+		bson.D{{Key: "fulfillmentMode", Value: "inventory"}},
+		bson.D{
+			{Key: "fulfillmentMode", Value: bson.D{{Key: "$exists", Value: false}}},
+			{Key: "fulfillmentType", Value: "code"},
+		},
+	}}})
 	if err != nil {
 		return nil, err
 	}

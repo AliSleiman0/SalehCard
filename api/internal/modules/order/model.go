@@ -48,8 +48,12 @@ type OrderItem struct {
 	Qty             int                `bson:"qty"                json:"qty"`
 	Price           float64            `bson:"price"              json:"price"`
 	FulfillmentType string             `bson:"fulfillmentType"    json:"fulfillmentType"`
-	PlayerID        string             `bson:"playerId,omitempty" json:"playerId,omitempty"`
-	Recipient       *RecipientInput    `bson:"recipient,omitempty" json:"recipient,omitempty"`
+	// FulfillmentMode/FulfillmentProvider are snapshots of the product's
+	// execution path at order time; the dispatcher routes on FulfillmentMode.
+	FulfillmentMode     string          `bson:"fulfillmentMode,omitempty"     json:"fulfillmentMode,omitempty"`
+	FulfillmentProvider *int            `bson:"fulfillmentProvider,omitempty" json:"fulfillmentProvider,omitempty"`
+	PlayerID            string          `bson:"playerId,omitempty"            json:"playerId,omitempty"`
+	Recipient           *RecipientInput `bson:"recipient,omitempty"           json:"recipient,omitempty"`
 }
 
 // TimelineEvent records a status transition on a fulfillment.

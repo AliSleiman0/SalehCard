@@ -9,18 +9,22 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const login = useAuthStore((s) => s.login)
-  const [email, setEmail] = useState('omar.f@proton.me')
+  const [email, setEmail] = useState('admin@salehcard.com')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   const from = (location.state as { from?: string })?.from ?? '/'
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
+    setError('')
     try {
       await login(email, password)
       navigate(from, { replace: true })
+    } catch (ex) {
+      setError(ex instanceof Error ? ex.message : 'Login failed. Check your credentials.')
     } finally {
       setBusy(false)
     }
@@ -78,6 +82,14 @@ export default function LoginPage() {
             placeholder="••••••••"
             style={{ marginBottom: 18 }}
           />
+          {error && (
+            <div
+              className="badge badge-soft"
+              style={{ display: 'block', marginBottom: 14, color: 'var(--danger, #e5484d)', fontSize: 12.5 }}
+            >
+              {error}
+            </div>
+          )}
           <button className="btn btn-primary btn-block" type="submit" disabled={busy}>
             <Icon name="logout" size={16} /> {t('login_submit')}
           </button>

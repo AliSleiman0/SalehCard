@@ -15,6 +15,12 @@ import (
 func Seed(ctx context.Context, db *mongo.Database) error {
 	col := db.Collection("products")
 
+	// Migrate any pre-existing products before the empty-collection guard, so
+	// re-running seed against a populated DB backfills fulfillmentMode.
+	if err := Backfill(ctx, db); err != nil {
+		return err
+	}
+
 	count, err := col.CountDocuments(ctx, bson.D{})
 	if err != nil {
 		return err
@@ -25,6 +31,7 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 
 	now := time.Now().UTC()
 
+	pubgProvider := 5 // demo upstream-provider id; resolves to a stub today (§5)
 	resellerPrice5 := 4.50
 	resellerPrice10 := 9.00
 	resellerPrice20 := 18.00
@@ -64,6 +71,7 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 				},
 			},
 			FulfillmentType: product.FulfillmentCode,
+			FulfillmentMode: product.FulfillmentModeInventory,
 			Stock:           500,
 			Available:       true,
 			Ratings:         product.RatingsSummary{Average: 0, Count: 0},
@@ -95,12 +103,14 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 					ResellerPrice: &resellerPrice325UC,
 				},
 			},
-			FulfillmentType: product.FulfillmentCredit,
-			Stock:           1000,
-			Available:       true,
-			Ratings:         product.RatingsSummary{Average: 0, Count: 0},
-			CreatedAt:       now,
-			UpdatedAt:       now,
+			FulfillmentType:     product.FulfillmentCredit,
+			FulfillmentMode:     product.FulfillmentModeAPI,
+			FulfillmentProvider: &pubgProvider,
+			Stock:               1000,
+			Available:           true,
+			Ratings:             product.RatingsSummary{Average: 0, Count: 0},
+			CreatedAt:           now,
+			UpdatedAt:           now,
 		},
 		{
 			ID: bson.NewObjectID(),
@@ -121,6 +131,7 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 				},
 			},
 			FulfillmentType: product.FulfillmentTransfer,
+			FulfillmentMode: product.FulfillmentModeManualOperator,
 			Stock:           0,
 			Available:       true,
 			Ratings:         product.RatingsSummary{Average: 0, Count: 0},
@@ -131,4 +142,28 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 
 	_, err = col.InsertMany(ctx, products)
 	return err
+}
+
+// Backfill sets fulfillmentMode on any product that predates the field, derived
+// from its fulfillmentType (spec §2.2). It only touches documents where
+// fulfillmentMode is missing, so it is idempotent and safe to re-run.
+func Backfill(ctx context.Context, db *mongo.Database) error {
+	col := db.Collection("products")
+	for _, t := range []product.FulfillmentType{
+		product.FulfillmentCode,
+		product.FulfillmentCredit,
+		product.FulfillmentTransfer,
+	} {
+		_, err := col.UpdateMany(ctx,
+			bson.D{
+				{Key: "fulfillmentType", Value: t},
+				{Key: "fulfillmentMode", Value: bson.D{{Key: "$exists", Value: false}}},
+			},
+			bson.D{{Key: "$set", Value: bson.D{{Key: "fulfillmentMode", Value: product.DeriveMode(t)}}}},
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -24,12 +24,14 @@ func NewHandler(svc Service) *Handler {
 }
 
 // List handles GET /api/v1/products
-// Query params: category (string), available (bool), page (int), limit (int).
+// Query params: category (string), rootDomain (string), available (bool),
+// page (int), limit (int).
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
 	var f ListFilter
 	f.Category = q.Get("category")
+	f.RootDomain = q.Get("rootDomain")
 
 	if raw := q.Get("available"); raw != "" {
 		v, err := strconv.ParseBool(raw)

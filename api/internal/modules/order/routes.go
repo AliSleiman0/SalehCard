@@ -12,6 +12,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 )
 
 // RegisterRoutes wires the customer-facing order routes onto r. /api/v1/orders
@@ -25,8 +26,11 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	products := product.NewProductService(product.NewMongoRepository(db))
 	codes := code.NewService(db)
 	wlt := wallet.NewService(db)
+	// No real upstream adapters yet → every api-mode order resolves to a stub
+	// and parks. Register adapters here as the owner provides credentials (§5).
+	providers := provider.NewRegistry()
 
-	svc := NewOrderService(repo, products, codes, wlt)
+	svc := NewOrderService(repo, products, codes, wlt, providers)
 	h := NewHandler(svc)
 
 	r.Route("/api/v1/orders", func(r chi.Router) {

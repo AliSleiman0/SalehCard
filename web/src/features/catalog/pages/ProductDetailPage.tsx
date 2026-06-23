@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Icon, ImageArt, Stars, Price, Stepper, LoadingSpinner, ErrorState, useToast } from '@/components'
-import { CATEGORIES, DEMO, REVIEWS } from '@/lib/mock/demo'
+import { DEMO, REVIEWS } from '@/lib/mock/demo'
+import { rootMeta } from '@/lib/categoryPresentation'
 import { fmtPrice } from '@/lib/utils'
 import { priceFor } from '@/lib/pricing'
 import { useUiStore } from '@/stores/ui'
@@ -69,7 +70,8 @@ export default function ProductDetailPage() {
   const unit = priceFor(p, v, agent)
   const total = unit * qty
   const savings = agent ? (v.p - unit) * qty : 0
-  const catKey = CATEGORIES.find((c) => c.id === p.cat)?.key
+  const catDomain = p.rootDomain || p.cat
+  const catLabel = rootMeta(p.rootDomain).label || p.cat
 
   const buy = (toCartFlag: boolean) => {
     if (fulfill === 'transfer' && !rName) {
@@ -104,8 +106,8 @@ export default function ProductDetailPage() {
           {t('nav_home')}
         </a>
         <span className="faint">/</span>
-        <a className="small clickable faint" onClick={() => navigate('/category/' + p.cat)}>
-          {catKey ? t(catKey) : p.cat}
+        <a className="small clickable faint" onClick={() => navigate('/category/' + catDomain)}>
+          {catLabel}
         </a>
         <span className="faint">/</span>
         <span className="small" style={{ fontWeight: 700 }}>

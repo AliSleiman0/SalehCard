@@ -47,6 +47,9 @@ func (h *Handler) AdminList(w http.ResponseWriter, r *http.Request) {
 	if ft := q.Get("fulfillmentType"); ft != "" {
 		f.FulfillmentType = FulfillmentType(ft)
 	}
+	if fm := q.Get("fulfillmentMode"); fm != "" {
+		f.FulfillmentMode = FulfillmentMode(fm)
+	}
 
 	p := pagination.ParseParams(r)
 
