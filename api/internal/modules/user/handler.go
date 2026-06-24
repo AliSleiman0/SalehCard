@@ -13,6 +13,17 @@ import (
 // refreshCookieName is the name of the httpOnly refresh-token cookie.
 const refreshCookieName = "refresh_token"
 
+// mobileClientHeader and mobileClientValue identify native clients that receive
+// the refresh token in the response body instead of (only) the httpOnly cookie.
+const mobileClientHeader = "X-Client"
+const mobileClientValue = "mobile"
+
+// isMobile reports whether the request comes from a native client that needs the
+// refresh token in the JSON body (it cannot read the httpOnly cookie).
+func isMobile(r *http.Request) bool {
+	return r.Header.Get(mobileClientHeader) == mobileClientValue
+}
+
 // refreshCookiePath scopes the cookie to the auth endpoints that consume it.
 const refreshCookiePath = "/api/v1/auth"
 
@@ -40,7 +51,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, err)
 		return
 	}
-	h.writeAuth(w, res)
+	h.writeAuth(w, r, res)
 }
 
 // Login handles POST /api/v1/auth/login.
@@ -55,22 +66,39 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, err)
 		return
 	}
-	h.writeAuth(w, res)
+	h.writeAuth(w, r, res)
 }
 
-// Refresh handles POST /api/v1/auth/refresh, rotating the refresh cookie.
+// Refresh handles POST /api/v1/auth/refresh, rotating the refresh token. Native
+// clients present the token in the JSON body; browser clients omit it and the
+// token is read from the httpOnly cookie.
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(refreshCookieName)
-	if err != nil {
+	token := h.refreshTokenFromRequest(r)
+	if token == "" {
 		response.Unauthorized(w, "missing refresh token")
 		return
 	}
-	res, err := h.service.Refresh(r.Context(), cookie.Value)
+	res, err := h.service.Refresh(r.Context(), token)
 	if err != nil {
 		writeAuthError(w, err)
 		return
 	}
-	h.writeAuth(w, res)
+	h.writeAuth(w, r, res)
+}
+
+// refreshTokenFromRequest extracts the refresh token, preferring an explicit
+// JSON body (native clients) and falling back to the httpOnly cookie (browsers).
+func (h *Handler) refreshTokenFromRequest(r *http.Request) string {
+	if r.Body != nil {
+		var in RefreshInput
+		if err := json.NewDecoder(r.Body).Decode(&in); err == nil && in.RefreshToken != "" {
+			return in.RefreshToken
+		}
+	}
+	if cookie, err := r.Cookie(refreshCookieName); err == nil {
+		return cookie.Value
+	}
+	return ""
 }
 
 // Logout handles POST /api/v1/auth/logout, revoking and clearing the cookie.
@@ -118,9 +146,15 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeAuth sets the rotated refresh cookie and writes the AuthResponse body.
-func (h *Handler) writeAuth(w http.ResponseWriter, res *AuthResult) {
+// For native clients (X-Client: mobile) the refresh token is also returned in the
+// body, since they cannot read the httpOnly cookie.
+func (h *Handler) writeAuth(w http.ResponseWriter, r *http.Request, res *AuthResult) {
 	h.setRefreshCookie(w, res.RefreshToken)
-	response.OK(w, AuthResponse{AccessToken: res.AccessToken, User: res.User})
+	body := AuthResponse{AccessToken: res.AccessToken, User: res.User}
+	if isMobile(r) {
+		body.RefreshToken = res.RefreshToken
+	}
+	response.OK(w, body)
 }
 
 // refreshCookieSameSite picks the SameSite policy for the refresh cookie. In

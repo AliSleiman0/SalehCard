@@ -1,0 +1,16 @@
+{
+  "@@locale": "en",
+  "appTitle": "SalehCard",
+  "loginTitle": "Sign in",
+  "emailLabel": "Email",
+  "passwordLabel": "Password",
+  "signInButton": "Sign in",
+  "loginFailed": "Sign in failed. Check your credentials and try again.",
+  "catalogTitle": "Products",
+  "retry": "Retry",
+  "logout": "Log out",
+  "outOfStock": "Out of stock",
+  "emptyCatalog": "No products available.",
+  "productDetailUnavailable": "This product is currently unavailable.",
+  "languageToggle": "العربية"
+}
