@@ -71,7 +71,18 @@ type AuthResult struct {
 }
 
 // AuthResponse is the public JSON body returned by register/login/refresh.
+// RefreshToken is populated only for native clients (X-Client: mobile), which
+// cannot rely on the httpOnly refresh cookie; browser clients receive it solely
+// via that cookie and the field is omitted.
 type AuthResponse struct {
-	AccessToken string `json:"accessToken"`
-	User        *User  `json:"user"`
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken,omitempty"`
+	User         *User  `json:"user"`
+}
+
+// RefreshInput is the optional JSON body accepted by POST /auth/refresh. Native
+// clients present the refresh token here; browser clients omit it and the token
+// is read from the httpOnly cookie instead.
+type RefreshInput struct {
+	RefreshToken string `json:"refreshToken"`
 }

@@ -1,0 +1,16 @@
+{
+  "@@locale": "ar",
+  "appTitle": "صالح كارد",
+  "loginTitle": "تسجيل الدخول",
+  "emailLabel": "البريد الإلكتروني",
+  "passwordLabel": "كلمة المرور",
+  "signInButton": "تسجيل الدخول",
+  "loginFailed": "فشل تسجيل الدخول. تحقق من بياناتك وحاول مرة أخرى.",
+  "catalogTitle": "المنتجات",
+  "retry": "إعادة المحاولة",
+  "logout": "تسجيل الخروج",
+  "outOfStock": "غير متوفر",
+  "emptyCatalog": "لا توجد منتجات متاحة.",
+  "productDetailUnavailable": "هذا المنتج غير متاح حالياً.",
+  "languageToggle": "English"
+}
