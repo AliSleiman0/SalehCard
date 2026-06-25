@@ -63,5 +63,65 @@
   "navCart": "Cart",
   "navMenu": "Menu",
   "comingSoon": "Coming soon.",
-  "loadFailed": "Couldn't load products."
+  "loadFailed": "Couldn't load products.",
+
+  "fromLabel": "from",
+  "chooseAmount": "Choose amount",
+  "quantityLabel": "Quantity",
+  "requiredBadge": "Required",
+  "ratingsCount": "({count} ratings)",
+  "@ratingsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "enterValue": "Enter {field}",
+  "@enterValue": {
+    "placeholders": { "field": { "type": "String" } }
+  },
+  "deliveredInstantly": "Credit is delivered to this account instantly.",
+  "addToCart": "Add to cart",
+  "buyNow": "Buy now",
+  "notifyMe": "Notify me",
+  "totalLabel": "Total",
+
+  "cartTitle": "Your cart",
+  "cartItemsCount": "· {count} items",
+  "@cartItemsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "cartEmptyTitle": "Your cart is empty",
+  "cartEmptySub": "Browse the catalog and add gift cards & top-ups.",
+  "browseCatalog": "Browse catalog",
+  "subtotalLabel": "Subtotal",
+  "discountLabel": "Discount",
+  "walletBalanceHint": "Wallet balance:",
+  "checkoutCta": "Checkout",
+
+  "checkoutTitle": "Checkout",
+  "paymentFailed": "Payment failed. Please try another method.",
+  "deliveryDetails": "Delivery details",
+  "paymentMethodLabel": "Payment method",
+  "payCardTitle": "Card",
+  "payCardSub": "Instant approval",
+  "payWalletTitle": "Wallet",
+  "balanceLabel": "Balance",
+  "insufficientBalance": "Insufficient balance",
+  "payUsdtTitle": "USDT",
+  "payUsdtSub": "Auto-approve · Instant",
+  "promoCodePlaceholder": "Promo code",
+  "applyLabel": "Apply",
+  "placeOrderCta": "Place order",
+  "fieldRequired": "This field is required.",
+
+  "orderCompletedTitle": "Order completed",
+  "orderProcessingTitle": "We're completing your order",
+  "orderCompletedSub": "Your codes have been delivered. Enjoy!",
+  "orderProcessingSub": "Account-credit orders can take a few minutes.",
+  "orderLabel": "Order",
+  "deliveredCodesLabel": "Delivered codes",
+  "giftCardLabel": "Gift card",
+  "copyLabel": "Copy",
+  "copiedLabel": "Copied",
+  "orderProcessingNote": "We'll notify you the moment it's done. You can track its status from the order page.",
+  "viewOrderCta": "View order",
+  "backToHomeCta": "Back to home"
 }

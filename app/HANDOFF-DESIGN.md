@@ -118,6 +118,29 @@ shifts the layout — tap fields using keyboard-open coordinates.
 - After editing `.arb` files or any `*.g.dart`-generating change, run
   `dart run build_runner build` (DTOs) — l10n regenerates on build automatically.
 
+## 6b. Shop module (S1) — done, with these notes/gaps
+
+Implemented `features/checkout/` (Order entity/DTO/repo, `place_order`/`get_order`,
+`placeOrderControllerProvider`, `orderDetailProvider`) + enhanced product detail,
+replaced cart, new checkout + order-success screens. Routes `/checkout` and
+`/order-success/:id` are top-level. `Product`/`ProductDto` extended with
+`fulfillmentType` + `inputFields[]`.
+
+- **"View order"** on the success screen routes to `/orders/:id` — **that route
+  is owned by the Orders module (S2) and not registered yet**, so until S2 lands
+  tapping it shows go-router's not-found page. "Back to home" works.
+- **Checkout email field** from the design is dropped — the `POST /orders` API has
+  no email field. The dynamic `inputFields[]` form is the real delivery input.
+- **Promo code** is sent to the backend (`promoCode`); no client-side discount
+  preview (server re-prices), so cart/checkout show subtotal == total estimate.
+- **`inputFields` → order mapping:** account_credit → `playerId` (joined field
+  values); transfer → `recipient{name,country,detail}` derived by key heuristics
+  (`name`/`country`/`detail`/`account`/…). All fields treated as required.
+- **Delivered codes:** backend returns a single `fulfillment.deliveredCode` (first
+  claimed), so success shows one code card (the design mocked one per unit).
+- **Idempotency:** one `newIdempotencyKey()` minted per checkout screen instance,
+  held across retries (sent via `Idempotency-Key` header in `Options`).
+
 ## 7. Out of scope (future slices, not design)
 
 Cart, checkout (dynamic `inputFields` form + `Idempotency-Key`), orders history,

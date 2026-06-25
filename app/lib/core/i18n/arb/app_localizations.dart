@@ -415,6 +415,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load products.'**
   String get loadFailed;
+
+  /// No description provided for @fromLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'from'**
+  String get fromLabel;
+
+  /// No description provided for @chooseAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose amount'**
+  String get chooseAmount;
+
+  /// No description provided for @quantityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Quantity'**
+  String get quantityLabel;
+
+  /// No description provided for @requiredBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get requiredBadge;
+
+  /// No description provided for @ratingsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'({count} ratings)'**
+  String ratingsCount(int count);
+
+  /// No description provided for @enterValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter {field}'**
+  String enterValue(String field);
+
+  /// No description provided for @deliveredInstantly.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit is delivered to this account instantly.'**
+  String get deliveredInstantly;
+
+  /// No description provided for @addToCart.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to cart'**
+  String get addToCart;
+
+  /// No description provided for @buyNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy now'**
+  String get buyNow;
+
+  /// No description provided for @notifyMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify me'**
+  String get notifyMe;
+
+  /// No description provided for @totalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get totalLabel;
+
+  /// No description provided for @cartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your cart'**
+  String get cartTitle;
+
+  /// No description provided for @cartItemsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'· {count} items'**
+  String cartItemsCount(int count);
+
+  /// No description provided for @cartEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your cart is empty'**
+  String get cartEmptyTitle;
+
+  /// No description provided for @cartEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse the catalog and add gift cards & top-ups.'**
+  String get cartEmptySub;
+
+  /// No description provided for @browseCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse catalog'**
+  String get browseCatalog;
+
+  /// No description provided for @subtotalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtotal'**
+  String get subtotalLabel;
+
+  /// No description provided for @discountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount'**
+  String get discountLabel;
+
+  /// No description provided for @walletBalanceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet balance:'**
+  String get walletBalanceHint;
+
+  /// No description provided for @checkoutCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Checkout'**
+  String get checkoutCta;
+
+  /// No description provided for @checkoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checkout'**
+  String get checkoutTitle;
+
+  /// No description provided for @paymentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment failed. Please try another method.'**
+  String get paymentFailed;
+
+  /// No description provided for @deliveryDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery details'**
+  String get deliveryDetails;
+
+  /// No description provided for @paymentMethodLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment method'**
+  String get paymentMethodLabel;
+
+  /// No description provided for @payCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Card'**
+  String get payCardTitle;
+
+  /// No description provided for @payCardSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Instant approval'**
+  String get payCardSub;
+
+  /// No description provided for @payWalletTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get payWalletTitle;
+
+  /// No description provided for @balanceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get balanceLabel;
+
+  /// No description provided for @insufficientBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Insufficient balance'**
+  String get insufficientBalance;
+
+  /// No description provided for @payUsdtTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'USDT'**
+  String get payUsdtTitle;
+
+  /// No description provided for @payUsdtSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-approve · Instant'**
+  String get payUsdtSub;
+
+  /// No description provided for @promoCodePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Promo code'**
+  String get promoCodePlaceholder;
+
+  /// No description provided for @applyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get applyLabel;
+
+  /// No description provided for @placeOrderCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Place order'**
+  String get placeOrderCta;
+
+  /// No description provided for @fieldRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required.'**
+  String get fieldRequired;
+
+  /// No description provided for @orderCompletedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Order completed'**
+  String get orderCompletedTitle;
+
+  /// No description provided for @orderProcessingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'re completing your order'**
+  String get orderProcessingTitle;
+
+  /// No description provided for @orderCompletedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Your codes have been delivered. Enjoy!'**
+  String get orderCompletedSub;
+
+  /// No description provided for @orderProcessingSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Account-credit orders can take a few minutes.'**
+  String get orderProcessingSub;
+
+  /// No description provided for @orderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Order'**
+  String get orderLabel;
+
+  /// No description provided for @deliveredCodesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered codes'**
+  String get deliveredCodesLabel;
+
+  /// No description provided for @giftCardLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Gift card'**
+  String get giftCardLabel;
+
+  /// No description provided for @copyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get copyLabel;
+
+  /// No description provided for @copiedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get copiedLabel;
+
+  /// No description provided for @orderProcessingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll notify you the moment it\'s done. You can track its status from the order page.'**
+  String get orderProcessingNote;
+
+  /// No description provided for @viewOrderCta.
+  ///
+  /// In en, this message translates to:
+  /// **'View order'**
+  String get viewOrderCta;
+
+  /// No description provided for @backToHomeCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to home'**
+  String get backToHomeCta;
 }
 
 class _AppLocalizationsDelegate

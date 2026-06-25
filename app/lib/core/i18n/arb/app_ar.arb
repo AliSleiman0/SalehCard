@@ -63,5 +63,65 @@
   "navCart": "السلة",
   "navMenu": "القائمة",
   "comingSoon": "قريباً.",
-  "loadFailed": "تعذّر تحميل المنتجات."
+  "loadFailed": "تعذّر تحميل المنتجات.",
+
+  "fromLabel": "يبدأ من",
+  "chooseAmount": "اختر الفئة",
+  "quantityLabel": "الكمية",
+  "requiredBadge": "مطلوب",
+  "ratingsCount": "({count} تقييم)",
+  "@ratingsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "enterValue": "أدخل {field}",
+  "@enterValue": {
+    "placeholders": { "field": { "type": "String" } }
+  },
+  "deliveredInstantly": "سنسلّم الرصيد إلى هذا الحساب فوراً.",
+  "addToCart": "أضف للسلة",
+  "buyNow": "اشترِ الآن",
+  "notifyMe": "تنبيهي",
+  "totalLabel": "الإجمالي",
+
+  "cartTitle": "سلة المشتريات",
+  "cartItemsCount": "· {count} عناصر",
+  "@cartItemsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "cartEmptyTitle": "سلتك فارغة",
+  "cartEmptySub": "تصفّح الكتالوج وأضف بطاقات الهدايا والتعبئة.",
+  "browseCatalog": "تصفّح الكتالوج",
+  "subtotalLabel": "المجموع الفرعي",
+  "discountLabel": "خصم",
+  "walletBalanceHint": "رصيد المحفظة:",
+  "checkoutCta": "إتمام الشراء",
+
+  "checkoutTitle": "الدفع",
+  "paymentFailed": "فشل الدفع. يرجى تجربة طريقة دفع أخرى.",
+  "deliveryDetails": "تفاصيل التسليم",
+  "paymentMethodLabel": "طريقة الدفع",
+  "payCardTitle": "بطاقة",
+  "payCardSub": "موافقة فورية",
+  "payWalletTitle": "المحفظة",
+  "balanceLabel": "الرصيد",
+  "insufficientBalance": "رصيد غير كافٍ",
+  "payUsdtTitle": "USDT",
+  "payUsdtSub": "موافقة فورية",
+  "promoCodePlaceholder": "رمز الخصم",
+  "applyLabel": "تطبيق",
+  "placeOrderCta": "تأكيد الطلب",
+  "fieldRequired": "هذا الحقل مطلوب.",
+
+  "orderCompletedTitle": "تم إتمام الطلب",
+  "orderProcessingTitle": "نُكمل طلبك",
+  "orderCompletedSub": "تم تسليم رموزك. استمتع!",
+  "orderProcessingSub": "طلبات إضافة الرصيد قد تستغرق بضع دقائق.",
+  "orderLabel": "رقم الطلب",
+  "deliveredCodesLabel": "الرموز المُسلّمة",
+  "giftCardLabel": "بطاقة هدية",
+  "copyLabel": "نسخ",
+  "copiedLabel": "تم النسخ",
+  "orderProcessingNote": "سنُعلمك فور اكتمال الطلب. يمكنك متابعة حالته من صفحة الطلب.",
+  "viewOrderCta": "عرض الطلب",
+  "backToHomeCta": "العودة للرئيسية"
 }

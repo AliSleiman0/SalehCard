@@ -9,6 +9,9 @@ import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/cart/presentation/screens/cart_screen.dart';
 import '../../features/catalog/presentation/screens/product_detail_screen.dart';
 import '../../features/catalog/presentation/screens/product_list_screen.dart';
+import '../../features/checkout/domain/entities/order.dart';
+import '../../features/checkout/presentation/screens/checkout_screen.dart';
+import '../../features/checkout/presentation/screens/order_success_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/shell/presentation/app_shell.dart';
 
@@ -49,6 +52,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/product/:id',
         builder: (context, state) =>
             ProductDetailScreen(id: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/checkout',
+        builder: (context, state) => const CheckoutScreen(),
+      ),
+      GoRoute(
+        path: '/order-success/:id',
+        builder: (context, state) => OrderSuccessScreen(
+          id: state.pathParameters['id']!,
+          order: state.extra is Order ? state.extra as Order : null,
+        ),
       ),
       // Tabbed shell.
       StatefulShellRoute.indexedStack(

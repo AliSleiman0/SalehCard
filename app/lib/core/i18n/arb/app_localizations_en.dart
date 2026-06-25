@@ -172,4 +172,154 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loadFailed => 'Couldn\'t load products.';
+
+  @override
+  String get fromLabel => 'from';
+
+  @override
+  String get chooseAmount => 'Choose amount';
+
+  @override
+  String get quantityLabel => 'Quantity';
+
+  @override
+  String get requiredBadge => 'Required';
+
+  @override
+  String ratingsCount(int count) {
+    return '($count ratings)';
+  }
+
+  @override
+  String enterValue(String field) {
+    return 'Enter $field';
+  }
+
+  @override
+  String get deliveredInstantly =>
+      'Credit is delivered to this account instantly.';
+
+  @override
+  String get addToCart => 'Add to cart';
+
+  @override
+  String get buyNow => 'Buy now';
+
+  @override
+  String get notifyMe => 'Notify me';
+
+  @override
+  String get totalLabel => 'Total';
+
+  @override
+  String get cartTitle => 'Your cart';
+
+  @override
+  String cartItemsCount(int count) {
+    return '· $count items';
+  }
+
+  @override
+  String get cartEmptyTitle => 'Your cart is empty';
+
+  @override
+  String get cartEmptySub => 'Browse the catalog and add gift cards & top-ups.';
+
+  @override
+  String get browseCatalog => 'Browse catalog';
+
+  @override
+  String get subtotalLabel => 'Subtotal';
+
+  @override
+  String get discountLabel => 'Discount';
+
+  @override
+  String get walletBalanceHint => 'Wallet balance:';
+
+  @override
+  String get checkoutCta => 'Checkout';
+
+  @override
+  String get checkoutTitle => 'Checkout';
+
+  @override
+  String get paymentFailed => 'Payment failed. Please try another method.';
+
+  @override
+  String get deliveryDetails => 'Delivery details';
+
+  @override
+  String get paymentMethodLabel => 'Payment method';
+
+  @override
+  String get payCardTitle => 'Card';
+
+  @override
+  String get payCardSub => 'Instant approval';
+
+  @override
+  String get payWalletTitle => 'Wallet';
+
+  @override
+  String get balanceLabel => 'Balance';
+
+  @override
+  String get insufficientBalance => 'Insufficient balance';
+
+  @override
+  String get payUsdtTitle => 'USDT';
+
+  @override
+  String get payUsdtSub => 'Auto-approve · Instant';
+
+  @override
+  String get promoCodePlaceholder => 'Promo code';
+
+  @override
+  String get applyLabel => 'Apply';
+
+  @override
+  String get placeOrderCta => 'Place order';
+
+  @override
+  String get fieldRequired => 'This field is required.';
+
+  @override
+  String get orderCompletedTitle => 'Order completed';
+
+  @override
+  String get orderProcessingTitle => 'We\'re completing your order';
+
+  @override
+  String get orderCompletedSub => 'Your codes have been delivered. Enjoy!';
+
+  @override
+  String get orderProcessingSub =>
+      'Account-credit orders can take a few minutes.';
+
+  @override
+  String get orderLabel => 'Order';
+
+  @override
+  String get deliveredCodesLabel => 'Delivered codes';
+
+  @override
+  String get giftCardLabel => 'Gift card';
+
+  @override
+  String get copyLabel => 'Copy';
+
+  @override
+  String get copiedLabel => 'Copied';
+
+  @override
+  String get orderProcessingNote =>
+      'We\'ll notify you the moment it\'s done. You can track its status from the order page.';
+
+  @override
+  String get viewOrderCta => 'View order';
+
+  @override
+  String get backToHomeCta => 'Back to home';
 }
