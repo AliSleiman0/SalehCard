@@ -1,9 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/error/failure.dart';
 import '../../../../core/network/providers.dart';
 import '../../../../core/storage/token_store.dart';
 import '../../domain/entities/user.dart';
 import '../providers.dart';
+
+/// Seeded demo credentials. TEMP bridge: the phone + OTP UI has no backend, so
+/// the phone sign-in / sign-up flows authenticate as this real seeded account to
+/// obtain a real JWT (so wallet/orders/profile work). Replace when a real
+/// phone-auth backend exists. Account is created by `api/cmd/seed`.
+const String kDemoEmail = 'customer@salehcard.local';
+const String kDemoPassword = 'password123';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
@@ -35,16 +43,35 @@ class AuthController extends Notifier<AuthState> {
     state = AuthState(AuthStatus.authenticated, user: user);
   }
 
-  /// TEMP: the phone + OTP auth flow has no backend yet (registration / OTP are
-  /// future slices — see HANDOFF.md). The design's sign-in / sign-up flows call
-  /// this to complete into the app with a demo session. Replace with real
-  /// phone-auth + OTP endpoints when they exist.
+  /// Real email/password sign-in: stores the JWT (via the repository) and sets
+  /// the session. Returns `null` on success, or the [Failure] to surface.
+  Future<Failure?> signInWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    final result = await ref
+        .read(loginUseCaseProvider)
+        .call(email: email, password: password);
+    return result.match((failure) => failure, (user) {
+      setAuthenticated(user);
+      return null;
+    });
+  }
+
+  /// TEMP bridge for the phone UI: authenticates as the seeded demo account so
+  /// the session carries a REAL token (protected endpoints work). Returns the
+  /// [Failure] if the demo account/login is unavailable. Replace when a real
+  /// phone-auth backend exists.
+  Future<Failure?> signInDemo() =>
+      signInWithPassword(email: kDemoEmail, password: kDemoPassword);
+
+  @Deprecated('Use signInDemo() — it obtains a real token. Kept as offline fallback.')
   void completeDemoAuth() {
     state = const AuthState(
       AuthStatus.authenticated,
       user: User(
         id: 'demo',
-        email: 'demo@salehcard.local',
+        email: kDemoEmail,
         role: 'customer',
         locale: 'en',
         walletBalance: 0,

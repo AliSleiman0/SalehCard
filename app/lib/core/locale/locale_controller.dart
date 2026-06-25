@@ -12,6 +12,8 @@ class LocaleController extends Notifier<Locale> {
         ? const Locale('ar')
         : const Locale('en');
   }
+
+  void setLanguage(String code) => state = Locale(code);
 }
 
 final localeControllerProvider =

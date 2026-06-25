@@ -91,10 +91,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           _errorField = _errorMessage = null;
           _loading = true;
         });
-        Future.delayed(const Duration(milliseconds: 1600), () {
+        // TEMP: no phone-auth backend; complete into the app with a real token
+        // by authenticating as the seeded account.
+        () async {
+          final failure =
+              await ref.read(authControllerProvider.notifier).signInDemo();
           if (!mounted) return;
-          ref.read(authControllerProvider.notifier).completeDemoAuth();
-        });
+          if (failure != null) {
+            setState(() => _loading = false);
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(failure.message)));
+          }
+        }();
     }
   }
 

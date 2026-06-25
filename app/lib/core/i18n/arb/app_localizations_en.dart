@@ -129,4 +129,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get otpIncomplete => 'Enter the 6-digit code.';
+
+  @override
+  String get searchHint => 'Search';
+
+  @override
+  String get totalBalance => 'Total Balance';
+
+  @override
+  String get requestPhysicalCard => 'Request Physical Card';
+
+  @override
+  String get cardInfo => 'Card info';
+
+  @override
+  String get addMoney => 'Add Money';
+
+  @override
+  String get promoTitle => 'Instant digital delivery';
+
+  @override
+  String get promoSubtitle =>
+      'Gift cards & top-ups land in your wallet in seconds.';
+
+  @override
+  String get featured => 'Featured';
+
+  @override
+  String get navHome => 'Home';
+
+  @override
+  String get navCategories => 'Categories';
+
+  @override
+  String get navCart => 'Cart';
+
+  @override
+  String get navMenu => 'Menu';
+
+  @override
+  String get comingSoon => 'Coming soon.';
+
+  @override
+  String get loadFailed => 'Couldn\'t load products.';
 }
