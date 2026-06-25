@@ -7,6 +7,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/catalog/presentation/screens/product_detail_screen.dart';
 import '../../features/catalog/presentation/screens/product_list_screen.dart';
+import '../../features/home/presentation/screens/home_screen.dart';
 
 /// App router. The catalog is gated behind authentication (even though the
 /// products API is public) so the skeleton exercises the login → guard flow.
@@ -18,7 +19,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
-    initialLocation: '/catalog',
+    initialLocation: '/home',
     refreshListenable: refresh,
     redirect: (context, state) {
       final status = ref.read(authControllerProvider).status;
@@ -27,7 +28,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (status == AuthStatus.unknown) return null;
       if (status == AuthStatus.unauthenticated && !onAuthRoute) return '/login';
-      if (status == AuthStatus.authenticated && onAuthRoute) return '/catalog';
+      if (status == AuthStatus.authenticated && onAuthRoute) return '/home';
       return null;
     },
     routes: [
@@ -38,6 +39,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/signup',
         builder: (context, state) => const SignupScreen(),
+      ),
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => const HomeScreen(),
       ),
       GoRoute(
         path: '/catalog',

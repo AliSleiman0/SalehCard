@@ -48,5 +48,20 @@
   "passwordRequired": "Please enter your password.",
   "passwordTooShort": "Password must be at least 6 characters.",
   "passwordMismatch": "Passwords do not match.",
-  "otpIncomplete": "Enter the 6-digit code."
+  "otpIncomplete": "Enter the 6-digit code.",
+
+  "searchHint": "Search",
+  "totalBalance": "Total Balance",
+  "requestPhysicalCard": "Request Physical Card",
+  "cardInfo": "Card info",
+  "addMoney": "Add Money",
+  "promoTitle": "Instant digital delivery",
+  "promoSubtitle": "Gift cards & top-ups land in your wallet in seconds.",
+  "featured": "Featured",
+  "navHome": "Home",
+  "navCategories": "Categories",
+  "navCart": "Cart",
+  "navMenu": "Menu",
+  "comingSoon": "Coming soon.",
+  "loadFailed": "Couldn't load products."
 }

@@ -331,6 +331,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter the 6-digit code.'**
   String get otpIncomplete;
+
+  /// No description provided for @searchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchHint;
+
+  /// No description provided for @totalBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Balance'**
+  String get totalBalance;
+
+  /// No description provided for @requestPhysicalCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Request Physical Card'**
+  String get requestPhysicalCard;
+
+  /// No description provided for @cardInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Card info'**
+  String get cardInfo;
+
+  /// No description provided for @addMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Money'**
+  String get addMoney;
+
+  /// No description provided for @promoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Instant digital delivery'**
+  String get promoTitle;
+
+  /// No description provided for @promoSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Gift cards & top-ups land in your wallet in seconds.'**
+  String get promoSubtitle;
+
+  /// No description provided for @featured.
+  ///
+  /// In en, this message translates to:
+  /// **'Featured'**
+  String get featured;
+
+  /// No description provided for @navHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get navHome;
+
+  /// No description provided for @navCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories'**
+  String get navCategories;
+
+  /// No description provided for @navCart.
+  ///
+  /// In en, this message translates to:
+  /// **'Cart'**
+  String get navCart;
+
+  /// No description provided for @navMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get navMenu;
+
+  /// No description provided for @comingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming soon.'**
+  String get comingSoon;
+
+  /// No description provided for @loadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load products.'**
+  String get loadFailed;
 }
 
 class _AppLocalizationsDelegate

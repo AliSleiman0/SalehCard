@@ -128,4 +128,47 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get otpIncomplete => 'أدخل الرمز المكوّن من 6 أرقام.';
+
+  @override
+  String get searchHint => 'ابحث';
+
+  @override
+  String get totalBalance => 'الرصيد الإجمالي';
+
+  @override
+  String get requestPhysicalCard => 'اطلب بطاقة فعلية';
+
+  @override
+  String get cardInfo => 'معلومات البطاقة';
+
+  @override
+  String get addMoney => 'إضافة رصيد';
+
+  @override
+  String get promoTitle => 'تسليم فوري';
+
+  @override
+  String get promoSubtitle =>
+      'بطاقات الهدايا والتعبئة تصل إلى محفظتك خلال ثوانٍ.';
+
+  @override
+  String get featured => 'مميّز';
+
+  @override
+  String get navHome => 'الرئيسية';
+
+  @override
+  String get navCategories => 'الفئات';
+
+  @override
+  String get navCart => 'السلة';
+
+  @override
+  String get navMenu => 'القائمة';
+
+  @override
+  String get comingSoon => 'قريباً.';
+
+  @override
+  String get loadFailed => 'تعذّر تحميل المنتجات.';
 }

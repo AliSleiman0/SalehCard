@@ -48,5 +48,20 @@
   "passwordRequired": "يرجى إدخال كلمة المرور.",
   "passwordTooShort": "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.",
   "passwordMismatch": "كلمتا المرور غير متطابقتين.",
-  "otpIncomplete": "أدخل الرمز المكوّن من 6 أرقام."
+  "otpIncomplete": "أدخل الرمز المكوّن من 6 أرقام.",
+
+  "searchHint": "ابحث",
+  "totalBalance": "الرصيد الإجمالي",
+  "requestPhysicalCard": "اطلب بطاقة فعلية",
+  "cardInfo": "معلومات البطاقة",
+  "addMoney": "إضافة رصيد",
+  "promoTitle": "تسليم فوري",
+  "promoSubtitle": "بطاقات الهدايا والتعبئة تصل إلى محفظتك خلال ثوانٍ.",
+  "featured": "مميّز",
+  "navHome": "الرئيسية",
+  "navCategories": "الفئات",
+  "navCart": "السلة",
+  "navMenu": "القائمة",
+  "comingSoon": "قريباً.",
+  "loadFailed": "تعذّر تحميل المنتجات."
 }
