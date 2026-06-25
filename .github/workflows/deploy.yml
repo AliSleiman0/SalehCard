@@ -1,0 +1,193 @@
+name: Deploy (prod)
+
+# Auto-deploy to production on push to main. Path-filtered so only changed
+# components redeploy. Cloud runners have no corporate proxy, so the local
+# az/docker TLS workaround (see DEPLOYMENT.md) is not needed here.
+#
+# Auth: OIDC federated credentials — no long-lived secrets in GitHub.
+# Required repo VARIABLES: AZURE_CLIENT_ID, AZURE_TENANT_ID,
+# AZURE_SUBSCRIPTION_ID, VITE_API_BASE_URL.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write   # required for azure/login OIDC
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: salehcard-prod
+  ACR_NAME: salehcardprodacr
+  ACR_LOGIN_SERVER: salehcardprodacr.azurecr.io
+  API_IMAGE: salehcardprodacr.azurecr.io/salehcard-api
+  API_WEBAPP: salehcard-api
+  API_URL: https://salehcard-api.azurewebsites.net
+  WEB_SWA: salehcard-web
+  ADMIN_SWA: salehcard-admin
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+      admin: ${{ steps.filter.outputs.admin }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+              - '.github/workflows/deploy.yml'
+            web:
+              - 'web/**'
+              - '.github/workflows/deploy.yml'
+            admin:
+              - 'admin/**'
+              - '.github/workflows/deploy.yml'
+
+  deploy-api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login -n ${{ env.ACR_NAME }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+            ${{ env.API_IMAGE }}:latest
+
+      - name: Point App Service at the new image & restart
+        run: |
+          az webapp config container set \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$API_WEBAPP" \
+            --container-image-name "${API_IMAGE}:${GITHUB_SHA}"
+          az webapp restart --resource-group "$RESOURCE_GROUP" --name "$API_WEBAPP"
+
+      - name: Smoke test /health
+        run: |
+          for i in $(seq 1 12); do
+            if curl -fsS "$API_URL/health" | grep -q '"status":"ok"'; then
+              echo "health OK"; exit 0
+            fi
+            echo "waiting for app to come up ($i)..."; sleep 10
+          done
+          echo "health check failed"; exit 1
+
+  deploy-web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Build storefront
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch SWA deployment token
+        id: swa
+        run: |
+          token=$(az staticwebapp secrets list \
+            --name "$WEB_SWA" --resource-group "$RESOURCE_GROUP" \
+            --query "properties.apiKey" -o tsv)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa.outputs.token }}
+          action: upload
+          app_location: web/dist
+          skip_app_build: true
+
+  deploy-admin:
+    needs: changes
+    if: needs.changes.outputs.admin == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: admin/pnpm-lock.yaml
+      - name: Build admin console
+        working-directory: admin
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch SWA deployment token
+        id: swa
+        run: |
+          token=$(az staticwebapp secrets list \
+            --name "$ADMIN_SWA" --resource-group "$RESOURCE_GROUP" \
+            --query "properties.apiKey" -o tsv)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa.outputs.token }}
+          action: upload
+          app_location: admin/dist
+          skip_app_build: true
