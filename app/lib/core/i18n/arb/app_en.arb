@@ -1,16 +1,52 @@
 {
   "@@locale": "en",
   "appTitle": "SalehCard",
-  "loginTitle": "Sign in",
   "emailLabel": "Email",
   "passwordLabel": "Password",
   "signInButton": "Sign in",
-  "loginFailed": "Sign in failed. Check your credentials and try again.",
   "catalogTitle": "Products",
   "retry": "Retry",
   "logout": "Log out",
   "outOfStock": "Out of stock",
   "emptyCatalog": "No products available.",
   "productDetailUnavailable": "This product is currently unavailable.",
-  "languageToggle": "العربية"
+  "languageToggle": "العربية",
+
+  "welcomeBackTitle": "Welcome back",
+  "signInSubtitle": "Sign in with your mobile number.",
+  "getStartedTitle": "Get Started",
+  "getStartedSubtitle": "Enter your mobile number. We will send you a confirmation code there.",
+  "createPasswordTitle": "Create a password",
+  "createPasswordSubtitle": "Choose a strong password to secure your account.",
+  "verifyTitle": "Verify your number",
+  "otpSubtitle": "Enter the 6-digit code we sent to {phone}.",
+  "@otpSubtitle": {
+    "placeholders": {
+      "phone": { "type": "String" }
+    }
+  },
+
+  "continueButton": "Continue",
+  "verifyButton": "Verify",
+
+  "mobileNumberLabel": "Mobile Number",
+  "phoneHint": "70 123 456",
+  "passwordHint": "••••••••",
+  "newPasswordHint": "At least 6 characters",
+  "confirmPasswordLabel": "Confirm password",
+  "confirmPasswordHint": "Re-enter password",
+
+  "termsPrefix": "By entering your phone number, you agree to our ",
+  "termsLink": "terms and conditions",
+  "resendPrefix": "Didn't get a code? ",
+  "resendLink": "Resend",
+  "haveAccountPrefix": "Already have an account? ",
+  "noAccountPrefix": "Don't have an account? ",
+  "signUpButton": "Sign up",
+
+  "invalidPhone": "Please enter a valid mobile number.",
+  "passwordRequired": "Please enter your password.",
+  "passwordTooShort": "Password must be at least 6 characters.",
+  "passwordMismatch": "Passwords do not match.",
+  "otpIncomplete": "Enter the 6-digit code."
 }

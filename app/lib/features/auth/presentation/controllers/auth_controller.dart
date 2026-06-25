@@ -35,6 +35,24 @@ class AuthController extends Notifier<AuthState> {
     state = AuthState(AuthStatus.authenticated, user: user);
   }
 
+  /// TEMP: the phone + OTP auth flow has no backend yet (registration / OTP are
+  /// future slices — see HANDOFF.md). The design's sign-in / sign-up flows call
+  /// this to complete into the app with a demo session. Replace with real
+  /// phone-auth + OTP endpoints when they exist.
+  void completeDemoAuth() {
+    state = const AuthState(
+      AuthStatus.authenticated,
+      user: User(
+        id: 'demo',
+        email: 'demo@salehcard.local',
+        role: 'customer',
+        locale: 'en',
+        walletBalance: 0,
+        loyaltyPoints: 0,
+      ),
+    );
+  }
+
   /// Invoked by the network layer when refresh fails (tokens already cleared
   /// there is not guaranteed — clear defensively on explicit logout).
   void onSessionExpired() {

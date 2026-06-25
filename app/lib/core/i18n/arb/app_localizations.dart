@@ -104,12 +104,6 @@ abstract class AppLocalizations {
   /// **'SalehCard'**
   String get appTitle;
 
-  /// No description provided for @loginTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in'**
-  String get loginTitle;
-
   /// No description provided for @emailLabel.
   ///
   /// In en, this message translates to:
@@ -127,12 +121,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sign in'**
   String get signInButton;
-
-  /// No description provided for @loginFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in failed. Check your credentials and try again.'**
-  String get loginFailed;
 
   /// No description provided for @catalogTitle.
   ///
@@ -175,6 +163,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'العربية'**
   String get languageToggle;
+
+  /// No description provided for @welcomeBackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome back'**
+  String get welcomeBackTitle;
+
+  /// No description provided for @signInSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with your mobile number.'**
+  String get signInSubtitle;
+
+  /// No description provided for @getStartedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Get Started'**
+  String get getStartedTitle;
+
+  /// No description provided for @getStartedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your mobile number. We will send you a confirmation code there.'**
+  String get getStartedSubtitle;
+
+  /// No description provided for @createPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a password'**
+  String get createPasswordTitle;
+
+  /// No description provided for @createPasswordSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a strong password to secure your account.'**
+  String get createPasswordSubtitle;
+
+  /// No description provided for @verifyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your number'**
+  String get verifyTitle;
+
+  /// No description provided for @otpSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code we sent to {phone}.'**
+  String otpSubtitle(String phone);
+
+  /// No description provided for @continueButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get continueButton;
+
+  /// No description provided for @verifyButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify'**
+  String get verifyButton;
+
+  /// No description provided for @mobileNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Mobile Number'**
+  String get mobileNumberLabel;
+
+  /// No description provided for @phoneHint.
+  ///
+  /// In en, this message translates to:
+  /// **'70 123 456'**
+  String get phoneHint;
+
+  /// No description provided for @passwordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'••••••••'**
+  String get passwordHint;
+
+  /// No description provided for @newPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 6 characters'**
+  String get newPasswordHint;
+
+  /// No description provided for @confirmPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get confirmPasswordLabel;
+
+  /// No description provided for @confirmPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-enter password'**
+  String get confirmPasswordHint;
+
+  /// No description provided for @termsPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'By entering your phone number, you agree to our '**
+  String get termsPrefix;
+
+  /// No description provided for @termsLink.
+  ///
+  /// In en, this message translates to:
+  /// **'terms and conditions'**
+  String get termsLink;
+
+  /// No description provided for @resendPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Didn\'t get a code? '**
+  String get resendPrefix;
+
+  /// No description provided for @resendLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend'**
+  String get resendLink;
+
+  /// No description provided for @haveAccountPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account? '**
+  String get haveAccountPrefix;
+
+  /// No description provided for @noAccountPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t have an account? '**
+  String get noAccountPrefix;
+
+  /// No description provided for @signUpButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign up'**
+  String get signUpButton;
+
+  /// No description provided for @invalidPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid mobile number.'**
+  String get invalidPhone;
+
+  /// No description provided for @passwordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter your password.'**
+  String get passwordRequired;
+
+  /// No description provided for @passwordTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least 6 characters.'**
+  String get passwordTooShort;
+
+  /// No description provided for @passwordMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match.'**
+  String get passwordMismatch;
+
+  /// No description provided for @otpIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code.'**
+  String get otpIncomplete;
 }
 
 class _AppLocalizationsDelegate

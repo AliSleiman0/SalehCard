@@ -1,16 +1,52 @@
 {
   "@@locale": "ar",
   "appTitle": "صالح كارد",
-  "loginTitle": "تسجيل الدخول",
   "emailLabel": "البريد الإلكتروني",
   "passwordLabel": "كلمة المرور",
   "signInButton": "تسجيل الدخول",
-  "loginFailed": "فشل تسجيل الدخول. تحقق من بياناتك وحاول مرة أخرى.",
   "catalogTitle": "المنتجات",
   "retry": "إعادة المحاولة",
   "logout": "تسجيل الخروج",
   "outOfStock": "غير متوفر",
   "emptyCatalog": "لا توجد منتجات متاحة.",
   "productDetailUnavailable": "هذا المنتج غير متاح حالياً.",
-  "languageToggle": "English"
+  "languageToggle": "English",
+
+  "welcomeBackTitle": "مرحباً بعودتك",
+  "signInSubtitle": "سجّل الدخول برقم هاتفك.",
+  "getStartedTitle": "لنبدأ",
+  "getStartedSubtitle": "أدخل رقم هاتفك المحمول. سنرسل لك رمز التأكيد عليه.",
+  "createPasswordTitle": "أنشئ كلمة المرور",
+  "createPasswordSubtitle": "اختر كلمة مرور قوية لتأمين حسابك.",
+  "verifyTitle": "تأكيد رقمك",
+  "otpSubtitle": "أدخل الرمز المكوّن من 6 أرقام المرسل إلى {phone}.",
+  "@otpSubtitle": {
+    "placeholders": {
+      "phone": { "type": "String" }
+    }
+  },
+
+  "continueButton": "متابعة",
+  "verifyButton": "تأكيد",
+
+  "mobileNumberLabel": "رقم الهاتف",
+  "phoneHint": "70 123 456",
+  "passwordHint": "••••••••",
+  "newPasswordHint": "٦ أحرف على الأقل",
+  "confirmPasswordLabel": "تأكيد كلمة المرور",
+  "confirmPasswordHint": "أعد إدخال كلمة المرور",
+
+  "termsPrefix": "بإدخال رقم هاتفك، فإنك توافق على ",
+  "termsLink": "الشروط والأحكام",
+  "resendPrefix": "لم يصلك الرمز؟ ",
+  "resendLink": "إعادة الإرسال",
+  "haveAccountPrefix": "لديك حساب بالفعل؟ ",
+  "noAccountPrefix": "ليس لديك حساب؟ ",
+  "signUpButton": "إنشاء حساب",
+
+  "invalidPhone": "يرجى إدخال رقم هاتف صحيح.",
+  "passwordRequired": "يرجى إدخال كلمة المرور.",
+  "passwordTooShort": "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.",
+  "passwordMismatch": "كلمتا المرور غير متطابقتين.",
+  "otpIncomplete": "أدخل الرمز المكوّن من 6 أرقام."
 }

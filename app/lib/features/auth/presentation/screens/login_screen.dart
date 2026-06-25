@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/i18n/arb/app_localizations.dart';
-import '../../../../core/locale/locale_controller.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/auth_header.dart';
+import '../../../../core/widgets/auth_switch_link.dart';
+import '../../../../core/widgets/auth_text_field.dart';
+import '../../../../core/widgets/country_code_box.dart';
+import '../../../../core/widgets/gradient_heading.dart';
+import '../../../../core/widgets/primary_cta.dart';
 import '../controllers/auth_controller.dart';
-import '../providers.dart';
 
+/// Phone + password sign-in, on the same template as the sign-up flow. Client
+/// side for now: a successful submit authenticates a demo session (no phone
+/// auth backend yet — see [AuthController.completeDemoAuth]).
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -14,99 +24,120 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _submitting = false;
+  final _phone = TextEditingController();
+  final _password = TextEditingController();
+
+  String? _errorField; // 'phone' | 'password'
+  String? _errorMessage;
+  bool _loading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _phone.dispose();
+    _password.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _submitting = true);
+  void _clearError() {
+    if (_errorField != null) setState(() => _errorField = _errorMessage = null);
+  }
 
-    final result = await ref.read(loginUseCaseProvider).call(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
+  void _setError(String field, String message) {
+    setState(() {
+      _errorField = field;
+      _errorMessage = message;
+    });
+  }
 
-    if (!mounted) return;
-    result.match(
-      (failure) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(failure.message)),
-        );
-        setState(() => _submitting = false);
-      },
-      (user) {
-        ref.read(authControllerProvider.notifier).setAuthenticated(user);
-        // Router guard redirects to /catalog on the auth state change.
-      },
-    );
+  void _submit() {
+    if (_loading) return;
+    final l10n = AppLocalizations.of(context);
+    final digits = _phone.text.replaceAll(RegExp(r'\D'), '').length;
+    if (digits < 7) return _setError('phone', l10n.invalidPhone);
+    if (_password.text.isEmpty) {
+      return _setError('password', l10n.passwordRequired);
+    }
+    setState(() {
+      _errorField = _errorMessage = null;
+      _loading = true;
+    });
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (!mounted) return;
+      ref.read(authControllerProvider.notifier).completeDemoAuth();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = context.colors;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.loginTitle),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                ref.read(localeControllerProvider.notifier).toggle(),
-            child: Text(l10n.languageToggle),
-          ),
-        ],
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  decoration: InputDecoration(labelText: l10n.emailLabel),
-                  validator: (value) =>
-                      (value == null || !value.contains('@'))
-                          ? l10n.emailLabel
-                          : null,
+      backgroundColor: colors.surface,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AuthHeader(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GradientHeading(l10n.welcomeBackTitle),
+                    const SizedBox(height: 10),
+                    Text(
+                      l10n.signInSubtitle,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        height: 1.5,
+                        color: colors.textDim,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    AuthTextField(
+                      label: l10n.mobileNumberLabel,
+                      controller: _phone,
+                      hintText: l10n.phoneHint,
+                      keyboardType: TextInputType.phone,
+                      autofillHints: const [AutofillHints.telephoneNumber],
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]')),
+                        LengthLimitingTextInputFormatter(12),
+                      ],
+                      leading: const CountryCodeBox(),
+                      errorText: _errorField == 'phone' ? _errorMessage : null,
+                      onChanged: (_) => _clearError(),
+                    ),
+                    const SizedBox(height: 20),
+                    AuthTextField(
+                      label: l10n.passwordLabel,
+                      controller: _password,
+                      hintText: l10n.passwordHint,
+                      obscureText: true,
+                      textInputAction: TextInputAction.done,
+                      errorText:
+                          _errorField == 'password' ? _errorMessage : null,
+                      onChanged: (_) => _clearError(),
+                      onSubmitted: (_) => _submit(),
+                    ),
+                    const SizedBox(height: 30),
+                    PrimaryCta(
+                      label: l10n.signInButton,
+                      onPressed: _submit,
+                      loading: _loading,
+                    ),
+                    const SizedBox(height: 18),
+                    AuthSwitchLink(
+                      prefix: l10n.noAccountPrefix,
+                      link: l10n.signUpButton,
+                      onTap: () => context.go('/signup'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.password],
-                  decoration: InputDecoration(labelText: l10n.passwordLabel),
-                  validator: (value) => (value == null || value.isEmpty)
-                      ? l10n.passwordLabel
-                      : null,
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _submitting ? null : _submit,
-                  child: _submitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(l10n.signInButton),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

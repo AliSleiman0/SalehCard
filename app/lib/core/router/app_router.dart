@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/controllers/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/catalog/presentation/screens/product_detail_screen.dart';
 import '../../features/catalog/presentation/screens/product_list_screen.dart';
 
@@ -21,17 +22,22 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     redirect: (context, state) {
       final status = ref.read(authControllerProvider).status;
-      final loggingIn = state.matchedLocation == '/login';
+      const authRoutes = {'/login', '/signup'};
+      final onAuthRoute = authRoutes.contains(state.matchedLocation);
 
       if (status == AuthStatus.unknown) return null;
-      if (status == AuthStatus.unauthenticated && !loggingIn) return '/login';
-      if (status == AuthStatus.authenticated && loggingIn) return '/catalog';
+      if (status == AuthStatus.unauthenticated && !onAuthRoute) return '/login';
+      if (status == AuthStatus.authenticated && onAuthRoute) return '/catalog';
       return null;
     },
     routes: [
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignupScreen(),
       ),
       GoRoute(
         path: '/catalog',
