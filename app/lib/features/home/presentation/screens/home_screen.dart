@@ -123,7 +123,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Widget chip(Product p) => ProductChip(
           name: p.title.resolve(localeCode),
           tint: ProductChip.tintFor(tintIndex[p.id]!),
-          outOfStock: !(p.available && p.stock > 0),
+          outOfStock: !p.inStock,
           outOfStockLabel: l10n.outOfStock,
           onTap: () => context.push('/product/${p.id}'),
         );

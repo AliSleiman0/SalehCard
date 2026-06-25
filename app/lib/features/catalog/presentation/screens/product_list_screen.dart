@@ -78,7 +78,7 @@ class _ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final price = product.fromPrice;
-    final inStock = product.available && product.stock > 0;
+    final inStock = product.inStock;
     return ListTile(
       leading: product.images.isNotEmpty
           ? SizedBox(

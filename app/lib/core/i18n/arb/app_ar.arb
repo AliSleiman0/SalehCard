@@ -123,5 +123,12 @@
   "copiedLabel": "تم النسخ",
   "orderProcessingNote": "سنُعلمك فور اكتمال الطلب. يمكنك متابعة حالته من صفحة الطلب.",
   "viewOrderCta": "عرض الطلب",
-  "backToHomeCta": "العودة للرئيسية"
+  "backToHomeCta": "العودة للرئيسية",
+
+  "orderItemsLabel": "العناصر",
+  "statusPending": "قيد الانتظار",
+  "statusProcessing": "قيد المعالجة",
+  "statusCompleted": "مكتمل",
+  "statusFailed": "فشل",
+  "statusRefunded": "مُسترَد"
 }

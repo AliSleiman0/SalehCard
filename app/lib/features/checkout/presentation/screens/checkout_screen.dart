@@ -41,7 +41,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
-    ref.read(placeOrderControllerProvider.notifier).reset();
+    // Clear any leftover submit state from a previous checkout. Deferred to
+    // after the first frame — modifying a provider during build/mount throws.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(placeOrderControllerProvider.notifier).reset();
+    });
   }
 
   @override

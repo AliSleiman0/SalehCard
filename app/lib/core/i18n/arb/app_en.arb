@@ -123,5 +123,12 @@
   "copiedLabel": "Copied",
   "orderProcessingNote": "We'll notify you the moment it's done. You can track its status from the order page.",
   "viewOrderCta": "View order",
-  "backToHomeCta": "Back to home"
+  "backToHomeCta": "Back to home",
+
+  "orderItemsLabel": "Items",
+  "statusPending": "Pending",
+  "statusProcessing": "Processing",
+  "statusCompleted": "Completed",
+  "statusFailed": "Failed",
+  "statusRefunded": "Refunded"
 }

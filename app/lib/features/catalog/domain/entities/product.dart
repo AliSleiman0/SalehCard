@@ -75,6 +75,12 @@ class Product {
   final double? rating;
   final int ratingCount;
 
+  /// Orderable right now. `code` (inventory) fulfilment needs stock on hand;
+  /// `account_credit` / `transfer` are fulfilled manually, so [available] alone
+  /// suffices (the backend accepts these orders with stock 0).
+  bool get inStock =>
+      available && (fulfillmentType == 'code' ? stock > 0 : true);
+
   /// Lowest variant price, or null when there are no variants.
   double? get fromPrice {
     if (variants.isEmpty) return null;

@@ -319,4 +319,22 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get backToHomeCta => 'العودة للرئيسية';
+
+  @override
+  String get orderItemsLabel => 'العناصر';
+
+  @override
+  String get statusPending => 'قيد الانتظار';
+
+  @override
+  String get statusProcessing => 'قيد المعالجة';
+
+  @override
+  String get statusCompleted => 'مكتمل';
+
+  @override
+  String get statusFailed => 'فشل';
+
+  @override
+  String get statusRefunded => 'مُسترَد';
 }

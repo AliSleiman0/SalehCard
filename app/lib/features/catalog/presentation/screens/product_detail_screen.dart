@@ -82,7 +82,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     Product product,
     String localeCode,
   ) {
-    final inStock = product.available && product.stock > 0;
+    final inStock = product.inStock;
     final variants = product.variants;
     final hasVariants = variants.isNotEmpty;
     final index = _variantIndex.clamp(0, hasVariants ? variants.length - 1 : 0);
@@ -500,6 +500,7 @@ class _BottomBar extends StatelessWidget {
           Row(
             children: [
               Expanded(
+                flex: 10,
                 child: OutlinedButton(
                   onPressed: enabled ? onAddToCart : null,
                   style: OutlinedButton.styleFrom(

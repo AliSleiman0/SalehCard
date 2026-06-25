@@ -322,4 +322,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backToHomeCta => 'Back to home';
+
+  @override
+  String get orderItemsLabel => 'Items';
+
+  @override
+  String get statusPending => 'Pending';
+
+  @override
+  String get statusProcessing => 'Processing';
+
+  @override
+  String get statusCompleted => 'Completed';
+
+  @override
+  String get statusFailed => 'Failed';
+
+  @override
+  String get statusRefunded => 'Refunded';
 }
