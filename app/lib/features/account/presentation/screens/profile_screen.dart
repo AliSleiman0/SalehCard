@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../providers.dart';
@@ -118,7 +119,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
       ),
       body: profileAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingView(),
         error: (_, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -457,12 +458,7 @@ class _SaveBar extends StatelessWidget {
           textStyle: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),
         ),
         child: submitting
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Colors.white),
-              )
+            ? const AppSpinner(color: Colors.white, size: 22, stroke: 2.5)
             : Text(label),
       ),
     );

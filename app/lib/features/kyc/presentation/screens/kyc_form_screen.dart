@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/auth_text_field.dart';
 import '../../../../core/widgets/step_dots.dart';
 import '../../domain/entities/kyc.dart';
@@ -374,12 +375,7 @@ class _SubmitBar extends StatelessWidget {
               const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),
         ),
         child: submitting
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Colors.white),
-              )
+            ? const AppSpinner(color: Colors.white, size: 22, stroke: 2.5)
             : Text(label),
       ),
     );

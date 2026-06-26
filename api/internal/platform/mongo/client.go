@@ -29,7 +29,8 @@ func Connect(uri, dbName string) (*mongo.Client, *mongo.Database, error) {
 	return client, db, nil
 }
 
-// Disconnect closes the MongoDB client connection.
+// Disconnect closes the MongoDB client connection (best-effort; errors on a
+// shutdown path are not actionable).
 func Disconnect(ctx context.Context, client *mongo.Client) {
-	client.Disconnect(ctx)
+	_ = client.Disconnect(ctx)
 }

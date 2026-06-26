@@ -122,6 +122,24 @@ abstract class AppLocalizations {
   /// **'Sign in'**
   String get signInButton;
 
+  /// No description provided for @sendCodeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Send code'**
+  String get sendCodeButton;
+
+  /// No description provided for @useCodeInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with a code instead'**
+  String get useCodeInstead;
+
+  /// No description provided for @usePasswordInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with a password instead'**
+  String get usePasswordInstead;
+
   /// No description provided for @catalogTitle.
   ///
   /// In en, this message translates to:
@@ -245,7 +263,7 @@ abstract class AppLocalizations {
   /// No description provided for @newPasswordHint.
   ///
   /// In en, this message translates to:
-  /// **'At least 6 characters'**
+  /// **'At least 8 characters'**
   String get newPasswordHint;
 
   /// No description provided for @confirmPasswordLabel.
@@ -317,7 +335,7 @@ abstract class AppLocalizations {
   /// No description provided for @passwordTooShort.
   ///
   /// In en, this message translates to:
-  /// **'Password must be at least 6 characters.'**
+  /// **'Password must be at least 8 characters.'**
   String get passwordTooShort;
 
   /// No description provided for @passwordMismatch.

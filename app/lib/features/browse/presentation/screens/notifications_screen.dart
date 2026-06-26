@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../domain/entities/app_notification.dart';
 import '../providers.dart';
@@ -27,7 +28,7 @@ class NotificationsScreen extends ConsumerWidget {
         title: Text(l10n.notificationsTitle),
       ),
       body: notificationsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingView(),
         error: (_, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

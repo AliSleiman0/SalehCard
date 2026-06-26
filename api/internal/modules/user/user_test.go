@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,10 +19,11 @@ import (
 type fakeUserRepo struct {
 	byID    map[bson.ObjectID]*User
 	byEmail map[string]*User
+	byPhone map[string]*User
 }
 
 func newFakeUserRepo() *fakeUserRepo {
-	return &fakeUserRepo{byID: map[bson.ObjectID]*User{}, byEmail: map[string]*User{}}
+	return &fakeUserRepo{byID: map[bson.ObjectID]*User{}, byEmail: map[string]*User{}, byPhone: map[string]*User{}}
 }
 
 func (f *fakeUserRepo) FindByID(_ context.Context, id bson.ObjectID) (*User, error) {
@@ -38,16 +40,35 @@ func (f *fakeUserRepo) FindByEmail(_ context.Context, email string) (*User, erro
 	return nil, apperrors.ErrNotFound
 }
 
+func (f *fakeUserRepo) FindByPhone(_ context.Context, phone string) (*User, error) {
+	if u, ok := f.byPhone[phone]; ok {
+		return u, nil
+	}
+	return nil, apperrors.ErrNotFound
+}
+
 func (f *fakeUserRepo) Create(_ context.Context, u *User) error {
 	u.Email = normalizeEmail(u.Email)
-	if _, exists := f.byEmail[u.Email]; exists {
-		return apperrors.ErrConflict
+	if u.Email != "" {
+		if _, exists := f.byEmail[u.Email]; exists {
+			return apperrors.ErrConflict
+		}
+	}
+	if u.Phone != nil {
+		if _, exists := f.byPhone[*u.Phone]; exists {
+			return apperrors.ErrConflict
+		}
 	}
 	if u.ID.IsZero() {
 		u.ID = bson.NewObjectID()
 	}
 	f.byID[u.ID] = u
-	f.byEmail[u.Email] = u
+	if u.Email != "" {
+		f.byEmail[u.Email] = u
+	}
+	if u.Phone != nil {
+		f.byPhone[*u.Phone] = u
+	}
 	return nil
 }
 
@@ -59,9 +80,64 @@ func (f *fakeUserRepo) Update(_ context.Context, u *User) error {
 	return nil
 }
 
+func (f *fakeUserRepo) SetPassword(_ context.Context, id bson.ObjectID, hash string) error {
+	u, ok := f.byID[id]
+	if !ok {
+		return apperrors.ErrNotFound
+	}
+	u.PasswordHash = &hash
+	return nil
+}
+
 func (f *fakeUserRepo) Delete(_ context.Context, id bson.ObjectID) error {
 	delete(f.byID, id)
 	return nil
+}
+
+// fakeOTPRepo is a single-record-per-phone in-memory OTPRepository.
+type fakeOTPRepo struct {
+	byPhone map[string]*OtpCode
+}
+
+func newFakeOTPRepo() *fakeOTPRepo { return &fakeOTPRepo{byPhone: map[string]*OtpCode{}} }
+
+func (f *fakeOTPRepo) Upsert(_ context.Context, c *OtpCode) error {
+	if c.ID.IsZero() {
+		c.ID = bson.NewObjectID()
+	}
+	f.byPhone[c.Phone] = c
+	return nil
+}
+
+func (f *fakeOTPRepo) FindByPhone(_ context.Context, phone string) (*OtpCode, error) {
+	if c, ok := f.byPhone[phone]; ok {
+		return c, nil
+	}
+	return nil, apperrors.ErrNotFound
+}
+
+func (f *fakeOTPRepo) IncrementAttempts(_ context.Context, phone string) error {
+	if c, ok := f.byPhone[phone]; ok {
+		c.Attempts++
+	}
+	return nil
+}
+
+func (f *fakeOTPRepo) DeleteByPhone(_ context.Context, phone string) error {
+	delete(f.byPhone, phone)
+	return nil
+}
+
+// captureSender records the last message sent, for asserting the OTP code.
+type captureSender struct{ lastMessage string }
+
+func (c *captureSender) Send(_ context.Context, _, message string) error {
+	c.lastMessage = message
+	return nil
+}
+
+func testOTPConfig() OTPConfig {
+	return OTPConfig{CountryCode: "+961", Length: 6, TTL: 5 * time.Minute, ResendInterval: time.Minute, MaxAttempts: 5}
 }
 
 type fakeRefreshRepo struct {
@@ -110,7 +186,7 @@ func (f *fakeRefreshRepo) RevokeAllForUser(_ context.Context, userID bson.Object
 func newTestService() (*UserService, *fakeUserRepo, *fakeRefreshRepo) {
 	repo := newFakeUserRepo()
 	refresh := newFakeRefreshRepo()
-	svc := NewUserService(repo, refresh, "test-secret", 15*time.Minute, 24*time.Hour)
+	svc := NewUserService(repo, refresh, newFakeOTPRepo(), sms.LogSender{}, testOTPConfig(), "test-secret", 15*time.Minute, 24*time.Hour)
 	return svc, repo, refresh
 }
 
@@ -190,7 +266,7 @@ func TestRefresh_RotatesAndRevokesOld(t *testing.T) {
 func TestRefresh_RejectsExpired(t *testing.T) {
 	repo := newFakeUserRepo()
 	refresh := newFakeRefreshRepo()
-	svc := NewUserService(repo, refresh, "test-secret", 15*time.Minute, -time.Hour) // already-expired refresh TTL
+	svc := NewUserService(repo, refresh, newFakeOTPRepo(), sms.LogSender{}, testOTPConfig(), "test-secret", 15*time.Minute, -time.Hour) // already-expired refresh TTL
 
 	reg, err := svc.Register(context.Background(), RegisterInput{Email: "a@b.com", Password: "password123"})
 	require.NoError(t, err)
@@ -221,6 +297,88 @@ func TestUpdateProfile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "tr", updated.Locale)
 	assert.Equal(t, []string{"player-1"}, updated.SavedPlayerIDs)
+}
+
+// otpServiceWith builds a service with explicit OTP fakes for OTP-flow tests.
+func otpServiceWith() (*UserService, *fakeUserRepo, *fakeOTPRepo, *captureSender) {
+	repo := newFakeUserRepo()
+	otp := newFakeOTPRepo()
+	sender := &captureSender{}
+	svc := NewUserService(repo, newFakeRefreshRepo(), otp, sender, testOTPConfig(), "test-secret", 15*time.Minute, 24*time.Hour)
+	return svc, repo, otp, sender
+}
+
+func TestRequestOTP_NormalizesPhoneAndSendsCode(t *testing.T) {
+	svc, _, otp, sender := otpServiceWith()
+
+	// Local Lebanese number with a leading 0 → +961 E.164.
+	require.NoError(t, svc.RequestOTP(context.Background(), RequestOTPInput{Phone: "070 123 456"}))
+	rec, err := otp.FindByPhone(context.Background(), "+96170123456")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rec.CodeHash)
+	assert.Contains(t, sender.lastMessage, "SalehCard")
+}
+
+func TestRequestOTP_RejectsInvalidPhone(t *testing.T) {
+	svc, _, _, _ := otpServiceWith()
+	err := svc.RequestOTP(context.Background(), RequestOTPInput{Phone: "123"})
+	assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+}
+
+func TestRequestOTP_ThrottlesRepeat(t *testing.T) {
+	svc, _, _, _ := otpServiceWith()
+	require.NoError(t, svc.RequestOTP(context.Background(), RequestOTPInput{Phone: "+96170123456"}))
+	err := svc.RequestOTP(context.Background(), RequestOTPInput{Phone: "+96170123456"})
+	assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+}
+
+func TestVerifyOTP_CreatesAccountAndIssuesTokens(t *testing.T) {
+	svc, repo, otp, _ := otpServiceWith()
+	require.NoError(t, svc.RequestOTP(context.Background(), RequestOTPInput{Phone: "+96170123456"}))
+
+	// Pull the raw code by replacing the stored record with a known one.
+	known := "654321"
+	rec, _ := otp.FindByPhone(context.Background(), "+96170123456")
+	rec.CodeHash = hashToken(known)
+
+	res, err := svc.VerifyOTP(context.Background(), VerifyOTPInput{Phone: "+96170123456", Code: known})
+	require.NoError(t, err)
+	assert.NotEmpty(t, res.AccessToken)
+	require.NotNil(t, res.User.Phone)
+	assert.Equal(t, "+96170123456", *res.User.Phone)
+
+	stored, err := repo.FindByPhone(context.Background(), "+96170123456")
+	require.NoError(t, err)
+	assert.Equal(t, RoleCustomer, stored.Role)
+
+	// Code is consumed → second verify fails.
+	_, err = svc.VerifyOTP(context.Background(), VerifyOTPInput{Phone: "+96170123456", Code: known})
+	assert.ErrorIs(t, err, apperrors.ErrUnauthorized)
+}
+
+func TestVerifyOTP_WrongCodeIsUnauthorized(t *testing.T) {
+	svc, _, _, _ := otpServiceWith()
+	require.NoError(t, svc.RequestOTP(context.Background(), RequestOTPInput{Phone: "+96170123456"}))
+	_, err := svc.VerifyOTP(context.Background(), VerifyOTPInput{Phone: "+96170123456", Code: "000000"})
+	assert.ErrorIs(t, err, apperrors.ErrUnauthorized)
+}
+
+func TestVerifyOTP_SetsPasswordThenPhoneLoginWorks(t *testing.T) {
+	svc, _, otp, _ := otpServiceWith()
+	require.NoError(t, svc.RequestOTP(context.Background(), RequestOTPInput{Phone: "+96170123456"}))
+	known := "112233"
+	rec, _ := otp.FindByPhone(context.Background(), "+96170123456")
+	rec.CodeHash = hashToken(known)
+
+	_, err := svc.VerifyOTP(context.Background(), VerifyOTPInput{Phone: "+96170123456", Code: known, Password: "password123"})
+	require.NoError(t, err)
+
+	res, err := svc.LoginByPhone(context.Background(), PhoneLoginInput{Phone: "+96170123456", Password: "password123"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, res.AccessToken)
+
+	_, err = svc.LoginByPhone(context.Background(), PhoneLoginInput{Phone: "+96170123456", Password: "wrong"})
+	assert.ErrorIs(t, err, apperrors.ErrUnauthorized)
 }
 
 func TestHandler_GetProfile_Unauthenticated(t *testing.T) {

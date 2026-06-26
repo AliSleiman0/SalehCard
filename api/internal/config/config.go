@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -27,6 +28,35 @@ type Config struct {
 	RefreshTokenTTL time.Duration
 	// CookieSecure marks the refresh-token cookie Secure outside development.
 	CookieSecure bool
+
+	// SMSProvider selects the active OTP SMS adapter: "monty" (Lebanon),
+	// "twilio" (international), or "log" (dev — logs the code). Default "log".
+	SMSProvider string
+
+	// Monty Mobile (Lebanon) credentials. Required when SMSProvider is "monty".
+	MontyBaseURL     string // default https://sms.montymobile.com
+	MontyUsername    string
+	MontyAPIID       string // apiId query parameter
+	MontyAccessToken string // X-Access-Token header
+	MontySenderID    string // registered alphanumeric Source (e.g. "SalehCard")
+	MontyCampaign    string // optional campaignname; defaults to username
+
+	// Twilio credentials. Required when SMSProvider is "twilio".
+	TwilioAccountSID string
+	TwilioAuthToken  string
+	TwilioFrom       string // sender number (E.164) or Messaging Service SID
+
+	// DefaultCountryCode is prefixed to local phone numbers entered without an
+	// international prefix (e.g. "+961" for Lebanon).
+	DefaultCountryCode string
+	// OTPLength is the number of digits in a generated OTP code.
+	OTPLength int
+	// OTPTTL is how long a requested OTP stays valid.
+	OTPTTL time.Duration
+	// OTPResendInterval is the minimum wait between OTP requests for one number.
+	OTPResendInterval time.Duration
+	// OTPMaxAttempts is the number of wrong guesses allowed before a code locks.
+	OTPMaxAttempts int
 }
 
 // Load reads configuration from environment variables, applying defaults where needed.
@@ -44,7 +74,37 @@ func Load() *Config {
 		AccessTokenTTL:  getDuration("ACCESS_TOKEN_TTL", defaultAccessTokenTTL),
 		RefreshTokenTTL: getDuration("REFRESH_TOKEN_TTL", defaultRefreshTokenTTL),
 		CookieSecure:    env != "development",
+
+		SMSProvider: getEnv("SMS_PROVIDER", "log"),
+
+		MontyBaseURL:     getEnv("MONTY_BASE_URL", "https://sms.montymobile.com"),
+		MontyUsername:    os.Getenv("MONTY_USERNAME"),
+		MontyAPIID:       os.Getenv("MONTY_API_ID"),
+		MontyAccessToken: os.Getenv("MONTY_ACCESS_TOKEN"),
+		MontySenderID:    os.Getenv("MONTY_SENDER_ID"),
+		MontyCampaign:    os.Getenv("MONTY_CAMPAIGN"),
+
+		TwilioAccountSID: os.Getenv("TWILIO_ACCOUNT_SID"),
+		TwilioAuthToken:  os.Getenv("TWILIO_AUTH_TOKEN"),
+		TwilioFrom:       os.Getenv("TWILIO_FROM"),
+
+		DefaultCountryCode: getEnv("DEFAULT_COUNTRY_CODE", "+961"),
+		OTPLength:          getInt("OTP_LENGTH", 6),
+		OTPTTL:             getDuration("OTP_TTL", 5*time.Minute),
+		OTPResendInterval:  getDuration("OTP_RESEND_INTERVAL", 60*time.Second),
+		OTPMaxAttempts:     getInt("OTP_MAX_ATTEMPTS", 5),
 	}
+}
+
+// getInt parses an integer from the environment, falling back to defaultVal when
+// unset or unparseable.
+func getInt(key string, defaultVal int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return defaultVal
 }
 
 func getEnv(key, defaultVal string) string {

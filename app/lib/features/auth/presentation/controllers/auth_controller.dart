@@ -6,13 +6,6 @@ import '../../../../core/storage/token_store.dart';
 import '../../domain/entities/user.dart';
 import '../providers.dart';
 
-/// Seeded demo credentials. TEMP bridge: the phone + OTP UI has no backend, so
-/// the phone sign-in / sign-up flows authenticate as this real seeded account to
-/// obtain a real JWT (so wallet/orders/profile work). Replace when a real
-/// phone-auth backend exists. Account is created by `api/cmd/seed`.
-const String kDemoEmail = 'customer@salehcard.local';
-const String kDemoPassword = 'password123';
-
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthState {
@@ -58,26 +51,41 @@ class AuthController extends Notifier<AuthState> {
     });
   }
 
-  /// TEMP bridge for the phone UI: authenticates as the seeded demo account so
-  /// the session carries a REAL token (protected endpoints work). Returns the
-  /// [Failure] if the demo account/login is unavailable. Replace when a real
-  /// phone-auth backend exists.
-  Future<Failure?> signInDemo() =>
-      signInWithPassword(email: kDemoEmail, password: kDemoPassword);
+  /// Phone + password sign-in. Returns `null` on success, or the [Failure].
+  Future<Failure?> signInWithPhone({
+    required String phone,
+    required String password,
+  }) async {
+    final result = await ref
+        .read(loginByPhoneUseCaseProvider)
+        .call(phone: phone, password: password);
+    return result.match((failure) => failure, (user) {
+      setAuthenticated(user);
+      return null;
+    });
+  }
 
-  @Deprecated('Use signInDemo() — it obtains a real token. Kept as offline fallback.')
-  void completeDemoAuth() {
-    state = const AuthState(
-      AuthStatus.authenticated,
-      user: User(
-        id: 'demo',
-        email: kDemoEmail,
-        role: 'customer',
-        locale: 'en',
-        walletBalance: 0,
-        loyaltyPoints: 0,
-      ),
-    );
+  /// Requests an OTP code for [phone]. Returns `null` on success, or the [Failure].
+  Future<Failure?> requestOtp(String phone) async {
+    final result = await ref.read(requestOtpUseCaseProvider).call(phone: phone);
+    return result.match((failure) => failure, (_) => null);
+  }
+
+  /// Verifies an OTP code and signs in (creating the account on first sign-in).
+  /// A non-null [password] is set on a brand-new account (signup). Returns
+  /// `null` on success, or the [Failure] to surface.
+  Future<Failure?> verifyOtp({
+    required String phone,
+    required String code,
+    String? password,
+  }) async {
+    final result = await ref
+        .read(verifyOtpUseCaseProvider)
+        .call(phone: phone, code: code, password: password);
+    return result.match((failure) => failure, (user) {
+      setAuthenticated(user);
+      return null;
+    });
   }
 
   /// Invoked by the network layer when refresh fails (tokens already cleared

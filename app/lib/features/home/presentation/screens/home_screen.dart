@@ -7,6 +7,7 @@ import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/brand_logo.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
@@ -82,7 +83,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   productsAsync.when(
                     loading: () => const Padding(
                       padding: EdgeInsets.only(top: 40),
-                      child: Center(child: CircularProgressIndicator()),
+                      child: LoadingView(),
                     ),
                     error: (_, _) => Padding(
                       padding: const EdgeInsets.only(top: 32),

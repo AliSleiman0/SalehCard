@@ -6,6 +6,7 @@ import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../domain/entities/category.dart';
 import '../providers.dart';
@@ -38,7 +39,7 @@ class CategoriesScreen extends ConsumerWidget {
         ],
       ),
       body: categoriesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingView(),
         error: (_, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

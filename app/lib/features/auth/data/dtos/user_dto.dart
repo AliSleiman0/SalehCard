@@ -11,6 +11,7 @@ class UserDto {
     required this.email,
     required this.role,
     required this.locale,
+    this.phone,
     this.walletBalance = 0,
     this.loyaltyPoints = 0,
     this.savedPlayerIds = const [],
@@ -18,6 +19,7 @@ class UserDto {
 
   final String id;
   final String email;
+  final String? phone;
   final String role;
   final String locale;
   final double walletBalance;
@@ -33,6 +35,7 @@ class UserDto {
   User toEntity() => User(
         id: id,
         email: email,
+        phone: phone,
         role: role,
         locale: locale,
         walletBalance: walletBalance,

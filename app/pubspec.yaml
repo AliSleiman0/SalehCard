@@ -56,6 +56,30 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   build_runner: ^2.15.0
   json_serializable: ^6.14.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
+
+# Launcher icon: the gamepad mark on a dark brand tile. Regenerate with
+# `dart run flutter_launcher_icons`.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/branding/logo_mark.png"
+  adaptive_icon_background: "#0D0D17"
+  adaptive_icon_foreground: "assets/branding/logo_mark_padded.png"
+  min_sdk_android: 21
+
+# Native splash: the lockup centered on the dark brand background. Regenerate
+# with `dart run flutter_native_splash:create`.
+flutter_native_splash:
+  color: "#0D0D17"
+  image: assets/branding/logo_lockup.png
+  android_12:
+    image: assets/branding/logo_mark.png
+    color: "#0D0D17"
+  android: true
+  ios: false
+  web: false
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -71,10 +95,10 @@ flutter:
   # Generate localized message classes from the .arb files (see l10n.yaml).
   generate: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # Branding artwork (logo mark + lockup) used by the in-app BrandLogo and the
+  # splash screen, and the source for the generated launcher icon / native splash.
+  assets:
+    - assets/branding/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

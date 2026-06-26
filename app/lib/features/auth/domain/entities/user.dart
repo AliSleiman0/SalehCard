@@ -7,11 +7,15 @@ class User {
     required this.locale,
     required this.walletBalance,
     required this.loyaltyPoints,
+    this.phone,
     this.savedPlayerIds = const [],
   });
 
   final String id;
   final String email;
+
+  /// E.164 phone for phone-OTP accounts; null for email-only accounts.
+  final String? phone;
   final String role;
   final String locale;
   final double walletBalance;

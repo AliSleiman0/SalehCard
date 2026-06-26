@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_tokens.dart';
+import 'app_spinner.dart';
 
 /// Full-width pill CTA used across the auth screens. Shows a spinner while
 /// [loading] and keeps its filled appearance (disabled but still branded).
@@ -29,14 +30,7 @@ class PrimaryCta extends StatelessWidget {
         shadowColor: AppTokens.cta.withValues(alpha: 0.4),
       ),
       child: loading
-          ? const SizedBox(
-              height: 22,
-              width: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: Colors.white,
-              ),
-            )
+          ? const AppSpinner(color: Colors.white, size: 22, stroke: 2.5)
           : Text(label),
     );
   }

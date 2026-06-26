@@ -69,6 +69,50 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	h.writeAuth(w, r, res)
 }
 
+// LoginPhone handles POST /api/v1/auth/login-phone (phone + password).
+func (h *Handler) LoginPhone(w http.ResponseWriter, r *http.Request) {
+	var in PhoneLoginInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	res, err := h.service.LoginByPhone(r.Context(), in)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	h.writeAuth(w, r, res)
+}
+
+// RequestOTP handles POST /api/v1/auth/otp/request, sending a one-time code.
+func (h *Handler) RequestOTP(w http.ResponseWriter, r *http.Request) {
+	var in RequestOTPInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	if err := h.service.RequestOTP(r.Context(), in); err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	response.OK(w, map[string]bool{"sent": true})
+}
+
+// VerifyOTP handles POST /api/v1/auth/otp/verify, authenticating on a valid code.
+func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
+	var in VerifyOTPInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	res, err := h.service.VerifyOTP(r.Context(), in)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	h.writeAuth(w, r, res)
+}
+
 // Refresh handles POST /api/v1/auth/refresh, rotating the refresh token. Native
 // clients present the token in the JSON body; browser clients omit it and the
 // token is read from the httpOnly cookie.

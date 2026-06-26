@@ -15,12 +15,13 @@ import '../../../../core/widgets/otp_input.dart';
 import '../../../../core/widgets/primary_cta.dart';
 import '../../../../core/widgets/step_dots.dart';
 import '../controllers/auth_controller.dart';
+import 'phone_format.dart';
 
 enum _Step { phone, password, otp }
 
-/// Phone-based sign-up flow modeled on the Claude Design "PhoneAuth" component:
-/// phone entry → create password → OTP verification. Client-side flow for now;
-/// the terminal verify authenticates a demo session (no phone/OTP backend yet).
+/// Phone-based sign-up: phone entry → create password → OTP verification. Moving
+/// to the OTP step sends a real code via the backend; the terminal verify creates
+/// the account (phone + password) and signs in.
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
@@ -67,43 +68,60 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     });
   }
 
-  void _submit() {
+  void _snack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _submit() async {
     if (_loading) return;
     final l10n = AppLocalizations.of(context);
+    final notifier = ref.read(authControllerProvider.notifier);
     switch (_step) {
       case _Step.phone:
         if (_digits < 7) return _setError('phone', l10n.invalidPhone);
         setState(() => _step = _Step.password);
       case _Step.password:
-        if (_password.text.length < 6) {
+        if (_password.text.length < 8) {
           return _setError('password', l10n.passwordTooShort);
         }
         if (_confirm.text != _password.text) {
           return _setError('confirm', l10n.passwordMismatch);
         }
+        // Send the OTP, then advance to the verify step.
         setState(() {
           _errorField = _errorMessage = null;
-          _step = _Step.otp;
+          _loading = true;
         });
+        final reqFailure = await notifier.requestOtp(toE164Lebanon(_phone.text));
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          if (reqFailure == null) _step = _Step.otp;
+        });
+        if (reqFailure != null) _snack(reqFailure.message);
       case _Step.otp:
         if (_otp.length < 6) return _setError('otp', l10n.otpIncomplete);
         setState(() {
           _errorField = _errorMessage = null;
           _loading = true;
         });
-        // TEMP: no phone-auth backend; complete into the app with a real token
-        // by authenticating as the seeded account.
-        () async {
-          final failure =
-              await ref.read(authControllerProvider.notifier).signInDemo();
-          if (!mounted) return;
-          if (failure != null) {
-            setState(() => _loading = false);
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(failure.message)));
-          }
-        }();
+        // Verify the code; creates the account (phone + password) and signs in.
+        final failure = await notifier.verifyOtp(
+          phone: toE164Lebanon(_phone.text),
+          code: _otp,
+          password: _password.text,
+        );
+        if (!mounted) return;
+        setState(() => _loading = false);
+        if (failure != null) _setError('otp', failure.message);
     }
+  }
+
+  Future<void> _resend() async {
+    final failure =
+        await ref.read(authControllerProvider.notifier).requestOtp(toE164Lebanon(_phone.text));
+    if (!mounted) return;
+    _snack(failure?.message ?? AppLocalizations.of(context).sendCodeButton);
   }
 
   @override
@@ -245,27 +263,28 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         ),
       ],
       const SizedBox(height: 16),
-      Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text: l10n.resendPrefix,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: colors.textDim,
-              ),
+      Row(
+        children: [
+          Text(
+            l10n.resendPrefix,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: colors.textDim,
             ),
-            TextSpan(
-              text: l10n.resendLink,
+          ),
+          GestureDetector(
+            onTap: _resend,
+            child: Text(
+              l10n.resendLink,
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: AppTokens.brand1,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     ];
   }
