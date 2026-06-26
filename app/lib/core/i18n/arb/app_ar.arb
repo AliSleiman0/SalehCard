@@ -137,5 +137,28 @@
   "ordersEmptyTitle": "لا توجد طلبات بعد",
   "ordersEmptySub": "ستظهر مشترياتك هنا بمجرد إتمام أول طلب.",
   "orderRefundedNote": "تم استرداد هذا الطلب. أُعيد المبلغ إلى محفظتك.",
-  "orderTimelineLabel": "المسار"
+  "orderTimelineLabel": "المسار",
+
+  "walletTitle": "المحفظة",
+  "currentBalance": "الرصيد الحالي",
+  "topUpCta": "إضافة رصيد",
+  "sendMoney": "إرسال أموال",
+  "txHistory": "سجل العمليات",
+  "walletEmptyTitle": "لا توجد عمليات بعد",
+  "walletEmptySub": "أضف رصيداً إلى محفظتك للبدء — ستظهر عملياتك هنا.",
+  "txTopUp": "إضافة رصيد",
+  "txPurchase": "عملية شراء",
+  "txRefund": "استرداد",
+  "txAdjustment": "تسوية",
+  "topUpAmount": "مبلغ الإضافة",
+  "topUpVia": "الإضافة عبر",
+  "topUpSuccess": "تمت إضافة {amount}+ إلى محفظتك",
+  "@topUpSuccess": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "sendMoneyComingSoon": "إرسال الأموال قريباً.",
+  "recipientLabel": "المستلِم (هاتف أو بريد إلكتروني)",
+  "amountLabel": "المبلغ",
+  "noteLabel": "ملاحظة (اختياري)",
+  "sendCta": "إرسال"
 }

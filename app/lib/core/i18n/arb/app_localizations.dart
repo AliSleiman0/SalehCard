@@ -769,6 +769,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Timeline'**
   String get orderTimelineLabel;
+
+  /// No description provided for @walletTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get walletTitle;
+
+  /// No description provided for @currentBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Current balance'**
+  String get currentBalance;
+
+  /// No description provided for @topUpCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up'**
+  String get topUpCta;
+
+  /// No description provided for @sendMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Send money'**
+  String get sendMoney;
+
+  /// No description provided for @txHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction history'**
+  String get txHistory;
+
+  /// No description provided for @walletEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No transactions yet'**
+  String get walletEmptyTitle;
+
+  /// No description provided for @walletEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up your wallet to get started — your activity will show up here.'**
+  String get walletEmptySub;
+
+  /// No description provided for @txTopUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up'**
+  String get txTopUp;
+
+  /// No description provided for @txPurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase'**
+  String get txPurchase;
+
+  /// No description provided for @txRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund'**
+  String get txRefund;
+
+  /// No description provided for @txAdjustment.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjustment'**
+  String get txAdjustment;
+
+  /// No description provided for @topUpAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Top-up amount'**
+  String get topUpAmount;
+
+  /// No description provided for @topUpVia.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up via'**
+  String get topUpVia;
+
+  /// No description provided for @topUpSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'+{amount} added to your wallet'**
+  String topUpSuccess(String amount);
+
+  /// No description provided for @sendMoneyComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Send money is coming soon.'**
+  String get sendMoneyComingSoon;
+
+  /// No description provided for @recipientLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipient (phone or email)'**
+  String get recipientLabel;
+
+  /// No description provided for @amountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get amountLabel;
+
+  /// No description provided for @noteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get noteLabel;
+
+  /// No description provided for @sendCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get sendCta;
 }
 
 class _AppLocalizationsDelegate

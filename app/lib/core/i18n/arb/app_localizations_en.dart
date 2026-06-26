@@ -360,4 +360,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get orderTimelineLabel => 'Timeline';
+
+  @override
+  String get walletTitle => 'Wallet';
+
+  @override
+  String get currentBalance => 'Current balance';
+
+  @override
+  String get topUpCta => 'Top up';
+
+  @override
+  String get sendMoney => 'Send money';
+
+  @override
+  String get txHistory => 'Transaction history';
+
+  @override
+  String get walletEmptyTitle => 'No transactions yet';
+
+  @override
+  String get walletEmptySub =>
+      'Top up your wallet to get started — your activity will show up here.';
+
+  @override
+  String get txTopUp => 'Top up';
+
+  @override
+  String get txPurchase => 'Purchase';
+
+  @override
+  String get txRefund => 'Refund';
+
+  @override
+  String get txAdjustment => 'Adjustment';
+
+  @override
+  String get topUpAmount => 'Top-up amount';
+
+  @override
+  String get topUpVia => 'Top up via';
+
+  @override
+  String topUpSuccess(String amount) {
+    return '+$amount added to your wallet';
+  }
+
+  @override
+  String get sendMoneyComingSoon => 'Send money is coming soon.';
+
+  @override
+  String get recipientLabel => 'Recipient (phone or email)';
+
+  @override
+  String get amountLabel => 'Amount';
+
+  @override
+  String get noteLabel => 'Note (optional)';
+
+  @override
+  String get sendCta => 'Send';
 }

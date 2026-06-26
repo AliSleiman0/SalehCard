@@ -16,6 +16,9 @@ import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
 import '../../features/orders/presentation/screens/orders_list_screen.dart';
 import '../../features/shell/presentation/app_shell.dart';
+import '../../features/wallet/presentation/screens/send_money_screen.dart';
+import '../../features/wallet/presentation/screens/topup_screen.dart';
+import '../../features/wallet/presentation/screens/wallet_screen.dart';
 
 /// App router. Authenticated tabs live inside a [StatefulShellRoute] (Home /
 /// Categories / Cart / Menu); auth screens and full-screen pushes (product
@@ -74,6 +77,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/orders/:id',
         builder: (context, state) =>
             OrderDetailScreen(id: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/wallet',
+        builder: (context, state) => const WalletScreen(),
+      ),
+      GoRoute(
+        path: '/wallet/topup',
+        builder: (context, state) => const TopUpScreen(),
+      ),
+      GoRoute(
+        path: '/wallet/send',
+        builder: (context, state) => const SendMoneyScreen(),
       ),
       // Tabbed shell.
       StatefulShellRoute.indexedStack(

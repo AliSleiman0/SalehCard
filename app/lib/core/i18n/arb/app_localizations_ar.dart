@@ -356,4 +356,64 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get orderTimelineLabel => 'المسار';
+
+  @override
+  String get walletTitle => 'المحفظة';
+
+  @override
+  String get currentBalance => 'الرصيد الحالي';
+
+  @override
+  String get topUpCta => 'إضافة رصيد';
+
+  @override
+  String get sendMoney => 'إرسال أموال';
+
+  @override
+  String get txHistory => 'سجل العمليات';
+
+  @override
+  String get walletEmptyTitle => 'لا توجد عمليات بعد';
+
+  @override
+  String get walletEmptySub =>
+      'أضف رصيداً إلى محفظتك للبدء — ستظهر عملياتك هنا.';
+
+  @override
+  String get txTopUp => 'إضافة رصيد';
+
+  @override
+  String get txPurchase => 'عملية شراء';
+
+  @override
+  String get txRefund => 'استرداد';
+
+  @override
+  String get txAdjustment => 'تسوية';
+
+  @override
+  String get topUpAmount => 'مبلغ الإضافة';
+
+  @override
+  String get topUpVia => 'الإضافة عبر';
+
+  @override
+  String topUpSuccess(String amount) {
+    return 'تمت إضافة $amount+ إلى محفظتك';
+  }
+
+  @override
+  String get sendMoneyComingSoon => 'إرسال الأموال قريباً.';
+
+  @override
+  String get recipientLabel => 'المستلِم (هاتف أو بريد إلكتروني)';
+
+  @override
+  String get amountLabel => 'المبلغ';
+
+  @override
+  String get noteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get sendCta => 'إرسال';
 }

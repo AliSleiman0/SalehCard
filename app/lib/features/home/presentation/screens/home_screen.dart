@@ -12,6 +12,7 @@ import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../catalog/domain/entities/product.dart';
 import '../../../catalog/presentation/providers.dart';
+import '../../../wallet/presentation/providers.dart';
 
 /// Home / wallet landing (content only — the bottom nav is provided by the app
 /// shell). The wallet/promo are design chrome; the Featured row and category
@@ -39,7 +40,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final colors = context.colors;
     final productsAsync = ref.watch(catalogProductsProvider);
     final localeCode = ref.watch(localeControllerProvider).languageCode;
-    final balance = ref.watch(authControllerProvider).user?.walletBalance ?? 0;
+    final authBalance =
+        ref.watch(authControllerProvider).user?.walletBalance ?? 0;
+    // Prefer the live wallet balance; fall back to the auth balance while the
+    // wallet loads or if it errors.
+    final balance = ref.watch(walletProvider).maybeWhen(
+          data: (w) => w.balance,
+          orElse: () => authBalance.toDouble(),
+        );
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -55,17 +63,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _SearchBar(hint: l10n.searchHint, onTap: _comingSoon),
                   const SizedBox(height: 16),
                   _WalletCard(
-                    balanceText: _balanceHidden
-                        ? '••••••'
-                        : formatUsd(balance.toDouble()),
+                    balanceText:
+                        _balanceHidden ? '••••••' : formatUsd(balance),
                     hidden: _balanceHidden,
                     onToggle: () =>
                         setState(() => _balanceHidden = !_balanceHidden),
                     onPill: _comingSoon,
+                    onTap: () => context.push('/wallet'),
                     l10n: l10n,
                   ),
                   const SizedBox(height: 14),
-                  _AddMoneyButton(label: l10n.addMoney, onTap: _comingSoon),
+                  _AddMoneyButton(
+                      label: l10n.addMoney,
+                      onTap: () => context.push('/wallet/topup')),
                   const SizedBox(height: 16),
                   _PromoCard(title: l10n.promoTitle, subtitle: l10n.promoSubtitle),
                   const SizedBox(height: 8),
@@ -291,6 +301,7 @@ class _WalletCard extends StatelessWidget {
     required this.hidden,
     required this.onToggle,
     required this.onPill,
+    required this.onTap,
     required this.l10n,
   });
 
@@ -298,24 +309,28 @@ class _WalletCard extends StatelessWidget {
   final bool hidden;
   final VoidCallback onToggle;
   final VoidCallback onPill;
+  final VoidCallback onTap;
   final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppTokens.brandGradient,
-        borderRadius: BorderRadius.circular(AppTokens.rLg),
-        boxShadow: [
-          BoxShadow(
-            color: AppTokens.brandMid.withValues(alpha: 0.45),
-            blurRadius: 34,
-            offset: const Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Column(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: AppTokens.brandGradient,
+          borderRadius: BorderRadius.circular(AppTokens.rLg),
+          boxShadow: [
+            BoxShadow(
+              color: AppTokens.brandMid.withValues(alpha: 0.45),
+              blurRadius: 34,
+              offset: const Offset(0, 16),
+            ),
+          ],
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -391,14 +406,15 @@ class _WalletCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          Row(
-            children: [
-              _CardPill(label: l10n.requestPhysicalCard, onTap: onPill),
-              const SizedBox(width: 10),
-              _CardPill(label: l10n.cardInfo, onTap: onPill),
-            ],
-          ),
-        ],
+            Row(
+              children: [
+                _CardPill(label: l10n.requestPhysicalCard, onTap: onPill),
+                const SizedBox(width: 10),
+                _CardPill(label: l10n.cardInfo, onTap: onPill),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

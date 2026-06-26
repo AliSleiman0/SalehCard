@@ -33,6 +33,13 @@ class AccountMenuScreen extends ConsumerWidget {
             ),
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: Text(l10n.walletTitle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/wallet'),
+          ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.receipt_long_rounded),
             title: Text(l10n.ordersTitle),
             trailing: const Icon(Icons.chevron_right_rounded),
