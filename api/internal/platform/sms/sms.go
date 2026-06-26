@@ -1,100 +1,58 @@
-// Package sms delivers text messages for the OTP flow. It abstracts the mip SMS
-// gateway behind a small Sender interface so the user service stays unaware of
-// the transport, and provides a logging fallback for local development.
+// Package sms is the outbound SMS port for the OTP flow together with its
+// provider adapters (Monty, Twilio, log). The user service depends only on the
+// [Sender] port; [New] selects an adapter from [Config] so providers swap purely
+// by configuration (ports & adapters / hexagonal). Adding a provider is a new
+// adapter file plus one case in [New].
 package sms
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"log/slog"
-	"net/http"
-	"strings"
-	"time"
 )
 
-// Sender delivers a message to a phone number in E.164 form.
+// Sender is the outbound port: it delivers a message to a phone number in E.164.
 type Sender interface {
 	Send(ctx context.Context, phoneE164, message string) error
 }
 
-// LogSender is the development fallback: it logs the message instead of sending
-// it, so the OTP flow is fully testable without a gateway or Twilio account.
-type LogSender struct{}
-
-// Send logs the would-be SMS at info level.
-func (LogSender) Send(_ context.Context, phoneE164, message string) error {
-	slog.Info("sms (dev, not sent)", "to", phoneE164, "message", message)
-	return nil
+// Config selects and configures the active SMS adapter.
+type Config struct {
+	// Provider is one of "monty", "twilio", or "log" (default "log").
+	Provider string
+	Monty    MontyConfig
+	Twilio   TwilioConfig
 }
 
-// GatewayClient sends via the mip SMS gateway's POST {base}/api/sms/send.
-type GatewayClient struct {
-	baseURL  string
-	provider string
-	token    string // optional Bearer, used only if the gateway requires auth
-	http     *http.Client
+// MontyConfig holds Monty Mobile (Lebanon) credentials and settings for the
+// sms.montymobile.com/API/SendSMS endpoint.
+type MontyConfig struct {
+	BaseURL     string // e.g. https://sms.montymobile.com
+	Username    string
+	APIID       string // the apiId query parameter
+	AccessToken string // X-Access-Token header
+	SenderID    string // registered alphanumeric Source (e.g. "SalehCard")
+	Campaign    string // optional campaignname; defaults to Username
 }
 
-// NewGatewayClient builds a client for the gateway at baseURL (e.g.
-// "http://localhost:8081/SMS_GATEWAY_API"). provider selects the downstream
-// channel ("twilio"); token is an optional Bearer for a security-enabled gateway.
-func NewGatewayClient(baseURL, provider, token string) *GatewayClient {
-	return &GatewayClient{
-		baseURL:  strings.TrimRight(baseURL, "/"),
-		provider: provider,
-		token:    token,
-		http:     &http.Client{Timeout: 15 * time.Second},
-	}
+// TwilioConfig holds Twilio (international) credentials and settings.
+type TwilioConfig struct {
+	AccountSID string
+	AuthToken  string
+	From       string // E.164 sender number or Messaging Service SID
 }
 
-// sendRequest mirrors the gateway's SmsRequestDto.
-type sendRequest struct {
-	PhoneNumber string `json:"phoneNumber"`
-	Message     string `json:"message"`
-	Provider    string `json:"provider,omitempty"`
-}
-
-// sendResponse mirrors the gateway's envelope (time/message/code/messageSid).
-type sendResponse struct {
-	Message    string `json:"message"`
-	Code       int    `json:"code"`
-	MessageSid string `json:"messageSid"`
-}
-
-// Send posts the message to the gateway, returning an error on a non-2xx HTTP
-// status or a non-200 envelope code.
-func (c *GatewayClient) Send(ctx context.Context, phoneE164, message string) error {
-	body, err := json.Marshal(sendRequest{PhoneNumber: phoneE164, Message: message, Provider: c.provider})
-	if err != nil {
-		return err
+// New builds the [Sender] for cfg.Provider. An empty or "log" provider returns
+// the dev [LogSender]; an unknown provider, or a selected provider missing
+// required credentials, returns an error.
+func New(cfg Config) (Sender, error) {
+	switch cfg.Provider {
+	case "", "log":
+		return LogSender{}, nil
+	case "monty":
+		return newMontySender(cfg.Monty)
+	case "twilio":
+		return newTwilioSender(cfg.Twilio)
+	default:
+		return nil, fmt.Errorf("unknown SMS provider %q", cfg.Provider)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/sms/send", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("sms gateway request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var parsed sendResponse
-	_ = json.NewDecoder(resp.Body).Decode(&parsed) // tolerate empty/non-JSON bodies
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("sms gateway status %d: %s", resp.StatusCode, parsed.Message)
-	}
-	if parsed.Code != 0 && parsed.Code != http.StatusOK {
-		return fmt.Errorf("sms gateway error %d: %s", parsed.Code, parsed.Message)
-	}
-	slog.Info("sms sent via gateway", "to", phoneE164, "sid", parsed.MessageSid)
-	return nil
 }

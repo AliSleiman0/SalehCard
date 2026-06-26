@@ -23,19 +23,29 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 		slog.Warn("user: failed to ensure indexes", "error", err)
 	}
 
-	// Pick the SMS sender: Twilio direct-send when configured, else the mip
-	// gateway, else a dev fallback that logs the code (no Twilio/gateway needed).
-	var sender sms.Sender
-	switch {
-	case cfg.TwilioAccountSID != "" && cfg.TwilioAuthToken != "" && cfg.TwilioFrom != "":
-		sender = sms.NewTwilioSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFrom)
-		slog.Info("user: sending OTP SMS via Twilio")
-	case cfg.SMSGatewayBaseURL != "":
-		sender = sms.NewGatewayClient(cfg.SMSGatewayBaseURL, cfg.SMSGatewayProvider, cfg.SMSGatewayToken)
-		slog.Info("user: sending OTP SMS via the mip gateway", "url", cfg.SMSGatewayBaseURL)
-	default:
-		slog.Warn("user: no SMS sender configured — OTP codes will be logged, not sent")
+	// Build the configured SMS adapter (monty | twilio | log). On a config error
+	// fall back to the dev log sender so the API still boots.
+	sender, err := sms.New(sms.Config{
+		Provider: cfg.SMSProvider,
+		Monty: sms.MontyConfig{
+			BaseURL:     cfg.MontyBaseURL,
+			Username:    cfg.MontyUsername,
+			APIID:       cfg.MontyAPIID,
+			AccessToken: cfg.MontyAccessToken,
+			SenderID:    cfg.MontySenderID,
+			Campaign:    cfg.MontyCampaign,
+		},
+		Twilio: sms.TwilioConfig{
+			AccountSID: cfg.TwilioAccountSID,
+			AuthToken:  cfg.TwilioAuthToken,
+			From:       cfg.TwilioFrom,
+		},
+	})
+	if err != nil {
+		slog.Warn("user: SMS provider misconfigured — falling back to logging codes", "error", err)
 		sender = sms.LogSender{}
+	} else {
+		slog.Info("user: OTP SMS sender ready", "provider", cfg.SMSProvider)
 	}
 	otpCfg := OTPConfig{
 		CountryCode:    cfg.DefaultCountryCode,

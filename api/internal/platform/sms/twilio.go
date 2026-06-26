@@ -21,14 +21,18 @@ type TwilioSender struct {
 	http       *http.Client
 }
 
-// NewTwilioSender builds a Twilio-backed Sender.
-func NewTwilioSender(accountSID, authToken, from string) *TwilioSender {
-	return &TwilioSender{
-		accountSID: accountSID,
-		authToken:  authToken,
-		from:       from,
-		http:       &http.Client{Timeout: 15 * time.Second},
+// newTwilioSender builds a Twilio-backed Sender from cfg, erroring if any
+// required credential is missing.
+func newTwilioSender(cfg TwilioConfig) (Sender, error) {
+	if cfg.AccountSID == "" || cfg.AuthToken == "" || cfg.From == "" {
+		return nil, fmt.Errorf("twilio: account SID, auth token, and from-number are required")
 	}
+	return &TwilioSender{
+		accountSID: cfg.AccountSID,
+		authToken:  cfg.AuthToken,
+		from:       cfg.From,
+		http:       &http.Client{Timeout: 15 * time.Second},
+	}, nil
 }
 
 // Send delivers message to phoneE164 via Twilio, returning an error on a non-2xx
