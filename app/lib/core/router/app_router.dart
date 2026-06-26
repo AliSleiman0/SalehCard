@@ -8,8 +8,10 @@ import '../../features/auth/presentation/controllers/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/cart/presentation/screens/cart_screen.dart';
+import '../../features/browse/presentation/screens/categories_screen.dart';
+import '../../features/browse/presentation/screens/notifications_screen.dart';
+import '../../features/browse/presentation/screens/search_screen.dart';
 import '../../features/catalog/presentation/screens/product_detail_screen.dart';
-import '../../features/catalog/presentation/screens/product_list_screen.dart';
 import '../../features/checkout/domain/entities/order.dart';
 import '../../features/checkout/presentation/screens/checkout_screen.dart';
 import '../../features/checkout/presentation/screens/order_success_screen.dart';
@@ -84,6 +86,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ProfileScreen(),
       ),
       GoRoute(
+        path: '/search',
+        builder: (context, state) => SearchScreen(
+          prefill: state.extra is String ? state.extra as String : null,
+        ),
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
         path: '/wallet',
         builder: (context, state) => const WalletScreen(),
       ),
@@ -104,7 +116,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/home', builder: (c, s) => const HomeScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/browse', builder: (c, s) => const ProductListScreen()),
+            GoRoute(path: '/browse', builder: (c, s) => const CategoriesScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/cart', builder: (c, s) => const CartScreen()),

@@ -961,6 +961,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Profile updated.'**
   String get profileSaved;
+
+  /// No description provided for @browseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories'**
+  String get browseTitle;
+
+  /// No description provided for @categoryItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No items} =1{1 item} other{{count} items}}'**
+  String categoryItemCount(int count);
+
+  /// No description provided for @searchPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the catalog'**
+  String get searchPromptTitle;
+
+  /// No description provided for @searchPromptSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Type to find gift cards, top-ups & more.'**
+  String get searchPromptSub;
+
+  /// No description provided for @searchEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get searchEmptyTitle;
+
+  /// No description provided for @searchEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Try a different keyword or browse categories.'**
+  String get searchEmptySub;
+
+  /// No description provided for @notificationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsTitle;
+
+  /// No description provided for @notificationsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re all caught up'**
+  String get notificationsEmptyTitle;
+
+  /// No description provided for @notificationsEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications about your orders and wallet will show up here.'**
+  String get notificationsEmptySub;
+
+  /// No description provided for @notifOrderCompletedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Order completed'**
+  String get notifOrderCompletedTitle;
+
+  /// No description provided for @notifOrderCompletedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your codes have been delivered. Enjoy!'**
+  String get notifOrderCompletedBody;
+
+  /// No description provided for @notifWalletTopUpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet topped up'**
+  String get notifWalletTopUpTitle;
+
+  /// No description provided for @notifWalletTopUpBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your top-up was credited to your wallet.'**
+  String get notifWalletTopUpBody;
+
+  /// No description provided for @notifPromoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Limited-time offer'**
+  String get notifPromoTitle;
+
+  /// No description provided for @notifPromoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Enjoy instant delivery on gift cards & top-ups.'**
+  String get notifPromoBody;
 }
 
 class _AppLocalizationsDelegate

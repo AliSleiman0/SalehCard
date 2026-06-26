@@ -174,5 +174,24 @@
   "editProfile": "تعديل",
   "cancel": "إلغاء",
   "saveChanges": "حفظ التغييرات",
-  "profileSaved": "تم تحديث الملف الشخصي."
+  "profileSaved": "تم تحديث الملف الشخصي.",
+
+  "browseTitle": "الفئات",
+  "categoryItemCount": "{count, plural, =0{لا عناصر} =1{عنصر واحد} =2{عنصران} few{{count} عناصر} many{{count} عنصراً} other{{count} عنصر}}",
+  "@categoryItemCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "searchPromptTitle": "ابحث في الكتالوج",
+  "searchPromptSub": "اكتب للعثور على بطاقات الهدايا والتعبئة والمزيد.",
+  "searchEmptyTitle": "لا نتائج",
+  "searchEmptySub": "جرّب كلمة مختلفة أو تصفّح الفئات.",
+  "notificationsTitle": "الإشعارات",
+  "notificationsEmptyTitle": "لا جديد لديك",
+  "notificationsEmptySub": "ستظهر هنا إشعارات طلباتك ومحفظتك.",
+  "notifOrderCompletedTitle": "تم إتمام الطلب",
+  "notifOrderCompletedBody": "تم تسليم رموزك. استمتع!",
+  "notifWalletTopUpTitle": "تمت إضافة الرصيد",
+  "notifWalletTopUpBody": "تمت إضافة رصيدك إلى محفظتك.",
+  "notifPromoTitle": "عرض لفترة محدودة",
+  "notifPromoBody": "استمتع بالتسليم الفوري على بطاقات الهدايا والتعبئة."
 }

@@ -174,5 +174,24 @@
   "editProfile": "Edit",
   "cancel": "Cancel",
   "saveChanges": "Save changes",
-  "profileSaved": "Profile updated."
+  "profileSaved": "Profile updated.",
+
+  "browseTitle": "Categories",
+  "categoryItemCount": "{count, plural, =0{No items} =1{1 item} other{{count} items}}",
+  "@categoryItemCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "searchPromptTitle": "Search the catalog",
+  "searchPromptSub": "Type to find gift cards, top-ups & more.",
+  "searchEmptyTitle": "No results",
+  "searchEmptySub": "Try a different keyword or browse categories.",
+  "notificationsTitle": "Notifications",
+  "notificationsEmptyTitle": "You're all caught up",
+  "notificationsEmptySub": "Notifications about your orders and wallet will show up here.",
+  "notifOrderCompletedTitle": "Order completed",
+  "notifOrderCompletedBody": "Your codes have been delivered. Enjoy!",
+  "notifWalletTopUpTitle": "Wallet topped up",
+  "notifWalletTopUpBody": "Your top-up was credited to your wallet.",
+  "notifPromoTitle": "Limited-time offer",
+  "notifPromoBody": "Enjoy instant delivery on gift cards & top-ups."
 }

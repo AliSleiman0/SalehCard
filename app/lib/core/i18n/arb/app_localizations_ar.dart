@@ -456,4 +456,63 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get profileSaved => 'تم تحديث الملف الشخصي.';
+
+  @override
+  String get browseTitle => 'الفئات';
+
+  @override
+  String categoryItemCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عنصر',
+      many: '$count عنصراً',
+      few: '$count عناصر',
+      two: 'عنصران',
+      one: 'عنصر واحد',
+      zero: 'لا عناصر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get searchPromptTitle => 'ابحث في الكتالوج';
+
+  @override
+  String get searchPromptSub =>
+      'اكتب للعثور على بطاقات الهدايا والتعبئة والمزيد.';
+
+  @override
+  String get searchEmptyTitle => 'لا نتائج';
+
+  @override
+  String get searchEmptySub => 'جرّب كلمة مختلفة أو تصفّح الفئات.';
+
+  @override
+  String get notificationsTitle => 'الإشعارات';
+
+  @override
+  String get notificationsEmptyTitle => 'لا جديد لديك';
+
+  @override
+  String get notificationsEmptySub => 'ستظهر هنا إشعارات طلباتك ومحفظتك.';
+
+  @override
+  String get notifOrderCompletedTitle => 'تم إتمام الطلب';
+
+  @override
+  String get notifOrderCompletedBody => 'تم تسليم رموزك. استمتع!';
+
+  @override
+  String get notifWalletTopUpTitle => 'تمت إضافة الرصيد';
+
+  @override
+  String get notifWalletTopUpBody => 'تمت إضافة رصيدك إلى محفظتك.';
+
+  @override
+  String get notifPromoTitle => 'عرض لفترة محدودة';
+
+  @override
+  String get notifPromoBody =>
+      'استمتع بالتسليم الفوري على بطاقات الهدايا والتعبئة.';
 }

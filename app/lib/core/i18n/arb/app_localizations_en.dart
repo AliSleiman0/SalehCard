@@ -460,4 +460,61 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileSaved => 'Profile updated.';
+
+  @override
+  String get browseTitle => 'Categories';
+
+  @override
+  String categoryItemCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items',
+      one: '1 item',
+      zero: 'No items',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get searchPromptTitle => 'Search the catalog';
+
+  @override
+  String get searchPromptSub => 'Type to find gift cards, top-ups & more.';
+
+  @override
+  String get searchEmptyTitle => 'No results';
+
+  @override
+  String get searchEmptySub => 'Try a different keyword or browse categories.';
+
+  @override
+  String get notificationsTitle => 'Notifications';
+
+  @override
+  String get notificationsEmptyTitle => 'You\'re all caught up';
+
+  @override
+  String get notificationsEmptySub =>
+      'Notifications about your orders and wallet will show up here.';
+
+  @override
+  String get notifOrderCompletedTitle => 'Order completed';
+
+  @override
+  String get notifOrderCompletedBody =>
+      'Your codes have been delivered. Enjoy!';
+
+  @override
+  String get notifWalletTopUpTitle => 'Wallet topped up';
+
+  @override
+  String get notifWalletTopUpBody => 'Your top-up was credited to your wallet.';
+
+  @override
+  String get notifPromoTitle => 'Limited-time offer';
+
+  @override
+  String get notifPromoBody =>
+      'Enjoy instant delivery on gift cards & top-ups.';
 }
