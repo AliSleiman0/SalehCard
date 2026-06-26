@@ -160,5 +160,19 @@
   "recipientLabel": "المستلِم (هاتف أو بريد إلكتروني)",
   "amountLabel": "المبلغ",
   "noteLabel": "ملاحظة (اختياري)",
-  "sendCta": "إرسال"
+  "sendCta": "إرسال",
+
+  "darkMode": "الوضع الداكن",
+  "profileTitle": "الملف الشخصي",
+  "accountInfo": "معلومات الحساب",
+  "roleLabel": "الدور",
+  "savedPlayerIds": "معرّفات اللاعبين المحفوظة",
+  "savedPlayerIdsEmptyTitle": "لا توجد معرّفات محفوظة",
+  "savedPlayerIdsEmptySub": "احفظ معرّفات اللاعب أو الحساب لإتمام شراء أسرع.",
+  "addPlayerId": "إضافة",
+  "playerIdHint": "أدخل معرّف اللاعب",
+  "editProfile": "تعديل",
+  "cancel": "إلغاء",
+  "saveChanges": "حفظ التغييرات",
+  "profileSaved": "تم تحديث الملف الشخصي."
 }

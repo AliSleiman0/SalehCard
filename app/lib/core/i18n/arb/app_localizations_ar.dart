@@ -416,4 +416,44 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get sendCta => 'إرسال';
+
+  @override
+  String get darkMode => 'الوضع الداكن';
+
+  @override
+  String get profileTitle => 'الملف الشخصي';
+
+  @override
+  String get accountInfo => 'معلومات الحساب';
+
+  @override
+  String get roleLabel => 'الدور';
+
+  @override
+  String get savedPlayerIds => 'معرّفات اللاعبين المحفوظة';
+
+  @override
+  String get savedPlayerIdsEmptyTitle => 'لا توجد معرّفات محفوظة';
+
+  @override
+  String get savedPlayerIdsEmptySub =>
+      'احفظ معرّفات اللاعب أو الحساب لإتمام شراء أسرع.';
+
+  @override
+  String get addPlayerId => 'إضافة';
+
+  @override
+  String get playerIdHint => 'أدخل معرّف اللاعب';
+
+  @override
+  String get editProfile => 'تعديل';
+
+  @override
+  String get cancel => 'إلغاء';
+
+  @override
+  String get saveChanges => 'حفظ التغييرات';
+
+  @override
+  String get profileSaved => 'تم تحديث الملف الشخصي.';
 }

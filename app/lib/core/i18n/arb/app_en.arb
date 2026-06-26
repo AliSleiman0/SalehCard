@@ -160,5 +160,19 @@
   "recipientLabel": "Recipient (phone or email)",
   "amountLabel": "Amount",
   "noteLabel": "Note (optional)",
-  "sendCta": "Send"
+  "sendCta": "Send",
+
+  "darkMode": "Dark mode",
+  "profileTitle": "Profile",
+  "accountInfo": "Account info",
+  "roleLabel": "Role",
+  "savedPlayerIds": "Saved player IDs",
+  "savedPlayerIdsEmptyTitle": "No saved player IDs",
+  "savedPlayerIdsEmptySub": "Save your player or account IDs for faster checkout.",
+  "addPlayerId": "Add",
+  "playerIdHint": "Enter a player ID",
+  "editProfile": "Edit",
+  "cancel": "Cancel",
+  "saveChanges": "Save changes",
+  "profileSaved": "Profile updated."
 }

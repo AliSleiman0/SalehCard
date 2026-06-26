@@ -13,6 +13,7 @@ class UserDto {
     required this.locale,
     this.walletBalance = 0,
     this.loyaltyPoints = 0,
+    this.savedPlayerIds = const [],
   });
 
   final String id;
@@ -21,6 +22,8 @@ class UserDto {
   final String locale;
   final double walletBalance;
   final int loyaltyPoints;
+
+  final List<String> savedPlayerIds;
 
   factory UserDto.fromJson(Map<String, dynamic> json) =>
       _$UserDtoFromJson(json);
@@ -34,5 +37,6 @@ class UserDto {
         locale: locale,
         walletBalance: walletBalance,
         loyaltyPoints: loyaltyPoints,
+        savedPlayerIds: savedPlayerIds,
       );
 }

@@ -33,6 +33,13 @@ class AccountMenuScreen extends ConsumerWidget {
             ),
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.person_outline_rounded),
+            title: Text(l10n.profileTitle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/profile'),
+          ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.account_balance_wallet_outlined),
             title: Text(l10n.walletTitle),
             trailing: const Icon(Icons.chevron_right_rounded),
@@ -55,7 +62,7 @@ class AccountMenuScreen extends ConsumerWidget {
           ),
           SwitchListTile(
             secondary: const Icon(Icons.dark_mode_outlined),
-            title: const Text('Dark mode'),
+            title: Text(l10n.darkMode),
             value: isDark,
             onChanged: (_) =>
                 ref.read(themeControllerProvider.notifier).toggle(),

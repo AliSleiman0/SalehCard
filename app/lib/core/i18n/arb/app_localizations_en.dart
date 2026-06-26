@@ -420,4 +420,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sendCta => 'Send';
+
+  @override
+  String get darkMode => 'Dark mode';
+
+  @override
+  String get profileTitle => 'Profile';
+
+  @override
+  String get accountInfo => 'Account info';
+
+  @override
+  String get roleLabel => 'Role';
+
+  @override
+  String get savedPlayerIds => 'Saved player IDs';
+
+  @override
+  String get savedPlayerIdsEmptyTitle => 'No saved player IDs';
+
+  @override
+  String get savedPlayerIdsEmptySub =>
+      'Save your player or account IDs for faster checkout.';
+
+  @override
+  String get addPlayerId => 'Add';
+
+  @override
+  String get playerIdHint => 'Enter a player ID';
+
+  @override
+  String get editProfile => 'Edit';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get saveChanges => 'Save changes';
+
+  @override
+  String get profileSaved => 'Profile updated.';
 }

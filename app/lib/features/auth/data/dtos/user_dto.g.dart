@@ -13,6 +13,11 @@ UserDto _$UserDtoFromJson(Map<String, dynamic> json) => UserDto(
   locale: json['locale'] as String,
   walletBalance: (json['walletBalance'] as num?)?.toDouble() ?? 0,
   loyaltyPoints: (json['loyaltyPoints'] as num?)?.toInt() ?? 0,
+  savedPlayerIds:
+      (json['savedPlayerIds'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [],
 );
 
 Map<String, dynamic> _$UserDtoToJson(UserDto instance) => <String, dynamic>{
@@ -22,4 +27,5 @@ Map<String, dynamic> _$UserDtoToJson(UserDto instance) => <String, dynamic>{
   'locale': instance.locale,
   'walletBalance': instance.walletBalance,
   'loyaltyPoints': instance.loyaltyPoints,
+  'savedPlayerIds': instance.savedPlayerIds,
 };

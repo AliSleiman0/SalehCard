@@ -883,6 +883,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send'**
   String get sendCta;
+
+  /// No description provided for @darkMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark mode'**
+  String get darkMode;
+
+  /// No description provided for @profileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profileTitle;
+
+  /// No description provided for @accountInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Account info'**
+  String get accountInfo;
+
+  /// No description provided for @roleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get roleLabel;
+
+  /// No description provided for @savedPlayerIds.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved player IDs'**
+  String get savedPlayerIds;
+
+  /// No description provided for @savedPlayerIdsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved player IDs'**
+  String get savedPlayerIdsEmptyTitle;
+
+  /// No description provided for @savedPlayerIdsEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Save your player or account IDs for faster checkout.'**
+  String get savedPlayerIdsEmptySub;
+
+  /// No description provided for @addPlayerId.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get addPlayerId;
+
+  /// No description provided for @playerIdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a player ID'**
+  String get playerIdHint;
+
+  /// No description provided for @editProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get editProfile;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @saveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get saveChanges;
+
+  /// No description provided for @profileSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile updated.'**
+  String get profileSaved;
 }
 
 class _AppLocalizationsDelegate
