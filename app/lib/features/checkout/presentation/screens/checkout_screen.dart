@@ -9,6 +9,7 @@ import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/network/idempotency.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/money_row.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
@@ -689,12 +690,7 @@ class _PlaceOrderBar extends StatelessWidget {
           textStyle: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),
         ),
         child: submitting
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Colors.white),
-              )
+            ? const AppSpinner(color: Colors.white, size: 22, stroke: 2.5)
             : Text('${l10n.placeOrderCta}  ·  ${formatUsd(total)}'),
       ),
     );

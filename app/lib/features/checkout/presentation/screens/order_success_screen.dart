@@ -7,6 +7,7 @@ import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../domain/entities/order.dart';
 import '../providers.dart';
 
@@ -34,7 +35,7 @@ class OrderSuccessScreen extends ConsumerWidget {
       backgroundColor: colors.bg,
       appBar: _appBar(context, l10n, colors),
       body: orderAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingView(),
         error: (_, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

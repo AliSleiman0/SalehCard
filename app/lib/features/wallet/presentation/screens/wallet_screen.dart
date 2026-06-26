@@ -6,6 +6,7 @@ import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/ledger_row.dart';
 import '../../domain/entities/wallet.dart';
@@ -29,7 +30,7 @@ class WalletScreen extends ConsumerWidget {
         title: Text(l10n.walletTitle),
       ),
       body: walletAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingView(),
         error: (_, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

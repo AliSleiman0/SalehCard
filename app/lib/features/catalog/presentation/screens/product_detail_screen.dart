@@ -7,6 +7,7 @@ import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../cart/domain/entities/cart_item.dart';
 import '../../../cart/presentation/controllers/cart_controller.dart';
@@ -52,7 +53,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         title: Text(l10n.catalogTitle),
       ),
       body: productAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingView(),
         error: (error, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

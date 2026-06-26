@@ -2,7 +2,7 @@
     <!-- Network access for the API client. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="salehcard_app"
+        android:label="SalehCard"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

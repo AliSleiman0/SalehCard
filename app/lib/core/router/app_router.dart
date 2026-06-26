@@ -21,6 +21,7 @@ import '../../features/kyc/presentation/screens/kyc_status_screen.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
 import '../../features/orders/presentation/screens/orders_list_screen.dart';
 import '../../features/shell/presentation/app_shell.dart';
+import '../../features/splash/presentation/splash_screen.dart';
 import '../../features/wallet/presentation/screens/send_money_screen.dart';
 import '../../features/wallet/presentation/screens/topup_screen.dart';
 import '../../features/wallet/presentation/screens/wallet_screen.dart';
@@ -42,13 +43,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       final status = ref.read(authControllerProvider).status;
       const authRoutes = {'/login', '/signup'};
       final onAuthRoute = authRoutes.contains(state.matchedLocation);
+      final onSplash = state.matchedLocation == '/splash';
 
-      if (status == AuthStatus.unknown) return null;
+      // While the session is being restored, hold on the branded splash.
+      if (status == AuthStatus.unknown) return onSplash ? null : '/splash';
+      // Once resolved, leave the splash for the right landing screen.
+      if (onSplash) {
+        return status == AuthStatus.authenticated ? '/home' : '/login';
+      }
       if (status == AuthStatus.unauthenticated && !onAuthRoute) return '/login';
       if (status == AuthStatus.authenticated && onAuthRoute) return '/home';
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),

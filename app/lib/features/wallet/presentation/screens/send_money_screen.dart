@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_spinner.dart';
 import '../providers.dart';
 
 /// Send money (peer transfer) — STUB.
@@ -132,12 +133,7 @@ class _SendMoneyScreenState extends ConsumerState<SendMoneyScreen> {
                     const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),
               ),
               child: submitting
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2.5, color: Colors.white),
-                    )
+                  ? const AppSpinner(color: Colors.white, size: 22, stroke: 2.5)
                   : Text(l10n.sendCta),
             ),
           ),
