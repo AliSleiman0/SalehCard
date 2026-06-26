@@ -4,6 +4,9 @@
   "emailLabel": "البريد الإلكتروني",
   "passwordLabel": "كلمة المرور",
   "signInButton": "تسجيل الدخول",
+  "sendCodeButton": "إرسال الرمز",
+  "useCodeInstead": "تسجيل الدخول برمز بدلاً من ذلك",
+  "usePasswordInstead": "تسجيل الدخول بكلمة المرور بدلاً من ذلك",
   "catalogTitle": "المنتجات",
   "retry": "إعادة المحاولة",
   "logout": "تسجيل الخروج",
@@ -32,7 +35,7 @@
   "mobileNumberLabel": "رقم الهاتف",
   "phoneHint": "70 123 456",
   "passwordHint": "••••••••",
-  "newPasswordHint": "٦ أحرف على الأقل",
+  "newPasswordHint": "٨ أحرف على الأقل",
   "confirmPasswordLabel": "تأكيد كلمة المرور",
   "confirmPasswordHint": "أعد إدخال كلمة المرور",
 
@@ -46,7 +49,7 @@
 
   "invalidPhone": "يرجى إدخال رقم هاتف صحيح.",
   "passwordRequired": "يرجى إدخال كلمة المرور.",
-  "passwordTooShort": "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.",
+  "passwordTooShort": "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.",
   "passwordMismatch": "كلمتا المرور غير متطابقتين.",
   "otpIncomplete": "أدخل الرمز المكوّن من 6 أرقام.",
 

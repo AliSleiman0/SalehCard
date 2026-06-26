@@ -21,6 +21,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInButton => 'Sign in';
 
   @override
+  String get sendCodeButton => 'Send code';
+
+  @override
+  String get useCodeInstead => 'Sign in with a code instead';
+
+  @override
+  String get usePasswordInstead => 'Sign in with a password instead';
+
+  @override
   String get catalogTitle => 'Products';
 
   @override
@@ -86,7 +95,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordHint => '••••••••';
 
   @override
-  String get newPasswordHint => 'At least 6 characters';
+  String get newPasswordHint => 'At least 8 characters';
 
   @override
   String get confirmPasswordLabel => 'Confirm password';
@@ -122,7 +131,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordRequired => 'Please enter your password.';
 
   @override
-  String get passwordTooShort => 'Password must be at least 6 characters.';
+  String get passwordTooShort => 'Password must be at least 8 characters.';
 
   @override
   String get passwordMismatch => 'Passwords do not match.';

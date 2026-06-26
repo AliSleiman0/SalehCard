@@ -21,6 +21,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get signInButton => 'تسجيل الدخول';
 
   @override
+  String get sendCodeButton => 'إرسال الرمز';
+
+  @override
+  String get useCodeInstead => 'تسجيل الدخول برمز بدلاً من ذلك';
+
+  @override
+  String get usePasswordInstead => 'تسجيل الدخول بكلمة المرور بدلاً من ذلك';
+
+  @override
   String get catalogTitle => 'المنتجات';
 
   @override
@@ -84,7 +93,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get passwordHint => '••••••••';
 
   @override
-  String get newPasswordHint => '٦ أحرف على الأقل';
+  String get newPasswordHint => '٨ أحرف على الأقل';
 
   @override
   String get confirmPasswordLabel => 'تأكيد كلمة المرور';
@@ -121,7 +130,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get passwordTooShort =>
-      'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.';
+      'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.';
 
   @override
   String get passwordMismatch => 'كلمتا المرور غير متطابقتين.';
