@@ -40,6 +40,13 @@ class AccountMenuScreen extends ConsumerWidget {
           ),
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.verified_user_outlined),
+            title: Text(l10n.kycMenuLabel),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/kyc'),
+          ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.account_balance_wallet_outlined),
             title: Text(l10n.walletTitle),
             trailing: const Icon(Icons.chevron_right_rounded),

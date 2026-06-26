@@ -1051,6 +1051,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enjoy instant delivery on gift cards & top-ups.'**
   String get notifPromoBody;
+
+  /// No description provided for @kycTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification'**
+  String get kycTitle;
+
+  /// No description provided for @kycMenuLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification'**
+  String get kycMenuLabel;
+
+  /// No description provided for @kycBadgeUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'Not verified'**
+  String get kycBadgeUnverified;
+
+  /// No description provided for @kycBadgePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Under review'**
+  String get kycBadgePending;
+
+  /// No description provided for @kycBadgeVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get kycBadgeVerified;
+
+  /// No description provided for @kycBadgeRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get kycBadgeRejected;
+
+  /// No description provided for @kycUnverifiedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your identity'**
+  String get kycUnverifiedTitle;
+
+  /// No description provided for @kycUnverifiedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your identity to unlock higher limits and faster checkout. It only takes a minute.'**
+  String get kycUnverifiedBody;
+
+  /// No description provided for @kycPendingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Under review'**
+  String get kycPendingTitle;
+
+  /// No description provided for @kycPendingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ve received your documents and our team is reviewing them. This usually takes a few minutes.'**
+  String get kycPendingBody;
+
+  /// No description provided for @kycVerifiedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re verified'**
+  String get kycVerifiedTitle;
+
+  /// No description provided for @kycVerifiedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your identity has been confirmed. All features are unlocked — enjoy higher limits and faster checkout.'**
+  String get kycVerifiedBody;
+
+  /// No description provided for @kycRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification failed'**
+  String get kycRejectedTitle;
+
+  /// No description provided for @kycRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t verify your identity from the documents provided. Please check the details and resubmit.'**
+  String get kycRejectedBody;
+
+  /// No description provided for @kycVerifyNowCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify now'**
+  String get kycVerifyNowCta;
+
+  /// No description provided for @kycResubmitCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Resubmit'**
+  String get kycResubmitCta;
+
+  /// No description provided for @kycFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity verification'**
+  String get kycFormTitle;
+
+  /// No description provided for @kycFullNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get kycFullNameLabel;
+
+  /// No description provided for @kycDocTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Document type'**
+  String get kycDocTypeLabel;
+
+  /// No description provided for @kycDocPassport.
+  ///
+  /// In en, this message translates to:
+  /// **'Passport'**
+  String get kycDocPassport;
+
+  /// No description provided for @kycDocIdCard.
+  ///
+  /// In en, this message translates to:
+  /// **'ID card'**
+  String get kycDocIdCard;
+
+  /// No description provided for @kycDocLicense.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver\'s license'**
+  String get kycDocLicense;
+
+  /// No description provided for @kycDocNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Document number'**
+  String get kycDocNumberLabel;
+
+  /// No description provided for @kycUploadLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Document photo'**
+  String get kycUploadLabel;
+
+  /// No description provided for @kycUploadHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to upload a photo of your document'**
+  String get kycUploadHint;
+
+  /// No description provided for @kycUploadSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'document.jpg'**
+  String get kycUploadSelected;
+
+  /// No description provided for @kycSubmitCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get kycSubmitCta;
+
+  /// No description provided for @kycFieldRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required.'**
+  String get kycFieldRequired;
+
+  /// No description provided for @kycSubmittedSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification submitted — we\'ll review it shortly.'**
+  String get kycSubmittedSnack;
 }
 
 class _AppLocalizationsDelegate

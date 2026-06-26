@@ -515,4 +515,95 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get notifPromoBody =>
       'استمتع بالتسليم الفوري على بطاقات الهدايا والتعبئة.';
+
+  @override
+  String get kycTitle => 'التحقق';
+
+  @override
+  String get kycMenuLabel => 'التحقق من الهوية';
+
+  @override
+  String get kycBadgeUnverified => 'غير موثّق';
+
+  @override
+  String get kycBadgePending => 'قيد المراجعة';
+
+  @override
+  String get kycBadgeVerified => 'موثّق';
+
+  @override
+  String get kycBadgeRejected => 'مرفوض';
+
+  @override
+  String get kycUnverifiedTitle => 'وثّق هويتك';
+
+  @override
+  String get kycUnverifiedBody =>
+      'وثّق هويتك للحصول على حدود أعلى وإتمام شراء أسرع. لن يستغرق الأمر سوى دقيقة.';
+
+  @override
+  String get kycPendingTitle => 'قيد المراجعة';
+
+  @override
+  String get kycPendingBody =>
+      'لقد استلمنا مستنداتك وفريقنا يراجعها الآن. عادةً ما يستغرق هذا بضع دقائق.';
+
+  @override
+  String get kycVerifiedTitle => 'تم توثيق هويتك';
+
+  @override
+  String get kycVerifiedBody =>
+      'تم تأكيد هويتك. كل الميزات مفعّلة — استمتع بحدود أعلى وإتمام شراء أسرع.';
+
+  @override
+  String get kycRejectedTitle => 'فشل التحقق';
+
+  @override
+  String get kycRejectedBody =>
+      'تعذّر علينا التحقق من هويتك من المستندات المقدّمة. يرجى مراجعة البيانات وإعادة الإرسال.';
+
+  @override
+  String get kycVerifyNowCta => 'وثّق الآن';
+
+  @override
+  String get kycResubmitCta => 'إعادة الإرسال';
+
+  @override
+  String get kycFormTitle => 'التحقق من الهوية';
+
+  @override
+  String get kycFullNameLabel => 'الاسم الكامل';
+
+  @override
+  String get kycDocTypeLabel => 'نوع المستند';
+
+  @override
+  String get kycDocPassport => 'جواز سفر';
+
+  @override
+  String get kycDocIdCard => 'بطاقة هوية';
+
+  @override
+  String get kycDocLicense => 'رخصة قيادة';
+
+  @override
+  String get kycDocNumberLabel => 'رقم المستند';
+
+  @override
+  String get kycUploadLabel => 'صورة المستند';
+
+  @override
+  String get kycUploadHint => 'اضغط لرفع صورة من مستندك';
+
+  @override
+  String get kycUploadSelected => 'document.jpg';
+
+  @override
+  String get kycSubmitCta => 'إرسال';
+
+  @override
+  String get kycFieldRequired => 'هذا الحقل مطلوب.';
+
+  @override
+  String get kycSubmittedSnack => 'تم إرسال طلب التحقق — سنراجعه قريباً.';
 }

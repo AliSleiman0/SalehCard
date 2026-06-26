@@ -517,4 +517,96 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notifPromoBody =>
       'Enjoy instant delivery on gift cards & top-ups.';
+
+  @override
+  String get kycTitle => 'Verification';
+
+  @override
+  String get kycMenuLabel => 'Verification';
+
+  @override
+  String get kycBadgeUnverified => 'Not verified';
+
+  @override
+  String get kycBadgePending => 'Under review';
+
+  @override
+  String get kycBadgeVerified => 'Verified';
+
+  @override
+  String get kycBadgeRejected => 'Rejected';
+
+  @override
+  String get kycUnverifiedTitle => 'Verify your identity';
+
+  @override
+  String get kycUnverifiedBody =>
+      'Verify your identity to unlock higher limits and faster checkout. It only takes a minute.';
+
+  @override
+  String get kycPendingTitle => 'Under review';
+
+  @override
+  String get kycPendingBody =>
+      'We\'ve received your documents and our team is reviewing them. This usually takes a few minutes.';
+
+  @override
+  String get kycVerifiedTitle => 'You\'re verified';
+
+  @override
+  String get kycVerifiedBody =>
+      'Your identity has been confirmed. All features are unlocked — enjoy higher limits and faster checkout.';
+
+  @override
+  String get kycRejectedTitle => 'Verification failed';
+
+  @override
+  String get kycRejectedBody =>
+      'We couldn\'t verify your identity from the documents provided. Please check the details and resubmit.';
+
+  @override
+  String get kycVerifyNowCta => 'Verify now';
+
+  @override
+  String get kycResubmitCta => 'Resubmit';
+
+  @override
+  String get kycFormTitle => 'Identity verification';
+
+  @override
+  String get kycFullNameLabel => 'Full name';
+
+  @override
+  String get kycDocTypeLabel => 'Document type';
+
+  @override
+  String get kycDocPassport => 'Passport';
+
+  @override
+  String get kycDocIdCard => 'ID card';
+
+  @override
+  String get kycDocLicense => 'Driver\'s license';
+
+  @override
+  String get kycDocNumberLabel => 'Document number';
+
+  @override
+  String get kycUploadLabel => 'Document photo';
+
+  @override
+  String get kycUploadHint => 'Tap to upload a photo of your document';
+
+  @override
+  String get kycUploadSelected => 'document.jpg';
+
+  @override
+  String get kycSubmitCta => 'Submit';
+
+  @override
+  String get kycFieldRequired => 'This field is required.';
+
+  @override
+  String get kycSubmittedSnack =>
+      'Verification submitted — we\'ll review it shortly.';
 }

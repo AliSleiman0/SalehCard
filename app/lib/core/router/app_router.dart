@@ -16,6 +16,8 @@ import '../../features/checkout/domain/entities/order.dart';
 import '../../features/checkout/presentation/screens/checkout_screen.dart';
 import '../../features/checkout/presentation/screens/order_success_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
+import '../../features/kyc/presentation/screens/kyc_form_screen.dart';
+import '../../features/kyc/presentation/screens/kyc_status_screen.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
 import '../../features/orders/presentation/screens/orders_list_screen.dart';
 import '../../features/shell/presentation/app_shell.dart';
@@ -94,6 +96,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/kyc',
+        builder: (context, state) => const KycStatusScreen(),
+      ),
+      GoRoute(
+        path: '/kyc/form',
+        builder: (context, state) => const KycFormScreen(),
       ),
       GoRoute(
         path: '/wallet',
