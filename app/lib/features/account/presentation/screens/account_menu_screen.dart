@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
@@ -30,6 +31,13 @@ class AccountMenuScreen extends ConsumerWidget {
               leading: const Icon(Icons.person_outline_rounded),
               title: Text(email),
             ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.receipt_long_rounded),
+            title: Text(l10n.ordersTitle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/orders'),
+          ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.translate_rounded),

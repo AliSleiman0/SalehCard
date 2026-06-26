@@ -13,9 +13,9 @@ import '../../../../core/widgets/status_badge.dart';
 import '../../../checkout/domain/entities/order.dart';
 import '../../../checkout/presentation/providers.dart';
 
-/// Order detail. Minimal version wired to `GET /orders/{id}` via the existing
-/// [orderDetailProvider]; the Orders module (S2) expands this with the full
-/// designed timeline + refund states.
+/// Order detail, wired to `GET /orders/{id}` via [orderDetailProvider]. Renders
+/// the delivered-code, processing, and refunded (display-only) variants plus the
+/// status timeline.
 class OrderDetailScreen extends ConsumerWidget {
   const OrderDetailScreen({super.key, required this.id});
 
@@ -86,6 +86,25 @@ class _Body extends StatelessWidget {
     }
   }
 
+  /// Localise a raw timeline status string where it maps to a known status,
+  /// else return the raw value unchanged.
+  String _statusLabel(String raw) {
+    switch (orderStatusFromString(raw)) {
+      case OrderStatus.completed:
+        return l10n.statusCompleted;
+      case OrderStatus.processing:
+        return l10n.statusProcessing;
+      case OrderStatus.pending:
+        return l10n.statusPending;
+      case OrderStatus.failed:
+        return l10n.statusFailed;
+      case OrderStatus.refunded:
+        return l10n.statusRefunded;
+      case OrderStatus.unknown:
+        return raw;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -111,6 +130,9 @@ class _Body extends StatelessWidget {
           const SizedBox(height: 20),
         ] else if (order.isProcessing) ...[
           _ProcessingNote(l10n: l10n),
+          const SizedBox(height: 20),
+        ] else if (order.status == OrderStatus.refunded) ...[
+          _RefundedNote(amount: order.total, l10n: l10n),
           const SizedBox(height: 20),
         ],
         Text(l10n.orderItemsLabel,
@@ -186,7 +208,160 @@ class _Body extends StatelessWidget {
             ],
           ),
         ),
+        if (order.fulfillment.statusTimeline.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text(l10n.orderTimelineLabel,
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: colors.text)),
+          const SizedBox(height: 10),
+          _Timeline(
+            events: order.fulfillment.statusTimeline,
+            labelOf: _statusLabel,
+          ),
+        ],
       ],
+    );
+  }
+}
+
+class _RefundedNote extends StatelessWidget {
+  const _RefundedNote({required this.amount, required this.l10n});
+
+  final double amount;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: StatusBadge.danger.withValues(alpha: 0.08),
+        border: Border.all(color: StatusBadge.danger.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.assignment_return_rounded,
+              size: 20, color: StatusBadge.danger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.orderRefundedNote,
+                    style: TextStyle(
+                        fontSize: 13, height: 1.4, color: colors.textDim)),
+                const SizedBox(height: 4),
+                Text(formatUsd(amount),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: StatusBadge.danger)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A vertical status timeline: each event is a dot + connector line, a localised
+/// status label, the note, and the time (when present).
+class _Timeline extends StatelessWidget {
+  const _Timeline({required this.events, required this.labelOf});
+
+  final List<TimelineEvent> events;
+  final String Function(String) labelOf;
+
+  String _time(DateTime? at) {
+    if (at == null) return '';
+    final local = at.toLocal();
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    final h = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '${local.year}-$m-$d $h:$min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < events.length; i++)
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        margin: const EdgeInsets.only(top: 3),
+                        decoration: const BoxDecoration(
+                          gradient: AppTokens.brandGradient,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      if (i != events.length - 1)
+                        Expanded(
+                          child: Container(
+                            width: 2,
+                            color: colors.border,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                          bottom: i == events.length - 1 ? 0 : 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(labelOf(events[i].status),
+                              style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: colors.text)),
+                          if (events[i].note.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(events[i].note,
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    height: 1.35,
+                                    color: colors.textDim)),
+                          ],
+                          if (_time(events[i].at).isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(_time(events[i].at),
+                                style: TextStyle(
+                                    fontSize: 11.5, color: colors.textFaint)),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -130,5 +130,12 @@
   "statusProcessing": "Processing",
   "statusCompleted": "Completed",
   "statusFailed": "Failed",
-  "statusRefunded": "Refunded"
+  "statusRefunded": "Refunded",
+
+  "ordersTitle": "Orders",
+  "filterAll": "All",
+  "ordersEmptyTitle": "No orders yet",
+  "ordersEmptySub": "Your purchases will show up here once you place an order.",
+  "orderRefundedNote": "This order was refunded. The amount was returned to your wallet.",
+  "orderTimelineLabel": "Timeline"
 }

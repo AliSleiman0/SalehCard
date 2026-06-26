@@ -337,4 +337,23 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get statusRefunded => 'مُسترَد';
+
+  @override
+  String get ordersTitle => 'طلباتي';
+
+  @override
+  String get filterAll => 'الكل';
+
+  @override
+  String get ordersEmptyTitle => 'لا توجد طلبات بعد';
+
+  @override
+  String get ordersEmptySub => 'ستظهر مشترياتك هنا بمجرد إتمام أول طلب.';
+
+  @override
+  String get orderRefundedNote =>
+      'تم استرداد هذا الطلب. أُعيد المبلغ إلى محفظتك.';
+
+  @override
+  String get orderTimelineLabel => 'المسار';
 }

@@ -733,6 +733,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Refunded'**
   String get statusRefunded;
+
+  /// No description provided for @ordersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders'**
+  String get ordersTitle;
+
+  /// No description provided for @filterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get filterAll;
+
+  /// No description provided for @ordersEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders yet'**
+  String get ordersEmptyTitle;
+
+  /// No description provided for @ordersEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Your purchases will show up here once you place an order.'**
+  String get ordersEmptySub;
+
+  /// No description provided for @orderRefundedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This order was refunded. The amount was returned to your wallet.'**
+  String get orderRefundedNote;
+
+  /// No description provided for @orderTimelineLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get orderTimelineLabel;
 }
 
 class _AppLocalizationsDelegate

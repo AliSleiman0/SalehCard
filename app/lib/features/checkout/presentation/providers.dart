@@ -10,6 +10,7 @@ import '../data/repositories/order_repository_impl.dart';
 import '../domain/entities/order.dart';
 import '../domain/repositories/order_repository.dart';
 import '../domain/usecases/get_order.dart';
+import '../domain/usecases/get_orders.dart';
 import '../domain/usecases/place_order.dart';
 
 final orderRemoteDataSourceProvider = Provider<OrderRemoteDataSource>(
@@ -34,6 +35,27 @@ final orderDetailProvider =
     FutureProvider.family<Order, String>((ref, id) async {
   final result = await ref.watch(getOrderUseCaseProvider).call(id);
   return result.match((failure) => throw failure, (order) => order);
+});
+
+final getOrdersUseCaseProvider = Provider<GetOrders>(
+  (ref) => GetOrders(ref.watch(orderRepositoryProvider)),
+);
+
+/// Customer order history (newest first), used by the Orders list screen. Throws
+/// the [Failure] so the UI renders it via the AsyncValue error state. Sorts by
+/// `createdAt` descending (nulls last) in case the API order is not guaranteed.
+final ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
+  final result = await ref.watch(getOrdersUseCaseProvider).call();
+  final orders = result.match((failure) => throw failure, (orders) => orders);
+  final sorted = [...orders]..sort((a, b) {
+      final bDate = b.createdAt;
+      final aDate = a.createdAt;
+      if (aDate == null && bDate == null) return 0;
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      return bDate.compareTo(aDate);
+    });
+  return sorted;
 });
 
 /// Fetches the full product (incl. `inputFields`) for every distinct product in

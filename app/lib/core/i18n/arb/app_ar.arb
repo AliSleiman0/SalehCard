@@ -130,5 +130,12 @@
   "statusProcessing": "قيد المعالجة",
   "statusCompleted": "مكتمل",
   "statusFailed": "فشل",
-  "statusRefunded": "مُسترَد"
+  "statusRefunded": "مُسترَد",
+
+  "ordersTitle": "طلباتي",
+  "filterAll": "الكل",
+  "ordersEmptyTitle": "لا توجد طلبات بعد",
+  "ordersEmptySub": "ستظهر مشترياتك هنا بمجرد إتمام أول طلب.",
+  "orderRefundedNote": "تم استرداد هذا الطلب. أُعيد المبلغ إلى محفظتك.",
+  "orderTimelineLabel": "المسار"
 }

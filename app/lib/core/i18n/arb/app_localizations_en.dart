@@ -340,4 +340,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statusRefunded => 'Refunded';
+
+  @override
+  String get ordersTitle => 'Orders';
+
+  @override
+  String get filterAll => 'All';
+
+  @override
+  String get ordersEmptyTitle => 'No orders yet';
+
+  @override
+  String get ordersEmptySub =>
+      'Your purchases will show up here once you place an order.';
+
+  @override
+  String get orderRefundedNote =>
+      'This order was refunded. The amount was returned to your wallet.';
+
+  @override
+  String get orderTimelineLabel => 'Timeline';
 }

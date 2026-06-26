@@ -14,6 +14,7 @@ import '../../features/checkout/presentation/screens/checkout_screen.dart';
 import '../../features/checkout/presentation/screens/order_success_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
+import '../../features/orders/presentation/screens/orders_list_screen.dart';
 import '../../features/shell/presentation/app_shell.dart';
 
 /// App router. Authenticated tabs live inside a [StatefulShellRoute] (Home /
@@ -64,6 +65,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           id: state.pathParameters['id']!,
           order: state.extra is Order ? state.extra as Order : null,
         ),
+      ),
+      GoRoute(
+        path: '/orders',
+        builder: (context, state) => const OrdersListScreen(),
       ),
       GoRoute(
         path: '/orders/:id',
