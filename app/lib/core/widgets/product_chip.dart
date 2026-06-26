@@ -4,8 +4,8 @@ import '../theme/app_colors.dart';
 import '../theme/app_tokens.dart';
 
 /// A catalog tile: a tinted rounded square with the item's initials, an optional
-/// "Out of stock" overlay badge, and the item name beneath. Matches the Home
-/// screen design's horizontal-row items.
+/// "Out of stock" overlay badge, and the item name beneath. Used in the Home
+/// screen sections and browse/search results.
 class ProductChip extends StatelessWidget {
   const ProductChip({
     super.key,
@@ -82,7 +82,7 @@ class ProductChip extends StatelessWidget {
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
-                        color: const Color(0x940D0D17), // rgba(13,13,23,0.58)
+                        color: const Color(0x940D0D17),
                         borderRadius: BorderRadius.circular(AppTokens.rMd),
                       ),
                       alignment: Alignment.center,

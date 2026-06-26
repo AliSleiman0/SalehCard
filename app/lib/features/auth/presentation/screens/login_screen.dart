@@ -13,9 +13,9 @@ import '../../../../core/widgets/gradient_heading.dart';
 import '../../../../core/widgets/primary_cta.dart';
 import '../controllers/auth_controller.dart';
 
-/// Phone + password sign-in, on the same template as the sign-up flow. Client
-/// side for now: a successful submit authenticates a demo session (no phone
-/// auth backend yet — see [AuthController.completeDemoAuth]).
+/// Phone + password sign-in, on the same template as the sign-up flow. The phone
+/// UI bridges to the seeded account via [AuthController.signInDemo] to obtain a
+/// real token (no phone-auth backend yet).
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -49,7 +49,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_loading) return;
     final l10n = AppLocalizations.of(context);
     final digits = _phone.text.replaceAll(RegExp(r'\D'), '').length;
@@ -61,10 +61,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _errorField = _errorMessage = null;
       _loading = true;
     });
-    Future.delayed(const Duration(milliseconds: 1600), () {
-      if (!mounted) return;
-      ref.read(authControllerProvider.notifier).completeDemoAuth();
-    });
+    // TEMP: phone UI bridges to the seeded account for a real token (no
+    // phone-auth backend yet). Router redirects to /home on success.
+    final failure =
+        await ref.read(authControllerProvider.notifier).signInDemo();
+    if (!mounted) return;
+    if (failure != null) {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(failure.message)));
+    }
   }
 
   @override

@@ -1,0 +1,702 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/error/failure.dart';
+import '../../../../core/format/money.dart';
+import '../../../../core/i18n/arb/app_localizations.dart';
+import '../../../../core/locale/locale_controller.dart';
+import '../../../../core/network/idempotency.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/money_row.dart';
+import '../../../../core/widgets/product_chip.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../catalog/domain/entities/product.dart';
+import '../../../cart/domain/entities/cart_item.dart';
+import '../../../cart/presentation/controllers/cart_controller.dart';
+import '../../domain/entities/order.dart';
+import '../providers.dart';
+import '../widgets/dynamic_input_field.dart';
+
+/// Checkout: order summary, a dynamic per-item delivery form (rendered from each
+/// product's `inputFields`), payment-method selector, promo code, and a sticky
+/// "Place order" CTA. Submits via `POST /orders` with a held idempotency key.
+class CheckoutScreen extends ConsumerStatefulWidget {
+  const CheckoutScreen({super.key});
+
+  @override
+  ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
+}
+
+class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
+  // One idempotency key per checkout attempt, held across retries.
+  final String _idempotencyKey = newIdempotencyKey();
+  final _promo = TextEditingController();
+  final Map<String, TextEditingController> _fieldControllers = {};
+  final Map<String, String> _selectValues = {};
+  Map<String, String?> _fieldErrors = {};
+  String _payment = 'card'; // card | wallet | usdt
+
+  @override
+  void initState() {
+    super.initState();
+    // Clear any leftover submit state from a previous checkout. Deferred to
+    // after the first frame — modifying a provider during build/mount throws.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(placeOrderControllerProvider.notifier).reset();
+    });
+  }
+
+  @override
+  void dispose() {
+    _promo.dispose();
+    for (final c in _fieldControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _controllerFor(String key, String initial) {
+    return _fieldControllers.putIfAbsent(
+        key, () => TextEditingController(text: initial));
+  }
+
+  String _valueFor(String key, InputField field) {
+    if (field.type == 'select') return _selectValues[key] ?? '';
+    return _fieldControllers[key]?.text ?? '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = context.colors;
+    final localeCode = ref.watch(localeControllerProvider).languageCode;
+    final items = ref.watch(cartControllerProvider);
+    final subtotal = ref.watch(cartSubtotalProvider);
+    final productsAsync = ref.watch(checkoutProductsProvider);
+    final submitState = ref.watch(placeOrderControllerProvider);
+    final balance =
+        ref.watch(authControllerProvider).user?.walletBalance ?? 0;
+
+    final walletInsufficient = balance < subtotal;
+    if (_payment == 'wallet' && walletInsufficient) _payment = 'card';
+
+    return Scaffold(
+      backgroundColor: colors.bg,
+      appBar: AppBar(
+        backgroundColor: colors.topbar,
+        title: Text(l10n.checkoutTitle),
+      ),
+      body: items.isEmpty
+          ? Center(
+              child: Text(l10n.cartEmptyTitle,
+                  style: TextStyle(color: colors.textDim)))
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    children: [
+                      if (submitState.failure != null)
+                        _ErrorBanner(
+                            message: _errorMessage(submitState.failure!, l10n)),
+                      _OrderSummary(
+                          items: items,
+                          subtotal: subtotal,
+                          localeCode: localeCode,
+                          l10n: l10n),
+                      ..._deliverySection(
+                          items, productsAsync, localeCode, l10n, colors),
+                      const SizedBox(height: 20),
+                      Text(l10n.paymentMethodLabel,
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: colors.text)),
+                      const SizedBox(height: 12),
+                      _PaymentSelector(
+                        selected: _payment,
+                        balance: balance,
+                        walletInsufficient: walletInsufficient,
+                        l10n: l10n,
+                        onSelect: (m) => setState(() => _payment = m),
+                      ),
+                      const SizedBox(height: 18),
+                      _PromoField(controller: _promo, l10n: l10n),
+                    ],
+                  ),
+                ),
+                _PlaceOrderBar(
+                  total: subtotal,
+                  submitting: submitState.submitting,
+                  l10n: l10n,
+                  colors: colors,
+                  onPlaceOrder: () => _submit(items,
+                      productsAsync.asData?.value ?? const {}, subtotal),
+                ),
+              ],
+            ),
+    );
+  }
+
+  List<Widget> _deliverySection(
+    List<CartItem> items,
+    AsyncValue<Map<String, Product>> productsAsync,
+    String localeCode,
+    AppLocalizations l10n,
+    AppColors colors,
+  ) {
+    final products = productsAsync.asData?.value ?? const <String, Product>{};
+    final needing = [
+      for (final item in items)
+        if ((products[item.productId]?.fulfillmentType ?? item.fulfillmentType) !=
+                'code' &&
+            (products[item.productId]?.inputFields.isNotEmpty ?? false))
+          item,
+    ];
+    if (needing.isEmpty) return const [];
+
+    final showTitles = needing.length > 1;
+    final widgets = <Widget>[
+      const SizedBox(height: 20),
+      Text(l10n.deliveryDetails,
+          style: TextStyle(
+              fontSize: 15, fontWeight: FontWeight.w800, color: colors.text)),
+    ];
+    for (final item in needing) {
+      final product = products[item.productId]!;
+      if (showTitles) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Text(item.title.resolve(localeCode),
+              style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: colors.textDim)),
+        ));
+      }
+      for (var i = 0; i < product.inputFields.length; i++) {
+        final field = product.inputFields[i];
+        final key = '${item.key}|${field.key}';
+        final initial = i == 0 ? (item.playerId ?? '') : '';
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: DynamicInputField(
+            field: field,
+            localeCode: localeCode,
+            controller: field.type == 'select'
+                ? null
+                : _controllerFor(key, initial),
+            value: field.type == 'select' ? _selectValues[key] : null,
+            onChanged: field.type == 'select'
+                ? (v) => setState(() => _selectValues[key] = v)
+                : null,
+            errorText: _fieldErrors[key],
+          ),
+        ));
+      }
+    }
+    return widgets;
+  }
+
+  Future<void> _submit(
+    List<CartItem> items,
+    Map<String, Product> products,
+    double total,
+  ) async {
+    // Validate every dynamic field on items that require input.
+    final errors = <String, String?>{};
+    final l10n = AppLocalizations.of(context);
+    for (final item in items) {
+      final product = products[item.productId];
+      if (product == null || product.fulfillmentType == 'code') continue;
+      for (final field in product.inputFields) {
+        final key = '${item.key}|${field.key}';
+        if (_valueFor(key, field).trim().isEmpty) {
+          errors[key] = l10n.fieldRequired;
+        }
+      }
+    }
+    if (errors.isNotEmpty) {
+      setState(() => _fieldErrors = errors);
+      return;
+    }
+    setState(() => _fieldErrors = {});
+
+    // Build order lines from cart + collected field values.
+    final lines = <PlaceOrderLine>[];
+    for (final item in items) {
+      final product = products[item.productId];
+      final fields = product?.inputFields ?? const <InputField>[];
+      String? playerId;
+      OrderRecipient? recipient;
+      if (product != null &&
+          product.fulfillmentType != 'code' &&
+          fields.isNotEmpty) {
+        final values = <String, String>{
+          for (final field in fields)
+            field.key: _valueFor('${item.key}|${field.key}', field).trim(),
+        };
+        if (product.fulfillmentType == 'transfer') {
+          recipient = _buildRecipient(values);
+        } else {
+          playerId =
+              values.values.where((v) => v.isNotEmpty).join(' / ');
+        }
+      } else if (item.playerId != null && item.playerId!.isNotEmpty) {
+        playerId = item.playerId;
+      }
+      lines.add(PlaceOrderLine(
+        productId: item.productId,
+        variantId: item.variantId,
+        qty: item.qty,
+        playerId: playerId,
+        recipient: recipient,
+      ));
+    }
+
+    final order =
+        await ref.read(placeOrderControllerProvider.notifier).submit(
+              PlaceOrderInput(
+                items: lines,
+                paymentMethod: _payment,
+                promoCode:
+                    _promo.text.trim().isEmpty ? null : _promo.text.trim(),
+              ),
+              idempotencyKey: _idempotencyKey,
+            );
+    if (!mounted) return;
+    if (order != null) {
+      ref.read(cartControllerProvider.notifier).clear();
+      context.pushReplacement('/order-success/${order.id}', extra: order);
+    }
+  }
+
+  OrderRecipient _buildRecipient(Map<String, String> values) {
+    String pick(List<String> needles) {
+      for (final entry in values.entries) {
+        final lower = entry.key.toLowerCase();
+        if (needles.any(lower.contains)) return entry.value;
+      }
+      return '';
+    }
+
+    final joined = values.values.where((v) => v.isNotEmpty).join(' / ');
+    final name = pick(['name']);
+    final detail =
+        pick(['detail', 'account', 'number', 'iban', 'wallet', 'address']);
+    return OrderRecipient(
+      name: name.isEmpty ? joined : name,
+      country: pick(['country']),
+      detail: detail.isEmpty ? joined : detail,
+    );
+  }
+
+  String _errorMessage(Failure failure, AppLocalizations l10n) {
+    if (failure is InsufficientFundsFailure) return l10n.insufficientBalance;
+    if (failure.message.isNotEmpty) return failure.message;
+    return l10n.paymentFailed;
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: AppTokens.danger.withValues(alpha: 0.12),
+        border: Border.all(color: AppTokens.danger.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              size: 19, color: AppTokens.danger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message,
+                style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    color: AppTokens.danger)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderSummary extends StatelessWidget {
+  const _OrderSummary({
+    required this.items,
+    required this.subtotal,
+    required this.localeCode,
+    required this.l10n,
+  });
+
+  final List<CartItem> items;
+  final double subtotal;
+  final String localeCode;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Column(
+        children: [
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 11),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: ProductChip.tintFor(item.productId.hashCode.abs()),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      ProductChip.initialsFor(item.title.resolve(localeCode)),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      '${item.title.resolve(localeCode)}  ×${item.qty}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: colors.text),
+                    ),
+                  ),
+                  Text(formatUsd(item.lineTotal),
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: colors.text)),
+                ],
+              ),
+            ),
+          Divider(height: 1, color: colors.border),
+          const SizedBox(height: 8),
+          MoneyRow(label: l10n.totalLabel, value: subtotal, emphasized: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentSelector extends StatelessWidget {
+  const _PaymentSelector({
+    required this.selected,
+    required this.balance,
+    required this.walletInsufficient,
+    required this.l10n,
+    required this.onSelect,
+  });
+
+  final String selected;
+  final double balance;
+  final bool walletInsufficient;
+  final AppLocalizations l10n;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _PayRow(
+          selected: selected == 'card',
+          enabled: true,
+          icon: Icons.credit_card_rounded,
+          iconGradient: true,
+          title: l10n.payCardTitle,
+          subtitle: l10n.payCardSub,
+          onTap: () => onSelect('card'),
+        ),
+        const SizedBox(height: 10),
+        _PayRow(
+          selected: selected == 'wallet' && !walletInsufficient,
+          enabled: !walletInsufficient,
+          icon: Icons.account_balance_wallet_outlined,
+          iconColor: AppTokens.accent,
+          title: l10n.payWalletTitle,
+          subtitle: walletInsufficient
+              ? '${l10n.insufficientBalance} · ${formatUsd(balance)}'
+              : '${l10n.balanceLabel} ${formatUsd(balance)}',
+          subtitleDanger: walletInsufficient,
+          onTap: () => onSelect('wallet'),
+        ),
+        const SizedBox(height: 10),
+        _PayRow(
+          selected: selected == 'usdt',
+          enabled: true,
+          icon: Icons.currency_exchange_rounded,
+          iconColor: const Color(0xFF26A17B),
+          title: l10n.payUsdtTitle,
+          subtitle: l10n.payUsdtSub,
+          onTap: () => onSelect('usdt'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PayRow extends StatelessWidget {
+  const _PayRow({
+    required this.selected,
+    required this.enabled,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.iconGradient = false,
+    this.iconColor,
+    this.subtitleDanger = false,
+  });
+
+  final bool selected;
+  final bool enabled;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool iconGradient;
+  final Color? iconColor;
+  final bool subtitleDanger;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(AppTokens.rMd),
+            border: Border.all(
+              color: selected ? AppTokens.cta : colors.border,
+              width: selected ? 2 : 1,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: AppTokens.cta.withValues(alpha: 0.10),
+                      spreadRadius: 3,
+                      blurRadius: 0,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  gradient: iconGradient ? AppTokens.brandGradient : null,
+                  color: iconGradient
+                      ? null
+                      : (iconColor ?? AppTokens.accent).withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon,
+                    size: 19,
+                    color: iconGradient ? Colors.white : iconColor),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: colors.text)),
+                    const SizedBox(height: 1),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: subtitleDanger
+                                ? AppTokens.danger
+                                : colors.textDim)),
+                  ],
+                ),
+              ),
+              _Radio(selected: selected),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Radio extends StatelessWidget {
+  const _Radio({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: selected ? AppTokens.cta : context.colors.borderStrong,
+          width: 2,
+        ),
+      ),
+      child: selected
+          ? Center(
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTokens.cta,
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _PromoField extends StatelessWidget {
+  const _PromoField({required this.controller, required this.l10n});
+
+  final TextEditingController controller;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppTokens.rMd),
+      borderSide: BorderSide(color: colors.border),
+    );
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: controller,
+            style: TextStyle(fontSize: 14.5, color: colors.text),
+            cursorColor: AppTokens.brand1,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: colors.surface,
+              hintText: l10n.promoCodePlaceholder,
+              hintStyle: TextStyle(color: colors.textFaint),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: border,
+              enabledBorder: border,
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppTokens.rMd),
+                borderSide:
+                    const BorderSide(color: AppTokens.brand1, width: 1.6),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton(
+          onPressed: () => FocusScope.of(context).unfocus(),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 50),
+            foregroundColor: colors.text,
+            side: BorderSide(color: colors.borderStrong),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTokens.rMd)),
+            textStyle:
+                const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+          ),
+          child: Text(l10n.applyLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlaceOrderBar extends StatelessWidget {
+  const _PlaceOrderBar({
+    required this.total,
+    required this.submitting,
+    required this.l10n,
+    required this.colors,
+    required this.onPlaceOrder,
+  });
+
+  final double total;
+  final bool submitting;
+  final AppLocalizations l10n;
+  final AppColors colors;
+  final VoidCallback onPlaceOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          18, 13, 18, 13 + MediaQuery.of(context).padding.bottom),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.border)),
+      ),
+      child: FilledButton(
+        onPressed: submitting ? null : onPlaceOrder,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(54),
+          backgroundColor: AppTokens.cta,
+          disabledBackgroundColor: AppTokens.cta.withValues(alpha: 0.92),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white,
+          shape: const StadiumBorder(),
+          elevation: 8,
+          shadowColor: AppTokens.cta.withValues(alpha: 0.3),
+          textStyle: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),
+        ),
+        child: submitting
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.5, color: Colors.white),
+              )
+            : Text('${l10n.placeOrderCta}  ·  ${formatUsd(total)}'),
+      ),
+    );
+  }
+}

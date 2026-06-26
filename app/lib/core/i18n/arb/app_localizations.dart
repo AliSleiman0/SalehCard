@@ -415,6 +415,816 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load products.'**
   String get loadFailed;
+
+  /// No description provided for @fromLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'from'**
+  String get fromLabel;
+
+  /// No description provided for @chooseAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose amount'**
+  String get chooseAmount;
+
+  /// No description provided for @quantityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Quantity'**
+  String get quantityLabel;
+
+  /// No description provided for @requiredBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get requiredBadge;
+
+  /// No description provided for @ratingsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'({count} ratings)'**
+  String ratingsCount(int count);
+
+  /// No description provided for @enterValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter {field}'**
+  String enterValue(String field);
+
+  /// No description provided for @deliveredInstantly.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit is delivered to this account instantly.'**
+  String get deliveredInstantly;
+
+  /// No description provided for @addToCart.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to cart'**
+  String get addToCart;
+
+  /// No description provided for @buyNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy now'**
+  String get buyNow;
+
+  /// No description provided for @notifyMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify me'**
+  String get notifyMe;
+
+  /// No description provided for @totalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get totalLabel;
+
+  /// No description provided for @cartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your cart'**
+  String get cartTitle;
+
+  /// No description provided for @cartItemsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'· {count} items'**
+  String cartItemsCount(int count);
+
+  /// No description provided for @cartEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your cart is empty'**
+  String get cartEmptyTitle;
+
+  /// No description provided for @cartEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse the catalog and add gift cards & top-ups.'**
+  String get cartEmptySub;
+
+  /// No description provided for @browseCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse catalog'**
+  String get browseCatalog;
+
+  /// No description provided for @subtotalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtotal'**
+  String get subtotalLabel;
+
+  /// No description provided for @discountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount'**
+  String get discountLabel;
+
+  /// No description provided for @walletBalanceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet balance:'**
+  String get walletBalanceHint;
+
+  /// No description provided for @checkoutCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Checkout'**
+  String get checkoutCta;
+
+  /// No description provided for @checkoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checkout'**
+  String get checkoutTitle;
+
+  /// No description provided for @paymentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment failed. Please try another method.'**
+  String get paymentFailed;
+
+  /// No description provided for @deliveryDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery details'**
+  String get deliveryDetails;
+
+  /// No description provided for @paymentMethodLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment method'**
+  String get paymentMethodLabel;
+
+  /// No description provided for @payCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Card'**
+  String get payCardTitle;
+
+  /// No description provided for @payCardSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Instant approval'**
+  String get payCardSub;
+
+  /// No description provided for @payWalletTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get payWalletTitle;
+
+  /// No description provided for @balanceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get balanceLabel;
+
+  /// No description provided for @insufficientBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Insufficient balance'**
+  String get insufficientBalance;
+
+  /// No description provided for @payUsdtTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'USDT'**
+  String get payUsdtTitle;
+
+  /// No description provided for @payUsdtSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-approve · Instant'**
+  String get payUsdtSub;
+
+  /// No description provided for @promoCodePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Promo code'**
+  String get promoCodePlaceholder;
+
+  /// No description provided for @applyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get applyLabel;
+
+  /// No description provided for @placeOrderCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Place order'**
+  String get placeOrderCta;
+
+  /// No description provided for @fieldRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required.'**
+  String get fieldRequired;
+
+  /// No description provided for @orderCompletedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Order completed'**
+  String get orderCompletedTitle;
+
+  /// No description provided for @orderProcessingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'re completing your order'**
+  String get orderProcessingTitle;
+
+  /// No description provided for @orderCompletedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Your codes have been delivered. Enjoy!'**
+  String get orderCompletedSub;
+
+  /// No description provided for @orderProcessingSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Account-credit orders can take a few minutes.'**
+  String get orderProcessingSub;
+
+  /// No description provided for @orderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Order'**
+  String get orderLabel;
+
+  /// No description provided for @deliveredCodesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered codes'**
+  String get deliveredCodesLabel;
+
+  /// No description provided for @giftCardLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Gift card'**
+  String get giftCardLabel;
+
+  /// No description provided for @copyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get copyLabel;
+
+  /// No description provided for @copiedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get copiedLabel;
+
+  /// No description provided for @orderProcessingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll notify you the moment it\'s done. You can track its status from the order page.'**
+  String get orderProcessingNote;
+
+  /// No description provided for @viewOrderCta.
+  ///
+  /// In en, this message translates to:
+  /// **'View order'**
+  String get viewOrderCta;
+
+  /// No description provided for @backToHomeCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to home'**
+  String get backToHomeCta;
+
+  /// No description provided for @orderItemsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get orderItemsLabel;
+
+  /// No description provided for @statusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get statusPending;
+
+  /// No description provided for @statusProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing'**
+  String get statusProcessing;
+
+  /// No description provided for @statusCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get statusCompleted;
+
+  /// No description provided for @statusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get statusFailed;
+
+  /// No description provided for @statusRefunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded'**
+  String get statusRefunded;
+
+  /// No description provided for @ordersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders'**
+  String get ordersTitle;
+
+  /// No description provided for @filterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get filterAll;
+
+  /// No description provided for @ordersEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders yet'**
+  String get ordersEmptyTitle;
+
+  /// No description provided for @ordersEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Your purchases will show up here once you place an order.'**
+  String get ordersEmptySub;
+
+  /// No description provided for @orderRefundedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This order was refunded. The amount was returned to your wallet.'**
+  String get orderRefundedNote;
+
+  /// No description provided for @orderTimelineLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get orderTimelineLabel;
+
+  /// No description provided for @walletTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get walletTitle;
+
+  /// No description provided for @currentBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Current balance'**
+  String get currentBalance;
+
+  /// No description provided for @topUpCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up'**
+  String get topUpCta;
+
+  /// No description provided for @sendMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Send money'**
+  String get sendMoney;
+
+  /// No description provided for @txHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction history'**
+  String get txHistory;
+
+  /// No description provided for @walletEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No transactions yet'**
+  String get walletEmptyTitle;
+
+  /// No description provided for @walletEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up your wallet to get started — your activity will show up here.'**
+  String get walletEmptySub;
+
+  /// No description provided for @txTopUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up'**
+  String get txTopUp;
+
+  /// No description provided for @txPurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase'**
+  String get txPurchase;
+
+  /// No description provided for @txRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund'**
+  String get txRefund;
+
+  /// No description provided for @txAdjustment.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjustment'**
+  String get txAdjustment;
+
+  /// No description provided for @topUpAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Top-up amount'**
+  String get topUpAmount;
+
+  /// No description provided for @topUpVia.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up via'**
+  String get topUpVia;
+
+  /// No description provided for @topUpSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'+{amount} added to your wallet'**
+  String topUpSuccess(String amount);
+
+  /// No description provided for @sendMoneyComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Send money is coming soon.'**
+  String get sendMoneyComingSoon;
+
+  /// No description provided for @recipientLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipient (phone or email)'**
+  String get recipientLabel;
+
+  /// No description provided for @amountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get amountLabel;
+
+  /// No description provided for @noteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get noteLabel;
+
+  /// No description provided for @sendCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get sendCta;
+
+  /// No description provided for @darkMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark mode'**
+  String get darkMode;
+
+  /// No description provided for @profileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profileTitle;
+
+  /// No description provided for @accountInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Account info'**
+  String get accountInfo;
+
+  /// No description provided for @roleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get roleLabel;
+
+  /// No description provided for @savedPlayerIds.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved player IDs'**
+  String get savedPlayerIds;
+
+  /// No description provided for @savedPlayerIdsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved player IDs'**
+  String get savedPlayerIdsEmptyTitle;
+
+  /// No description provided for @savedPlayerIdsEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Save your player or account IDs for faster checkout.'**
+  String get savedPlayerIdsEmptySub;
+
+  /// No description provided for @addPlayerId.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get addPlayerId;
+
+  /// No description provided for @playerIdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a player ID'**
+  String get playerIdHint;
+
+  /// No description provided for @editProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get editProfile;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @saveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get saveChanges;
+
+  /// No description provided for @profileSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile updated.'**
+  String get profileSaved;
+
+  /// No description provided for @browseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories'**
+  String get browseTitle;
+
+  /// No description provided for @categoryItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No items} =1{1 item} other{{count} items}}'**
+  String categoryItemCount(int count);
+
+  /// No description provided for @searchPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the catalog'**
+  String get searchPromptTitle;
+
+  /// No description provided for @searchPromptSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Type to find gift cards, top-ups & more.'**
+  String get searchPromptSub;
+
+  /// No description provided for @searchEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get searchEmptyTitle;
+
+  /// No description provided for @searchEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Try a different keyword or browse categories.'**
+  String get searchEmptySub;
+
+  /// No description provided for @notificationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsTitle;
+
+  /// No description provided for @notificationsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re all caught up'**
+  String get notificationsEmptyTitle;
+
+  /// No description provided for @notificationsEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications about your orders and wallet will show up here.'**
+  String get notificationsEmptySub;
+
+  /// No description provided for @notifOrderCompletedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Order completed'**
+  String get notifOrderCompletedTitle;
+
+  /// No description provided for @notifOrderCompletedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your codes have been delivered. Enjoy!'**
+  String get notifOrderCompletedBody;
+
+  /// No description provided for @notifWalletTopUpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet topped up'**
+  String get notifWalletTopUpTitle;
+
+  /// No description provided for @notifWalletTopUpBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your top-up was credited to your wallet.'**
+  String get notifWalletTopUpBody;
+
+  /// No description provided for @notifPromoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Limited-time offer'**
+  String get notifPromoTitle;
+
+  /// No description provided for @notifPromoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Enjoy instant delivery on gift cards & top-ups.'**
+  String get notifPromoBody;
+
+  /// No description provided for @kycTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification'**
+  String get kycTitle;
+
+  /// No description provided for @kycMenuLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification'**
+  String get kycMenuLabel;
+
+  /// No description provided for @kycBadgeUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'Not verified'**
+  String get kycBadgeUnverified;
+
+  /// No description provided for @kycBadgePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Under review'**
+  String get kycBadgePending;
+
+  /// No description provided for @kycBadgeVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get kycBadgeVerified;
+
+  /// No description provided for @kycBadgeRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get kycBadgeRejected;
+
+  /// No description provided for @kycUnverifiedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your identity'**
+  String get kycUnverifiedTitle;
+
+  /// No description provided for @kycUnverifiedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your identity to unlock higher limits and faster checkout. It only takes a minute.'**
+  String get kycUnverifiedBody;
+
+  /// No description provided for @kycPendingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Under review'**
+  String get kycPendingTitle;
+
+  /// No description provided for @kycPendingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ve received your documents and our team is reviewing them. This usually takes a few minutes.'**
+  String get kycPendingBody;
+
+  /// No description provided for @kycVerifiedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re verified'**
+  String get kycVerifiedTitle;
+
+  /// No description provided for @kycVerifiedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your identity has been confirmed. All features are unlocked — enjoy higher limits and faster checkout.'**
+  String get kycVerifiedBody;
+
+  /// No description provided for @kycRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification failed'**
+  String get kycRejectedTitle;
+
+  /// No description provided for @kycRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t verify your identity from the documents provided. Please check the details and resubmit.'**
+  String get kycRejectedBody;
+
+  /// No description provided for @kycVerifyNowCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify now'**
+  String get kycVerifyNowCta;
+
+  /// No description provided for @kycResubmitCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Resubmit'**
+  String get kycResubmitCta;
+
+  /// No description provided for @kycFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity verification'**
+  String get kycFormTitle;
+
+  /// No description provided for @kycFullNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get kycFullNameLabel;
+
+  /// No description provided for @kycDocTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Document type'**
+  String get kycDocTypeLabel;
+
+  /// No description provided for @kycDocPassport.
+  ///
+  /// In en, this message translates to:
+  /// **'Passport'**
+  String get kycDocPassport;
+
+  /// No description provided for @kycDocIdCard.
+  ///
+  /// In en, this message translates to:
+  /// **'ID card'**
+  String get kycDocIdCard;
+
+  /// No description provided for @kycDocLicense.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver\'s license'**
+  String get kycDocLicense;
+
+  /// No description provided for @kycDocNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Document number'**
+  String get kycDocNumberLabel;
+
+  /// No description provided for @kycUploadLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Document photo'**
+  String get kycUploadLabel;
+
+  /// No description provided for @kycUploadHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to upload a photo of your document'**
+  String get kycUploadHint;
+
+  /// No description provided for @kycUploadSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'document.jpg'**
+  String get kycUploadSelected;
+
+  /// No description provided for @kycSubmitCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get kycSubmitCta;
+
+  /// No description provided for @kycFieldRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required.'**
+  String get kycFieldRequired;
+
+  /// No description provided for @kycSubmittedSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification submitted — we\'ll review it shortly.'**
+  String get kycSubmittedSnack;
 }
 
 class _AppLocalizationsDelegate

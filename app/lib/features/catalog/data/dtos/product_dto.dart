@@ -39,6 +39,53 @@ class RatingsDto {
   Map<String, dynamic> toJson() => _$RatingsDtoToJson(this);
 }
 
+@JsonSerializable()
+class InputFieldConstraintsDto {
+  const InputFieldConstraintsDto({this.min, this.max, this.options});
+
+  final double? min;
+  final double? max;
+  final List<String>? options;
+
+  factory InputFieldConstraintsDto.fromJson(Map<String, dynamic> json) =>
+      _$InputFieldConstraintsDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$InputFieldConstraintsDtoToJson(this);
+
+  InputFieldConstraints toEntity() =>
+      InputFieldConstraints(min: min, max: max, options: options);
+}
+
+@JsonSerializable(explicitToJson: true)
+class InputFieldDto {
+  const InputFieldDto({
+    required this.key,
+    this.label,
+    this.type = 'text',
+    this.constraints,
+    this.sensitive = false,
+  });
+
+  final String key;
+  final Map<String, dynamic>? label;
+  final String type;
+  final InputFieldConstraintsDto? constraints;
+  final bool sensitive;
+
+  factory InputFieldDto.fromJson(Map<String, dynamic> json) =>
+      _$InputFieldDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$InputFieldDtoToJson(this);
+
+  InputField toEntity() => InputField(
+        key: key,
+        label: I18nString.fromJson(label),
+        type: type,
+        constraints: constraints?.toEntity(),
+        sensitive: sensitive,
+      );
+}
+
 @JsonSerializable(explicitToJson: true)
 class ProductDto {
   const ProductDto({
@@ -49,6 +96,8 @@ class ProductDto {
     this.variants,
     this.stock,
     this.available,
+    this.fulfillmentType,
+    this.inputFields,
     this.ratings,
   });
 
@@ -59,6 +108,8 @@ class ProductDto {
   final List<VariantDto>? variants;
   final int? stock;
   final bool? available;
+  final String? fulfillmentType;
+  final List<InputFieldDto>? inputFields;
   final RatingsDto? ratings;
 
   factory ProductDto.fromJson(Map<String, dynamic> json) =>
@@ -75,6 +126,9 @@ class ProductDto {
             (variants ?? const []).map((v) => v.toEntity()).toList(),
         stock: stock ?? 0,
         available: available ?? false,
+        fulfillmentType: fulfillmentType ?? 'code',
+        inputFields:
+            (inputFields ?? const []).map((f) => f.toEntity()).toList(),
         rating: ratings?.average,
         ratingCount: ratings?.count ?? 0,
       );

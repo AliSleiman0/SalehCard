@@ -118,6 +118,52 @@ shifts the layout — tap fields using keyboard-open coordinates.
 - After editing `.arb` files or any `*.g.dart`-generating change, run
   `dart run build_runner build` (DTOs) — l10n regenerates on build automatically.
 
+## 6b. Shop module (S1) — done, with these notes/gaps
+
+Implemented `features/checkout/` (Order entity/DTO/repo, `place_order`/`get_order`,
+`placeOrderControllerProvider`, `orderDetailProvider`) + enhanced product detail,
+replaced cart, new checkout + order-success screens. Routes `/checkout` and
+`/order-success/:id` are top-level. `Product`/`ProductDto` extended with
+`fulfillmentType` + `inputFields[]`.
+
+- **"View order"** on the success screen routes to `/orders/:id` — **that route
+  is owned by the Orders module (S2) and not registered yet**, so until S2 lands
+  tapping it shows go-router's not-found page. "Back to home" works.
+- **Checkout email field** from the design is dropped — the `POST /orders` API has
+  no email field. The dynamic `inputFields[]` form is the real delivery input.
+- **Promo code** is sent to the backend (`promoCode`); no client-side discount
+  preview (server re-prices), so cart/checkout show subtotal == total estimate.
+- **`inputFields` → order mapping:** account_credit → `playerId` (joined field
+  values); transfer → `recipient{name,country,detail}` derived by key heuristics
+  (`name`/`country`/`detail`/`account`/…). All fields treated as required.
+- **Delivered codes:** backend returns a single `fulfillment.deliveredCode` (first
+  claimed), so success shows one code card (the design mocked one per unit).
+- **Idempotency:** one `newIdempotencyKey()` minted per checkout screen instance,
+  held across retries (sent via `Idempotency-Key` header in `Options`).
+
+## 6c. Wallet module (S3) — done, with these notes/gaps
+
+Implemented `features/wallet/` (Wallet/WalletTx entities + DTOs, `getWallet`/`topUp`
+usecases, `walletProvider`, `TopUpController`) + the `/wallet`, `/wallet/topup`,
+`/wallet/send` top-level routes. Home now sources the displayed balance from
+`walletProvider` (falling back to the auth balance), Add-Money → `/wallet/topup`,
+the wallet card → `/wallet`; the Account menu gained a "Wallet" row.
+
+- **STUB — send money (peer transfer):** no backend endpoint exists. The full
+  form (`send_money_screen.dart`) is real, but it submits through
+  `TransferRepositoryStub` (behind `TransferRepository`), which returns a
+  `ServerFailure('NOT_IMPLEMENTED', 'Send money is coming soon')` → surfaced as a
+  SnackBar. Swap `transferRepositoryProvider` to an HTTP impl when an endpoint
+  lands (`// TODO(backend)`).
+- **USDT top-up is NOT a poll flow.** Backend mock-approves BOTH `card` and
+  `usdt` top-ups and credits immediately, so there is no pending/poll state — the
+  top-up screen just submits and pops back to the wallet, which refreshes via
+  `ref.invalidate(walletProvider)`. (MANIFEST's "usdt-pending/poll" state does
+  not apply to the current backend.)
+- **Signed amounts:** `WalletTx.amount` is signed (credit positive / debit
+  negative); `LedgerRow` renders the green `+` / red `−` from the sign.
+- **Date format:** ledger subtitles use `yyyy-MM-dd` (local), null-guarded.
+
 ## 7. Out of scope (future slices, not design)
 
 Cart, checkout (dynamic `inputFields` form + `Idempotency-Key`), orders history,

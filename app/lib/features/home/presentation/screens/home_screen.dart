@@ -12,9 +12,10 @@ import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../catalog/domain/entities/product.dart';
 import '../../../catalog/presentation/providers.dart';
+import '../../../wallet/presentation/providers.dart';
 
-/// Home / wallet landing, ported from the Claude Design "PhoneHome" component.
-/// The wallet, promo and nav are design chrome; the Featured row and category
+/// Home / wallet landing (content only — the bottom nav is provided by the app
+/// shell). The wallet/promo are design chrome; the Featured row and category
 /// sections are wired to the real catalog API (tap → product detail).
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -39,7 +40,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final colors = context.colors;
     final productsAsync = ref.watch(catalogProductsProvider);
     final localeCode = ref.watch(localeControllerProvider).languageCode;
-    final balance = ref.watch(authControllerProvider).user?.walletBalance ?? 0;
+    final authBalance =
+        ref.watch(authControllerProvider).user?.walletBalance ?? 0;
+    // Prefer the live wallet balance; fall back to the auth balance while the
+    // wallet loads or if it errors.
+    final balance = ref.watch(walletProvider).maybeWhen(
+          data: (w) => w.balance,
+          orElse: () => authBalance.toDouble(),
+        );
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -52,20 +60,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
                 children: [
-                  _SearchBar(hint: l10n.searchHint),
+                  _SearchBar(hint: l10n.searchHint, onTap: _comingSoon),
                   const SizedBox(height: 16),
                   _WalletCard(
-                    balanceText: _balanceHidden
-                        ? '••••••'
-                        : formatUsd(balance.toDouble()),
+                    balanceText:
+                        _balanceHidden ? '••••••' : formatUsd(balance),
                     hidden: _balanceHidden,
                     onToggle: () =>
                         setState(() => _balanceHidden = !_balanceHidden),
                     onPill: _comingSoon,
+                    onTap: () => context.push('/wallet'),
                     l10n: l10n,
                   ),
                   const SizedBox(height: 14),
-                  _AddMoneyButton(label: l10n.addMoney, onTap: _comingSoon),
+                  _AddMoneyButton(
+                      label: l10n.addMoney,
+                      onTap: () => context.push('/wallet/topup')),
                   const SizedBox(height: 16),
                   _PromoCard(title: l10n.promoTitle, subtitle: l10n.promoSubtitle),
                   const SizedBox(height: 8),
@@ -97,11 +107,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
             ),
-            _HomeBottomNav(
-              l10n: l10n,
-              onCategories: () => context.push('/catalog'),
-              onOther: _comingSoon,
-            ),
           ],
         ),
       ),
@@ -121,7 +126,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
 
-    // Stable tint per product (same colour in Featured and its section).
     final tintIndex = {
       for (var i = 0; i < products.length; i++) products[i].id: i,
     };
@@ -129,12 +133,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Widget chip(Product p) => ProductChip(
           name: p.title.resolve(localeCode),
           tint: ProductChip.tintFor(tintIndex[p.id]!),
-          outOfStock: !(p.available && p.stock > 0),
+          outOfStock: !p.inStock,
           outOfStockLabel: l10n.outOfStock,
           onTap: () => context.push('/product/${p.id}'),
         );
 
-    // Group by real category, preserving first-seen order.
     final byCategory = <String, List<Product>>{};
     for (final p in products) {
       byCategory.putIfAbsent(p.category, () => []).add(p);
@@ -165,7 +168,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-/// Top bar: EN/عربي language segments, centered logo, bell + profile (logout).
 class _HomeAppBar extends ConsumerWidget {
   const _HomeAppBar();
 
@@ -193,15 +195,14 @@ class _HomeAppBar extends ConsumerWidget {
               children: [
                 IconButton(
                   onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(AppLocalizations.of(context).comingSoon)),
+                    SnackBar(
+                        content: Text(AppLocalizations.of(context).comingSoon)),
                   ),
                   icon: Icon(Icons.notifications_none_rounded,
                       color: colors.textDim),
                 ),
                 IconButton(
-                  tooltip: AppLocalizations.of(context).logout,
-                  onPressed: () =>
-                      ref.read(authControllerProvider.notifier).logout(),
+                  onPressed: () => context.go('/account'),
                   icon: Icon(Icons.person_outline_rounded,
                       color: colors.textDim),
                 ),
@@ -261,29 +262,34 @@ class _LangSegments extends ConsumerWidget {
 }
 
 class _SearchBar extends StatelessWidget {
-  const _SearchBar({required this.hint});
+  const _SearchBar({required this.hint, required this.onTap});
 
   final String hint;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
-      height: 48,
-      padding: const EdgeInsetsDirectional.only(start: 16, end: 16),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(AppTokens.rPill),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.search_rounded, size: 20, color: colors.textFaint),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(hint, style: TextStyle(color: colors.textFaint, fontSize: 15)),
-          ),
-        ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        padding: const EdgeInsetsDirectional.only(start: 16, end: 16),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(AppTokens.rPill),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.search_rounded, size: 20, color: colors.textFaint),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(hint,
+                  style: TextStyle(color: colors.textFaint, fontSize: 15)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -295,6 +301,7 @@ class _WalletCard extends StatelessWidget {
     required this.hidden,
     required this.onToggle,
     required this.onPill,
+    required this.onTap,
     required this.l10n,
   });
 
@@ -302,24 +309,28 @@ class _WalletCard extends StatelessWidget {
   final bool hidden;
   final VoidCallback onToggle;
   final VoidCallback onPill;
+  final VoidCallback onTap;
   final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppTokens.brandGradient,
-        borderRadius: BorderRadius.circular(AppTokens.rLg),
-        boxShadow: [
-          BoxShadow(
-            color: AppTokens.brandMid.withValues(alpha: 0.45),
-            blurRadius: 34,
-            offset: const Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Column(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: AppTokens.brandGradient,
+          borderRadius: BorderRadius.circular(AppTokens.rLg),
+          boxShadow: [
+            BoxShadow(
+              color: AppTokens.brandMid.withValues(alpha: 0.45),
+              blurRadius: 34,
+              offset: const Offset(0, 16),
+            ),
+          ],
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -352,7 +363,6 @@ class _WalletCard extends StatelessWidget {
               const Icon(Icons.wifi_rounded, color: Colors.white70, size: 22),
             ],
           ),
-          // Card chip.
           Container(
             margin: const EdgeInsets.only(top: 18),
             width: 38,
@@ -396,14 +406,15 @@ class _WalletCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          Row(
-            children: [
-              _CardPill(label: l10n.requestPhysicalCard, onTap: onPill),
-              const SizedBox(width: 10),
-              _CardPill(label: l10n.cardInfo, onTap: onPill),
-            ],
-          ),
-        ],
+            Row(
+              children: [
+                _CardPill(label: l10n.requestPhysicalCard, onTap: onPill),
+                const SizedBox(width: 10),
+                _CardPill(label: l10n.cardInfo, onTap: onPill),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -541,136 +552,6 @@ class _ProductRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _HomeBottomNav extends StatelessWidget {
-  const _HomeBottomNav({
-    required this.l10n,
-    required this.onCategories,
-    required this.onOther,
-  });
-
-  final AppLocalizations l10n;
-  final VoidCallback onCategories;
-  final VoidCallback onOther;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.topbar,
-        border: Border(top: BorderSide(color: colors.border)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom,
-      ),
-      child: SizedBox(
-        height: 62,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _NavItem(
-                icon: Icons.home_rounded,
-                label: l10n.navHome,
-                active: true,
-                onTap: () {}),
-            _NavItem(
-                icon: Icons.grid_view_rounded,
-                label: l10n.navCategories,
-                active: false,
-                onTap: onCategories),
-            _ScanFab(onTap: onOther),
-            _NavItem(
-                icon: Icons.shopping_bag_outlined,
-                label: l10n.navCart,
-                active: false,
-                onTap: onOther),
-            _NavItem(
-                icon: Icons.menu_rounded,
-                label: l10n.navMenu,
-                active: false,
-                onTap: onOther),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active ? AppTokens.cta : context.colors.textFaint;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 56,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 23, color: color),
-            const SizedBox(height: 3),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ScanFab extends StatelessWidget {
-  const _ScanFab({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 56,
-      child: Center(
-        child: Transform.translate(
-          offset: const Offset(0, -16),
-          child: GestureDetector(
-            onTap: onTap,
-            child: Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                gradient: AppTokens.brandGradient,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTokens.cta.withValues(alpha: 0.45),
-                    blurRadius: 22,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.qr_code_scanner_rounded,
-                  color: Colors.white, size: 25),
-            ),
-          ),
-        ),
       ),
     );
   }
