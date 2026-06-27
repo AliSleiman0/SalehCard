@@ -203,7 +203,7 @@ func (r *MongoRepository) UpdateStatus(ctx context.Context, id bson.ObjectID, st
 		{Key: "reviewedAt", Value: now},
 		{Key: "updatedAt", Value: now},
 	}
-	update := bson.D{{Key: "$set", Value: set}}
+	var update bson.D
 	if status == StatusRejected {
 		set = append(set, bson.E{Key: "rejectionReason", Value: reason})
 		update = bson.D{{Key: "$set", Value: set}}
