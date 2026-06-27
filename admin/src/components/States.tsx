@@ -62,8 +62,9 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   )
 }
 
-/** Banner shown on screens whose backend is stubbed (501) or still mock-driven. */
-export function ComingSoonNote({ mock }: { mock?: boolean }) {
+/** Banner shown on screens whose backend is stubbed (501) or still mock-driven.
+ *  An optional note overrides the default coming-soon/not-implemented label. */
+export function ComingSoonNote({ mock, note }: { mock?: boolean; note?: string }) {
   const { t } = useTranslation()
   return (
     <div
@@ -82,7 +83,7 @@ export function ComingSoonNote({ mock }: { mock?: boolean }) {
       }}
     >
       <Icon name="bolt" size={15} />
-      {mock ? t('coming_soon') : t('not_implemented')}
+      {note ?? (mock ? t('coming_soon') : t('not_implemented'))}
     </div>
   )
 }

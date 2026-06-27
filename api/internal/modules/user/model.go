@@ -35,6 +35,9 @@ type User struct {
 	GoogleID       *string       `bson:"googleId,omitempty" json:"googleId,omitempty"`
 	Role           Role          `bson:"role"          json:"role"`
 	Status         Status        `bson:"status,omitempty" json:"status"`
+	// ResellerTier is the name of the reseller tier (Bronze/Silver/Gold) this
+	// account belongs to. Empty for non-resellers and unassigned resellers.
+	ResellerTier   string        `bson:"resellerTier,omitempty" json:"resellerTier,omitempty"`
 	Locale         string        `bson:"locale"        json:"locale"`
 	SavedPlayerIDs []string      `bson:"savedPlayerIds" json:"savedPlayerIds"`
 	WalletBalance  float64       `bson:"walletBalance" json:"walletBalance"`
