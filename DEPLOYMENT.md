@@ -5,8 +5,10 @@ URLs, resources, config, redeploy recipes, the corporate-proxy workaround, and
 open items. **Secrets are NOT here** — they live in `DEPLOY-CREDS.local.md`
 (gitignored, local only).
 
-> Code state: everything below ships from branch **`feat/catalog-migration-browse`**
-> (PR #3, **not yet merged to `main`**).
+> **Deploys are automated as of 2026-06-27.** Pushing to `main` triggers
+> `.github/workflows/deploy.yml` (build → ACR → App Service + Static Web Apps), authenticating
+> to Azure via **OIDC + a user-assigned managed identity** — no stored secrets. The manual
+> "Redeploy recipes" below are kept only as a proxy-bound fallback. See **`.github/CICD-SETUP.md`**.
 
 ## TL;DR — live URLs
 
@@ -15,7 +17,7 @@ open items. **Secrets are NOT here** — they live in `DEPLOY-CREDS.local.md`
 | Storefront (web) | https://black-mud-01b8ea603.7.azurestaticapps.net |
 | Admin console | https://purple-bay-0d1a52d03.7.azurestaticapps.net |
 | API | https://salehcard-api.azurewebsites.net (`/health` → `{"status":"ok"}`) |
-| Database | MongoDB Atlas `Cluster0` → `cluster0.b8ybow1.mongodb.net`, db `salehcard` |
+| Database | Azure Cosmos DB for MongoDB **vCore** `docdb-cluster-20260626-2230` (Free tier), db `salehcard` — migrated off Atlas 2026-06-27 |
 
 Admin login email: **admin@salehcard.com** (password in `DEPLOY-CREDS.local.md`).
 Data loaded: **86 categories + 635 products** + the admin user.
@@ -24,7 +26,7 @@ Data loaded: **86 categories + 635 products** + the admin user.
 
 - **API** (`/api`, Go) → Docker image on **Azure App Service for Containers** (Linux).
 - **Storefront** (`/web`) + **Admin** (`/admin`) (React/Vite SPAs) → two **Azure Static Web Apps** (Free tier), prod API URL baked at build time via `VITE_API_BASE_URL`.
-- **DB** → MongoDB Atlas M0 (free). App is built for standalone Mongo (no multi-doc txns); the new `product.Upsert` uses an aggregation-pipeline update (Atlas-supported).
+- **DB** → Azure Cosmos DB for MongoDB **vCore** (Free tier), `docdb-cluster-20260626-2230`, migrated from Atlas M0 on 2026-06-27. App is built for standalone Mongo (no multi-doc txns); the connection string **requires `retrywrites=false`** for vCore, and the admin password must be **percent-encoded** in the URI.
 - **Image registry** → Azure Container Registry (Basic).
 
 ## Azure resources
@@ -36,11 +38,11 @@ Data loaded: **86 categories + 635 products** + the admin user.
 - Container Registry: **`salehcardprodacr`** (Basic, admin-enabled) → `salehcardprodacr.azurecr.io`.
 - Static Web Apps: **`salehcard-web`**, **`salehcard-admin`** (Free).
 
-**Approx cost:** ~$18/mo (App Service B1 ~$13 + ACR Basic ~$5; SWA Free + Atlas M0 = $0).
+**Approx cost:** ~$18/mo (App Service B1 ~$13 + ACR Basic ~$5; SWA Free + Cosmos vCore Free = $0).
 
 ## API configuration (App Service app settings)
 
-`MONGO_URI` (Atlas srv), `DB_NAME=salehcard`, `JWT_SECRET` (strong, generated at
+`MONGO_URI` (Cosmos **vCore** srv — `retrywrites=false`, password percent-encoded), `DB_NAME=salehcard`, `JWT_SECRET` (strong, generated at
 deploy — **set, so AdminOnly enforces in prod**), `ENV=production`,
 `PORT=8080`, `WEBSITES_PORT=8080`, `ALLOWED_ORIGINS=<both SWA URLs>`,
 `DOCKER_REGISTRY_SERVER_{URL,USERNAME,PASSWORD}`, `WEBSITES_ENABLE_APP_SERVICE_STORAGE=false`.
@@ -70,9 +72,12 @@ tools (git, gh, Docker, the Go Atlas driver) trust it via the Windows cert store
   image **locally and `docker push`** instead (Docker trusts the Windows store).
 - For the **SWA CLI**, set `$env:NODE_EXTRA_CA_CERTS="C:\Users\user\.azure\win-ca-bundle.pem"`.
 
-## Redeploy recipes
+## Redeploy recipes (FALLBACK ONLY — prefer CI/CD)
 
-All commands assume the proxy env vars above are set in the PowerShell session.
+> Normal deploys happen automatically on push to `main` via GitHub Actions
+> (`.github/workflows/deploy.yml`, `CICD-SETUP.md`). Use the manual recipes below only if
+> the pipeline is unavailable. All commands assume the proxy env vars above are set in the
+> PowerShell session.
 
 ### API (after changing Go code)
 ```powershell
@@ -105,22 +110,26 @@ npx --yes @azure/static-web-apps-cli deploy ./dist --deployment-token $tok --env
 ```
 (For admin use `staticSites/salehcard-admin` and `./admin/dist`.)
 
-### Reload catalog data into Atlas
+### Reload catalog data into the vCore cluster
 ```bash
-cd api && MONGO_URI="<atlas-srv-uri>" DB_NAME=salehcard go run ./cmd/loadseed
+cd api && MONGO_URI="<vcore-srv-uri>" DB_NAME=salehcard go run ./cmd/loadseed
+# Use the percent-encoded password + retrywrites=false in the URI (see DEPLOY-CREDS.local.md).
 # loadseed timeout is 15m (remote-cluster friendly). Idempotent; re-import refreshes price.
+# Atlas → vCore migration (2026-06-27) was: mongodump Atlas + mongorestore users/wallet_transactions;
+# catalog via loadseed. codes/orders were empty. Pre-migration backup: C:\Users\user\.salehcard-atlas-dump.
 ```
 
 ## Open items / follow-ups
 
-1. **Rotate the Atlas DB password** — it was pasted in chat during setup. Change in Atlas →
-   Database Access, then update the API's `MONGO_URI` app setting + restart.
-2. **Change the admin password** — it was shown in chat. (Strong/random, but visible there.)
-3. **Merge PR #3** (`feat/catalog-migration-browse`) into `main`.
-4. **CI/CD** — deploys are currently manual; wire GitHub Actions (build+deploy cloud-side,
-   which also sidesteps the local proxy). Needs a `workflow`-scope token to push workflow files.
-5. **Tighten Atlas Network Access** — currently `0.0.0.0/0`; restrict to the App Service
-   outbound IPs (`az webapp show ... outboundIpAddresses`) once stable.
+1. **Decommission Atlas M0** — once the vCore cutover is verified live, delete the Atlas cluster.
+   That also retires its leaked password and its open `0.0.0.0/0` network rule (no separate fix needed).
+2. **Rotate exposed secrets** (all pasted in chat): the **Cosmos vCore** admin password, the
+   **Monty access token**, and the **admin account** password. Update `MONGO_URI` / app settings + restart.
+3. **Merge PR #3** (`feat/catalog-migration-browse`) into `main` — superseded by later branches; verify.
+4. ✅ **CI/CD — DONE (2026-06-27).** GitHub Actions builds+deploys cloud-side (OIDC + user-assigned
+   managed identity `salehcard-github-oidc`). See `.github/CICD-SETUP.md`.
+5. ✅ **vCore network** — public access restricted to "Allow Azure services" + dev IP (no `0.0.0.0/0`).
+   Future hardening: pin App Service outbound IPs, or move to a private endpoint (VNet).
 6. **Custom domain** — currently on default `*.azurewebsites.net` / `*.azurestaticapps.net`.
 7. **Remaining code-review findings** (fast-follows, see PR #3 description): fulfillAPI
    multi-item drop (latent until a real provider), `park()` CreditedToID, admin-created
