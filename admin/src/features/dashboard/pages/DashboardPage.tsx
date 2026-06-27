@@ -2,12 +2,23 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Icon, PageHead, Spark, AreaChart, Donut, Avatar, FfBadge, StatusBadge, Art, artForCategory } from '@/components'
+import type { DonutDatum } from '@/components'
 import { money } from '@/lib/utils'
-import { useDashboardStats, useLowStock } from '../hooks/useDashboard'
-import { orders, revSeries, revLabels, ffBreakdown, inventory as mockInventory } from '@/lib/mock/demo'
+import { useDashboardStats, useLowStock, useRevenueChart, useFulfillmentBreakdown } from '../hooks/useDashboard'
+import { useOrders } from '@/features/orders/hooks/useOrders'
+import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import { inventory as mockInventory } from '@/lib/mock/demo'
 import type { InventoryStats } from '@/types'
 
 type Range = 'daily' | 'weekly' | 'monthly'
+
+// Donut colors keyed by fulfillment slice key — the design-system tokens (same
+// source as FfBadge / OrderListPage's FF_DOT), so the palette tracks the theme.
+const FF_COLOR: Record<string, string> = {
+  code: 'var(--ff-code)',
+  credit: 'var(--ff-credit)',
+  transfer: 'var(--ff-transfer)',
+}
 
 interface KpiProps {
   icon: React.ReactNode
@@ -56,13 +67,27 @@ export default function DashboardPage() {
   const [range, setRange] = useState<Range>('daily')
   const { data: statsRes } = useDashboardStats()
   const { data: lowRes } = useLowStock()
+  const { data: revRes } = useRevenueChart(range)
+  const { data: ffRes } = useFulfillmentBreakdown()
+  const { data: recentRes } = useOrders({ limit: 7 })
   const s = statsRes?.data
 
-  // Revenue area chart + fulfillment donut remain mock-driven.
-  // TODO: wire to /api/admin/dashboard/revenue-chart once orders revenue lands.
-  const rev = revSeries[range]
-  const lab = revLabels[range]
-  const ffTotal = ffBreakdown.reduce((a, d) => a + d.value, 0)
+  // Revenue area chart — real completed-order revenue for the selected range.
+  const rev = revRes?.data?.series ?? []
+  const lab = revRes?.data?.labels ?? []
+  const revTotal = rev.reduce((a, n) => a + n, 0)
+
+  // Fulfillment donut — real line-item counts by fulfillment type.
+  const ffSlices: DonutDatum[] = (ffRes?.data ?? []).map((d) => ({
+    key: d.key,
+    label: d.label,
+    value: d.value,
+    color: FF_COLOR[d.key] ?? '#888',
+  }))
+  const ffTotal = ffSlices.reduce((a, d) => a + d.value, 0)
+
+  // Recent orders — newest 7, adapted to the row view.
+  const recent = (recentRes?.data ?? []).map(adaptOrder)
 
   // Low-stock panel: real data when available, else mock.
   const lowStock: InventoryStats[] =
@@ -184,21 +209,15 @@ export default function DashboardPage() {
             <div className="row" style={{ gap: 22, marginBottom: 4, paddingInline: 6 }}>
               <div>
                 <div style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 700 }}>
-                  This {range === 'daily' ? 'week' : range === 'weekly' ? 'quarter' : 'year'}
+                  {range === 'daily' ? 'Last 14 days' : range === 'weekly' ? 'Last 12 weeks' : 'Last 12 months'}
                 </div>
                 <div className="num" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.02em' }}>
-                  ${range === 'monthly' ? '1.91M' : range === 'weekly' ? '624K' : '118.4K'}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 700 }}>Avg order</div>
-                <div className="num" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.02em' }}>
-                  $24.80
+                  {money(revTotal)}
                 </div>
               </div>
               <div className="spacer" />
-              <span className="delta up" style={{ fontSize: 13 }}>
-                <Icon name="arrowup" size={13} stroke={2.6} /> 18.6% growth
+              <span className="k-since" style={{ fontSize: 12 }}>
+                Completed orders only
               </span>
             </div>
             <AreaChart data={rev} labels={lab} height={210} />
@@ -213,24 +232,24 @@ export default function DashboardPage() {
           <div style={{ padding: 22 }}>
             <div className="donut-wrap">
               <Donut
-                data={ffBreakdown}
+                data={ffSlices}
                 size={148}
                 thickness={22}
                 center={
                   <div>
                     <div className="num" style={{ fontSize: 23, fontWeight: 800 }}>
-                      {s ? s.ordersToday : 842}
+                      {ffTotal}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>orders</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>items</div>
                   </div>
                 }
               />
               <div className="legend" style={{ flex: 1 }}>
-                {ffBreakdown.map((d) => (
+                {ffSlices.map((d) => (
                   <div className="li" key={d.key}>
                     <span className="sw" style={{ background: d.color }} />
                     <span style={{ fontWeight: 700 }}>{d.label}</span>
-                    <span className="lv num">{Math.round((d.value / ffTotal) * (s ? s.ordersToday : 842))}</span>
+                    <span className="lv num">{d.value}</span>
                   </div>
                 ))}
               </div>
@@ -277,10 +296,10 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {orders.slice(0, 7).map((o) => (
+                {recent.map((o) => (
                   <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
                     <td>
-                      <span className="mono strong">{o.id}</span>
+                      <span className="mono strong">{o.id.slice(-8)}</span>
                       <div className="faint" style={{ fontSize: 11 }}>
                         {o.date}
                       </div>

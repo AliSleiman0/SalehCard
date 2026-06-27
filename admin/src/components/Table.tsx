@@ -42,30 +42,46 @@ export function Pagination({
   total = 0,
   shown,
   label = 'results',
+  limit,
+  onPage,
 }: {
   page?: number
   pages?: number
   total?: number
   shown?: number
   label?: string
+  /** Page size — used to compute the "Showing X–Y" range on pages after the
+   *  first. Falls back to the shown count (correct only on page 1). */
+  limit?: number
+  /** When provided, the component is controlled: clicks call onPage instead of
+   *  tracking page internally (so the caller can refetch). */
+  onPage?: (page: number) => void
 }) {
-  const [p, setP] = useState(page)
-  const upTo = shown ?? Math.min(total, 14)
+  const [internal, setInternal] = useState(page)
+  const p = onPage ? page : internal
+  const go = (n: number) => {
+    const clamped = Math.max(1, Math.min(pages, n))
+    if (onPage) onPage(clamped)
+    else setInternal(clamped)
+  }
+  const count = shown ?? Math.min(total, 14)
+  const from = total === 0 ? 0 : (p - 1) * (limit ?? count) + 1
+  const to = total === 0 ? 0 : from + count - 1
   return (
     <div className="pagination">
       <span>
-        Showing <b>1–{upTo}</b> of <b className="num">{total.toLocaleString()}</b> {label}
+        Showing <b>{from}–{to}</b> of <b className="num">{total.toLocaleString()}</b> {label}
       </span>
       <div className="sp" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <div className="pg" onClick={() => setP(Math.max(1, p - 1))}>
+        <div className="pg" onClick={() => go(p - 1)}>
           <Icon name="chevleft" size={15} />
         </div>
         {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
-          <div key={n} className={cn('pg', n === p && 'on')} onClick={() => setP(n)}>
+          <div key={n} className={cn('pg', n === p && 'on')} onClick={() => go(n)}>
             {n}
           </div>
         ))}
-        <div className="pg" onClick={() => setP(Math.min(pages, p + 1))}>
+        <div className="pg" onClick={() => go(p + 1)}>
           <Icon name="chevright" size={15} />
         </div>
       </div>

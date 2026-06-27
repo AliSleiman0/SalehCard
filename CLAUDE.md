@@ -9,17 +9,24 @@ for depth — this file is the orientation layer.
 money transfers). Monorepo:
 
 - **`/api`** — Go 1.22 + chi + MongoDB (driver v2). Module path `github.com/AliSleiman0/salehcard/api`.
-- **`/web`** — React 18 + TS + Vite storefront (customer-facing), port **5173**.
+- **`/app`** — **Flutter customer mobile client** (Riverpod, go_router) on the Go API — the
+  customer-facing app going forward (supersedes the `/web` storefront). See `app/HANDOFF-DESIGN.md`.
+- **`/web`** — React 18 + TS + Vite storefront (customer-facing), port **5173** (legacy; being retired).
 - **`/admin`** — React 18 + TS + Vite admin console, port **5174** (separate app).
 - **`/deploy`** — docker-compose for MongoDB + env examples.
+
+> **Live in production on Azure** (CI/CD auto-deploys on push to `main`). See `DEPLOYMENT.md`,
+> `HANDOFF-OTP-DEPLOY.md`, and the latest session handoff (`HANDOFF-2026-06-27.md`).
 
 ## Read these first
 
 - **`README.md`** — stack, prerequisites, quick start.
 - **`CONVENTIONS.md`** — backend module layout, response envelope, frontend design-system rules. **Follow it.**
-- **`HANDOFF.md`** — current funnel state and the next steps (Step 3: refunds, admin manual-completion, etc.).
-- **`MANUAL-TEST.md`** — A→Z manual browser test of the implemented funnel.
-- **`PURCHASE-FUNNEL.md`** — overall funnel assessment.
+- **`HANDOFF-2026-06-27.md`** — **latest session state** (mobile app, phone-OTP + Monty SMS live, CI/CD, NAT). Start here.
+- **`app/HANDOFF-DESIGN.md`** — the Flutter mobile client: modules, what's stubbed, run/verify.
+- **`DEPLOYMENT.md`** + **`HANDOFF-OTP-DEPLOY.md`** — Azure prod resources, redeploy recipes, OTP/SMS rollout.
+- **`HANDOFF.md`** — earlier funnel state (Step 3: refunds, admin manual-completion, etc.).
+- **`MANUAL-TEST.md`** / **`PURCHASE-FUNNEL.md`** — manual funnel test + assessment.
 
 ## Build / run / test
 
@@ -62,13 +69,24 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
 - **Backend modules** (`api/internal/modules/<name>/`): `model / repository / service /
   handler / routes` split (see CONVENTIONS.md). Wire deps explicitly in `routes.go` /
   `server.go` — no DI container.
-- **MongoDB is standalone → no multi-document transactions.** Achieve consistency with
-  **document-atomic `FindOneAndUpdate`** (e.g. code claim: `available→delivered`; wallet
-  debit: `$inc` guarded by `$gte`) plus explicit compensation. Never select-then-update.
+- **MongoDB has no multi-document transactions** (dev = local standalone Mongo; **prod = Azure
+  Cosmos DB for MongoDB vCore**, `retrywrites=false`). Achieve consistency with **document-atomic
+  `FindOneAndUpdate`** (e.g. code claim: `available→delivered`; wallet debit: `$inc` guarded by
+  `$gte`) plus explicit compensation. Never select-then-update. Indexes are created at startup by
+  each module's `EnsureIndexes` (sparse-unique `email`/`phone`, TTL on `otp_codes`/`refresh_tokens`).
 - **Auth**: JWT access token in memory + rotating refresh token in an httpOnly cookie.
   `auth.AuthRequired` gates customer routes; `auth.AdminOnly` gates `/api/admin/*` and
   **dev-bypasses when `JWT_SECRET` is empty** (logs a warning). `api/.env` ships a
   `JWT_SECRET`, so to bypass admin auth in dev you must run with `JWT_SECRET=` empty.
+- **Phone-OTP auth** (`internal/modules/user`): `POST /auth/otp/request` + `/auth/otp/verify`
+  (find-or-create by phone, optional password-set) + `/auth/login-phone`, alongside email/password.
+  Users carry a sparse-unique `phone`; codes live in `otp_codes`. The mobile login offers
+  **code or password**. Native clients send `X-Client: mobile` to get the refresh token in-body.
+- **SMS provider layer** (`internal/platform/sms`, ports & adapters): a `Sender` port with
+  `monty` / `twilio` / `log` adapters, selected by **`SMS_PROVIDER`** (default `log` → codes are
+  logged, not sent — add a provider = new adapter file + one case in `New`). Prod uses **Monty**
+  (Lebanon; sender `Arya`). Monty **IP-allowlists the caller**, so prod egresses via a NAT Gateway
+  (one fixed IP) — see `HANDOFF-OTP-DEPLOY.md`.
 - **Orders / payment / fulfillment** (implemented): server **re-prices from the catalog**
   (never trusts client price/fulfillment); `Idempotency-Key` header dedupes via a
   partial-unique index; order-first → atomic code claim → `completed`, with compensation
@@ -91,3 +109,10 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
 
 - Default branch is `main`. Commit/push only when asked.
 - End commit messages with the `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>` trailer.
+- **CI/CD**: `.github/workflows/ci.yml` (build/lint/test on PRs — note golangci-lint runs, stricter
+  than `go vet`) + `deploy.yml` (**auto-deploys to Azure on push to `main`**, path-filtered per
+  `api`/`web`/`admin`, via OIDC — no stored secrets). Merging a PR to `main` ships prod.
+- **GitHub repo is `AliSleiman0/SalehCard`** (capital S/C — renamed from lowercase; `origin` still
+  redirects). OIDC subject matching is **case-sensitive** — keep Azure federated creds on `SalehCard`.
+- **Corporate-proxy gotcha**: `az` fails TLS locally; run Azure CLI in **Azure Cloud Shell**
+  (browser, pre-auth, no proxy). `git`/`gh`/`docker`/Go trust the Windows cert store and work.

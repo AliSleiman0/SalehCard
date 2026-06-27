@@ -1,16 +1,19 @@
-// Package dashboard serves the admin overview endpoints. Product/code-derived
-// figures are real; revenue/orders/users figures are mocked until the orders and
-// wallet modules are wired (flagged with TODOs).
+// Package dashboard serves the admin overview endpoints. Product/code-derived and
+// order-derived figures are real; only active-users and wallet-topups remain
+// mocked until the user/wallet aggregations land (flagged with TODOs).
 package dashboard
 
 import (
+	"math"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -21,20 +24,29 @@ type Stats struct {
 	LowStockCount  int   `json:"lowStockCount"`
 	CodesAvailable int   `json:"codesAvailable"`
 	CodesDelivered int   `json:"codesDelivered"`
-	// Mocked until orders/wallet modules land:
+	// Real (derived from orders):
 	RevenueToday     float64 `json:"revenueToday"`
 	RevenueDeltaPct  float64 `json:"revenueDeltaPct"`
 	OrdersToday      int     `json:"ordersToday"`
 	OrdersDeltaPct   float64 `json:"ordersDeltaPct"`
-	ActiveUsers      int     `json:"activeUsers"`
-	WalletTopups     float64 `json:"walletTopups"`
 	PendingTransfers int     `json:"pendingTransfers"`
+	// Mocked until user/wallet aggregations land:
+	ActiveUsers  int     `json:"activeUsers"`
+	WalletTopups float64 `json:"walletTopups"`
+}
+
+// ffSlice is one segment of the fulfillment-breakdown donut.
+type ffSlice struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Value int    `json:"value"`
 }
 
 // Handler serves the dashboard endpoints.
 type Handler struct {
 	products *mongo.Collection
 	codes    code.Service
+	orders   order.Repository
 }
 
 // RegisterAdminRoutes mounts the dashboard routes onto r (the /api/admin group).
@@ -42,10 +54,12 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 	h := &Handler{
 		products: db.Collection("products"),
 		codes:    code.NewService(db),
+		orders:   order.NewMongoRepository(db.Collection("orders")),
 	}
 	r.Get("/dashboard/stats", h.GetStats)
 	r.Get("/dashboard/low-stock", h.GetLowStock)
 	r.Get("/dashboard/revenue-chart", h.GetRevenueChart)
+	r.Get("/dashboard/fulfillment-breakdown", h.GetFulfillmentBreakdown)
 }
 
 // GetStats handles GET /api/admin/dashboard/stats.
@@ -72,21 +86,50 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	now := time.Now().UTC()
+	ordersToday, revenueToday, err := h.orders.DayStats(ctx, now)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	ordersYday, revenueYday, err := h.orders.DayStats(ctx, now.AddDate(0, 0, -1))
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	pendingTransfers, err := h.orders.CountPendingTransfers(ctx)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+
 	stats := Stats{
-		TotalProducts:  totalProducts,
-		LowStockCount:  lowStock,
-		CodesAvailable: available,
-		CodesDelivered: delivered,
-		// TODO: replace with real figures once the orders + wallet modules are wired.
-		RevenueToday:     12148,
-		RevenueDeltaPct:  14.2,
-		OrdersToday:      842,
-		OrdersDeltaPct:   8.1,
-		ActiveUsers:      3610,
-		WalletTopups:     48920,
-		PendingTransfers: 4,
+		TotalProducts:    totalProducts,
+		LowStockCount:    lowStock,
+		CodesAvailable:   available,
+		CodesDelivered:   delivered,
+		RevenueToday:     revenueToday,
+		RevenueDeltaPct:  deltaPct(revenueToday, revenueYday),
+		OrdersToday:      ordersToday,
+		OrdersDeltaPct:   deltaPct(float64(ordersToday), float64(ordersYday)),
+		PendingTransfers: int(pendingTransfers),
+		// TODO(mock): needs user/wallet aggregation.
+		ActiveUsers:  3610,
+		WalletTopups: 48920,
 	}
 	response.OK(w, stats)
+}
+
+// deltaPct is the percentage change from prev to cur, rounded to one decimal and
+// guarded against a zero baseline.
+func deltaPct(cur, prev float64) float64 {
+	if prev == 0 {
+		if cur == 0 {
+			return 0
+		}
+		return 100
+	}
+	return math.Round((cur-prev)/prev*1000) / 10
 }
 
 // GetLowStock handles GET /api/admin/dashboard/low-stock.
@@ -99,18 +142,30 @@ func (h *Handler) GetLowStock(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, low)
 }
 
-// GetRevenueChart handles GET /api/admin/dashboard/revenue-chart.
-// TODO: derive from real order revenue; currently returns a mock series.
+// GetRevenueChart handles GET /api/admin/dashboard/revenue-chart, returning a
+// completed-order revenue series for the requested range (daily/weekly/monthly).
 func (h *Handler) GetRevenueChart(w http.ResponseWriter, r *http.Request) {
 	rng := r.URL.Query().Get("range")
-	series := map[string][]float64{
-		"daily":   {4.2, 5.1, 4.8, 6.3, 7.1, 6.6, 8.2, 7.4, 9.1, 8.7, 10.2, 9.6, 11.4, 12.1},
-		"weekly":  {28, 32, 30, 38, 41, 44, 47, 52, 49, 58, 61, 67},
-		"monthly": {98, 112, 121, 134, 128, 156, 162, 178, 171, 198, 214, 240},
+	labels, series, err := h.orders.RevenueSeries(r.Context(), rng)
+	if err != nil {
+		response.InternalError(w)
+		return
 	}
-	data, ok := series[rng]
-	if !ok {
-		data = series["daily"]
+	response.OK(w, map[string]any{"range": rng, "labels": labels, "series": series})
+}
+
+// GetFulfillmentBreakdown handles GET /api/admin/dashboard/fulfillment-breakdown,
+// returning order line-item counts by fulfillment type as donut-ready slices.
+func (h *Handler) GetFulfillmentBreakdown(w http.ResponseWriter, r *http.Request) {
+	counts, err := h.orders.FulfillmentBreakdown(r.Context())
+	if err != nil {
+		response.InternalError(w)
+		return
 	}
-	response.OK(w, map[string]any{"range": rng, "series": data})
+	out := []ffSlice{
+		{Key: "code", Label: "Code / PIN", Value: counts["code"]},
+		{Key: "credit", Label: "Account credit", Value: counts["account_credit"]},
+		{Key: "transfer", Label: "Money transfer", Value: counts["transfer"]},
+	}
+	response.OK(w, out)
 }

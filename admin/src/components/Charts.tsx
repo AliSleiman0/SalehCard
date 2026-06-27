@@ -47,6 +47,13 @@ export function AreaChart({ data, labels, height = 220 }: AreaChartProps) {
   const pb = 26
   const iw = w - pl - pr
   const ih = h - pt - pb
+  // With fewer than two points the path math below dereferences pts[0]/divides
+  // by (len-1); render an empty chart frame instead (e.g. while data loads).
+  if (data.length < 2) {
+    return (
+      <svg className="chart-area" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ height }} />
+    )
+  }
   const max = Math.max(...data) * 1.12
   const min = 0
   const rng = max - min || 1
@@ -126,11 +133,13 @@ export function Donut({ data, size = 150, thickness = 22, center }: DonutProps) 
               cy={size / 2}
               r={r}
               fill="none"
-              stroke={d.color}
               strokeWidth={thickness}
               strokeDasharray={`${len} ${C - len}`}
               strokeDashoffset={-off}
               strokeLinecap="butt"
+              // via style so CSS custom properties (var(--ff-*)) resolve — they
+              // do not when set as the SVG `stroke` presentation attribute.
+              style={{ stroke: d.color }}
             />
           )
           off += len
