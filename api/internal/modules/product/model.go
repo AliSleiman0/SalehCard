@@ -217,6 +217,7 @@ type UpsertProductInput struct {
 // CreateProductInput carries all the data required to create a new product.
 type CreateProductInput struct {
 	Title               I18nString      `json:"title"`
+	Description         I18nString      `json:"description"`
 	Category            string          `json:"category"`
 	Images              []string        `json:"images"`
 	Variants            []Variant       `json:"variants"`
@@ -232,6 +233,7 @@ type CreateProductInput struct {
 // A nil pointer means "leave unchanged".
 type UpdateProductInput struct {
 	Title               *I18nString      `json:"title,omitempty"`
+	Description         *I18nString      `json:"description,omitempty"`
 	Category            *string          `json:"category,omitempty"`
 	Images              []string         `json:"images,omitempty"`
 	Variants            []Variant        `json:"variants,omitempty"`

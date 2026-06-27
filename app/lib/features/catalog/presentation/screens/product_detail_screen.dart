@@ -236,6 +236,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         firstField != null && _field.text.trim().isNotEmpty
             ? _field.text.trim()
             : null;
+    // Direct-checkout funnel: the cart UI is hidden, so clear any stale item
+    // from a previously abandoned checkout before adding this one — each
+    // checkout reflects only the current product. (Drop this when the cart
+    // is re-enabled.)
+    if (goCheckout) {
+      ref.read(cartControllerProvider.notifier).clear();
+    }
     ref.read(cartControllerProvider.notifier).add(
           CartItem(
             productId: product.id,
@@ -500,22 +507,25 @@ class _BottomBar extends StatelessWidget {
           const SizedBox(height: 11),
           Row(
             children: [
-              Expanded(
-                flex: 10,
-                child: OutlinedButton(
-                  onPressed: enabled ? onAddToCart : null,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    foregroundColor: colors.text,
-                    side: BorderSide(color: colors.borderStrong),
-                    shape: const StadiumBorder(),
-                    textStyle: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w800),
-                  ),
-                  child: Text(enabled ? l10n.addToCart : l10n.notifyMe),
-                ),
-              ),
-              const SizedBox(width: 10),
+              // NOTE: "Add to cart" is disabled for now — the funnel goes
+              // straight to checkout via "Buy Now". Re-enable by uncommenting
+              // this Expanded block + the spacer below (cart plumbing is intact).
+              // Expanded(
+              //   flex: 10,
+              //   child: OutlinedButton(
+              //     onPressed: enabled ? onAddToCart : null,
+              //     style: OutlinedButton.styleFrom(
+              //       minimumSize: const Size.fromHeight(54),
+              //       foregroundColor: colors.text,
+              //       side: BorderSide(color: colors.borderStrong),
+              //       shape: const StadiumBorder(),
+              //       textStyle: const TextStyle(
+              //           fontSize: 15, fontWeight: FontWeight.w800),
+              //     ),
+              //     child: Text(enabled ? l10n.addToCart : l10n.notifyMe),
+              //   ),
+              // ),
+              // const SizedBox(width: 10),
               Expanded(
                 flex: 13,
                 child: FilledButton(

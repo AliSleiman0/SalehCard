@@ -9,6 +9,6 @@ class SubmitKyc {
 
   final KycRepository _repository;
 
-  Future<Either<Failure, KycStatus>> call(KycSubmission submission) =>
+  Future<Either<Failure, KycProfile>> call(KycSubmission submission) =>
       _repository.submit(submission);
 }

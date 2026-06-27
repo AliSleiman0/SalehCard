@@ -37,12 +37,13 @@ export default function ProductEditPage() {
 
   const [langTab, setLangTab] = useState<Locale>('en')
   const [title, setTitle] = useState({ en: '', ar: '', tr: '' })
+  const [description, setDescription] = useState({ en: '', ar: '', tr: '' })
   const [category, setCategory] = useState('')
   const [ff, setFf] = useState<FfKey>('code')
   const [active, setActive] = useState(false)
   const [stock, setStock] = useState(0)
   const [variants, setVariants] = useState<VariantRow[]>([
-    { denomination: '$10', price: '10.00', resellerPrice: '8.80' },
+    { denomination: '', price: '', resellerPrice: '' },
   ])
 
   // Populate from the loaded product when editing.
@@ -50,6 +51,7 @@ export default function ProductEditPage() {
     const p = data?.data
     if (!p) return
     setTitle({ en: p.title.en, ar: p.title.ar, tr: p.title.tr })
+    setDescription({ en: p.description?.en ?? '', ar: p.description?.ar ?? '', tr: p.description?.tr ?? '' })
     setCategory(p.category)
     setFf(ffKey(p.fulfillmentType))
     setActive(p.available)
@@ -83,6 +85,7 @@ export default function ProductEditPage() {
 
   const buildInput = () => ({
     title,
+    description,
     category,
     images: data?.data?.images ?? [],
     fulfillmentType: toFulfillment(ff),
@@ -175,29 +178,24 @@ export default function ProductEditPage() {
             <div className="ahint">Localized titles shown to customers in each language.</div>
             <div style={{ marginTop: 16 }}>
               <label className="alabel">Description ({langTab.toUpperCase()})</label>
-              <textarea className="afield" placeholder="Describe the product, redemption steps, region…" />
-              <div className="ahint">Description is design-only for now (not yet persisted by the API).</div>
+              <textarea
+                className="afield"
+                value={description[langTab]}
+                onChange={(e) => setDescription({ ...description, [langTab]: e.target.value })}
+                placeholder="Describe the product, redemption steps, region…"
+                dir={langTab === 'ar' ? 'rtl' : 'ltr'}
+              />
+              <div className="ahint">Localized description shown to customers in each language.</div>
             </div>
-            <div className="g2" style={{ marginTop: 16 }}>
-              <div>
-                <label className="alabel">Category</label>
-                <select className="select" style={{ width: '100%' }} value={category} onChange={(e) => setCategory(e.target.value)}>
-                  {catOptions.map((c) => (
-                    <option key={c} value={c}>
-                      {categoryLabel(c)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="alabel">Region</label>
-                <select className="select" style={{ width: '100%' }}>
-                  <option>United States</option>
-                  <option>Türkiye</option>
-                  <option>Global</option>
-                  <option>MENA</option>
-                </select>
-              </div>
+            <div style={{ marginTop: 16 }}>
+              <label className="alabel">Category</label>
+              <select className="select" style={{ width: '100%' }} value={category} onChange={(e) => setCategory(e.target.value)}>
+                {catOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {categoryLabel(c)}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -350,9 +348,10 @@ export default function ProductEditPage() {
                 </span>
                 <h3 style={{ fontSize: 15, fontWeight: 800 }}>Player ID field</h3>
               </div>
-              <label className="alabel">ID label shown at checkout</label>
-              <input className="afield" defaultValue="Player ID" />
-              <div className="ahint">Customers enter this ID; top-ups are credited automatically via the provider API.</div>
+              <div className="ahint" style={{ marginTop: 0 }}>
+                Customers enter their player/account ID at checkout; top-ups are credited
+                automatically via the provider API.
+              </div>
             </div>
           )}
           {ff === 'transfer' && (
@@ -399,34 +398,6 @@ export default function ProductEditPage() {
             </div>
           )}
 
-          <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Images</h3>
-            <div className="imgslot" style={{ height: 150, marginBottom: 10 }}>
-              box art · 1:1 · drop image
-            </div>
-            <div className="g3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="imgslot" style={{ height: 56 }}>
-                  {i}
-                </div>
-              ))}
-            </div>
-            <div className="ahint">Image upload is design-only for now (gradient box-art is generated).</div>
-          </div>
-
-          <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Organize</h3>
-            <label className="alabel">Tags</label>
-            <input className="afield" defaultValue="instant, popular" />
-            <div style={{ marginTop: 14 }}>
-              <label className="alabel">Badges</label>
-              <div className="chiprow">
-                <div className="chip on">Instant</div>
-                <div className="chip">Best seller</div>
-                <div className="chip">New</div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

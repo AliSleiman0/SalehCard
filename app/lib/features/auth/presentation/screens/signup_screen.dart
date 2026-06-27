@@ -30,18 +30,20 @@ class SignupScreen extends ConsumerStatefulWidget {
 }
 
 class _SignupScreenState extends ConsumerState<SignupScreen> {
+  final _name = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   String _otp = '';
 
   _Step _step = _Step.phone;
-  String? _errorField; // 'phone' | 'password' | 'confirm' | 'otp'
+  String? _errorField; // 'name' | 'phone' | 'password' | 'confirm' | 'otp'
   String? _errorMessage;
   bool _loading = false;
 
   @override
   void dispose() {
+    _name.dispose();
     _phone.dispose();
     _password.dispose();
     _confirm.dispose();
@@ -78,6 +80,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     final notifier = ref.read(authControllerProvider.notifier);
     switch (_step) {
       case _Step.phone:
+        if (_name.text.trim().length < 2) {
+          return _setError('name', l10n.nameRequired);
+        }
         if (_digits < 7) return _setError('phone', l10n.invalidPhone);
         setState(() => _step = _Step.password);
       case _Step.password:
@@ -110,6 +115,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           phone: toE164Lebanon(_phone.text),
           code: _otp,
           password: _password.text,
+          name: _name.text.trim(),
         );
         if (!mounted) return;
         setState(() => _loading = false);
@@ -199,6 +205,17 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   List<Widget> _phoneStep(AppLocalizations l10n) {
     return [
+      AuthTextField(
+        label: l10n.nameLabel,
+        controller: _name,
+        hintText: l10n.nameHint,
+        keyboardType: TextInputType.name,
+        textCapitalization: TextCapitalization.words,
+        autofillHints: const [AutofillHints.name],
+        errorText: _errorField == 'name' ? _errorMessage : null,
+        onChanged: (_) => _clearError(),
+      ),
+      const SizedBox(height: 20),
       AuthTextField(
         label: l10n.mobileNumberLabel,
         controller: _phone,

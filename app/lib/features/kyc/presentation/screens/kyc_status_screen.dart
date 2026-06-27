@@ -21,7 +21,7 @@ class KycStatusScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
-    final statusAsync = ref.watch(kycStatusProvider);
+    final profileAsync = ref.watch(kycProfileProvider);
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -29,7 +29,7 @@ class KycStatusScreen extends ConsumerWidget {
         backgroundColor: colors.topbar,
         title: Text(l10n.kycTitle),
       ),
-      body: statusAsync.when(
+      body: profileAsync.when(
         loading: () => const LoadingView(),
         error: (_, _) => Center(
           child: Padding(
@@ -40,16 +40,21 @@ class KycStatusScreen extends ConsumerWidget {
                 Text(l10n.loadFailed, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: () => ref.invalidate(kycStatusProvider),
+                  onPressed: () => ref.invalidate(kycProfileProvider),
                   child: Text(l10n.retry),
                 ),
               ],
             ),
           ),
         ),
-        data: (status) => ListView(
+        data: (profile) => ListView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-          children: [_StatusCard(status: status)],
+          children: [
+            _StatusCard(
+              status: profile.status,
+              rejectionReason: profile.rejectionReason,
+            )
+          ],
         ),
       ),
     );
@@ -57,9 +62,10 @@ class KycStatusScreen extends ConsumerWidget {
 }
 
 class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.status});
+  const _StatusCard({required this.status, this.rejectionReason});
 
   final KycStatus status;
+  final String? rejectionReason;
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +143,29 @@ class _StatusCard extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 color: colors.textDim),
           ),
+          if (status == KycStatus.rejected &&
+              rejectionReason != null &&
+              rejectionReason!.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTokens.danger.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppTokens.rMd),
+                border: Border.all(
+                    color: AppTokens.danger.withValues(alpha: 0.35)),
+              ),
+              child: Text(
+                rejectionReason!,
+                style: TextStyle(
+                    fontSize: 13.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    color: colors.text),
+              ),
+            ),
+          ],
           if (status == KycStatus.unverified ||
               status == KycStatus.rejected) ...[
             const SizedBox(height: 22),

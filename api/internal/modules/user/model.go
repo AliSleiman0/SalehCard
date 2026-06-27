@@ -29,6 +29,7 @@ const (
 // index so phone-only accounts may omit the email and vice versa.
 type User struct {
 	ID             bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	Name           string        `bson:"name,omitempty" json:"name"`
 	Email          string        `bson:"email,omitempty" json:"email"`
 	Phone          *string       `bson:"phone,omitempty" json:"phone,omitempty"`
 	PasswordHash   *string       `bson:"passwordHash"  json:"-"`
@@ -64,6 +65,7 @@ type OtpCode struct {
 
 // RegisterInput holds the data required to create a new account.
 type RegisterInput struct {
+	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Locale   string `json:"locale"`
@@ -87,6 +89,9 @@ type VerifyOTPInput struct {
 	Phone    string `json:"phone"`
 	Code     string `json:"code"`
 	Password string `json:"password"`
+	// Name is captured at signup (first sign-in) and set on the new account; it
+	// is ignored when the phone already maps to an existing user (OTP login).
+	Name string `json:"name"`
 }
 
 // PhoneLoginInput holds the credentials for a phone+password login.

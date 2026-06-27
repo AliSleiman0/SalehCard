@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/i18n/arb/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
-import '../../cart/presentation/controllers/cart_controller.dart';
+// Cart is disabled for now (direct-checkout funnel); re-add this import with
+// the Cart _NavItem / cartCount below.
+// import '../../cart/presentation/controllers/cart_controller.dart';
 
 /// App shell: hosts the 5-tab bottom nav over the branch navigators. Branch
 /// order matches [StatefulShellRoute] branches: 0 Home · 1 Categories · 2 Cart ·
@@ -25,7 +27,9 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
-    final cartCount = ref.watch(cartCountProvider);
+    // Cart is disabled for now (direct-checkout funnel). Re-enable by
+    // uncommenting this + the Cart _NavItem below.
+    // final cartCount = ref.watch(cartCountProvider);
     final index = navigationShell.currentIndex;
 
     return Scaffold(
@@ -54,12 +58,22 @@ class AppShell extends ConsumerWidget {
                 onTap: () => navigationShell.goBranch(1),
               ),
               _ScanFab(onTap: () => _comingSoon(context)),
+              // Cart tab disabled for now — replaced by an "Offers" placeholder
+              // (feature deferred). The /cart branch (index 2) still exists in
+              // the router; it's just unreachable from the nav. Re-enable by
+              // restoring this _NavItem (and `cartCount` above).
+              // _NavItem(
+              //   icon: Icons.shopping_bag_outlined,
+              //   label: l10n.navCart,
+              //   active: index == 2,
+              //   badge: cartCount,
+              //   onTap: () => navigationShell.goBranch(2),
+              // ),
               _NavItem(
-                icon: Icons.shopping_bag_outlined,
-                label: l10n.navCart,
-                active: index == 2,
-                badge: cartCount,
-                onTap: () => navigationShell.goBranch(2),
+                icon: Icons.local_offer_outlined,
+                label: l10n.navOffers,
+                active: index == 4,
+                onTap: () => navigationShell.goBranch(4),
               ),
               _NavItem(
                 icon: Icons.menu_rounded,
@@ -81,6 +95,8 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.active,
     required this.onTap,
+    // Currently only supplied by the (disabled) Cart tab; kept for re-enable.
+    // ignore: unused_element_parameter
     this.badge = 0,
   });
 

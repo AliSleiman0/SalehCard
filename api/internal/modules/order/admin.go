@@ -45,15 +45,34 @@ type adminOrderView struct {
 // updates remain stubbed (they touch the wallet ledger / manual fulfillment,
 // handled in a later step).
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
+	repo := NewMongoRepository(db.Collection("orders"))
 	a := &adminHandler{
-		repo:  NewMongoRepository(db.Collection("orders")),
+		repo:  repo,
 		users: user.NewMongoRepository(db),
 	}
 
 	r.Get("/orders", a.list)
+	// Read-only sold-units read model for the admin product list. Wired off the
+	// concrete repo (like product.categoryFacetsHandler) so SoldByProduct stays
+	// off the Repository interface and its test fake.
+	r.Get("/orders/sold-by-product", soldByProductHandler(repo))
 	r.Get("/orders/{id}", a.detail)
 	r.Post("/orders/{id}/refund", response.Stub("order refund"))
 	r.Put("/orders/{id}/status", response.Stub("transfer status update"))
+}
+
+// soldByProductHandler serves GET /api/admin/orders/sold-by-product — a map of
+// product id -> total units sold across completed orders. It feeds the admin
+// product list's "Sold" column.
+func soldByProductHandler(repo *MongoRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sold, err := repo.SoldByProduct(r.Context())
+		if err != nil {
+			response.InternalError(w)
+			return
+		}
+		response.OK(w, sold)
+	}
 }
 
 type adminHandler struct {

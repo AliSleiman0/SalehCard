@@ -41,6 +41,7 @@ const STATUS_MAP: Record<string, [string, string]> = {
   verified: ['st-ok', 'Verified'],
   processing: ['st-warn', 'Processing'],
   pending: ['st-warn', 'Pending'],
+  scheduled: ['st-warn', 'Scheduled'],
   invited: ['st-warn', 'Invited'],
   draft: ['st-mute', 'Draft'],
   paused: ['st-mute', 'Paused'],

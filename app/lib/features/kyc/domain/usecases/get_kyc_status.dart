@@ -9,5 +9,5 @@ class GetKycStatus {
 
   final KycRepository _repository;
 
-  Future<Either<Failure, KycStatus>> call() => _repository.getStatus();
+  Future<Either<Failure, KycProfile>> call() => _repository.getProfile();
 }

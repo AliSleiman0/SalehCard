@@ -18,6 +18,7 @@ import '../../features/checkout/presentation/screens/order_success_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/kyc/presentation/screens/kyc_form_screen.dart';
 import '../../features/kyc/presentation/screens/kyc_status_screen.dart';
+import '../../features/offers/presentation/screens/offers_screen.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
 import '../../features/orders/presentation/screens/orders_list_screen.dart';
 import '../../features/shell/presentation/app_shell.dart';
@@ -144,6 +145,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/account', builder: (c, s) => const AccountMenuScreen()),
+          ]),
+          // Index 4: Offers tab (sale-price deals). Cart stays at index 2 (disabled).
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/offers', builder: (c, s) => const OffersScreen()),
           ]),
         ],
       ),

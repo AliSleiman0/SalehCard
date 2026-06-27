@@ -18,6 +18,7 @@ class AuthTextField extends StatefulWidget {
     this.obscureText = false,
     this.keyboardType,
     this.textInputAction,
+    this.textCapitalization = TextCapitalization.none,
     this.inputFormatters,
     this.autofillHints,
     this.onChanged,
@@ -32,6 +33,7 @@ class AuthTextField extends StatefulWidget {
   final bool obscureText;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
+  final TextCapitalization textCapitalization;
   final List<TextInputFormatter>? inputFormatters;
   final Iterable<String>? autofillHints;
   final ValueChanged<String>? onChanged;
@@ -101,6 +103,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
         obscureText: widget.obscureText,
         keyboardType: widget.keyboardType,
         textInputAction: widget.textInputAction,
+        textCapitalization: widget.textCapitalization,
         inputFormatters: widget.inputFormatters,
         autofillHints: widget.autofillHints,
         onChanged: widget.onChanged,

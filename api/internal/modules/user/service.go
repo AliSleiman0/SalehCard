@@ -110,6 +110,7 @@ func (s *UserService) Register(ctx context.Context, input RegisterInput) (*AuthR
 	}
 
 	user := &User{
+		Name:           strings.TrimSpace(input.Name),
 		Email:          email,
 		PasswordHash:   &hashed,
 		Role:           RoleCustomer,
@@ -242,6 +243,7 @@ func (s *UserService) VerifyOTP(ctx context.Context, input VerifyOTPInput) (*Aut
 		}
 		// First sign-in for this number: create a phone-only customer account.
 		user = &User{
+			Name:           strings.TrimSpace(input.Name),
 			Phone:          &phone,
 			Role:           RoleCustomer,
 			Locale:         "en",

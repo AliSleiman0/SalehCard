@@ -46,6 +46,7 @@ class AuthRemoteDataSource {
     required String phone,
     required String code,
     String? password,
+    String? name,
   }) async {
     final response = await _dio.post<dynamic>(
       '/auth/otp/verify',
@@ -53,6 +54,7 @@ class AuthRemoteDataSource {
         'phone': phone,
         'code': code,
         if (password != null && password.isNotEmpty) 'password': password,
+        if (name != null && name.isNotEmpty) 'name': name,
       },
     );
     return AuthResponseDto.fromJson(unwrap(response) as Map<String, dynamic>);

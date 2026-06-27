@@ -12,11 +12,12 @@ import '../providers.dart';
 /// Profile screen (`/profile`). Watches [profileProvider] (`GET /users/me`).
 ///
 /// Two states toggled by the AppBar action:
-///  - **view**: read-only account header (avatar + email), info rows, and the
-///    saved player IDs as plain rows (or an [EmptyState] when none).
+///  - **view**: read-only account header (avatar + name + email), info rows, and
+///    the saved player IDs as plain rows (or an [EmptyState] when none).
 ///  - **editing**: add a player ID (field + button) and remove existing ones
 ///    (chips with a delete affordance), then a sticky "Save changes" CTA that
-///    `PATCH`es `savedPlayerIds`. Email is read-only (the backend has no name).
+///    `PATCH`es `savedPlayerIds`. Name/email are read-only here (name is set at
+///    signup).
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -142,13 +143,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: ListView(
                 padding: const EdgeInsetsDirectional.fromSTEB(20, 18, 20, 24),
                 children: [
-                  _AccountHeader(email: user.email),
+                  _AccountHeader(name: user.name, email: user.email),
                   const SizedBox(height: 22),
                   _SectionLabel(l10n.accountInfo),
                   const SizedBox(height: 10),
                   _InfoCard(
                     rows: [
-                      _InfoRow(label: l10n.emailLabel, value: user.email),
+                      if (user.name.isNotEmpty)
+                        _InfoRow(label: l10n.nameLabel, value: user.name),
+                      if (user.email.isNotEmpty)
+                        _InfoRow(label: l10n.emailLabel, value: user.email),
+                      if (user.phone != null && user.phone!.isNotEmpty)
+                        _InfoRow(label: l10n.mobileNumberLabel, value: user.phone!),
                       _InfoRow(label: l10n.roleLabel, value: user.role),
                     ],
                   ),
@@ -202,19 +208,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 }
 
 class _AccountHeader extends StatelessWidget {
-  const _AccountHeader({required this.email});
+  const _AccountHeader({required this.name, required this.email});
 
+  final String name;
   final String email;
 
   String get _initials {
-    final trimmed = email.trim();
-    if (trimmed.isEmpty) return '?';
-    return trimmed.substring(0, 1).toUpperCase();
+    final source = name.trim().isNotEmpty ? name.trim() : email.trim();
+    if (source.isEmpty) return '?';
+    return source.substring(0, 1).toUpperCase();
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final primary = name.trim().isNotEmpty ? name.trim() : email;
+    final hasSecondary = name.trim().isNotEmpty && email.isNotEmpty;
     return Row(
       children: [
         Container(
@@ -233,10 +242,24 @@ class _AccountHeader extends StatelessWidget {
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: Text(
-            email,
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w800, color: colors.text),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                primary,
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: colors.text),
+              ),
+              if (hasSecondary) ...[
+                const SizedBox(height: 3),
+                Text(
+                  email,
+                  style: TextStyle(fontSize: 13.5, color: colors.textDim),
+                ),
+              ],
+            ],
           ),
         ),
       ],

@@ -354,6 +354,40 @@ func (r *MongoRepository) FulfillmentBreakdown(ctx context.Context) (map[string]
 	return out, nil
 }
 
+// SoldByProduct returns a map of product id (hex) -> total units sold, summed
+// from the line-item quantities of completed orders. Products with no completed
+// sales are simply absent from the map (the caller defaults them to 0). It is
+// a read model for the admin product list's "Sold" column; kept off the Service
+// interface (the admin handler holds the concrete repo) to avoid touching the
+// order Service fakes in order_test.go.
+func (r *MongoRepository) SoldByProduct(ctx context.Context) (map[string]int, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{{Key: "status", Value: OrderStatusCompleted}}}},
+		{{Key: "$unwind", Value: "$items"}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$items.productId"},
+			{Key: "qty", Value: bson.D{{Key: "$sum", Value: "$items.qty"}}},
+		}}},
+	}
+	cur, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var rows []struct {
+		ProductID bson.ObjectID `bson:"_id"`
+		Qty       int           `bson:"qty"`
+	}
+	if err := cur.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]int, len(rows))
+	for _, row := range rows {
+		out[row.ProductID.Hex()] = row.Qty
+	}
+	return out, nil
+}
+
 // revBucket is one column of the revenue chart: a [start, end) window in the
 // business timezone plus its display label.
 type revBucket struct {

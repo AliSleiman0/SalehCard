@@ -19,17 +19,23 @@ class AccountMenuScreen extends ConsumerWidget {
     final colors = context.colors;
     final isAr = ref.watch(localeControllerProvider).languageCode == 'ar';
     final isDark = ref.watch(themeControllerProvider) == ThemeMode.dark;
-    final email = ref.watch(authControllerProvider).user?.email ?? '';
+    final user = ref.watch(authControllerProvider).user;
+    final name = user?.name ?? '';
+    final email = user?.email ?? '';
+    // Prefer the name; fall back to phone for phone-OTP accounts without email.
+    final identity = name.isNotEmpty ? name : email;
+    final subtitle = name.isNotEmpty ? (email.isNotEmpty ? email : (user?.phone ?? '')) : '';
 
     return Scaffold(
       backgroundColor: colors.bg,
       appBar: AppBar(title: Text(l10n.navMenu)),
       body: ListView(
         children: [
-          if (email.isNotEmpty)
+          if (identity.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.person_outline_rounded),
-              title: Text(email),
+              title: Text(identity),
+              subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
             ),
           const Divider(height: 1),
           ListTile(

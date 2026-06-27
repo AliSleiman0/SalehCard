@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -17,10 +17,13 @@ import {
   ffKey,
   type FfKey,
 } from '@/components'
+import { downloadCsv } from '@/lib/utils'
 import { useBulk } from '@/hooks/useBulk'
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useProducts, useDeleteProduct, useBulkProductAction } from '../hooks/useProducts'
+import { useSoldByProduct } from '../hooks/useSoldByProduct'
+import { listProducts, type ProductListParams } from '../api/products'
 import { productStatus, priceRange } from '../lib/view'
 import type { FulfillmentType, Product } from '@/types'
 
@@ -29,6 +32,8 @@ const FF_DOT: Record<FfKey, string> = {
   credit: 'var(--ff-credit)',
   transfer: 'var(--ff-transfer)',
 }
+
+type StatusFilter = 'all' | 'active' | 'draft' | 'out'
 
 function toFulfillment(ff: FfKey): FulfillmentType {
   return ff === 'credit' ? 'account_credit' : ff === 'transfer' ? 'transfer' : 'code'
@@ -39,22 +44,50 @@ export default function ProductListPage() {
   const navigate = useNavigate()
   const [ff, setFf] = useState<'all' | FfKey>('all')
   const [cat, setCat] = useState('all')
+  const [status, setStatus] = useState<StatusFilter>('all')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
 
-  const { data, isLoading, isError, refetch } = useProducts({
+  // Debounce search so we issue one request per pause, not per keystroke; reset
+  // to page 1 on each new term.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Filters shared by the list query and the CSV export (page is added per call).
+  const filters: ProductListParams = {
     category: cat === 'all' ? undefined : cat,
     fulfillmentType: ff === 'all' ? undefined : toFulfillment(ff),
-    search: search.trim() || undefined,
-    limit: 100,
-  })
+    status: status === 'all' ? undefined : status,
+    search: debouncedSearch.trim() || undefined,
+  }
+
+  const { data, isLoading, isError, refetch } = useProducts({ ...filters, page })
   const del = useDeleteProduct()
   const bulkAction = useBulkProductAction()
   const { data: catsRes } = useProductCategories()
+  const { data: soldRes } = useSoldByProduct()
   const cats = catsRes?.data ?? []
+  const sold = soldRes?.data ?? {}
 
   const rows: Product[] = data?.data ?? []
+  const meta = data?.meta
   const ids = rows.map((r) => r.id)
   const bulk = useBulk(ids)
+
+  // Reset to page 1 whenever a non-search filter changes (search resets via its debounce).
+  const onFilter =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v)
+      setPage(1)
+    }
 
   const stockCell = (p: Product) => {
     const ff = ffKey(p.fulfillmentType)
@@ -83,15 +116,57 @@ export default function ProductListPage() {
     bulkAction.mutate({ ids: bulk.sel, action }, { onSuccess: () => bulk.clear() })
   }
 
+  // Export every product matching the current filters (across all pages — the
+  // backend caps limit at 100, so page through to total). CSV mirrors the table.
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const all: Product[] = []
+      let p = 1
+      let pages = 1
+      do {
+        const res = await listProducts({ ...filters, page: p, limit: 100 })
+        all.push(...(res.data ?? []))
+        pages = res.meta?.pages ?? 1
+        p++
+      } while (p <= pages)
+
+      const header = ['Name', 'ID', 'Category', 'Type', 'Variants', 'Stock', 'Price min', 'Price max', 'Sold', 'Status']
+      const csvRows = all.map((pr) => {
+        const prices = pr.variants.map((v) => v.price)
+        const min = prices.length ? Math.min(...prices) : 0
+        const max = prices.length ? Math.max(...prices) : 0
+        return [
+          pr.title.en,
+          pr.id,
+          pr.category,
+          ffKey(pr.fulfillmentType),
+          pr.variants.length,
+          pr.stock,
+          min.toFixed(2),
+          max.toFixed(2),
+          sold[pr.id] ?? 0,
+          productStatus(pr),
+        ]
+      })
+      downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="page page-wide">
       <PageHead
         crumbs={[t('grp_catalog'), t('nav_products')]}
         title={t('nav_products')}
-        sub={`${rows.length} products${cat !== 'all' || ff !== 'all' || search ? ' (filtered)' : ''}`}
+        sub={`${(meta?.total ?? 0).toLocaleString()} products${
+          cat !== 'all' || ff !== 'all' || status !== 'all' || debouncedSearch ? ' (filtered)' : ''
+        }`}
       >
-        <button className="abtn">
-          <Icon name="download" size={15} /> {t('export')}
+        <button className="abtn" onClick={handleExport} disabled={exporting}>
+          <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
         </button>
         <button className="abtn primary" onClick={() => navigate('/products/new')}>
           <Icon name="plus" size={15} /> {t('new_product')}
@@ -108,13 +183,23 @@ export default function ProductListPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select className="select" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <select className="select" value={cat} onChange={(e) => onFilter(setCat)(e.target.value)}>
             <option value="all">All categories</option>
             {cats.map((c) => (
               <option key={c.value} value={c.value}>
                 {categoryLabel(c.value)}
               </option>
             ))}
+          </select>
+          <select
+            className="select"
+            value={status}
+            onChange={(e) => onFilter(setStatus)(e.target.value as StatusFilter)}
+          >
+            <option value="all">{t('all')} {t('status').toLowerCase()}</option>
+            <option value="active">{t('active')}</option>
+            <option value="draft">{t('draft')}</option>
+            <option value="out">{t('out_of_stock')}</option>
           </select>
           <div className="chiprow">
             {(
@@ -128,17 +213,13 @@ export default function ProductListPage() {
               <Chip
                 key={k}
                 on={ff === k}
-                onClick={() => setFf(k as 'all' | FfKey)}
+                onClick={() => onFilter(setFf)(k as 'all' | FfKey)}
                 dotColor={k !== 'all' ? FF_DOT[k as FfKey] : undefined}
               >
                 {l}
               </Chip>
             ))}
           </div>
-          <div className="tb-spacer" />
-          <button className="abtn sm">
-            <Icon name="filter" size={14} /> {t('filter')}
-          </button>
         </div>
 
         {bulk.some && (
@@ -208,7 +289,7 @@ export default function ProductListPage() {
                     <td className="num">{p.variants.length}</td>
                     <td>{stockCell(p)}</td>
                     <td className="num strong">{priceRange(p) === '—' ? <span className="faint">—</span> : '$' + priceRange(p)}</td>
-                    <td className="num muted">{p.ratings.count ? p.ratings.count.toLocaleString() : '—'}</td>
+                    <td className="num muted">{sold[p.id] ? sold[p.id].toLocaleString() : '—'}</td>
                     <td>
                       <StatusBadge s={productStatus(p)} />
                     </td>
@@ -233,7 +314,15 @@ export default function ProductListPage() {
             </table>
           </div>
         )}
-        <Pagination total={data?.meta?.total ?? rows.length} pages={data?.meta?.pages ?? 1} shown={rows.length} label="products" />
+        <Pagination
+          page={meta?.page ?? 1}
+          pages={meta?.pages ?? 1}
+          total={meta?.total ?? rows.length}
+          shown={rows.length}
+          limit={meta?.limit}
+          label="products"
+          onPage={setPage}
+        />
       </div>
     </div>
   )

@@ -17,7 +17,12 @@ const ResellerDetailPage = lazy(() => import('@/features/resellers/pages/Reselle
 const FinancePage = lazy(() => import('@/features/finance/pages/FinancePage'))
 const PromoListPage = lazy(() => import('@/features/promos/pages/PromoListPage'))
 const PromoEditPage = lazy(() => import('@/features/promos/pages/PromoEditPage'))
+const OffersListPage = lazy(() => import('@/features/offers/pages/OffersListPage'))
+const OffersEditPage = lazy(() => import('@/features/offers/pages/OffersEditPage'))
+const ExpensesListPage = lazy(() => import('@/features/expenses/pages/ExpensesListPage'))
+const ExpenseEditPage = lazy(() => import('@/features/expenses/pages/ExpenseEditPage'))
 const ReviewsPage = lazy(() => import('@/features/reviews/pages/ReviewsPage'))
+const KycPage = lazy(() => import('@/features/kyc/pages/KycPage'))
 const SettingsPage = lazy(() => import('@/features/settings/pages/SettingsPage'))
 const NotFoundPage = lazy(() => import('@/features/misc/NotFoundPage'))
 
@@ -47,7 +52,14 @@ export default function AppRouter() {
         <Route path="/promos" element={<PromoListPage />} />
         <Route path="/promos/new" element={<PromoEditPage />} />
         <Route path="/promos/:id/edit" element={<PromoEditPage />} />
+        <Route path="/offers" element={<OffersListPage />} />
+        <Route path="/offers/new" element={<OffersEditPage />} />
+        <Route path="/offers/:id/edit" element={<OffersEditPage />} />
+        <Route path="/expenses" element={<ExpensesListPage />} />
+        <Route path="/expenses/new" element={<ExpenseEditPage />} />
+        <Route path="/expenses/:id/edit" element={<ExpenseEditPage />} />
         <Route path="/reviews" element={<ReviewsPage />} />
+        <Route path="/kyc" element={<KycPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -26,8 +26,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  bool _balanceHidden = false;
-
   void _comingSoon() {
     final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -64,12 +62,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _SearchBar(hint: l10n.searchHint, onTap: _comingSoon),
                   const SizedBox(height: 16),
                   _WalletCard(
-                    balanceText:
-                        _balanceHidden ? '••••••' : formatUsd(balance),
-                    hidden: _balanceHidden,
-                    onToggle: () =>
-                        setState(() => _balanceHidden = !_balanceHidden),
-                    onPill: _comingSoon,
+                    balanceText: formatUsd(balance),
                     onTap: () => context.push('/wallet'),
                     l10n: l10n,
                   ),
@@ -299,17 +292,11 @@ class _SearchBar extends StatelessWidget {
 class _WalletCard extends StatelessWidget {
   const _WalletCard({
     required this.balanceText,
-    required this.hidden,
-    required this.onToggle,
-    required this.onPill,
     required this.onTap,
     required this.l10n,
   });
 
   final String balanceText;
-  final bool hidden;
-  final VoidCallback onToggle;
-  final VoidCallback onPill;
   final VoidCallback onTap;
   final AppLocalizations l10n;
 
@@ -364,84 +351,22 @@ class _WalletCard extends StatelessWidget {
               const Icon(Icons.wifi_rounded, color: Colors.white70, size: 22),
             ],
           ),
-          Container(
-            margin: const EdgeInsets.only(top: 18),
-            width: 38,
-            height: 27,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFF4D98B), Color(0xFFC9A24B)],
-              ),
-              borderRadius: BorderRadius.circular(6),
-            ),
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 22),
           Text(l10n.totalBalance,
               style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 13,
                   fontWeight: FontWeight.w500)),
-          const SizedBox(height: 5),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: onToggle,
-                child: Icon(
-                  hidden
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                balanceText,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-            Row(
-              children: [
-                _CardPill(label: l10n.requestPhysicalCard, onTap: onPill),
-                const SizedBox(width: 10),
-                _CardPill(label: l10n.cardInfo, onTap: onPill),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CardPill extends StatelessWidget {
-  const _CardPill({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        decoration: BoxDecoration(
-          color: Colors.white24,
-          borderRadius: BorderRadius.circular(AppTokens.rPill),
-        ),
-        child: Text(label,
+          const SizedBox(height: 6),
+          Text(
+            balanceText,
             style: const TextStyle(
                 color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w700)),
+                fontSize: 28,
+                fontWeight: FontWeight.w800),
+          ),
+          ],
+        ),
       ),
     );
   }

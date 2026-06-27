@@ -170,6 +170,12 @@ abstract class AppLocalizations {
   /// **'No products available.'**
   String get emptyCatalog;
 
+  /// No description provided for @offersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No offers right now. Check back soon.'**
+  String get offersEmpty;
+
   /// No description provided for @productDetailUnavailable.
   ///
   /// In en, this message translates to:
@@ -241,6 +247,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Verify'**
   String get verifyButton;
+
+  /// No description provided for @nameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get nameLabel;
+
+  /// No description provided for @nameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name'**
+  String get nameHint;
+
+  /// No description provided for @nameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter your name.'**
+  String get nameRequired;
 
   /// No description provided for @mobileNumberLabel.
   ///
@@ -415,6 +439,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cart'**
   String get navCart;
+
+  /// No description provided for @navOffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Offers'**
+  String get navOffers;
 
   /// No description provided for @navMenu.
   ///
@@ -1177,6 +1207,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Full name'**
   String get kycFullNameLabel;
+
+  /// No description provided for @kycDobLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Date of birth'**
+  String get kycDobLabel;
+
+  /// No description provided for @kycDobHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your date of birth'**
+  String get kycDobHint;
+
+  /// No description provided for @kycPlaceOfBirthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Place of birth'**
+  String get kycPlaceOfBirthLabel;
+
+  /// No description provided for @kycPlaceOfResidenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Place of residence'**
+  String get kycPlaceOfResidenceLabel;
+
+  /// No description provided for @kycPlaceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'City, country'**
+  String get kycPlaceHint;
 
   /// No description provided for @kycDocTypeLabel.
   ///

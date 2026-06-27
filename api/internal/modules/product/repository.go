@@ -163,7 +163,11 @@ func (r *MongoRepository) FindAll(ctx context.Context, f ListFilter, p paginatio
 	opts := options.Find().
 		SetSkip(skip).
 		SetLimit(limit).
-		SetSort(bson.D{{Key: "createdAt", Value: -1}})
+		// _id is a tiebreaker so the sort is a total order: bulk-imported products
+		// share a createdAt to the millisecond, and createdAt alone is not stable
+		// across separate skip/limit queries — without this, paging duplicates and
+		// skips rows at page boundaries.
+		SetSort(bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}})
 
 	cursor, err := r.col.Find(ctx, filter, opts)
 	if err != nil {
@@ -310,6 +314,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 	p := Product{
 		ID:                  bson.NewObjectID(),
 		Title:               in.Title,
+		Description:         in.Description,
 		Category:            in.Category,
 		Images:              in.Images,
 		Variants:            variants,
@@ -434,6 +439,9 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 
 	if in.Title != nil {
 		set = append(set, bson.E{Key: "title", Value: in.Title})
+	}
+	if in.Description != nil {
+		set = append(set, bson.E{Key: "description", Value: *in.Description})
 	}
 	if in.Category != nil {
 		set = append(set, bson.E{Key: "category", Value: *in.Category})

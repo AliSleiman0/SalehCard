@@ -7,11 +7,16 @@ class User {
     required this.locale,
     required this.walletBalance,
     required this.loyaltyPoints,
+    this.name = '',
     this.phone,
     this.savedPlayerIds = const [],
   });
 
   final String id;
+
+  /// Display name captured at signup; empty for accounts created before names
+  /// were collected.
+  final String name;
   final String email;
 
   /// E.164 phone for phone-OTP accounts; null for email-only accounts.
