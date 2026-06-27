@@ -33,6 +33,16 @@ func (f *fakeUserRepo) FindByID(_ context.Context, id bson.ObjectID) (*User, err
 	return nil, apperrors.ErrNotFound
 }
 
+func (f *fakeUserRepo) FindByIDs(_ context.Context, ids []bson.ObjectID) ([]*User, error) {
+	out := []*User{}
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeUserRepo) FindByEmail(_ context.Context, email string) (*User, error) {
 	if u, ok := f.byEmail[normalizeEmail(email)]; ok {
 		return u, nil

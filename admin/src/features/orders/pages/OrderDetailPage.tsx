@@ -1,45 +1,64 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Icon, PageHead, Art, Avatar, FfBadge, StatusBadge, PayChip, Modal, ComingSoonNote } from '@/components'
+import {
+  Icon,
+  PageHead,
+  Art,
+  Avatar,
+  FfBadge,
+  StatusBadge,
+  PayChip,
+  Modal,
+  LoadingSpinner,
+  ErrorState,
+} from '@/components'
 import { money } from '@/lib/utils'
-import { orders } from '@/lib/mock/demo'
+import { useOrder } from '../hooks/useOrders'
+import { adaptOrder } from '../lib/adaptOrder'
 
 export default function OrderDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
-  // TODO: wire to GET /api/admin/orders/:id (mock; backend route stubbed 501).
-  const o = orders.find((x) => x.id === id) || orders[0]
+  const { data, isLoading, isError, refetch } = useOrder(id)
   const [masked, setMasked] = useState(true)
   const [refundOpen, setRefundOpen] = useState(false)
-  const [tStatus, setTStatus] = useState<'processing' | 'completed'>('processing')
+
+  if (isLoading) return <div className="page"><LoadingSpinner /></div>
+  if (isError || !data?.data) {
+    return (
+      <div className="page">
+        <ErrorState message="Couldn't load this order." onRetry={() => refetch()} />
+      </div>
+    )
+  }
+
+  const o = data.data
+  const v = adaptOrder(o)
+  const item = o.items[0]
+  const refundable = o.status !== 'refunded' && o.status !== 'failed'
 
   return (
     <div className="page">
       <PageHead
-        crumbs={[t('nav_orders'), o.id]}
+        crumbs={[t('nav_orders'), v.id.slice(-8)]}
         title={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-            Order {o.id} <StatusBadge s={o.status} />
+            Order {v.id.slice(-8)} <StatusBadge s={v.status} />
           </span>
         }
-        sub={`Placed ${o.date} · ${o.customer}`}
+        sub={`Placed ${v.date} · ${v.customer}`}
       >
         <button className="abtn" onClick={() => navigate('/orders')}>
           <Icon name="chevleft" size={15} /> {t('back')}
         </button>
-        <button className="abtn">
-          <Icon name="download" size={15} /> Invoice
-        </button>
-        {o.status !== 'refunded' && o.status !== 'failed' && (
+        {refundable && (
           <button className="abtn danger" onClick={() => setRefundOpen(true)}>
             <Icon name="refresh" size={15} /> {t('refund')}
           </button>
         )}
       </PageHead>
-
-      <ComingSoonNote mock />
 
       <div className="formgrid">
         <div className="fieldset">
@@ -48,26 +67,29 @@ export default function OrderDetailPage() {
               <Icon name="bag" size={17} />
               <h3>Items</h3>
               <div className="ph-act">
-                <FfBadge ff={o.ff} />
+                <FfBadge ff={v.ff} />
               </div>
             </div>
-            <div style={{ padding: 18 }}>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                <Art art={o.art} size={56} radius={12} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>{o.product}</div>
-                  <div className="faint" style={{ fontSize: 12.5 }}>
-                    Qty {o.qty} · {o.cur}
+            <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {o.items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                  <Art art={v.art} size={56} radius={12} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15 }}>{it.title.en}</div>
+                    <div className="faint" style={{ fontSize: 12.5 }}>
+                      Qty {it.qty} · {o.currency}
+                      {it.denomination ? ` · ${it.denomination}` : ''}
+                    </div>
+                  </div>
+                  <div className="num strong" style={{ fontSize: 16 }}>
+                    {money(it.price * it.qty, v.cur)}
                   </div>
                 </div>
-                <div className="num strong" style={{ fontSize: 16 }}>
-                  {money(o.amount, o.cur)}
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
-          {o.ff === 'code' && (
+          {v.ff === 'code' && (
             <div className="acard" style={{ borderColor: 'var(--ff-code-bd)' }}>
               <div className="panelhead">
                 <span className="bdg ff-code">
@@ -75,44 +97,29 @@ export default function OrderDetailPage() {
                   Code delivery
                 </span>
                 <div className="ph-act">
-                  <span className="st st-ok">
+                  <span className={o.fulfillment.deliveredCode ? 'st st-ok' : 'st st-warn'}>
                     <i className="d" />
-                    Delivered
+                    {o.fulfillment.deliveredCode ? 'Delivered' : 'Pending'}
                   </span>
                 </div>
               </div>
               <div style={{ padding: 18 }}>
                 <label className="alabel">Delivered code (admin view)</label>
                 <div className={'avault' + (masked ? ' masked' : '')}>
-                  <span className="vc">X3K9 — 7F2P — QW41 — 8N6R</span>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="abtn xs" onClick={() => setMasked(!masked)}>
-                      <Icon name={masked ? 'eye' : 'eyeoff'} size={13} /> {masked ? 'Reveal' : 'Hide'}
-                    </button>
-                    <button className="abtn xs">
-                      <Icon name="copy" size={13} /> Copy
-                    </button>
-                  </div>
-                </div>
-                <div className="deflist" style={{ marginTop: 8 }}>
-                  <div className="defrow">
-                    <span className="dk">Code ID</span>
-                    <span className="dv mono">CODE-88241</span>
-                  </div>
-                  <div className="defrow">
-                    <span className="dk">Delivered at</span>
-                    <span className="dv">Jun 3, 2026 · 14:08</span>
-                  </div>
-                  <div className="defrow">
-                    <span className="dk">Delivery channel</span>
-                    <span className="dv">In-app vault + email</span>
-                  </div>
+                  <span className="vc">{o.fulfillment.deliveredCode || '— not yet delivered —'}</span>
+                  {o.fulfillment.deliveredCode && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="abtn xs" onClick={() => setMasked(!masked)}>
+                        <Icon name={masked ? 'eye' : 'eyeoff'} size={13} /> {masked ? 'Reveal' : 'Hide'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {o.ff === 'credit' && (
+          {v.ff === 'credit' && (
             <div className="acard" style={{ borderColor: 'var(--ff-credit-bd)' }}>
               <div className="panelhead">
                 <span className="bdg ff-credit">
@@ -120,9 +127,9 @@ export default function OrderDetailPage() {
                   Account credit
                 </span>
                 <div className="ph-act">
-                  <span className="st st-ok">
+                  <span className={o.status === 'completed' ? 'st st-ok' : 'st st-warn'}>
                     <i className="d" />
-                    Credited
+                    {o.status === 'completed' ? 'Credited' : 'Processing'}
                   </span>
                 </div>
               </div>
@@ -130,49 +137,18 @@ export default function OrderDetailPage() {
                 <div className="deflist">
                   <div className="defrow">
                     <span className="dk">Player / Account ID</span>
-                    <span className="dv mono">5521 8842 1190</span>
+                    <span className="dv mono">{item?.playerId || o.fulfillment.creditedToId || '—'}</span>
                   </div>
                   <div className="defrow">
-                    <span className="dk">Provider</span>
-                    <span className="dv">Direct API · Midasbuy</span>
+                    <span className="dk">Amount</span>
+                    <span className="dv">{money(o.total, v.cur)}</span>
                   </div>
-                  <div className="defrow">
-                    <span className="dk">Amount credited</span>
-                    <span className="dv">660 UC</span>
-                  </div>
-                  <div className="defrow">
-                    <span className="dk">Confirmation</span>
-                    <span className="dv">
-                      <span className="st st-ok">
-                        <i className="d" />
-                        Confirmed · ref MB-44128
-                      </span>
-                    </span>
-                  </div>
-                  <div className="defrow">
-                    <span className="dk">Credited at</span>
-                    <span className="dv">Jun 3, 2026 · 14:08</span>
-                  </div>
-                </div>
-                <div
-                  style={{
-                    marginTop: 14,
-                    padding: 12,
-                    background: 'var(--ff-credit-bg)',
-                    borderRadius: 'var(--ar-sm)',
-                    fontSize: 12.5,
-                    color: 'var(--text-dim)',
-                    display: 'flex',
-                    gap: 8,
-                  }}
-                >
-                  <Icon name="bolt" size={15} /> No code needed — balance credited directly to the player account.
                 </div>
               </div>
             </div>
           )}
 
-          {o.ff === 'transfer' && (
+          {v.ff === 'transfer' && (
             <div className="acard" style={{ borderColor: 'var(--ff-transfer-bd)' }}>
               <div className="panelhead">
                 <span className="bdg ff-transfer">
@@ -180,70 +156,29 @@ export default function OrderDetailPage() {
                   Money transfer
                 </span>
                 <div className="ph-act">
-                  <span className="st st-warn">
-                    <i className="d" />
-                    Processing
-                  </span>
+                  <StatusBadge s={v.status} />
                 </div>
               </div>
               <div style={{ padding: 18 }}>
-                <div className="g2" style={{ alignItems: 'start' }}>
-                  <div className="timeline">
-                    {(
-                      [
-                        ['Submitted', 'Jun 5 · 09:02', 'done'],
-                        ['Processing', 'Jun 5 · 09:14', tStatus === 'processing' ? 'active' : 'done'],
-                        ['Completed', tStatus === 'completed' ? 'Just now' : 'Pending', tStatus === 'completed' ? 'done' : 'todo'],
-                      ] as [string, string, string][]
-                    ).map(([title, sub, st], i) => (
-                      <div className={'tlitem ' + st} key={i}>
-                        <div className="tldot">
-                          <Icon name={st === 'todo' ? 'clock' : 'check'} size={14} />
-                        </div>
-                        <div className="tlbody">
-                          <b>{title}</b>
-                          <span>{sub}</span>
-                        </div>
-                      </div>
-                    ))}
+                <div className="deflist">
+                  <div className="defrow">
+                    <span className="dk">Reference</span>
+                    <span className="dv mono">{o.fulfillment.transferRef || '—'}</span>
                   </div>
-                  <div>
-                    <div className="deflist">
-                      <div className="defrow">
-                        <span className="dk">Reference</span>
-                        <span className="dv mono">WU-7741-2290</span>
-                      </div>
-                      <div className="defrow">
-                        <span className="dk">Recipient</span>
-                        <span className="dv">Ahmad Saleh</span>
-                      </div>
-                      <div className="defrow">
-                        <span className="dk">Country</span>
-                        <span className="dv">Jordan 🇯🇴</span>
-                      </div>
-                    </div>
+                  <div className="defrow">
+                    <span className="dk">Recipient</span>
+                    <span className="dv">{item?.recipient?.name || '—'}</span>
+                  </div>
+                  <div className="defrow">
+                    <span className="dk">Country</span>
+                    <span className="dv">{item?.recipient?.country || '—'}</span>
                   </div>
                 </div>
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                   <label className="alabel">Manually update transfer status</label>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <div className="aseg">
-                      {(
-                        [
-                          ['processing', 'Processing'],
-                          ['completed', 'Completed'],
-                        ] as ['processing' | 'completed', string][]
-                      ).map(([k, l]) => (
-                        <button key={k} className={tStatus === k ? 'on' : ''} onClick={() => setTStatus(k)}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                    <button className="abtn sm primary">
-                      <Icon name="check" size={14} /> Update &amp; notify customer
-                    </button>
+                  <div className="ahint">
+                    <Icon name="clock" size={13} /> Manual status updates are coming soon (not yet implemented).
                   </div>
-                  <div className="ahint">Transfer is the one fulfillment type that may need manual intervention.</div>
                 </div>
               </div>
             </div>
@@ -256,21 +191,21 @@ export default function OrderDetailPage() {
             </div>
             <div style={{ padding: 18 }}>
               <div className="timeline">
-                {(
-                  [
-                    ['Order placed', o.date, 'done', 'bag'],
-                    ['Payment captured', o.date, 'done', 'card'],
-                    [
-                      o.status === 'refunded' ? 'Refund issued' : 'Fulfilled',
-                      o.date,
-                      o.status === 'failed' ? 'todo' : 'done',
-                      o.status === 'refunded' ? 'refresh' : 'checkc',
-                    ],
-                  ] as [string, string, string, 'bag' | 'card' | 'refresh' | 'checkc'][]
-                ).map(([title, sub, st, ic], i) => (
+                {(o.fulfillment.statusTimeline?.length
+                  ? o.fulfillment.statusTimeline.map((e) => [e.status, e.note || v.date, 'done'] as [string, string, string])
+                  : ([
+                      ['Order placed', v.date, 'done'],
+                      ['Payment captured', v.date, 'done'],
+                      [
+                        o.status === 'refunded' ? 'Refund issued' : o.status === 'completed' ? 'Fulfilled' : 'In progress',
+                        v.date,
+                        o.status === 'failed' ? 'todo' : 'done',
+                      ],
+                    ] as [string, string, string][])
+                ).map(([title, sub, st], i) => (
                   <div className={'tlitem ' + st} key={i}>
                     <div className="tldot">
-                      <Icon name={ic} size={14} />
+                      <Icon name={st === 'todo' ? 'clock' : 'check'} size={14} />
                     </div>
                     <div className="tlbody">
                       <b>{title}</b>
@@ -288,16 +223,16 @@ export default function OrderDetailPage() {
             <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Customer</h3>
             <div style={{ display: 'flex', gap: 11, alignItems: 'center', marginBottom: 14 }}>
               <div style={{ transform: 'scale(1.3)', transformOrigin: 'left center' }}>
-                <Avatar name={o.customer} />
+                <Avatar name={v.customer} />
               </div>
               <div style={{ marginInlineStart: 8 }}>
-                <div style={{ fontWeight: 800 }}>{o.customer}</div>
+                <div style={{ fontWeight: 800 }}>{v.customer}</div>
                 <div className="faint" style={{ fontSize: 12.5 }}>
-                  {o.email}
+                  {v.email || o.customer?.phone || '—'}
                 </div>
               </div>
             </div>
-            <button className="abtn sm" style={{ width: '100%' }} onClick={() => navigate('/users/U-9001')}>
+            <button className="abtn sm" style={{ width: '100%' }} onClick={() => navigate(`/users/${o.userId}`)}>
               <Icon name="users" size={14} /> View customer profile
             </button>
           </div>
@@ -307,18 +242,12 @@ export default function OrderDetailPage() {
             <div className="deflist">
               <div className="defrow">
                 <span className="dk">Subtotal</span>
-                <span className="dv num">{money(o.amount, o.cur)}</span>
-              </div>
-              <div className="defrow">
-                <span className="dk">Discount</span>
-                <span className="dv num" style={{ color: 'var(--ok)' }}>
-                  −{money(0, o.cur)}
-                </span>
+                <span className="dv num">{money(o.subtotal, v.cur)}</span>
               </div>
               <div className="defrow">
                 <span className="dk">Method</span>
                 <span className="dv">
-                  <PayChip p={o.pay} />
+                  <PayChip p={v.pay} />
                 </span>
               </div>
               <div className="defrow">
@@ -326,7 +255,7 @@ export default function OrderDetailPage() {
                   Total
                 </span>
                 <span className="dv num" style={{ fontSize: 17 }}>
-                  {money(o.amount, o.cur)}
+                  {money(o.total, v.cur)}
                 </span>
               </div>
             </div>
@@ -335,13 +264,7 @@ export default function OrderDetailPage() {
           <div className="acard pad">
             <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Quick actions</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button className="abtn sm" style={{ justifyContent: 'flex-start' }}>
-                <Icon name="send" size={14} /> Resend delivery email
-              </button>
-              <button className="abtn sm" style={{ justifyContent: 'flex-start' }}>
-                <Icon name="copy" size={14} /> Copy order link
-              </button>
-              {o.status !== 'refunded' && (
+              {refundable && (
                 <button className="abtn sm danger" style={{ justifyContent: 'flex-start' }} onClick={() => setRefundOpen(true)}>
                   <Icon name="refresh" size={14} /> Initiate refund
                 </button>
@@ -369,41 +292,20 @@ export default function OrderDetailPage() {
                 <Icon name="refresh" size={20} />
               </div>
               <div>
-                <h3 style={{ fontSize: 17, fontWeight: 800 }}>Refund order {o.id}</h3>
+                <h3 style={{ fontSize: 17, fontWeight: 800 }}>Refund order {v.id.slice(-8)}</h3>
                 <div className="faint" style={{ fontSize: 12.5 }}>
-                  {money(o.amount, o.cur)} · {o.customer}
+                  {money(o.total, v.cur)} · {v.customer}
                 </div>
               </div>
             </div>
-            <label className="alabel" style={{ marginTop: 16 }}>
-              Refund to
-            </label>
-            <div className="g2">
-              <div className="chip on" style={{ justifyContent: 'center', padding: '11px' }}>
-                Store wallet
-              </div>
-              <div className="chip" style={{ justifyContent: 'center', padding: '11px' }}>
-                Original method
-              </div>
+            <div className="ahint" style={{ marginTop: 16 }}>
+              <Icon name="clock" size={13} /> Refunds aren't wired yet — this action is coming soon.
             </div>
-            <label className="alabel" style={{ marginTop: 14 }}>
-              Amount
-            </label>
-            <input className="afield" defaultValue={Math.abs(o.amount).toFixed(2)} />
-            <label className="alabel" style={{ marginTop: 14 }}>
-              Reason
-            </label>
-            <select className="select" style={{ width: '100%' }}>
-              <option>Customer request</option>
-              <option>Failed delivery</option>
-              <option>Duplicate order</option>
-              <option>Fraud / chargeback</option>
-            </select>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
               <button className="abtn" onClick={() => setRefundOpen(false)}>
                 {t('cancel')}
               </button>
-              <button className="abtn danger" onClick={() => setRefundOpen(false)}>
+              <button className="abtn danger" disabled title="Coming soon">
                 <Icon name="check" size={15} /> Confirm refund
               </button>
             </div>

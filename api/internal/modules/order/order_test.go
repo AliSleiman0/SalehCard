@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -83,12 +84,50 @@ func (f *fakeOrderRepo) UpdateFulfillment(_ context.Context, id bson.ObjectID, s
 	return apperrors.ErrNotFound
 }
 
-func (f *fakeOrderRepo) ListAll(_ context.Context, _ pagination.Params) ([]*Order, int64, error) {
+func (f *fakeOrderRepo) ListAll(_ context.Context, _ OrderFilter, _ pagination.Params) ([]*Order, int64, error) {
 	out := []*Order{}
 	for _, o := range f.byID {
 		out = append(out, o)
 	}
 	return out, int64(len(out)), nil
+}
+
+func (f *fakeOrderRepo) DayStats(_ context.Context, _ time.Time) (int, float64, error) {
+	return 0, 0, nil
+}
+
+func (f *fakeOrderRepo) CountByStatus(_ context.Context, status OrderStatus) (int64, error) {
+	var n int64
+	for _, o := range f.byID {
+		if o.Status == status {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeOrderRepo) CountPendingTransfers(_ context.Context) (int64, error) {
+	var n int64
+	for _, o := range f.byID {
+		if o.Status != OrderStatusProcessing {
+			continue
+		}
+		for _, it := range o.Items {
+			if it.FulfillmentType == "transfer" {
+				n++
+				break
+			}
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeOrderRepo) FulfillmentBreakdown(_ context.Context) (map[string]int, error) {
+	return map[string]int{}, nil
+}
+
+func (f *fakeOrderRepo) RevenueSeries(_ context.Context, _ string) ([]string, []float64, error) {
+	return []string{}, []float64{}, nil
 }
 
 // fakeProductSvc serves a fixed catalog; only FindByID is exercised.

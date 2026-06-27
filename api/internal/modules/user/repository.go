@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 // Repository defines persistence operations for the User entity.
 type Repository interface {
 	FindByID(ctx context.Context, id bson.ObjectID) (*User, error)
+	FindByIDs(ctx context.Context, ids []bson.ObjectID) ([]*User, error)
 	FindByEmail(ctx context.Context, email string) (*User, error)
 	FindByPhone(ctx context.Context, phone string) (*User, error)
 	Create(ctx context.Context, user *User) error
@@ -97,6 +99,48 @@ func (r *MongoRepository) FindByID(ctx context.Context, id bson.ObjectID) (*User
 		return nil, err
 	}
 	return &u, nil
+}
+
+// FindByIDs retrieves users for the given ObjectIDs in a single query. Missing
+// IDs are simply omitted from the result; the order is not guaranteed. An empty
+// input returns an empty slice without touching the database.
+func (r *MongoRepository) FindByIDs(ctx context.Context, ids []bson.ObjectID) ([]*User, error) {
+	if len(ids) == 0 {
+		return []*User{}, nil
+	}
+	cur, err := r.collection.Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	out := []*User{}
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// FindByEmailLike returns users whose email contains q (case-insensitive). Used
+// by admin order search. An empty/whitespace term returns an empty slice.
+func (r *MongoRepository) FindByEmailLike(ctx context.Context, q string) ([]*User, error) {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return []*User{}, nil
+	}
+	pattern := regexp.QuoteMeta(strings.ToLower(q))
+	cur, err := r.collection.Find(ctx, bson.D{{Key: "email", Value: bson.D{
+		{Key: "$regex", Value: pattern},
+		{Key: "$options", Value: "i"},
+	}}})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	out := []*User{}
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // FindByEmail retrieves a user by (normalized) email, returning ErrNotFound when absent.
