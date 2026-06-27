@@ -9,6 +9,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
+	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -102,6 +103,32 @@ func (f *fakeUserRepo) SetPassword(_ context.Context, id bson.ObjectID, hash str
 func (f *fakeUserRepo) Delete(_ context.Context, id bson.ObjectID) error {
 	delete(f.byID, id)
 	return nil
+}
+
+func (f *fakeUserRepo) ListAll(_ context.Context, _ UserFilter, _ pagination.Params) ([]*User, int64, error) {
+	out := make([]*User, 0, len(f.byID))
+	for _, u := range f.byID {
+		out = append(out, u)
+	}
+	return out, int64(len(out)), nil
+}
+
+func (f *fakeUserRepo) UpdateRole(_ context.Context, id bson.ObjectID, role Role) (*User, error) {
+	u, ok := f.byID[id]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	u.Role = role
+	return u, nil
+}
+
+func (f *fakeUserRepo) UpdateStatus(_ context.Context, id bson.ObjectID, status Status) (*User, error) {
+	u, ok := f.byID[id]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	u.Status = status
+	return u, nil
 }
 
 // fakeOTPRepo is a single-record-per-phone in-memory OTPRepository.
@@ -256,6 +283,31 @@ func TestLogin_UnknownEmailIsUnauthorized(t *testing.T) {
 	svc, _, _ := newTestService()
 	_, err := svc.Login(context.Background(), LoginInput{Email: "nobody@b.com", Password: "password123"})
 	assert.ErrorIs(t, err, apperrors.ErrUnauthorized)
+}
+
+func TestLogin_SuspendedIsForbidden(t *testing.T) {
+	svc, repo, _ := newTestService()
+	_, err := svc.Register(context.Background(), RegisterInput{Email: "a@b.com", Password: "password123"})
+	require.NoError(t, err)
+
+	// Suspend the account, then a correct-credential login must be rejected as
+	// forbidden (not unauthorized) — the credentials are valid, the account is not.
+	repo.byEmail["a@b.com"].Status = StatusSuspended
+
+	_, err = svc.Login(context.Background(), LoginInput{Email: "a@b.com", Password: "password123"})
+	assert.ErrorIs(t, err, apperrors.ErrForbidden)
+	assert.ErrorIs(t, err, ErrAccountSuspended)
+}
+
+func TestRefresh_SuspendedIsForbidden(t *testing.T) {
+	svc, repo, _ := newTestService()
+	reg, err := svc.Register(context.Background(), RegisterInput{Email: "a@b.com", Password: "password123"})
+	require.NoError(t, err)
+
+	repo.byEmail["a@b.com"].Status = StatusSuspended
+
+	_, err = svc.Refresh(context.Background(), reg.RefreshToken)
+	assert.ErrorIs(t, err, apperrors.ErrForbidden)
 }
 
 func TestRefresh_RotatesAndRevokesOld(t *testing.T) {

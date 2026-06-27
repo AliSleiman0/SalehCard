@@ -22,6 +22,20 @@ import (
 // minPasswordLen is the minimum accepted password length.
 const minPasswordLen = 8
 
+// ErrAccountSuspended is returned by the auth flows when a suspended account
+// tries to sign in. It wraps ErrForbidden so the handler maps it to 403.
+var ErrAccountSuspended = &apperrors.AppError{
+	Code:    "ACCOUNT_SUSPENDED",
+	Message: "this account has been suspended",
+	Err:     apperrors.ErrForbidden,
+}
+
+// isSuspended reports whether an account is suspended. An empty status (legacy
+// accounts predating the field) counts as active.
+func isSuspended(u *User) bool {
+	return u.Status == StatusSuspended
+}
+
 // e164 matches a normalized international phone number.
 var e164 = regexp.MustCompile(`^\+[1-9]\d{6,14}$`)
 
@@ -125,6 +139,9 @@ func (s *UserService) Login(ctx context.Context, input LoginInput) (*AuthResult,
 	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(input.Password)); err != nil {
 		return nil, apperrors.ErrUnauthorized
 	}
+	if isSuspended(user) {
+		return nil, ErrAccountSuspended
+	}
 	return s.issueTokens(ctx, user)
 }
 
@@ -148,6 +165,9 @@ func (s *UserService) LoginByPhone(ctx context.Context, input PhoneLoginInput) (
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(input.Password)); err != nil {
 		return nil, apperrors.ErrUnauthorized
+	}
+	if isSuspended(user) {
+		return nil, ErrAccountSuspended
 	}
 	return s.issueTokens(ctx, user)
 }
@@ -232,6 +252,10 @@ func (s *UserService) VerifyOTP(ctx context.Context, input VerifyOTPInput) (*Aut
 		}
 	}
 
+	if isSuspended(user) {
+		return nil, ErrAccountSuspended
+	}
+
 	// Optionally set a password (signup flow) when the account has none yet.
 	if input.Password != "" && user.PasswordHash == nil {
 		if len(input.Password) < minPasswordLen {
@@ -272,6 +296,10 @@ func (s *UserService) Refresh(ctx context.Context, rawToken string) (*AuthResult
 			return nil, apperrors.ErrUnauthorized
 		}
 		return nil, err
+	}
+
+	if isSuspended(user) {
+		return nil, ErrAccountSuspended
 	}
 
 	// Rotate: revoke the consumed token before minting a replacement.
