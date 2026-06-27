@@ -131,6 +131,15 @@ func (f *fakeUserRepo) UpdateStatus(_ context.Context, id bson.ObjectID, status 
 	return u, nil
 }
 
+func (f *fakeUserRepo) UpdateResellerTier(_ context.Context, id bson.ObjectID, tier string) (*User, error) {
+	u, ok := f.byID[id]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	u.ResellerTier = tier
+	return u, nil
+}
+
 // fakeOTPRepo is a single-record-per-phone in-memory OTPRepository.
 type fakeOTPRepo struct {
 	byPhone map[string]*OtpCode

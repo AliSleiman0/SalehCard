@@ -28,13 +28,15 @@ type Repository interface {
 	ListAll(ctx context.Context, f UserFilter, p pagination.Params) ([]*User, int64, error)
 	UpdateRole(ctx context.Context, id bson.ObjectID, role Role) (*User, error)
 	UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error)
+	UpdateResellerTier(ctx context.Context, id bson.ObjectID, tier string) (*User, error)
 }
 
 // UserFilter narrows an admin user listing. Zero-valued fields are ignored.
 type UserFilter struct {
-	Role   Role
-	Status Status
-	Search string // matches an ObjectID hex, or email/phone (case-insensitive)
+	Role         Role
+	Status       Status
+	ResellerTier string // exact tier name (reseller listing)
+	Search       string // matches an ObjectID hex, or email/phone (case-insensitive)
 }
 
 // build assembles the MongoDB filter document for f.
@@ -54,6 +56,9 @@ func (f UserFilter) build() bson.D {
 		} else {
 			filter = append(filter, bson.E{Key: "status", Value: f.Status})
 		}
+	}
+	if f.ResellerTier != "" {
+		filter = append(filter, bson.E{Key: "resellerTier", Value: f.ResellerTier})
 	}
 	if s := strings.TrimSpace(f.Search); s != "" {
 		if id, err := bson.ObjectIDFromHex(s); err == nil {
@@ -313,6 +318,12 @@ func (r *MongoRepository) UpdateRole(ctx context.Context, id bson.ObjectID, role
 // returning ErrNotFound when no user matches.
 func (r *MongoRepository) UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error) {
 	return r.setFields(ctx, id, bson.D{{Key: "status", Value: status}})
+}
+
+// UpdateResellerTier atomically sets a user's reseller tier name and returns the
+// updated document, returning ErrNotFound when no user matches.
+func (r *MongoRepository) UpdateResellerTier(ctx context.Context, id bson.ObjectID, tier string) (*User, error) {
+	return r.setFields(ctx, id, bson.D{{Key: "resellerTier", Value: tier}})
 }
 
 // setFields applies a single-document $set (plus updatedAt) and returns the

@@ -36,6 +36,13 @@ func TestUserFilter_Build_ActiveMatchesMissingStatus(t *testing.T) {
 	assert.Len(t, or, 2)
 }
 
+func TestUserFilter_Build_ResellerTier(t *testing.T) {
+	// The reseller listing forces role=reseller and filters by tier name.
+	m := keyed(UserFilter{Role: RoleReseller, ResellerTier: "Gold"}.build())
+	assert.Equal(t, RoleReseller, m["role"])
+	assert.Equal(t, "Gold", m["resellerTier"])
+}
+
 func TestUserFilter_Build_SearchHexMatchesID(t *testing.T) {
 	id := bson.NewObjectID()
 	m := keyed(UserFilter{Search: id.Hex()}.build())
