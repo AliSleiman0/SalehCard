@@ -26,11 +26,27 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 	// /products/{id}/codes routes on the same /api/admin router without a Mount
 	// collision.
 	r.Get("/products", h.AdminList)
+	r.Get("/products/categories", categoryFacetsHandler(repo))
 	r.Post("/products", h.Create)
 	r.Post("/products/bulk", h.Bulk)
 	r.Get("/products/{id}", h.GetByID)
 	r.Put("/products/{id}", h.Update)
 	r.Delete("/products/{id}", h.Delete)
+}
+
+// categoryFacetsHandler serves GET /api/admin/products/categories — the distinct
+// product category values + counts that populate the admin category dropdowns.
+// It reads the repository directly (no Service method) to keep the Service
+// interface — and its test fakes — unchanged.
+func categoryFacetsHandler(repo *MongoRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		facets, err := repo.CategoryFacets(r.Context())
+		if err != nil {
+			response.InternalError(w)
+			return
+		}
+		response.OK(w, facets)
+	}
 }
 
 // AdminList handles GET /api/admin/products with category / fulfillmentType /

@@ -1,22 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/failure.dart';
-import '../data/repositories/kyc_repository_stub.dart';
+import '../../../core/network/providers.dart';
+import '../data/datasources/kyc_remote_data_source.dart';
+import '../data/repositories/kyc_repository_impl.dart';
 import '../domain/entities/kyc.dart';
 import '../domain/repositories/kyc_repository.dart';
 import '../domain/usecases/get_kyc_status.dart';
 import '../domain/usecases/submit_kyc.dart';
 
-// ---- KYC (stub — no backend endpoint yet) ----
+// ---- KYC (wired to /api/v1/kyc) ----
 
-/// Plain (non-autoDispose) [Provider] so the single [KycRepositoryStub] instance
-/// — and its in-memory status — persists across reads; submitting then re-reading
-/// the status reflects the move to "pending".
-///
-/// TODO(backend): swap [KycRepositoryStub] for an HTTP impl when KYC endpoints
-/// exist — this is the single wiring point.
+final kycRemoteDataSourceProvider = Provider<KycRemoteDataSource>(
+  (ref) => KycRemoteDataSource(ref.watch(dioProvider)),
+);
+
 final kycRepositoryProvider = Provider<KycRepository>(
-  (ref) => KycRepositoryStub(),
+  (ref) => KycRepositoryImpl(ref.watch(kycRemoteDataSourceProvider)),
 );
 
 final getKycStatusUseCaseProvider = Provider<GetKycStatus>(
@@ -27,12 +27,12 @@ final submitKycUseCaseProvider = Provider<SubmitKyc>(
   (ref) => SubmitKyc(ref.watch(kycRepositoryProvider)),
 );
 
-/// The customer's KYC status. Throws the [Failure] so the UI renders it via the
-/// AsyncValue error state (mirrors `walletProvider`). autoDispose so it re-reads
-/// the stub each time the status screen is shown.
-final kycStatusProvider = FutureProvider.autoDispose<KycStatus>((ref) async {
+/// The customer's KYC profile (status + optional rejection reason). Throws the
+/// [Failure] so the UI renders it via the AsyncValue error state. autoDispose so
+/// it re-reads `GET /kyc/me` each time the status screen is shown.
+final kycProfileProvider = FutureProvider.autoDispose<KycProfile>((ref) async {
   final result = await ref.watch(getKycStatusUseCaseProvider).call();
-  return result.match((failure) => throw failure, (status) => status);
+  return result.match((failure) => throw failure, (profile) => profile);
 });
 
 /// Submit state for the KYC form CTA.
@@ -48,7 +48,7 @@ class KycFormController extends Notifier<KycFormState> {
   KycFormState build() => const KycFormState();
 
   /// Submits the verification form. Returns `true` on success (and invalidates
-  /// [kycStatusProvider] so the status screen shows the new "pending" card), or
+  /// [kycProfileProvider] so the status screen shows the new "pending" card), or
   /// `false` on failure (the [Failure] is surfaced via [state]).
   Future<bool> submit(KycSubmission submission) async {
     if (state.submitting) return false;
@@ -61,7 +61,7 @@ class KycFormController extends Notifier<KycFormState> {
       },
       (_) {
         state = const KycFormState();
-        ref.invalidate(kycStatusProvider);
+        ref.invalidate(kycProfileProvider);
         return true;
       },
     );

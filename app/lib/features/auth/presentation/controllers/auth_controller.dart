@@ -78,10 +78,11 @@ class AuthController extends Notifier<AuthState> {
     required String phone,
     required String code,
     String? password,
+    String? name,
   }) async {
     final result = await ref
         .read(verifyOtpUseCaseProvider)
-        .call(phone: phone, code: code, password: password);
+        .call(phone: phone, code: code, password: password, name: name);
     return result.match((failure) => failure, (user) {
       setAuthenticated(user);
       return null;

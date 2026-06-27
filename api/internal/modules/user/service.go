@@ -110,6 +110,7 @@ func (s *UserService) Register(ctx context.Context, input RegisterInput) (*AuthR
 	}
 
 	user := &User{
+		Name:           strings.TrimSpace(input.Name),
 		Email:          email,
 		PasswordHash:   &hashed,
 		Role:           RoleCustomer,
@@ -242,6 +243,7 @@ func (s *UserService) VerifyOTP(ctx context.Context, input VerifyOTPInput) (*Aut
 		}
 		// First sign-in for this number: create a phone-only customer account.
 		user = &User{
+			Name:           strings.TrimSpace(input.Name),
 			Phone:          &phone,
 			Role:           RoleCustomer,
 			Locale:         "en",
@@ -372,6 +374,12 @@ func (s *UserService) issueTokens(ctx context.Context, user *User) (*AuthResult,
 	if err := s.refresh.Create(ctx, rec); err != nil {
 		return nil, err
 	}
+
+	// Activity heartbeat for the "active users" metric. Best-effort: a failure
+	// here must not fail the login/refresh, so the error is ignored.
+	now := time.Now().UTC()
+	_ = s.repo.TouchLastSeen(ctx, user.ID, now)
+	user.LastSeen = now
 
 	return &AuthResult{User: user, AccessToken: access, RefreshToken: raw}, nil
 }

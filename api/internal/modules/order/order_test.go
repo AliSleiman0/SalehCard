@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
@@ -129,6 +130,10 @@ func (f *fakeOrderRepo) FulfillmentBreakdown(_ context.Context) (map[string]int,
 
 func (f *fakeOrderRepo) RevenueSeries(_ context.Context, _ string) ([]string, []float64, error) {
 	return []string{}, []float64{}, nil
+}
+
+func (f *fakeOrderRepo) KpiSparkSeries(_ context.Context) ([]float64, []int, error) {
+	return []float64{}, []int{}, nil
 }
 
 func (f *fakeOrderRepo) RevenueSummary(_ context.Context) (RevenueSummary, error) {
@@ -288,14 +293,31 @@ func newSUT(p *product.Product, codeSvc *fakeCodeSvc, walletSvc *fakeWalletSvc) 
 }
 
 func newSUTMulti(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc *fakeWalletSvc) (*OrderService, *fakeOrderRepo) {
+	return newSUTWithOffers(prods, codeSvc, walletSvc, &fakeOfferSvc{})
+}
+
+func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc *fakeWalletSvc, offerSvc *fakeOfferSvc) (*OrderService, *fakeOrderRepo) {
 	repo := newFakeOrderRepo()
 	byID := make(map[string]*product.Product, len(prods))
 	for _, p := range prods {
 		byID[p.ID.Hex()] = p
 	}
 	prodSvc := &fakeProductSvc{byID: byID}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, provider.NewRegistry())
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry())
 	return svc, repo
+}
+
+// fakeOfferSvc serves at most one live offer per product; an absent product
+// yields ErrNotFound (the "no offer" case the order engine treats as full price).
+type fakeOfferSvc struct {
+	byProduct map[bson.ObjectID]*offer.Offer
+}
+
+func (f *fakeOfferSvc) FindLiveByProduct(_ context.Context, productID bson.ObjectID, _ time.Time) (*offer.Offer, error) {
+	if o, ok := f.byProduct[productID]; ok {
+		return o, nil
+	}
+	return nil, apperrors.ErrNotFound
 }
 
 // fakePromoSvc is a no-op promo service; the order tests never set a promo code,
@@ -344,6 +366,40 @@ func TestPlaceOrder_UsesResellerPriceWhenReseller(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 7.0, order.Total) // reseller price, not retail 10
+}
+
+func TestPlaceOrder_AppliesLiveOffer(t *testing.T) {
+	p := codeProduct(10, nil)
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	off := &offer.Offer{ProductID: p.ID, DiscountType: offer.DiscountPercent, DiscountValue: 30, Active: true}
+	offerSvc := &fakeOfferSvc{byProduct: map[bson.ObjectID]*offer.Offer{p.ID: off}}
+	svc, _ := newSUTWithOffers([]*product.Product{p}, codeSvc, walletSvc, offerSvc)
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 2)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 14.0, order.Total)         // 10 → 7 (30% off) × 2
+	assert.Equal(t, 7.0, order.Items[0].Price) // sale price snapshotted on the line
+	assert.Equal(t, 86.0, walletSvc.balance)   // 100 - 14
+}
+
+func TestPlaceOrder_OfferNotStackedForReseller(t *testing.T) {
+	resellerPrice := 7.0
+	p := codeProduct(10, &resellerPrice)
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	off := &offer.Offer{ProductID: p.ID, DiscountType: offer.DiscountPercent, DiscountValue: 50, Active: true}
+	offerSvc := &fakeOfferSvc{byProduct: map[bson.ObjectID]*offer.Offer{p.ID: off}}
+	svc, _ := newSUTWithOffers([]*product.Product{p}, codeSvc, &fakeWalletSvc{balance: 100}, offerSvc)
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), true, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodCard,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 7.0, order.Total) // reseller price wins; the 50% offer is not applied
 }
 
 func TestPlaceOrder_InsufficientFunds(t *testing.T) {

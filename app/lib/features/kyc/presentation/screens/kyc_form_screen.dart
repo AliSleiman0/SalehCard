@@ -11,12 +11,13 @@ import '../../../../core/widgets/step_dots.dart';
 import '../../domain/entities/kyc.dart';
 import '../providers.dart';
 
-/// KYC verification form (`/kyc/form`). A two-step header (StepDots), the
-/// identity fields (full name + document number via [AuthTextField]), a
-/// document-type selector (reusing the topup method-tile/radio pattern), and a
-/// faux document-upload tile. Submit-validates: empty required fields show their
-/// inline error. On a valid submit the [KycFormController] flips the stub to
-/// pending and we navigate back to `/kyc`, which now shows the pending card.
+/// KYC verification form (`/kyc/form`). Collects personal background info
+/// (full name, date of birth, place of birth, place of residence) plus a
+/// document type + number via [AuthTextField]s and a document-type selector
+/// (reusing the topup method-tile/radio pattern) — no document upload.
+/// Submit-validates: empty required fields show their inline error. On a valid
+/// submit the [KycFormController] POSTs to the API and we navigate back to
+/// `/kyc`, which now shows the pending card.
 class KycFormScreen extends ConsumerStatefulWidget {
   const KycFormScreen({super.key});
 
@@ -26,10 +27,12 @@ class KycFormScreen extends ConsumerStatefulWidget {
 
 class _KycFormScreenState extends ConsumerState<KycFormScreen> {
   final _nameController = TextEditingController();
+  final _placeOfBirthController = TextEditingController();
+  final _placeOfResidenceController = TextEditingController();
   final _numberController = TextEditingController();
 
   KycDocumentType _docType = KycDocumentType.passport;
-  bool _fileSelected = false;
+  DateTime? _dob;
   bool _submitted = false;
 
   @override
@@ -43,26 +46,53 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _placeOfBirthController.dispose();
+    _placeOfResidenceController.dispose();
     _numberController.dispose();
     super.dispose();
   }
 
   bool get _nameValid => _nameController.text.trim().isNotEmpty;
+  bool get _placeOfBirthValid => _placeOfBirthController.text.trim().isNotEmpty;
+  bool get _placeOfResidenceValid =>
+      _placeOfResidenceController.text.trim().isNotEmpty;
   bool get _numberValid => _numberController.text.trim().isNotEmpty;
+
+  String _isoDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickDob() async {
+    FocusScope.of(context).unfocus();
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dob ?? DateTime(now.year - 20),
+      firstDate: DateTime(1900),
+      lastDate: now,
+    );
+    if (picked != null) setState(() => _dob = picked);
+  }
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
     FocusScope.of(context).unfocus();
     setState(() => _submitted = true);
-    if (!_nameValid || !_numberValid) return;
+    if (!_nameValid ||
+        _dob == null ||
+        !_placeOfBirthValid ||
+        !_placeOfResidenceValid ||
+        !_numberValid) {
+      return;
+    }
 
     final ok = await ref.read(kycFormControllerProvider.notifier).submit(
           KycSubmission(
             fullName: _nameController.text.trim(),
+            dateOfBirth: _isoDate(_dob!),
+            placeOfBirth: _placeOfBirthController.text.trim(),
+            placeOfResidence: _placeOfResidenceController.text.trim(),
             documentType: _docType,
             documentNumber: _numberController.text.trim(),
-            documentFileName:
-                _fileSelected ? l10n.kycUploadSelected : '',
           ),
         );
     if (!mounted) return;
@@ -110,10 +140,48 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
                   label: l10n.kycFullNameLabel,
                   controller: _nameController,
                   textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
                   onChanged: (_) {
                     if (_submitted) setState(() {});
                   },
                   errorText: _submitted && !_nameValid
+                      ? l10n.kycFieldRequired
+                      : null,
+                ),
+                const SizedBox(height: 18),
+                _DateField(
+                  label: l10n.kycDobLabel,
+                  hint: l10n.kycDobHint,
+                  value: _dob == null ? null : _isoDate(_dob!),
+                  errorText:
+                      _submitted && _dob == null ? l10n.kycFieldRequired : null,
+                  onTap: _pickDob,
+                ),
+                const SizedBox(height: 18),
+                AuthTextField(
+                  label: l10n.kycPlaceOfBirthLabel,
+                  controller: _placeOfBirthController,
+                  hintText: l10n.kycPlaceHint,
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
+                  onChanged: (_) {
+                    if (_submitted) setState(() {});
+                  },
+                  errorText: _submitted && !_placeOfBirthValid
+                      ? l10n.kycFieldRequired
+                      : null,
+                ),
+                const SizedBox(height: 18),
+                AuthTextField(
+                  label: l10n.kycPlaceOfResidenceLabel,
+                  controller: _placeOfResidenceController,
+                  hintText: l10n.kycPlaceHint,
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
+                  onChanged: (_) {
+                    if (_submitted) setState(() {});
+                  },
+                  errorText: _submitted && !_placeOfResidenceValid
                       ? l10n.kycFieldRequired
                       : null,
                 ),
@@ -160,19 +228,6 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
                   errorText: _submitted && !_numberValid
                       ? l10n.kycFieldRequired
                       : null,
-                ),
-                const SizedBox(height: 22),
-                Text(
-                  l10n.kycUploadLabel,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.text),
-                ),
-                const SizedBox(height: 12),
-                _UploadTile(
-                  selected: _fileSelected,
-                  onTap: () => setState(() => _fileSelected = true),
                 ),
               ],
             ),
@@ -283,57 +338,78 @@ class _Radio extends StatelessWidget {
   }
 }
 
-/// Faux document-upload tile. Tapping it sets a placeholder "selected" state —
-/// there is no real file picker (no new dependency).
-///
-/// TODO(backend): real document upload.
-class _UploadTile extends StatelessWidget {
-  const _UploadTile({required this.selected, required this.onTap});
+/// A labeled, read-only field that opens a date picker on tap — styled to match
+/// [AuthTextField] (focus-less). Shows the selected ISO date or a hint, plus an
+/// inline error.
+class _DateField extends StatelessWidget {
+  const _DateField({
+    required this.label,
+    required this.hint,
+    required this.value,
+    required this.onTap,
+    this.errorText,
+  });
 
-  final bool selected;
+  final String label;
+  final String hint;
+  final String? value;
+  final String? errorText;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final colors = context.colors;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppTokens.accent.withValues(alpha: 0.08)
-              : colors.surface,
-          borderRadius: BorderRadius.circular(AppTokens.rMd),
-          border: Border.all(
-            color: selected ? AppTokens.cta : colors.borderStrong,
-            width: selected ? 2 : 1.4,
+    final hasError = errorText != null;
+    final hasValue = value != null && value!.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w600, color: colors.text),
+        ),
+        const SizedBox(height: 9),
+        GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(AppTokens.rMd),
+              border: Border.all(
+                color: hasError ? AppTokens.danger : colors.border,
+                width: hasError ? 1.6 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    hasValue ? value! : hint,
+                    style: TextStyle(
+                        fontSize: 16,
+                        color: hasValue ? colors.text : colors.textFaint),
+                  ),
+                ),
+                Icon(Icons.calendar_today_rounded,
+                    size: 18, color: colors.textFaint),
+              ],
+            ),
           ),
         ),
-        child: Column(
-          children: [
-            Icon(
-              selected
-                  ? Icons.check_circle_rounded
-                  : Icons.cloud_upload_outlined,
-              size: 34,
-              color: selected ? AppTokens.accent : colors.textFaint,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              selected ? l10n.kycUploadSelected : l10n.kycUploadHint,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? colors.text : colors.textDim),
-            ),
-          ],
-        ),
-      ),
+        if (hasError) ...[
+          const SizedBox(height: 7),
+          Text(
+            errorText!,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppTokens.danger),
+          ),
+        ],
+      ],
     );
   }
 }

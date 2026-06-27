@@ -45,6 +45,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get emptyCatalog => 'لا توجد منتجات متاحة.';
 
   @override
+  String get offersEmpty => 'لا توجد عروض حالياً. تحقق لاحقاً.';
+
+  @override
   String get productDetailUnavailable => 'هذا المنتج غير متاح حالياً.';
 
   @override
@@ -82,6 +85,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get verifyButton => 'تأكيد';
+
+  @override
+  String get nameLabel => 'الاسم الكامل';
+
+  @override
+  String get nameHint => 'اسمك';
+
+  @override
+  String get nameRequired => 'الرجاء إدخال اسمك.';
 
   @override
   String get mobileNumberLabel => 'رقم الهاتف';
@@ -171,6 +183,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get navCart => 'السلة';
+
+  @override
+  String get navOffers => 'العروض';
 
   @override
   String get navMenu => 'القائمة';
@@ -582,6 +597,21 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kycFullNameLabel => 'الاسم الكامل';
+
+  @override
+  String get kycDobLabel => 'تاريخ الميلاد';
+
+  @override
+  String get kycDobHint => 'اختر تاريخ ميلادك';
+
+  @override
+  String get kycPlaceOfBirthLabel => 'مكان الولادة';
+
+  @override
+  String get kycPlaceOfResidenceLabel => 'مكان الإقامة';
+
+  @override
+  String get kycPlaceHint => 'المدينة، البلد';
 
   @override
   String get kycDocTypeLabel => 'نوع المستند';

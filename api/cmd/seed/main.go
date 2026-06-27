@@ -8,6 +8,8 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
+	expenseseed "github.com/AliSleiman0/salehcard/api/internal/modules/expense/seed"
+	offerseed "github.com/AliSleiman0/salehcard/api/internal/modules/offer/seed"
 	orderseed "github.com/AliSleiman0/salehcard/api/internal/modules/order/seed"
 	seed "github.com/AliSleiman0/salehcard/api/internal/modules/product/seed"
 	promoseed "github.com/AliSleiman0/salehcard/api/internal/modules/promo/seed"
@@ -71,10 +73,22 @@ func main() {
 		log.Fatalf("promo seed failed: %v", err)
 	}
 
+	log.Println("running offer seed...")
+
+	if err := offerseed.Seed(ctx, db); err != nil {
+		log.Fatalf("offer seed failed: %v", err)
+	}
+
 	log.Println("running review seed...")
 
 	if err := reviewseed.Seed(ctx, db); err != nil {
 		log.Fatalf("review seed failed: %v", err)
+	}
+
+	log.Println("running expense seed...")
+
+	if err := expenseseed.Seed(ctx, db); err != nil {
+		log.Fatalf("expense seed failed: %v", err)
 	}
 
 	log.Println("seed completed successfully")

@@ -11,6 +11,7 @@ UserDto _$UserDtoFromJson(Map<String, dynamic> json) => UserDto(
   email: json['email'] as String,
   role: json['role'] as String,
   locale: json['locale'] as String,
+  name: json['name'] as String? ?? '',
   phone: json['phone'] as String?,
   walletBalance: (json['walletBalance'] as num?)?.toDouble() ?? 0,
   loyaltyPoints: (json['loyaltyPoints'] as num?)?.toInt() ?? 0,
@@ -23,6 +24,7 @@ UserDto _$UserDtoFromJson(Map<String, dynamic> json) => UserDto(
 
 Map<String, dynamic> _$UserDtoToJson(UserDto instance) => <String, dynamic>{
   'id': instance.id,
+  'name': instance.name,
   'email': instance.email,
   'phone': instance.phone,
   'role': instance.role,

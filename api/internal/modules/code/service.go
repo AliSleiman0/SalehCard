@@ -62,6 +62,18 @@ func (s *CodeService) Upload(ctx context.Context, productID string, in UploadInp
 		_ = s.repo.SetProductStock(ctx, productID, counts[StatusAvailable])
 	}
 
+	// Record the upload for the inventory history view (best effort — a history
+	// write must not fail the upload itself).
+	_ = s.repo.RecordBatch(ctx, UploadBatch{
+		ProductID:  productID,
+		Batch:      batch,
+		Inserted:   inserted,
+		Duplicates: duplicates,
+		Invalid:    invalid,
+		UploadedBy: in.UploadedBy,
+		CreatedAt:  time.Now().UTC(),
+	})
+
 	return &UploadResult{Inserted: inserted, Duplicates: duplicates, Invalid: invalid}, nil
 }
 

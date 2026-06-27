@@ -15,7 +15,9 @@ class VerifyOtp {
     required String phone,
     required String code,
     String? password,
+    String? name,
   }) {
-    return _repository.verifyOtp(phone: phone, code: code, password: password);
+    return _repository.verifyOtp(
+        phone: phone, code: code, password: password, name: name);
   }
 }

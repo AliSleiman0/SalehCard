@@ -31,18 +31,20 @@ Legend: ✅ done · 🟡 partial (UI built, backend mock/stub) · ⬜ not starte
 - [ ] ⬜ Token refresh handling for the admin client
 - [ ] ⬜ "Account settings" / "Activity log" / "Sign out → revoke" menu actions
 
-## Dashboard — 🟡 (KPIs + low-stock wired; revenue/orders mocked)
+## Dashboard — ✅ wired (fully real)
 
-- [x] ✅ KPI cards — product/code-derived figures real; revenue/orders/users/top-ups mocked server-side
-- [x] ✅ Low-stock alerts panel — real (`GET /api/admin/dashboard/low-stock`)
-- [x] ✅ Fulfillment donut + system health (static/design)
-- [ ] 🟡 Revenue area chart (daily/weekly/monthly) — client mock; `/dashboard/revenue-chart` returns mock series
-- [ ] ⬜ Recent-orders feed — mock until orders module is wired
-- [ ] ⬜ Replace mocked KPIs (revenue, orders, active users, wallet top-ups, pending transfers) with real data once orders/wallet land
+- [x] ✅ KPI cards — all real: revenue/orders (+deltas, +sparklines from `KpiSparkSeries`), active users (24h via `user.lastSeen`), wallet top-ups (today), pending transfers, low-stock
+- [x] ✅ Low-stock alerts panel — real (`GET /api/admin/dashboard/low-stock`); real empty state
+- [x] ✅ Fulfillment donut — real line-item counts
+- [x] ✅ Revenue area chart (daily/weekly/monthly) — real `/dashboard/revenue-chart`
+- [x] ✅ Recent-orders feed — real (newest 7 via the orders API)
+- [x] ✅ System health — real API + Database status from `GET /health`
+- [x] ✅ Header greeting (logged-in admin + time-of-day) + Export to CSV
 
 ## Products — ✅ wired (reference slice)
 
 - [x] ✅ List: filter (category/fulfillment/search), bulk select, bulk activate/deactivate/delete, delete
+- [x] ✅ Category dropdowns (list filter + edit select) — real, from catalog-distinct facets (`GET /api/admin/products/categories`)
 - [x] ✅ Create/edit: EN/AR/TR title tabs, fulfillment-type selector swaps fields, variants/pricing builder, status toggle
 - [x] ✅ Backend: `GET/POST/PUT/DELETE /api/admin/products`, `POST /products/bulk`
 - [ ] ⬜ Server-side sorting + real pagination UI (table sorts client-side today)
@@ -56,7 +58,7 @@ Legend: ✅ done · 🟡 partial (UI built, backend mock/stub) · ⬜ not starte
 - [x] ✅ Low-stock threshold config per product
 - [x] ✅ Code lookup/audit (exact + last-4 suffix) with order/delivery trail
 - [x] ✅ Backend: `code` module (`POST/GET /products/:id/codes`, `GET /codes/:code`, `PUT /products/:id/stock-threshold`, `GET /inventory`)
-- [ ] ⬜ Persist + read **real upload history** (currently mock)
+- [x] ✅ Persist + read **real upload history** — `upload_batches` collection written on each upload (records inserted/duplicates/invalid + uploader email); `GET /api/admin/upload-history` (history starts from first upload after this shipped)
 - [ ] ⬜ Mark codes expired (lifecycle job) + reserve/deliver on order fulfillment
 - [ ] ⬜ Export codes
 
@@ -107,7 +109,7 @@ Legend: ✅ done · 🟡 partial (UI built, backend mock/stub) · ⬜ not starte
 - [ ] 🟡 General (store name/contact, default language/currency) (mock UI)
 - [ ] 🟡 Payment gateways (Visa/USDT toggles, masked keys, webhook URLs) (mock UI)
 - [ ] 🟡 Notification thresholds (mock UI)
-- [ ] 🟡 Admin accounts list + invite (mock UI)
+- [x] ✅ Admin accounts list — real (`GET /api/admin/users?role=admin`, last-active from `user.lastSeen`); invite/edit/delete actions still UI-only
 - [ ] ⬜ Backend: `GET/PUT /settings`
 - [ ] ⬜ **Granular per-role permission model** (Super admin / Editor / Viewer) — open item flagged in the design
 

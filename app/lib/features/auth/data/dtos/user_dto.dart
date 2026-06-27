@@ -11,6 +11,7 @@ class UserDto {
     required this.email,
     required this.role,
     required this.locale,
+    this.name = '',
     this.phone,
     this.walletBalance = 0,
     this.loyaltyPoints = 0,
@@ -18,6 +19,7 @@ class UserDto {
   });
 
   final String id;
+  final String name;
   final String email;
   final String? phone;
   final String role;
@@ -34,6 +36,7 @@ class UserDto {
 
   User toEntity() => User(
         id: id,
+        name: name,
         email: email,
         phone: phone,
         role: role,

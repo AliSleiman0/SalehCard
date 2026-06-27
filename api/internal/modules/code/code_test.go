@@ -17,6 +17,7 @@ type fakeRepo struct {
 	thresholds map[string]int
 	products   []ProductMeta
 	stock      map[string]int
+	batches    []UploadBatch
 }
 
 func newFakeRepo() *fakeRepo {
@@ -99,6 +100,19 @@ func (f *fakeRepo) ClaimOne(_ context.Context, productID, orderID, deliveredTo s
 
 // ReleaseByOrder is a no-op for the fake (tests assert via stock mirror).
 func (f *fakeRepo) ReleaseByOrder(_ context.Context, _ string) error { return nil }
+
+func (f *fakeRepo) RecordBatch(_ context.Context, b UploadBatch) error {
+	f.batches = append(f.batches, b)
+	return nil
+}
+
+func (f *fakeRepo) ListUploadHistory(_ context.Context, _ int) ([]UploadBatchView, error) {
+	out := make([]UploadBatchView, len(f.batches))
+	for i, b := range f.batches {
+		out[i] = UploadBatchView{UploadBatch: b}
+	}
+	return out, nil
+}
 
 func TestComputeLevel(t *testing.T) {
 	assert.Equal(t, LevelLo, computeLevel(0, 100))

@@ -15,7 +15,10 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/category"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/dashboard"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/expense"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/finance"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/kyc"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
 	product "github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
@@ -77,6 +80,9 @@ func (s *Server) Routes() {
 	// Read-only category taxonomy (storefront browses by root domain).
 	category.RegisterRoutes(s.router, s.db)
 
+	// Offers listing (storefront Offers tab; sale-price deals) — AuthRequired.
+	offer.RegisterRoutes(s.router, s.db, s.cfg)
+
 	// Customer auth + profile (public; /users/* guarded by AuthRequired).
 	user.RegisterRoutes(s.router, s.db, s.cfg)
 
@@ -86,6 +92,7 @@ func (s *Server) Routes() {
 	wallet.RegisterRoutes(s.router, s.db, s.cfg)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
+	kyc.RegisterRoutes(s.router, s.db, s.cfg)
 
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role
 	// (AdminOnly bypasses in dev when no JWT secret is configured).
@@ -103,7 +110,10 @@ func (s *Server) Routes() {
 		user.RegisterAdminRoutes(r, s.db)
 		reseller.RegisterAdminRoutes(r, s.db)
 		promo.RegisterAdminRoutes(r, s.db)
+		offer.RegisterAdminRoutes(r, s.db)
 		review.RegisterAdminRoutes(r, s.db)
+		expense.RegisterAdminRoutes(r, s.db)
+		kyc.RegisterAdminRoutes(r, s.db)
 		settings.RegisterAdminRoutes(r, s.db)
 	})
 }

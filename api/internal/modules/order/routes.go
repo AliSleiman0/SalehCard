@@ -9,6 +9,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
@@ -28,11 +29,12 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	codes := code.NewService(db)
 	wlt := wallet.NewService(db)
 	promos := promo.NewPromoService(promo.NewMongoRepository(db.Collection("promos")))
+	offers := offer.NewOfferService(offer.NewMongoRepository(db.Collection("offers")))
 	// No real upstream adapters yet → every api-mode order resolves to a stub
 	// and parks. Register adapters here as the owner provides credentials (§5).
 	providers := provider.NewRegistry()
 
-	svc := NewOrderService(repo, products, codes, wlt, promos, providers)
+	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers)
 	h := NewHandler(svc)
 
 	r.Route("/api/v1/orders", func(r chi.Router) {

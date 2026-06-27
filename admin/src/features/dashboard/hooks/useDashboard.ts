@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getDashboardStats, getLowStock, getRevenueChart, getFulfillmentBreakdown } from '../api/dashboard'
+import { getDashboardStats, getLowStock, getRevenueChart, getFulfillmentBreakdown, getHealth } from '../api/dashboard'
 
 export function useDashboardStats() {
   return useQuery({ queryKey: ['admin', 'dashboard', 'stats'], queryFn: () => getDashboardStats() })
@@ -15,4 +15,13 @@ export function useRevenueChart(range: string) {
 
 export function useFulfillmentBreakdown() {
   return useQuery({ queryKey: ['admin', 'dashboard', 'fulfillment-breakdown'], queryFn: () => getFulfillmentBreakdown() })
+}
+
+export function useHealth() {
+  return useQuery({
+    queryKey: ['admin', 'dashboard', 'health'],
+    queryFn: () => getHealth(),
+    refetchInterval: 30_000, // live-ish system status
+    staleTime: 15_000,
+  })
 }

@@ -2,9 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { Icon, PageHead, Art, LoadingSpinner, ErrorState, EmptyState, artForCategory } from '@/components'
-import { useInventory, useUploadCodes, useLookupCode, useSetThreshold } from '../hooks/useInventory'
+import { useInventory, useUploadCodes, useLookupCode, useSetThreshold, useUploadHistory } from '../hooks/useInventory'
 import { parseCodesFile, type UploadItem } from '../api/codes'
-import { uploadHistory } from '@/lib/mock/demo'
+import { relativeTime } from '@/lib/utils'
 import type { InventoryStats } from '@/types'
 
 type Tab = 'stock' | 'upload' | 'config' | 'audit'
@@ -179,6 +179,8 @@ function StockTab({ stats, onAdd }: { stats: InventoryStats[]; onAdd: () => void
 
 function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; defaultProduct?: string }) {
   const upload = useUploadCodes()
+  const { data: historyRes } = useUploadHistory()
+  const history = historyRes?.data ?? []
   const fileRef = useRef<HTMLInputElement>(null)
   const [productId, setProductId] = useState(defaultProduct || stats[0]?.productId || '')
   const [fileName, setFileName] = useState('')
@@ -324,27 +326,31 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
             <Icon name="clock" size={17} />
             <h3>Upload history</h3>
           </div>
-          {/* TODO: persist + read real upload batches from the backend. */}
           <div>
-            {uploadHistory.map((u, i) => (
-              <div className="lsrow" key={i} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+            {history.length === 0 && (
+              <div className="lsrow faint" style={{ fontSize: 12.5 }}>
+                No uploads yet — bulk-uploaded code batches will appear here.
+              </div>
+            )}
+            {history.map((u) => (
+              <div className="lsrow" key={u.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <b style={{ fontSize: 13 }}>{u.product}</b>
+                  <b style={{ fontSize: 13 }}>{u.productTitle || u.productId}</b>
                   <span className="num faint" style={{ marginInlineStart: 'auto', fontSize: 12 }}>
-                    {u.date}
+                    {relativeTime(u.createdAt)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                   <span className="st st-ok" style={{ fontSize: 10.5 }}>
-                    +{u.ok} codes
+                    +{u.inserted} codes
                   </span>
-                  {u.dupes > 0 && (
+                  {u.duplicates > 0 && (
                     <span className="st st-warn" style={{ fontSize: 10.5 }}>
-                      {u.dupes} dupes
+                      {u.duplicates} dupes
                     </span>
                   )}
                   <span className="faint" style={{ marginInlineStart: 'auto' }}>
-                    by {u.by}
+                    by {u.uploadedBy ? u.uploadedBy.split('@')[0] : '—'}
                   </span>
                 </div>
               </div>

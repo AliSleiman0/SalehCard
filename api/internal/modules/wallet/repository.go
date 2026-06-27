@@ -26,6 +26,10 @@ type Repository interface {
 	GetBalance(ctx context.Context, userID bson.ObjectID) (float64, error)
 	Credit(ctx context.Context, userID bson.ObjectID, amount float64) (float64, error)
 	Debit(ctx context.Context, userID bson.ObjectID, amount float64) (float64, error)
+
+	// TopUpsForDay sums top-up ledger amounts created within the UTC day that
+	// contains `day`. Powers the dashboard "wallet top-ups today" metric.
+	TopUpsForDay(ctx context.Context, day time.Time) (float64, error)
 }
 
 // MongoRepository is a MongoDB-backed implementation of Repository.
@@ -91,6 +95,39 @@ func (r *MongoRepository) GetBalance(ctx context.Context, userID bson.ObjectID) 
 		return 0, err
 	}
 	return doc.WalletBalance, nil
+}
+
+// TopUpsForDay sums top-up amounts in the UTC day window containing `day`.
+// Mirrors finance.walletTopups (all-time) scoped to a single day.
+func (r *MongoRepository) TopUpsForDay(ctx context.Context, day time.Time) (float64, error) {
+	d := day.UTC()
+	start := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 1)
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{
+			{Key: "type", Value: TxTypeTopUp},
+			{Key: "createdAt", Value: bson.D{{Key: "$gte", Value: start}, {Key: "$lt", Value: end}}},
+		}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "v", Value: bson.D{{Key: "$sum", Value: "$amount"}}},
+		}}},
+	}
+	cur, err := r.tx.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+	defer cur.Close(ctx)
+	var rows []struct {
+		V float64 `bson:"v"`
+	}
+	if err := cur.All(ctx, &rows); err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	return rows[0].V, nil
 }
 
 // Credit atomically increments the user's balance and returns the new balance.

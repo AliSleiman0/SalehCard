@@ -36,6 +36,11 @@ type Repository interface {
 	// ReleaseByOrder reverses a claim, returning the delivered codes of an order
 	// to the available pool. Used to compensate a failed order.
 	ReleaseByOrder(ctx context.Context, orderID string) error
+	// RecordBatch persists an upload-batch record (best-effort history).
+	RecordBatch(ctx context.Context, b UploadBatch) error
+	// ListUploadHistory returns the most recent upload batches (newest first),
+	// each enriched with its product title.
+	ListUploadHistory(ctx context.Context, limit int) ([]UploadBatchView, error)
 }
 
 // ProductMeta is the minimal product info the inventory views need.
@@ -50,15 +55,17 @@ type MongoRepository struct {
 	codes      *mongo.Collection
 	products   *mongo.Collection
 	thresholds *mongo.Collection
+	uploads    *mongo.Collection
 }
 
 // NewMongoRepository builds a MongoRepository over the codes/products/thresholds
-// collections.
+// and upload_batches collections.
 func NewMongoRepository(db *mongo.Database) *MongoRepository {
 	return &MongoRepository{
 		codes:      db.Collection("codes"),
 		products:   db.Collection("products"),
 		thresholds: db.Collection("inventory_thresholds"),
+		uploads:    db.Collection("upload_batches"),
 	}
 }
 
@@ -79,6 +86,12 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	_, err = db.Collection("inventory_thresholds").Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "productId", Value: 1}},
 		Options: options.Index().SetUnique(true),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = db.Collection("upload_batches").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "createdAt", Value: -1}},
 	})
 	return err
 }
@@ -270,6 +283,62 @@ func (r *MongoRepository) ProductMeta(ctx context.Context, productID string) (*P
 		return nil, err
 	}
 	return &ProductMeta{ID: d.ID.Hex(), Title: d.Title.En, Category: d.Category}, nil
+}
+
+// RecordBatch persists an upload-batch history record, stamping id/createdAt.
+func (r *MongoRepository) RecordBatch(ctx context.Context, b UploadBatch) error {
+	if b.ID.IsZero() {
+		b.ID = bson.NewObjectID()
+	}
+	if b.CreatedAt.IsZero() {
+		b.CreatedAt = time.Now().UTC()
+	}
+	_, err := r.uploads.InsertOne(ctx, b)
+	return err
+}
+
+// ListUploadHistory returns the most recent upload batches (newest first), each
+// enriched with its product title (resolved in a single products query).
+func (r *MongoRepository) ListUploadHistory(ctx context.Context, limit int) ([]UploadBatchView, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}).SetLimit(int64(limit))
+	cur, err := r.uploads.Find(ctx, bson.D{}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var batches []UploadBatch
+	if err := cur.All(ctx, &batches); err != nil {
+		return nil, err
+	}
+
+	// Resolve product titles for the batches in one query.
+	oids := make([]bson.ObjectID, 0, len(batches))
+	for _, b := range batches {
+		if oid, err := bson.ObjectIDFromHex(b.ProductID); err == nil {
+			oids = append(oids, oid)
+		}
+	}
+	titles := make(map[string]string, len(oids))
+	if len(oids) > 0 {
+		pc, err := r.products.Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}})
+		if err == nil {
+			var docs []productDoc
+			if err := pc.All(ctx, &docs); err == nil {
+				for _, d := range docs {
+					titles[d.ID.Hex()] = d.Title.En
+				}
+			}
+		}
+	}
+
+	out := make([]UploadBatchView, len(batches))
+	for i, b := range batches {
+		out[i] = UploadBatchView{UploadBatch: b, ProductTitle: titles[b.ProductID]}
+	}
+	return out, nil
 }
 
 // GetThreshold returns the configured low-stock threshold, or DefaultThreshold.

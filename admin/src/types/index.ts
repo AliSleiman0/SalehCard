@@ -40,6 +40,7 @@ export interface RatingsSummary {
 export interface Product {
   id: string
   title: I18nString
+  description: I18nString
   category: string
   images: string[]
   variants: Variant[]

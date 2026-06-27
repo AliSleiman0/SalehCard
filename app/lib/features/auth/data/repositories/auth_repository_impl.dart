@@ -58,12 +58,14 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phone,
     required String code,
     String? password,
+    String? name,
   }) async {
     try {
       final dto = await _remote.verifyOtp(
         phone: phone,
         code: code,
         password: password,
+        name: name,
       );
       await _tokenStore.save(access: dto.accessToken, refresh: dto.refreshToken);
       return Right(dto.user.toEntity());

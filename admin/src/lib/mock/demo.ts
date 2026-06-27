@@ -17,15 +17,6 @@ export interface DemoProduct {
   rating: number
 }
 
-export const CATS = [
-  'Game Top-ups',
-  'App & Live Credits',
-  'Mobile Recharge',
-  'Gift Cards',
-  'Software & Apps',
-  'Crypto',
-  'Money Transfers',
-]
 
 export const products: DemoProduct[] = [
   { id: 'PRD-1042', title: 'PUBG Mobile UC', art: 'pubg', cat: 'Game Top-ups', ff: 'credit', variants: 8, stock: 9999, status: 'active', price: '0.99–99.00', sold: 18420, rating: 4.9 },
@@ -66,13 +57,6 @@ export const inventory: DemoInventory[] = [
   { id: 'PRD-1051', title: 'USDT Voucher (TRC20)', art: 'usdt', uploaded: 400, available: 27, delivered: 369, expired: 4, threshold: 50, level: 'lo' },
   { id: 'PRD-1052', title: 'Microsoft Office 365', art: 'office', uploaded: 300, available: 19, delivered: 277, expired: 4, threshold: 30, level: 'lo' },
   { id: 'PRD-1055', title: 'Spotify Premium', art: 'spotify', uploaded: 200, available: 62, delivered: 134, expired: 4, threshold: 40, level: 'hi' },
-]
-
-export const uploadHistory = [
-  { date: 'Jun 4, 2026 · 14:22', product: 'iTunes Gift Card (US)', count: 500, by: 'Omar A.', ok: 498, dupes: 2 },
-  { date: 'Jun 3, 2026 · 09:10', product: 'Steam Wallet (US)', count: 750, by: 'Layla H.', ok: 750, dupes: 0 },
-  { date: 'Jun 1, 2026 · 18:46', product: 'USDT Voucher (TRC20)', count: 200, by: 'Omar A.', ok: 196, dupes: 4 },
-  { date: 'May 30, 2026 · 11:05', product: 'PlayStation Store (US)', count: 400, by: 'Mona K.', ok: 400, dupes: 0 },
 ]
 
 const customers: [string, string][] = [
@@ -265,13 +249,6 @@ export const reviews: DemoReview[] = [
   { id: 'R-3305', product: 'Mobile Legends Diamonds', art: 'mlbb', user: 'Elif Yıldız', rating: 4, body: 'Good prices, fast credit. Wish there were more denomination options for diamonds.', date: '3h ago', status: 'approved' },
   { id: 'R-3306', product: 'USDT Voucher (TRC20)', art: 'usdt', user: 'Noor Khalid', rating: 5, body: 'Smooth crypto voucher purchase, redeemed without any issues. Will buy again.', date: '5h ago', status: 'approved' },
   { id: 'R-3307', product: 'Bigo Live Diamonds', art: 'bigo', user: 'Hamza Aziz', rating: 3, body: 'Delivery was fine but the player ID field was a little confusing at checkout.', date: 'Yesterday', status: 'rejected' },
-]
-
-export const admins = [
-  { name: 'Omar Farouk', email: 'omar.f@proton.me', role: 'Super admin', last: 'Online now', status: 'active' },
-  { name: 'Layla Haddad', email: 'layla.h@salehcard.co', role: 'Editor', last: '2h ago', status: 'active' },
-  { name: 'Mona Khoury', email: 'mona.k@salehcard.co', role: 'Editor', last: 'Yesterday', status: 'active' },
-  { name: 'Tarek Sami', email: 'tarek.s@salehcard.co', role: 'Viewer', last: '3d ago', status: 'invited' },
 ]
 
 export const revSeries: Record<string, number[]> = {

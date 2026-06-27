@@ -32,6 +32,39 @@ export function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+/** Long human date, e.g. "June 28, 2026". */
+export function formatLongDate(d: Date = new Date()): string {
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+/** Trigger a client-side CSV download from a 2-D array of rows (first row = header). */
+export function downloadCsv(filename: string, rows: (string | number)[][]): void {
+  const esc = (c: string | number): string => {
+    const s = String(c)
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const csv = rows.map((r) => r.map(esc).join(',')).join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/** Relative "last active" label, or "—" when the timestamp is missing or the Go
+ *  zero value (`0001-01-01T00:00:00Z`, which omitempty does not drop for a
+ *  time.Time) — i.e. an account that has never been seen. */
+export function lastActive(iso?: string): string {
+  if (!iso) return '—'
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t) || t <= 0) return '—'
+  return relativeTime(iso)
+}
+
 /** Stock level from available count vs threshold — green / yellow / red. */
 export function stockLevel(available: number, threshold: number): StockLevel {
   if (available <= 0 || available < threshold * 0.4) return 'lo'

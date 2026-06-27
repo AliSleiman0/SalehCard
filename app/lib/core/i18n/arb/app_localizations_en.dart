@@ -45,6 +45,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emptyCatalog => 'No products available.';
 
   @override
+  String get offersEmpty => 'No offers right now. Check back soon.';
+
+  @override
   String get productDetailUnavailable =>
       'This product is currently unavailable.';
 
@@ -84,6 +87,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get verifyButton => 'Verify';
+
+  @override
+  String get nameLabel => 'Full name';
+
+  @override
+  String get nameHint => 'Your name';
+
+  @override
+  String get nameRequired => 'Please enter your name.';
 
   @override
   String get mobileNumberLabel => 'Mobile Number';
@@ -172,6 +184,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get navCart => 'Cart';
+
+  @override
+  String get navOffers => 'Offers';
 
   @override
   String get navMenu => 'Menu';
@@ -584,6 +599,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kycFullNameLabel => 'Full name';
+
+  @override
+  String get kycDobLabel => 'Date of birth';
+
+  @override
+  String get kycDobHint => 'Select your date of birth';
+
+  @override
+  String get kycPlaceOfBirthLabel => 'Place of birth';
+
+  @override
+  String get kycPlaceOfResidenceLabel => 'Place of residence';
+
+  @override
+  String get kycPlaceHint => 'City, country';
 
   @override
   String get kycDocTypeLabel => 'Document type';

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
@@ -38,13 +39,14 @@ type OrderService struct {
 	codes     code.Service
 	wallet    wallet.Service
 	promo     promo.Service
+	offers    offer.Service
 	providers *provider.Registry
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
-// inventory, wallet, promo, and upstream-provider registry it depends on.
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, providers *provider.Registry) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, providers: providers}
+// inventory, wallet, promo, offers, and upstream-provider registry it depends on.
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -99,6 +101,13 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		price := variant.Price
 		if isReseller && variant.ResellerPrice != nil {
 			price = *variant.ResellerPrice
+		} else if s.offers != nil {
+			// Honor a live sale-price offer on the retail price (resellers keep
+			// their reseller price — offers don't stack on top of it). Absence of
+			// an offer (ErrNotFound) leaves the price unchanged.
+			if off, oerr := s.offers.FindLiveByProduct(ctx, p.ID, time.Now().UTC()); oerr == nil {
+				price = offer.OfferPriceFor(off, price)
+			}
 		}
 		ft := string(p.FulfillmentType)
 		// Resolve the execution mode, deriving a behavior-preserving default for

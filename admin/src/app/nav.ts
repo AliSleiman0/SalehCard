@@ -22,6 +22,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: '/products', icon: 'box', label: 'nav_products' },
       { to: '/inventory', icon: 'layers', label: 'nav_inventory', badge: '8', badgeType: 'warn' },
+      { to: '/offers', icon: 'tag', label: 'nav_offers' },
     ],
   },
   {
@@ -30,6 +31,7 @@ export const NAV: NavGroup[] = [
       { to: '/orders', icon: 'bag', label: 'nav_orders', badge: '3', badgeType: 'danger' },
       { to: '/users', icon: 'users', label: 'nav_users' },
       { to: '/resellers', icon: 'handshake', label: 'nav_resellers' },
+      { to: '/kyc', icon: 'id', label: 'nav_kyc' },
     ],
   },
   {
@@ -37,6 +39,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: '/finance', icon: 'wallet', label: 'nav_wallet' },
       { to: '/promos', icon: 'tag', label: 'nav_promos' },
+      { to: '/expenses', icon: 'coins', label: 'nav_expenses' },
     ],
   },
   { group: 'grp_content', items: [{ to: '/reviews', icon: 'star', label: 'nav_reviews' }] },

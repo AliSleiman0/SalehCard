@@ -19,11 +19,12 @@ abstract interface class AuthRepository {
   Future<Either<Failure, Unit>> requestOtp({required String phone});
 
   /// Verifies an OTP code; on success authenticates (creating the account on
-  /// first sign-in) and optionally sets [password].
+  /// first sign-in) and optionally sets [password] and [name] (signup).
   Future<Either<Failure, User>> verifyOtp({
     required String phone,
     required String code,
     String? password,
+    String? name,
   });
 
   Future<void> logout();

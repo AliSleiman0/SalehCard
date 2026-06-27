@@ -13,6 +13,7 @@ export interface ProductListParams {
 
 export interface ProductInput {
   title: { en: string; ar: string; tr: string }
+  description: { en: string; ar: string; tr: string }
   category: string
   images: string[]
   variants: { denomination: string; price: number; resellerPrice?: number }[]
