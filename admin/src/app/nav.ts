@@ -35,7 +35,7 @@ export const NAV: NavGroup[] = [
   {
     group: 'grp_finance',
     items: [
-      { to: '/finance', icon: 'wallet', label: 'nav_wallet', badge: '4', badgeType: 'warn' },
+      { to: '/finance', icon: 'wallet', label: 'nav_wallet' },
       { to: '/promos', icon: 'tag', label: 'nav_promos' },
     ],
   },

@@ -130,6 +130,10 @@ func (f *fakeOrderRepo) RevenueSeries(_ context.Context, _ string) ([]string, []
 	return []string{}, []float64{}, nil
 }
 
+func (f *fakeOrderRepo) RevenueSummary(_ context.Context) (RevenueSummary, error) {
+	return RevenueSummary{}, nil
+}
+
 // fakeProductSvc serves a fixed catalog; only FindByID is exercised.
 type fakeProductSvc struct {
 	byID map[string]*product.Product
