@@ -80,10 +80,12 @@ func (s *Server) Routes() {
 	// Customer auth + profile (public; /users/* guarded by AuthRequired).
 	user.RegisterRoutes(s.router, s.db, s.cfg)
 
-	// Customer orders + wallet + promo validation (guarded by AuthRequired).
+	// Customer orders + wallet + promo validation + review submission
+	// (guarded by AuthRequired).
 	order.RegisterRoutes(s.router, s.db, s.cfg)
 	wallet.RegisterRoutes(s.router, s.db, s.cfg)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
+	review.RegisterRoutes(s.router, s.db, s.cfg)
 
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role
 	// (AdminOnly bypasses in dev when no JWT secret is configured).

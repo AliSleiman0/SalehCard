@@ -12,6 +12,7 @@ import (
 	seed "github.com/AliSleiman0/salehcard/api/internal/modules/product/seed"
 	promoseed "github.com/AliSleiman0/salehcard/api/internal/modules/promo/seed"
 	resellerseed "github.com/AliSleiman0/salehcard/api/internal/modules/reseller/seed"
+	reviewseed "github.com/AliSleiman0/salehcard/api/internal/modules/review/seed"
 	userseed "github.com/AliSleiman0/salehcard/api/internal/modules/user/seed"
 	walletseed "github.com/AliSleiman0/salehcard/api/internal/modules/wallet/seed"
 	mongoplatform "github.com/AliSleiman0/salehcard/api/internal/platform/mongo"
@@ -68,6 +69,12 @@ func main() {
 
 	if err := promoseed.Seed(ctx, db); err != nil {
 		log.Fatalf("promo seed failed: %v", err)
+	}
+
+	log.Println("running review seed...")
+
+	if err := reviewseed.Seed(ctx, db); err != nil {
+		log.Fatalf("review seed failed: %v", err)
 	}
 
 	log.Println("seed completed successfully")

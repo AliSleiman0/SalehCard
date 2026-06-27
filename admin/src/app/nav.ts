@@ -39,6 +39,6 @@ export const NAV: NavGroup[] = [
       { to: '/promos', icon: 'tag', label: 'nav_promos' },
     ],
   },
-  { group: 'grp_content', items: [{ to: '/reviews', icon: 'star', label: 'nav_reviews', badge: '4', badgeType: 'danger' }] },
+  { group: 'grp_content', items: [{ to: '/reviews', icon: 'star', label: 'nav_reviews' }] },
   { group: 'grp_system', items: [{ to: '/settings', icon: 'settings', label: 'nav_settings' }] },
 ]
