@@ -55,6 +55,16 @@ export function downloadCsv(filename: string, rows: (string | number)[][]): void
   URL.revokeObjectURL(url)
 }
 
+/** Relative "last active" label, or "—" when the timestamp is missing or the Go
+ *  zero value (`0001-01-01T00:00:00Z`, which omitempty does not drop for a
+ *  time.Time) — i.e. an account that has never been seen. */
+export function lastActive(iso?: string): string {
+  if (!iso) return '—'
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t) || t <= 0) return '—'
+  return relativeTime(iso)
+}
+
 /** Stock level from available count vs threshold — green / yellow / red. */
 export function stockLevel(available: number, threshold: number): StockLevel {
   if (available <= 0 || available < threshold * 0.4) return 'lo'

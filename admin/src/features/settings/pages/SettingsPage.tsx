@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Icon, PageHead, Avatar, StatusBadge, Toggle, Tabs, ComingSoonNote } from '@/components'
 import { useUsers } from '@/features/users/hooks/useUsers'
 import { adaptUser } from '@/features/users/lib/adaptUser'
-import { relativeTime } from '@/lib/utils'
+import { lastActive } from '@/lib/utils'
 
 type Tab = 'general' | 'gateways' | 'notifications' | 'admins'
 
@@ -282,7 +282,7 @@ export default function SettingsPage() {
                       </span>
                     </td>
                     <td className="muted" style={{ fontSize: 12.5 }}>
-                      {a.raw.lastSeen ? relativeTime(a.raw.lastSeen) : '—'}
+                      {lastActive(a.raw.lastSeen)}
                     </td>
                     <td>
                       <StatusBadge s={a.status} />
