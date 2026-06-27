@@ -46,6 +46,26 @@ type Repository interface {
 	CountPendingTransfers(ctx context.Context) (int64, error)
 	FulfillmentBreakdown(ctx context.Context) (map[string]int, error)
 	RevenueSeries(ctx context.Context, rng string) (labels []string, series []float64, err error)
+	RevenueSummary(ctx context.Context) (RevenueSummary, error)
+}
+
+// LabelValue is one labeled bucket of a revenue breakdown (e.g. a payment
+// method, currency, or category and its summed revenue).
+type LabelValue struct {
+	Label string  `json:"label"`
+	Value float64 `json:"value"`
+}
+
+// RevenueSummary is the admin finance rollup, all derived from the orders
+// collection. Money figures are summed completed-order totals; RefundRate is a
+// fraction in [0,1] (refunded / (completed + refunded)).
+type RevenueSummary struct {
+	TotalRevenue float64      `json:"totalRevenue"`
+	MonthRevenue float64      `json:"monthRevenue"`
+	RefundRate   float64      `json:"refundRate"`
+	ByMethod     []LabelValue `json:"byMethod"`
+	ByCategory   []LabelValue `json:"byCategory"`
+	ByCurrency   []LabelValue `json:"byCurrency"`
 }
 
 // OrderFilter narrows an admin order listing. Zero-valued fields are ignored.
@@ -56,7 +76,7 @@ type OrderFilter struct {
 	Status          OrderStatus
 	PaymentMethod   PaymentMethod
 	FulfillmentType string
-	OrderID         *bson.ObjectID // exact order-id match (search parsed as hex)
+	OrderID         *bson.ObjectID  // exact order-id match (search parsed as hex)
 	UserIDs         []bson.ObjectID // email-search matches (search mode)
 	SearchRaw       string          // raw term; matched against deliveredCode in search mode
 }
@@ -358,7 +378,7 @@ func revenueBuckets(now time.Time, rng string, loc *time.Location) (mongoFmt str
 	case "weekly":
 		mongoFmt = "%Y-%m-%d"
 		today := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, loc)
-		monday := today.AddDate(0, 0, -((int(today.Weekday())+6)%7)) // ISO week starts Monday
+		monday := today.AddDate(0, 0, -((int(today.Weekday()) + 6) % 7)) // ISO week starts Monday
 		for i := 11; i >= 0; i-- {
 			s := monday.AddDate(0, 0, -7*i)
 			_, wk := s.ISOWeek()
@@ -430,6 +450,123 @@ func (r *MongoRepository) RevenueSeries(ctx context.Context, rng string) ([]stri
 		}
 	}
 	return labels, series, nil
+}
+
+// RevenueSummary rolls up the admin finance figures from the orders collection:
+// all-time and current-month completed revenue, the refund rate, and revenue
+// broken down by payment method, currency, and product category. The
+// month boundary uses the business timezone, consistent with DayStats.
+func (r *MongoRepository) RevenueSummary(ctx context.Context) (RevenueSummary, error) {
+	var out RevenueSummary
+
+	// All-time completed revenue + count, in one pass.
+	totalPipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{{Key: "status", Value: OrderStatusCompleted}}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "revenue", Value: bson.D{{Key: "$sum", Value: "$total"}}},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+	var totals []struct {
+		Revenue float64 `bson:"revenue"`
+		Count   int64   `bson:"count"`
+	}
+	if err := r.aggregateInto(ctx, totalPipeline, &totals); err != nil {
+		return out, err
+	}
+	var completedCount int64
+	if len(totals) > 0 {
+		out.TotalRevenue = totals[0].Revenue
+		completedCount = totals[0].Count
+	}
+
+	// Current-month completed revenue (business-timezone month boundary).
+	now := time.Now().In(businessLocation)
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, businessLocation)
+	monthPipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{
+			{Key: "status", Value: OrderStatusCompleted},
+			{Key: "createdAt", Value: bson.D{{Key: "$gte", Value: monthStart}}},
+		}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "revenue", Value: bson.D{{Key: "$sum", Value: "$total"}}},
+		}}},
+	}
+	var month []struct {
+		Revenue float64 `bson:"revenue"`
+	}
+	if err := r.aggregateInto(ctx, monthPipeline, &month); err != nil {
+		return out, err
+	}
+	if len(month) > 0 {
+		out.MonthRevenue = month[0].Revenue
+	}
+
+	// Refund rate = refunded / (completed + refunded), guarded against /0.
+	refundedCount, err := r.CountByStatus(ctx, OrderStatusRefunded)
+	if err != nil {
+		return out, err
+	}
+	if denom := completedCount + refundedCount; denom > 0 {
+		out.RefundRate = float64(refundedCount) / float64(denom)
+	}
+
+	// Breakdowns over completed orders.
+	if out.ByMethod, err = r.revenueGroup(ctx, "$paymentMethod", false); err != nil {
+		return out, err
+	}
+	if out.ByCurrency, err = r.revenueGroup(ctx, "$currency", false); err != nil {
+		return out, err
+	}
+	if out.ByCategory, err = r.revenueGroup(ctx, "$items.category", true); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+// revenueGroup sums completed-order revenue grouped by a single field, returning
+// labeled buckets sorted highest-first. When perItem is true the orders are
+// unwound to line items and revenue is summed as price*qty (used for category,
+// which lives on the line item); otherwise the order total is summed by an
+// order-level field (payment method, currency).
+func (r *MongoRepository) revenueGroup(ctx context.Context, field string, perItem bool) ([]LabelValue, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{{Key: "status", Value: OrderStatusCompleted}}}},
+	}
+	sum := bson.D{{Key: "$sum", Value: "$total"}}
+	if perItem {
+		pipeline = append(pipeline, bson.D{{Key: "$unwind", Value: "$items"}})
+		sum = bson.D{{Key: "$sum", Value: bson.D{{Key: "$multiply", Value: bson.A{"$items.price", "$items.qty"}}}}}
+	}
+	pipeline = append(pipeline,
+		bson.D{{Key: "$group", Value: bson.D{{Key: "_id", Value: field}, {Key: "v", Value: sum}}}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "v", Value: -1}}}},
+	)
+	var rows []struct {
+		ID    string  `bson:"_id"`
+		Value float64 `bson:"v"`
+	}
+	if err := r.aggregateInto(ctx, pipeline, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]LabelValue, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, LabelValue{Label: row.ID, Value: row.Value})
+	}
+	return out, nil
+}
+
+// aggregateInto runs a pipeline and decodes all rows into dst (a pointer to a
+// slice), closing the cursor.
+func (r *MongoRepository) aggregateInto(ctx context.Context, pipeline mongo.Pipeline, dst any) error {
+	cur, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+	defer cur.Close(ctx)
+	return cur.All(ctx, dst)
 }
 
 // mongoFmt2Go maps the small set of $dateToString formats we use to their Go

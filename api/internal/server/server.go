@@ -15,6 +15,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/category"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/dashboard"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/finance"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
 	product "github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
@@ -92,12 +93,12 @@ func (s *Server) Routes() {
 		product.RegisterAdminRoutes(r, s.db)
 		code.RegisterAdminRoutes(r, s.db)
 		dashboard.RegisterAdminRoutes(r, s.db)
+		finance.RegisterAdminRoutes(r, s.db)
 
 		// Route map registered; handlers stubbed (501) pending implementation:
 		order.RegisterAdminRoutes(r, s.db)
 		user.RegisterAdminRoutes(r, s.db)
 		reseller.RegisterAdminRoutes(r, s.db)
-		wallet.RegisterAdminRoutes(r, s.db)
 		promo.RegisterAdminRoutes(r, s.db)
 		review.RegisterAdminRoutes(r, s.db)
 		settings.RegisterAdminRoutes(r, s.db)
