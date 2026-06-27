@@ -39,10 +39,12 @@ type UploadItem struct {
 	Pin  string `json:"pin,omitempty"`
 }
 
-// UploadInput is the body of POST /api/admin/products/:id/codes.
+// UploadInput is the body of POST /api/admin/products/:id/codes. UploadedBy is
+// server-set from the caller's JWT (not trusted from the client body).
 type UploadInput struct {
-	Codes []UploadItem `json:"codes"`
-	Batch string       `json:"batch,omitempty"`
+	Codes      []UploadItem `json:"codes"`
+	Batch      string       `json:"batch,omitempty"`
+	UploadedBy string       `json:"-"`
 }
 
 // UploadResult summarises what a bulk upload committed.
@@ -50,6 +52,26 @@ type UploadResult struct {
 	Inserted   int `json:"inserted"`
 	Duplicates int `json:"duplicates"`
 	Invalid    int `json:"invalid"`
+}
+
+// UploadBatch is the persisted record of one bulk upload, written on each upload
+// so the inventory screen can show a real upload history (codes themselves don't
+// retain who uploaded them or the insert-time inserted/duplicate split).
+type UploadBatch struct {
+	ID         bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	ProductID  string        `bson:"productId"     json:"productId"`
+	Batch      string        `bson:"batch"         json:"batch"`
+	Inserted   int           `bson:"inserted"      json:"inserted"`
+	Duplicates int           `bson:"duplicates"    json:"duplicates"`
+	Invalid    int           `bson:"invalid"       json:"invalid"`
+	UploadedBy string        `bson:"uploadedBy,omitempty" json:"uploadedBy,omitempty"`
+	CreatedAt  time.Time     `bson:"createdAt"     json:"createdAt"`
+}
+
+// UploadBatchView is an UploadBatch enriched with the product title for display.
+type UploadBatchView struct {
+	UploadBatch
+	ProductTitle string `json:"productTitle"`
 }
 
 // StockLevel mirrors the frontend's green/yellow/red coding.

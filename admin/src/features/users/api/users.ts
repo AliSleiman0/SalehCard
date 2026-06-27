@@ -29,6 +29,7 @@ export interface AdminUser {
   loyaltyPoints: number
   createdAt: string
   updatedAt: string
+  lastSeen?: string
   orders: number
   spent: number
 }

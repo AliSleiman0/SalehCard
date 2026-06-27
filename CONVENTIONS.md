@@ -109,11 +109,11 @@ A **separate** Vite + React + TS app (port **5174**) for the internal team — p
 - **Fulfillment color-coding** is consistent everywhere via `<FfBadge>`: blue = `code`, green = `account_credit` (`credit`), orange = `transfer`.
 
 ### What is wired vs mock
-- **Wired to the Go API:** `products` (list/create/edit/delete/bulk), `inventory` (code stock, bulk upload, threshold config, code audit), and the dashboard's KPIs + low-stock panel.
-- **Mock-driven (with `// TODO` + a `ComingSoonNote` banner):** orders, users, resellers, finance, promos, reviews, settings. Mock data lives in `lib/mock/demo.ts` (ported from the prototype's `data.js`).
+- **Wired to the Go API:** `products` (list/create/edit/delete/bulk + category dropdowns from catalog-distinct facets), `inventory` (code stock, bulk upload, threshold config, code audit, **upload history**), the **dashboard** (every figure — revenue/orders/active-users/wallet KPIs + sparklines, charts, fulfillment, low-stock, system health), and **settings → admin-users** table (`/api/admin/users?role=admin`).
+- **Mock-driven (with `// TODO` + a `ComingSoonNote` banner):** orders, resellers, finance, promos, reviews, and the remaining settings store-config forms. Mock data lives in `lib/mock/demo.ts` (ported from the prototype's `data.js`).
 
 ### Admin backend (`/api`)
 - `internal/platform/auth/middleware.go` → `AdminOnly(secret)` guards the `/api/admin` group: requires `role == "admin"` on the JWT; **bypasses with a synthetic admin in dev when `JWT_SECRET` is empty** (logs a one-time warning), enforces when a secret is set.
-- **Fully implemented:** product admin CRUD + bulk (`internal/modules/product/admin.go`), the inventory/code module (`internal/modules/code/`), and dashboard stats + low-stock (`internal/modules/dashboard/`).
-- **Stubbed (501) with the full route map:** each area registers `RegisterAdminRoutes(r, db)` returning `response.Stub("…")` — `order`, `user`, `reseller`, `wallet` (finance), `promo`, `review`, and `settings`. Fill these in following the existing module pattern (model → repository → service → handler).
+- **Fully implemented:** product admin CRUD + bulk + category facets (`internal/modules/product/admin.go`), the inventory/code module incl. upload-history (`internal/modules/code/`, `GET /api/admin/upload-history` backed by the `upload_batches` collection), dashboard (`internal/modules/dashboard/`), and the admin user list (`internal/modules/user/admin.go`, `GET /api/admin/users`).
+- **Stubbed (501) with the full route map:** the remaining areas register `RegisterAdminRoutes(r, db)` returning `response.Stub("…")` — `reseller`, `settings`, and any others not yet filled in. Fill these in following the existing module pattern (model → repository → service → handler).
 - All admin routes are wired in `internal/server/server.go` under `r.Route("/api/admin", …)`.

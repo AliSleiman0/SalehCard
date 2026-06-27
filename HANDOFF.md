@@ -63,8 +63,9 @@ storefront **`:5174`** (5173 is held by another project `zakkerni`; CORS allows 
    `cd migration && go run ./cmd/import` then `cd api && go run ./cmd/loadseed`. The
    524 `fulfillment_review` products (which "manual" top-ups are really `api`) are
    the key owner decision.
-3. **Admin parity** (deferred this session): wire the admin's hardcoded `CATS`
-   (`admin/src/lib/mock/demo.ts`) to `GET /api/v1/categories`.
+3. ~~**Admin parity**: wire the admin's hardcoded `CATS` to real categories.~~ **Done** —
+   the admin category dropdowns now load from catalog-distinct facets
+   (`GET /api/admin/products/categories`); the `CATS` mock was deleted from `demo.ts`.
 4. **Subcategory drill-down** (depth 1/2) — today's storefront browse is flat
    (root → all products under it).
 5. Optional: surface rich fields (`description`, `inputFields`, `pricing.cost`) in

@@ -102,6 +102,9 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
 - **Frontend data**: catalog + orders + wallet are wired to the API via React-Query hooks
   + `adapt*` mappers (`features/*/lib/adapt*.ts`). Remaining mock data lives in
   `web/src/lib/mock/demo.ts` / `admin/src/lib/mock/demo.ts` behind `// TODO` markers.
+  In `/admin` the dashboard (fully real), products (incl. category dropdowns), inventory
+  (incl. upload history), and the settings admin-users table are API-wired; see
+  `CONVENTIONS.md` → "What is wired vs mock" for the current split.
 - **Customer routes guarded** by `RequireAuth` in `web/src/app/router.tsx`: `/dashboard`,
   `/wallet`, `/orders`, `/orders/:id`, `/checkout`, `/order-success/:id`.
 

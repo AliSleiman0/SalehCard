@@ -6,9 +6,27 @@ export interface CodeAudit {
   product?: { id: string; title: string }
 }
 
+/** One persisted bulk-upload record, for the inventory upload-history panel. */
+export interface UploadBatchView {
+  id: string
+  productId: string
+  productTitle: string
+  batch: string
+  inserted: number
+  duplicates: number
+  invalid: number
+  uploadedBy?: string
+  createdAt: string
+}
+
 /** Per-product code stats across all code-type products. */
 export function listInventory(): Promise<ApiResponse<InventoryStats[]>> {
   return apiClient.get<InventoryStats[]>('/api/admin/inventory')
+}
+
+/** Recent upload batches (newest first). */
+export function listUploadHistory(limit = 20): Promise<ApiResponse<UploadBatchView[]>> {
+  return apiClient.get<UploadBatchView[]>(`/api/admin/upload-history?limit=${limit}`)
 }
 
 export function listCodes(

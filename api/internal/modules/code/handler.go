@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -44,6 +45,12 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	if len(in.Codes) == 0 {
 		response.BadRequest(w, "codes are required")
 		return
+	}
+
+	// Stamp the uploader from the verified JWT (server-set, never trusted from the
+	// body). Empty in the dev AdminOnly bypass → shown as "—" in the UI.
+	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+		in.UploadedBy = claims.Email
 	}
 
 	result, err := h.svc.Upload(r.Context(), productID, in)

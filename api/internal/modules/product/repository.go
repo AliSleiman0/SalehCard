@@ -246,6 +246,45 @@ func (r *MongoRepository) CountByRootDomain(ctx context.Context) (map[string]int
 	return out, nil
 }
 
+// CategoryFacet is one distinct product category and how many products carry it.
+type CategoryFacet struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+// CategoryFacets returns the distinct, non-empty product `category` values with
+// their product counts (alphabetical). These are the exact strings the product
+// list filter matches on, so the admin category dropdowns can be populated from
+// them without guessing the taxonomy's slug alignment.
+func (r *MongoRepository) CategoryFacets(ctx context.Context) ([]CategoryFacet, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{{Key: "category", Value: bson.D{{Key: "$nin", Value: bson.A{"", nil}}}}}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$category"},
+			{Key: "n", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+		{{Key: "$sort", Value: bson.D{{Key: "_id", Value: 1}}}},
+	}
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var rows []struct {
+		ID string `bson:"_id"`
+		N  int    `bson:"n"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]CategoryFacet, len(rows))
+	for i, row := range rows {
+		out[i] = CategoryFacet{Value: row.ID, Count: row.N}
+	}
+	return out, nil
+}
+
 // Create inserts a new product document built from the supplied input.
 // Variant IDs are generated automatically; CreatedAt and UpdatedAt are stamped now.
 func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*Product, error) {

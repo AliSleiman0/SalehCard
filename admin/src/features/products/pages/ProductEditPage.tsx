@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, Toggle, StatusBadge, LoadingSpinner, ErrorState, ffKey, type FfKey } from '@/components'
-import { CATS } from '@/lib/mock/demo'
+import { useProductCategories } from '../hooks/useCategories'
+import { categoryLabel } from '../api/categories'
 import { useProduct, useCreateProduct, useUpdateProduct } from '../hooks/useProducts'
 import type { FulfillmentType, Locale } from '@/types'
 
@@ -31,9 +32,12 @@ export default function ProductEditPage() {
   const create = useCreateProduct()
   const update = useUpdateProduct(id ?? '')
 
+  const { data: catsRes } = useProductCategories()
+  const cats = useMemo(() => catsRes?.data ?? [], [catsRes])
+
   const [langTab, setLangTab] = useState<Locale>('en')
   const [title, setTitle] = useState({ en: '', ar: '', tr: '' })
-  const [category, setCategory] = useState(CATS[0])
+  const [category, setCategory] = useState('')
   const [ff, setFf] = useState<FfKey>('code')
   const [active, setActive] = useState(false)
   const [stock, setStock] = useState(0)
@@ -60,6 +64,19 @@ export default function ProductEditPage() {
         : [{ denomination: '', price: '', resellerPrice: '' }]
     )
   }, [data])
+
+  // Default a brand-new product to the first real category once the list loads.
+  useEffect(() => {
+    if (isNew && !category && cats.length > 0) setCategory(cats[0].value)
+  }, [isNew, category, cats])
+
+  // Options = the real categories, always including the product's current value
+  // (so editing a product whose category has no siblings still shows it).
+  const catOptions = useMemo(() => {
+    const values = cats.map((c) => c.value)
+    if (category && !values.includes(category)) values.unshift(category)
+    return values
+  }, [cats, category])
 
   const pending = create.isPending || update.isPending
   const error = create.error || update.error
@@ -165,8 +182,10 @@ export default function ProductEditPage() {
               <div>
                 <label className="alabel">Category</label>
                 <select className="select" style={{ width: '100%' }} value={category} onChange={(e) => setCategory(e.target.value)}>
-                  {CATS.map((c) => (
-                    <option key={c}>{c}</option>
+                  {catOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {categoryLabel(c)}
+                    </option>
                   ))}
                 </select>
               </div>

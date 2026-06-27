@@ -18,7 +18,8 @@ import {
   type FfKey,
 } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
-import { CATS } from '@/lib/mock/demo'
+import { useProductCategories } from '../hooks/useCategories'
+import { categoryLabel } from '../api/categories'
 import { useProducts, useDeleteProduct, useBulkProductAction } from '../hooks/useProducts'
 import { productStatus, priceRange } from '../lib/view'
 import type { FulfillmentType, Product } from '@/types'
@@ -48,6 +49,8 @@ export default function ProductListPage() {
   })
   const del = useDeleteProduct()
   const bulkAction = useBulkProductAction()
+  const { data: catsRes } = useProductCategories()
+  const cats = catsRes?.data ?? []
 
   const rows: Product[] = data?.data ?? []
   const ids = rows.map((r) => r.id)
@@ -107,9 +110,9 @@ export default function ProductListPage() {
           </div>
           <select className="select" value={cat} onChange={(e) => setCat(e.target.value)}>
             <option value="all">All categories</option>
-            {CATS.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {cats.map((c) => (
+              <option key={c.value} value={c.value}>
+                {categoryLabel(c.value)}
               </option>
             ))}
           </select>

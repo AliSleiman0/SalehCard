@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Icon, PageHead, Avatar, StatusBadge, Toggle, Tabs, ComingSoonNote } from '@/components'
-import { admins } from '@/lib/mock/demo'
+import { useUsers } from '@/features/users/hooks/useUsers'
+import { adaptUser } from '@/features/users/lib/adaptUser'
+import { relativeTime } from '@/lib/utils'
 
 type Tab = 'general' | 'gateways' | 'notifications' | 'admins'
 
@@ -10,6 +12,8 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>('general')
   const [visa, setVisa] = useState(true)
   const [usdt, setUsdt] = useState(true)
+  const { data: adminsRes, isLoading: adminsLoading } = useUsers({ role: 'admin', limit: 100 })
+  const adminRows = (adminsRes?.data ?? []).map(adaptUser)
 
   return (
     <div className="page">
@@ -247,8 +251,15 @@ export default function SettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {admins.map((a) => (
-                  <tr key={a.email}>
+                {adminRows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 20 }}>
+                      {adminsLoading ? 'Loading…' : 'No admin accounts found.'}
+                    </td>
+                  </tr>
+                )}
+                {adminRows.map((a) => (
+                  <tr key={a.id}>
                     <td>
                       <div className="cellprod">
                         <Avatar name={a.name} />
@@ -262,21 +273,16 @@ export default function SettingsPage() {
                       <span
                         className="pill-role"
                         style={{
-                          background:
-                            a.role === 'Super admin'
-                              ? 'rgba(214,51,255,.16)'
-                              : a.role === 'Editor'
-                                ? 'rgba(91,139,255,.15)'
-                                : 'var(--surface-2)',
-                          color: a.role === 'Super admin' ? '#d883ff' : a.role === 'Editor' ? 'var(--ff-code)' : 'var(--text-dim)',
+                          background: 'rgba(214,51,255,.16)',
+                          color: '#d883ff',
                           border: '1px solid var(--border)',
                         }}
                       >
-                        {a.role}
+                        Admin
                       </span>
                     </td>
                     <td className="muted" style={{ fontSize: 12.5 }}>
-                      {a.last}
+                      {a.raw.lastSeen ? relativeTime(a.raw.lastSeen) : '—'}
                     </td>
                     <td>
                       <StatusBadge s={a.status} />

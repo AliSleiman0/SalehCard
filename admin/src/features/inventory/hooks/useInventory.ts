@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   listInventory,
   listCodes,
+  listUploadHistory,
   uploadCodes,
   lookupCode,
   setStockThreshold,
@@ -11,6 +12,10 @@ import type { CodeStatus } from '@/types'
 
 export function useInventory() {
   return useQuery({ queryKey: ['admin', 'inventory'], queryFn: () => listInventory() })
+}
+
+export function useUploadHistory() {
+  return useQuery({ queryKey: ['admin', 'upload-history'], queryFn: () => listUploadHistory() })
 }
 
 export function useCodes(
@@ -32,6 +37,7 @@ export function useUploadCodes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'inventory'] })
       qc.invalidateQueries({ queryKey: ['admin', 'codes'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'upload-history'] })
     },
   })
 }
