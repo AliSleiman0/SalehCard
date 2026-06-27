@@ -131,6 +131,10 @@ func (f *fakeOrderRepo) RevenueSeries(_ context.Context, _ string) ([]string, []
 	return []string{}, []float64{}, nil
 }
 
+func (f *fakeOrderRepo) KpiSparkSeries(_ context.Context) ([]float64, []int, error) {
+	return []float64{}, []int{}, nil
+}
+
 func (f *fakeOrderRepo) RevenueSummary(_ context.Context) (RevenueSummary, error) {
 	return RevenueSummary{}, nil
 }

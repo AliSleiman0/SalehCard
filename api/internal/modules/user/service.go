@@ -373,6 +373,12 @@ func (s *UserService) issueTokens(ctx context.Context, user *User) (*AuthResult,
 		return nil, err
 	}
 
+	// Activity heartbeat for the "active users" metric. Best-effort: a failure
+	// here must not fail the login/refresh, so the error is ignored.
+	now := time.Now().UTC()
+	_ = s.repo.TouchLastSeen(ctx, user.ID, now)
+	user.LastSeen = now
+
 	return &AuthResult{User: user, AccessToken: access, RefreshToken: raw}, nil
 }
 

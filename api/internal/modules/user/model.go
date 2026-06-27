@@ -44,6 +44,10 @@ type User struct {
 	LoyaltyPoints  int           `bson:"loyaltyPoints" json:"loyaltyPoints"`
 	CreatedAt      time.Time     `bson:"createdAt"     json:"createdAt"`
 	UpdatedAt      time.Time     `bson:"updatedAt"     json:"updatedAt"`
+	// LastSeen is refreshed whenever the account authenticates (login / OTP /
+	// token refresh). It powers the "active users" dashboard metric; absent on
+	// accounts that have not signed in since the field was introduced.
+	LastSeen time.Time `bson:"lastSeen,omitempty" json:"lastSeen,omitempty"`
 }
 
 // OtpCode is a pending one-time passcode for a phone number. Only the SHA-256

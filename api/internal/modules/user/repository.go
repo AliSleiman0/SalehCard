@@ -24,6 +24,12 @@ type Repository interface {
 	SetPassword(ctx context.Context, id bson.ObjectID, passwordHash string) error
 	Delete(ctx context.Context, id bson.ObjectID) error
 
+	// TouchLastSeen stamps the account's last-seen time (best-effort activity
+	// heartbeat, written on every auth). CountActiveSince counts accounts seen
+	// at or after `since` — the "active users" dashboard metric.
+	TouchLastSeen(ctx context.Context, id bson.ObjectID, t time.Time) error
+	CountActiveSince(ctx context.Context, since time.Time) (int64, error)
+
 	// Admin operations.
 	ListAll(ctx context.Context, f UserFilter, p pagination.Params) ([]*User, int64, error)
 	UpdateRole(ctx context.Context, id bson.ObjectID, role Role) (*User, error)
@@ -102,6 +108,7 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 			Options: options.Index().SetUnique(true).SetSparse(true),
 		},
 		{Keys: bson.D{{Key: "role", Value: 1}}},
+		{Keys: bson.D{{Key: "lastSeen", Value: -1}}},
 	})
 	if err != nil {
 		return err
@@ -282,6 +289,23 @@ func (r *MongoRepository) SetPassword(ctx context.Context, id bson.ObjectID, pas
 		return apperrors.ErrNotFound
 	}
 	return nil
+}
+
+// TouchLastSeen stamps the account's lastSeen time. It is best-effort and does
+// not bump updatedAt (which tracks profile edits, not activity). A missing user
+// is silently ignored.
+func (r *MongoRepository) TouchLastSeen(ctx context.Context, id bson.ObjectID, t time.Time) error {
+	_, err := r.collection.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: id}},
+		bson.D{{Key: "$set", Value: bson.D{{Key: "lastSeen", Value: t.UTC()}}}},
+	)
+	return err
+}
+
+// CountActiveSince counts accounts whose lastSeen is at or after `since`.
+func (r *MongoRepository) CountActiveSince(ctx context.Context, since time.Time) (int64, error) {
+	return r.collection.CountDocuments(ctx,
+		bson.D{{Key: "lastSeen", Value: bson.D{{Key: "$gte", Value: since.UTC()}}}})
 }
 
 // ListAll returns a paginated, newest-first page of users matching f, plus the

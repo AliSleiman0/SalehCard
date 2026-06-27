@@ -1,6 +1,7 @@
-// Package dashboard serves the admin overview endpoints. Product/code-derived and
-// order-derived figures are real; only active-users and wallet-topups remain
-// mocked until the user/wallet aggregations land (flagged with TODOs).
+// Package dashboard serves the admin overview endpoints. Every figure is derived
+// from real data: products/codes (inventory), orders (revenue, counts,
+// fulfillment, sparklines), users (active-in-24h via lastSeen), and the wallet
+// ledger (today's top-ups).
 package dashboard
 
 import (
@@ -14,6 +15,8 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -25,14 +28,16 @@ type Stats struct {
 	CodesAvailable int   `json:"codesAvailable"`
 	CodesDelivered int   `json:"codesDelivered"`
 	// Real (derived from orders):
-	RevenueToday     float64 `json:"revenueToday"`
-	RevenueDeltaPct  float64 `json:"revenueDeltaPct"`
-	OrdersToday      int     `json:"ordersToday"`
-	OrdersDeltaPct   float64 `json:"ordersDeltaPct"`
-	PendingTransfers int     `json:"pendingTransfers"`
-	// Mocked until user/wallet aggregations land:
-	ActiveUsers  int     `json:"activeUsers"`
-	WalletTopups float64 `json:"walletTopups"`
+	RevenueToday     float64   `json:"revenueToday"`
+	RevenueDeltaPct  float64   `json:"revenueDeltaPct"`
+	OrdersToday      int       `json:"ordersToday"`
+	OrdersDeltaPct   float64   `json:"ordersDeltaPct"`
+	PendingTransfers int       `json:"pendingTransfers"`
+	RevenueSpark     []float64 `json:"revenueSpark"`
+	OrdersSpark      []int     `json:"ordersSpark"`
+	// Real (derived from users / wallet ledger):
+	ActiveUsers  int     `json:"activeUsers"`  // accounts seen in the last 24h
+	WalletTopups float64 `json:"walletTopups"` // top-ups credited today
 }
 
 // ffSlice is one segment of the fulfillment-breakdown donut.
@@ -47,6 +52,8 @@ type Handler struct {
 	products *mongo.Collection
 	codes    code.Service
 	orders   order.Repository
+	users    user.Repository
+	wallet   wallet.Repository
 }
 
 // RegisterAdminRoutes mounts the dashboard routes onto r (the /api/admin group).
@@ -55,6 +62,8 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 		products: db.Collection("products"),
 		codes:    code.NewService(db),
 		orders:   order.NewMongoRepository(db.Collection("orders")),
+		users:    user.NewMongoRepository(db),
+		wallet:   wallet.NewMongoRepository(db),
 	}
 	r.Get("/dashboard/stats", h.GetStats)
 	r.Get("/dashboard/low-stock", h.GetLowStock)
@@ -103,6 +112,24 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	revenueSpark, ordersSpark, err := h.orders.KpiSparkSeries(ctx)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+
+	activeUsers, err := h.users.CountActiveSince(ctx, now.Add(-24*time.Hour))
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+
+	walletTopups, err := h.wallet.TopUpsForDay(ctx, now)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+
 	stats := Stats{
 		TotalProducts:    totalProducts,
 		LowStockCount:    lowStock,
@@ -113,9 +140,10 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		OrdersToday:      ordersToday,
 		OrdersDeltaPct:   deltaPct(float64(ordersToday), float64(ordersYday)),
 		PendingTransfers: int(pendingTransfers),
-		// TODO(mock): needs user/wallet aggregation.
-		ActiveUsers:  3610,
-		WalletTopups: 48920,
+		RevenueSpark:     revenueSpark,
+		OrdersSpark:      ordersSpark,
+		ActiveUsers:      int(activeUsers),
+		WalletTopups:     walletTopups,
 	}
 	response.OK(w, stats)
 }

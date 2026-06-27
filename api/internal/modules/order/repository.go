@@ -46,6 +46,7 @@ type Repository interface {
 	CountPendingTransfers(ctx context.Context) (int64, error)
 	FulfillmentBreakdown(ctx context.Context) (map[string]int, error)
 	RevenueSeries(ctx context.Context, rng string) (labels []string, series []float64, err error)
+	KpiSparkSeries(ctx context.Context) (revenue []float64, orders []int, err error)
 	RevenueSummary(ctx context.Context) (RevenueSummary, error)
 }
 
@@ -450,6 +451,60 @@ func (r *MongoRepository) RevenueSeries(ctx context.Context, rng string) ([]stri
 		}
 	}
 	return labels, series, nil
+}
+
+// KpiSparkSeries returns parallel last-14-day daily series of completed-order
+// revenue and order count, in the business timezone, zero-filled. It feeds the
+// "today's revenue" / "today's orders" KPI sparklines on the admin dashboard.
+func (r *MongoRepository) KpiSparkSeries(ctx context.Context) (revenue []float64, orders []int, err error) {
+	loc := businessLocation
+	mongoFmt, buckets := revenueBuckets(time.Now(), "daily", loc)
+	matchStart := buckets[0].start
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{
+			{Key: "status", Value: OrderStatusCompleted},
+			{Key: "createdAt", Value: bson.D{{Key: "$gte", Value: matchStart}}},
+		}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: bson.D{{Key: "$dateToString", Value: bson.D{
+				{Key: "format", Value: mongoFmt},
+				{Key: "date", Value: "$createdAt"},
+				{Key: "timezone", Value: loc.String()},
+			}}}},
+			{Key: "revenue", Value: bson.D{{Key: "$sum", Value: "$total"}}},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+	cur, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer cur.Close(ctx)
+	var rows []struct {
+		Key     string  `bson:"_id"`
+		Revenue float64 `bson:"revenue"`
+		Count   int     `bson:"count"`
+	}
+	if err := cur.All(ctx, &rows); err != nil {
+		return nil, nil, err
+	}
+
+	revenue = make([]float64, len(buckets))
+	orders = make([]int, len(buckets))
+	for _, row := range rows {
+		t, err := time.ParseInLocation(mongoFmt2Go(mongoFmt), row.Key, loc)
+		if err != nil {
+			continue
+		}
+		for i, b := range buckets {
+			if !t.Before(b.start) && t.Before(b.end) {
+				revenue[i] += row.Revenue
+				orders[i] += row.Count
+				break
+			}
+		}
+	}
+	return revenue, orders, nil
 }
 
 // RevenueSummary rolls up the admin finance figures from the orders collection:

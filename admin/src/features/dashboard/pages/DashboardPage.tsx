@@ -3,14 +3,20 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Icon, PageHead, Spark, AreaChart, Donut, Avatar, FfBadge, StatusBadge, Art, artForCategory } from '@/components'
 import type { DonutDatum } from '@/components'
-import { money } from '@/lib/utils'
-import { useDashboardStats, useLowStock, useRevenueChart, useFulfillmentBreakdown } from '../hooks/useDashboard'
+import { money, downloadCsv, formatLongDate } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
+import { useDashboardStats, useLowStock, useRevenueChart, useFulfillmentBreakdown, useHealth } from '../hooks/useDashboard'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
-import { inventory as mockInventory } from '@/lib/mock/demo'
-import type { InventoryStats } from '@/types'
 
 type Range = 'daily' | 'weekly' | 'monthly'
+
+// Time-of-day greeting for the dashboard header.
+function greeting(h: number): string {
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
 
 // Donut colors keyed by fulfillment slice key — the design-system tokens (same
 // source as FfBadge / OrderListPage's FF_DOT), so the palette tracks the theme.
@@ -64,12 +70,14 @@ function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkC
 export default function DashboardPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const user = useAuthStore((st) => st.user)
   const [range, setRange] = useState<Range>('daily')
   const { data: statsRes } = useDashboardStats()
   const { data: lowRes } = useLowStock()
   const { data: revRes } = useRevenueChart(range)
   const { data: ffRes } = useFulfillmentBreakdown()
   const { data: recentRes } = useOrders({ limit: 7 })
+  const { data: health } = useHealth()
   const s = statsRes?.data
 
   // Revenue area chart — real completed-order revenue for the selected range.
@@ -89,33 +97,37 @@ export default function DashboardPage() {
   // Recent orders — newest 7, adapted to the row view.
   const recent = (recentRes?.data ?? []).map(adaptOrder)
 
-  // Low-stock panel: real data when available, else mock.
-  const lowStock: InventoryStats[] =
-    lowRes?.data && lowRes.data.length > 0
-      ? lowRes.data
-      : mockInventory
-          .filter((i) => i.level !== 'hi')
-          .slice(0, 4)
-          .map((i) => ({
-            productId: i.id,
-            title: i.title,
-            category: '',
-            uploaded: i.uploaded,
-            available: i.available,
-            delivered: i.delivered,
-            expired: i.expired,
-            threshold: i.threshold,
-            level: i.level,
-          }))
+  // Low-stock panel — real inventory, newest threshold breaches first.
+  const lowStock = lowRes?.data ?? []
+
+  // Export the current dashboard view (KPI summary + recent orders) to CSV.
+  const handleExport = () => {
+    const rows: (string | number)[][] = [
+      ['SalehCard dashboard export', formatLongDate()],
+      [],
+      ['Metric', 'Value'],
+      ["Today's revenue", s ? s.revenueToday : ''],
+      ["Today's orders", s ? s.ordersToday : ''],
+      ['Active users (24h)', s ? s.activeUsers : ''],
+      ['Wallet top-ups (today)', s ? s.walletTopups : ''],
+      ['Pending transfers', s ? s.pendingTransfers : ''],
+      ['Low-stock alerts', s ? s.lowStockCount : ''],
+      [],
+      ['Recent orders'],
+      ['Order', 'Customer', 'Type', 'Amount', 'Currency', 'Status', 'Date'],
+      ...recent.map((o) => [o.id, o.customer, o.ff, o.amount, o.cur, o.status, o.date]),
+    ]
+    downloadCsv(`dashboard-${new Date().toISOString().slice(0, 10)}.csv`, rows)
+  }
 
   return (
     <div className="page page-wide">
       <PageHead
         crumbs={[t('nav_dashboard')]}
-        title="Good morning, Omar"
-        sub="Here's what's happening across SalehCard today — June 5, 2026."
+        title={`${greeting(new Date().getHours())}, ${user?.name ?? 'Admin'}`}
+        sub={`Here's what's happening across SalehCard today — ${formatLongDate()}.`}
       >
-        <button className="abtn">
+        <button className="abtn" onClick={handleExport}>
           <Icon name="download" size={15} /> {t('export')}
         </button>
         <button className="abtn primary" onClick={() => navigate('/products/new')}>
@@ -128,53 +140,43 @@ export default function DashboardPage() {
           icon={<Icon name="wallet" size={17} />}
           iconBg="var(--grad)"
           label="Today's revenue"
-          value={s ? money(s.revenueToday) : '$12,148'}
-          delta={s ? `${s.revenueDeltaPct}%` : '14.2%'}
-          deltaDir="up"
+          value={s ? money(s.revenueToday) : '—'}
+          delta={s ? `${s.revenueDeltaPct}%` : undefined}
+          deltaDir={s && s.revenueDeltaPct < 0 ? 'down' : 'up'}
           since="vs yesterday"
-          spark={[6, 7, 6.5, 8, 7.5, 9, 8.7, 10, 9.6, 11.4, 12.1]}
+          spark={s?.revenueSpark}
           sparkColor="#8a3bff"
         />
         <Kpi
           icon={<Icon name="bag" size={17} />}
           iconBg="linear-gradient(135deg,#3b5bff,#22e3c8)"
           label="Today's orders"
-          value={s ? s.ordersToday.toLocaleString() : '842'}
-          delta={s ? `${s.ordersDeltaPct}%` : '8.1%'}
-          deltaDir="up"
+          value={s ? s.ordersToday.toLocaleString() : '—'}
+          delta={s ? `${s.ordersDeltaPct}%` : undefined}
+          deltaDir={s && s.ordersDeltaPct < 0 ? 'down' : 'up'}
           since="vs yesterday"
-          spark={[40, 42, 48, 46, 52, 58, 61, 67]}
+          spark={s?.ordersSpark}
           sparkColor="#3b5bff"
         />
         <Kpi
           icon={<Icon name="users" size={17} />}
           iconBg="linear-gradient(135deg,#2fd47a,#22e3c8)"
           label="Active users"
-          value={s ? s.activeUsers.toLocaleString() : '3,610'}
-          delta="2.4%"
-          deltaDir="up"
+          value={s ? s.activeUsers.toLocaleString() : '—'}
           since="last 24h"
-          spark={[28, 30, 32, 31, 34, 36, 35, 38]}
-          sparkColor="#2fd47a"
         />
         <Kpi
           icon={<Icon name="coins" size={17} />}
           iconBg="linear-gradient(135deg,#8a3bff,#d633ff)"
           label="Wallet top-ups"
-          value={s ? money(s.walletTopups) : '$48,920'}
-          delta="5.7%"
-          deltaDir="up"
+          value={s ? money(s.walletTopups) : '—'}
           since="today"
-          spark={[20, 24, 22, 28, 26, 30, 34, 33]}
-          sparkColor="#d633ff"
         />
         <Kpi
           icon={<Icon name="send" size={17} />}
           iconBg="rgba(255,155,61,.2)"
           label="Pending transfers"
-          value={s ? String(s.pendingTransfers) : '4'}
-          delta="2 new"
-          deltaDir="flat"
+          value={s ? String(s.pendingTransfers) : '—'}
           since="needs action"
           cls="alert"
         />
@@ -182,9 +184,7 @@ export default function DashboardPage() {
           icon={<Icon name="alert" size={17} />}
           iconBg="rgba(255,77,109,.2)"
           label="Low-stock alerts"
-          value={s ? String(s.lowStockCount) : '8'}
-          delta="2 critical"
-          deltaDir="down"
+          value={s ? String(s.lowStockCount) : '—'}
           since="codes running out"
           cls="crit"
         />
@@ -348,6 +348,11 @@ export default function DashboardPage() {
               </div>
             </div>
             <div>
+              {lowStock.length === 0 && (
+                <div className="lsrow" style={{ color: 'var(--text-faint)', fontSize: 13, fontWeight: 600 }}>
+                  All products are above their stock thresholds.
+                </div>
+              )}
               {lowStock.slice(0, 4).map((it) => {
                 const pct = Math.min(100, Math.round((it.available / Math.max(1, it.threshold)) * 100))
                 return (
@@ -377,26 +382,32 @@ export default function DashboardPage() {
             <div>
               {(
                 [
-                  ['Payment gateway · Visa', 'ok', 'Operational'],
-                  ['Payment gateway · USDT', 'ok', 'Operational'],
-                  ['Code delivery API', 'ok', '99.98% uptime'],
-                  ['Webhook queue', 'warn', 'Slight delay · 1.2s'],
-                ] as const
-              ).map(([name, st, note], i) => (
-                <div className="health" key={i}>
+                  ['API server', health ? health.api : null, health ? (health.api ? 'Operational' : 'Unreachable') : 'Checking…'],
+                  ['Database', health ? health.db : null, health ? (health.db ? 'Connected' : 'Unavailable') : 'Checking…'],
+                ] as [string, boolean | null, string][]
+              ).map(([name, ok, note]) => (
+                <div className="health" key={name}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span
                       style={{
                         width: 8,
                         height: 8,
                         borderRadius: 99,
-                        background: st === 'ok' ? 'var(--ok)' : 'var(--warn)',
-                        boxShadow: st === 'ok' ? '0 0 8px var(--ok)' : 'none',
+                        background: ok === null ? 'var(--text-faint)' : ok ? 'var(--ok)' : 'var(--warn)',
+                        boxShadow: ok ? '0 0 8px var(--ok)' : 'none',
                       }}
                     />
                     <span style={{ fontWeight: 700, fontSize: 13 }}>{name}</span>
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: st === 'ok' ? 'var(--ok)' : 'var(--warn)' }}>{note}</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: ok === null ? 'var(--text-faint)' : ok ? 'var(--ok)' : 'var(--warn)',
+                    }}
+                  >
+                    {note}
+                  </span>
                 </div>
               ))}
             </div>
