@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
@@ -13,11 +13,18 @@ import {
   Tabs,
   Segmented,
   Modal,
-  ComingSoonNote,
+  LoadingSpinner,
+  ErrorState,
+  EmptyState,
 } from '@/components'
-import { money } from '@/lib/utils'
-import { users, orders, transactions } from '@/lib/mock/demo'
-import type { DemoUser } from '@/lib/mock/demo'
+import { money, relativeTime } from '@/lib/utils'
+import { ApiError } from '@/lib/api-client'
+import { useOrders } from '@/features/orders/hooks/useOrders'
+import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import { useUser, useUpdateUserRole, useUpdateUserStatus, useAdjustWallet } from '../hooks/useUsers'
+import { adaptUser } from '../lib/adaptUser'
+import type { AdminUserDetail, UserStatus } from '../api/users'
+import type { UserRole } from '@/types'
 
 type Tab = 'overview' | 'orders' | 'wallet' | 'ids' | 'role'
 
@@ -25,41 +32,53 @@ export default function UserDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
-  // TODO: wire to GET /api/admin/users/:id (mock; backend route stubbed 501).
-  const u = users.find((x) => x.id === id) || users[0]
+  const { data, isLoading, isError, refetch } = useUser(id)
   const [tab, setTab] = useState<Tab>('overview')
   const [adjOpen, setAdjOpen] = useState(false)
-  const uOrders = orders.slice(0, 5)
+
+  const detail = data?.data
+  const view = detail ? adaptUser(detail) : null
+
+  const updateStatus = useUpdateUserStatus(id ?? '')
+
+  if (isLoading) return <LoadingSpinner />
+  if (isError || !detail || !view) {
+    return (
+      <div className="page">
+        <ErrorState message="Couldn't load this user." onRetry={() => refetch()} />
+      </div>
+    )
+  }
+
+  const toggleStatus = () => {
+    const next: UserStatus = view.status === 'suspended' ? 'active' : 'suspended'
+    updateStatus.mutate(next)
+  }
 
   return (
     <div className="page">
-      <PageHead crumbs={[t('nav_users'), u.name]} title={u.name} sub={u.email}>
+      <PageHead crumbs={[t('nav_users'), view.name]} title={view.name} sub={view.email || view.phone}>
         <button className="abtn" onClick={() => navigate('/users')}>
           <Icon name="chevleft" size={15} /> {t('back')}
         </button>
-        <button className="abtn">
-          <Icon name="send" size={15} /> Message
-        </button>
-        {u.status === 'active' ? (
-          <button className="abtn danger">
-            <Icon name="x" size={15} /> {t('suspend')}
+        {view.status === 'suspended' ? (
+          <button className="abtn ok" onClick={toggleStatus} disabled={updateStatus.isPending}>
+            <Icon name="check" size={15} /> Reactivate
           </button>
         ) : (
-          <button className="abtn ok">
-            <Icon name="check" size={15} /> Reactivate
+          <button className="abtn danger" onClick={toggleStatus} disabled={updateStatus.isPending}>
+            <Icon name="x" size={15} /> {t('suspend')}
           </button>
         )}
       </PageHead>
 
-      <ComingSoonNote mock />
-
       <div className="g3" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 18 }}>
         {(
           [
-            ['Wallet balance', money(u.balance, u.cur), 'wallet'],
-            ['Total orders', String(u.orders), 'bag'],
-            ['Total spent', money(u.spent, u.cur), 'coins'],
-            ['Loyalty points', '2,140', 'star'],
+            ['Wallet balance', money(view.balance, view.cur), 'wallet'],
+            ['Total orders', String(view.orders), 'bag'],
+            ['Total spent', money(view.spent, view.cur), 'coins'],
+            ['Loyalty points', view.loyalty.toLocaleString(), 'star'],
           ] as [string, string, 'wallet' | 'bag' | 'coins' | 'star'][]
         ).map(([l, v, ic]) => (
           <div className="kpi" key={l}>
@@ -95,14 +114,14 @@ export default function UserDetailPage() {
             <div className="deflist">
               {(
                 [
-                  ['Full name', u.name],
-                  ['Email', u.email],
-                  ['User ID', u.id],
-                  ['Role', <RoleBadge key="r" role={u.role} />],
-                  ['Status', <StatusBadge key="s" s={u.status} />],
-                  ['Currency', u.cur],
-                  ['Registered', u.joined],
-                  ['Last login', '2 hours ago'],
+                  ['Display name', view.name],
+                  ['Email', view.email || '—'],
+                  ['Phone', view.phone || '—'],
+                  ['User ID', view.id],
+                  ['Role', <RoleBadge key="r" role={view.role} />],
+                  ['Status', <StatusBadge key="s" s={view.status} />],
+                  ['Currency', view.cur],
+                  ['Registered', view.joined],
                 ] as [string, React.ReactNode][]
               ).map(([k, v]) => (
                 <div className="defrow" key={k}>
@@ -124,7 +143,7 @@ export default function UserDetailPage() {
             >
               <div style={{ fontSize: 12.5, opacity: 0.8, fontWeight: 700 }}>Current balance</div>
               <div className="num" style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-.02em', margin: '4px 0 14px' }}>
-                {money(u.balance, u.cur)}
+                {money(view.balance, view.cur)}
               </div>
               <button
                 className="abtn sm"
@@ -135,19 +154,15 @@ export default function UserDetailPage() {
               </button>
             </div>
             <div className="acard pad">
-              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Cashback &amp; loyalty</h3>
+              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Loyalty</h3>
               <div className="deflist">
                 <div className="defrow">
-                  <span className="dk">Cashback earned</span>
-                  <span className="dv num">$48.20</span>
-                </div>
-                <div className="defrow">
                   <span className="dk">Loyalty points</span>
-                  <span className="dv num">2,140</span>
+                  <span className="dv num">{view.loyalty.toLocaleString()}</span>
                 </div>
                 <div className="defrow">
-                  <span className="dk">Tier</span>
-                  <span className="dv">Silver member</span>
+                  <span className="dk">Saved game IDs</span>
+                  <span className="dv num">{detail.savedPlayerIds.length}</span>
                 </div>
               </div>
             </div>
@@ -155,56 +170,7 @@ export default function UserDetailPage() {
         </div>
       )}
 
-      {tab === 'orders' && (
-        <div className="acard">
-          <div className="panelhead">
-            <Icon name="bag" size={17} />
-            <h3>Order history</h3>
-            <span className="faint" style={{ fontSize: 12.5, marginInlineStart: 6 }}>
-              {u.orders} total
-            </span>
-          </div>
-          <div className="tablewrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>Product</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {uOrders.map((o) => (
-                  <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
-                    <td className="mono strong">{o.id}</td>
-                    <td>
-                      <div className="cellprod">
-                        <Art art={o.art} size={28} radius={6} />
-                        <div className="pn">
-                          <b style={{ fontSize: 12.5 }}>{o.product}</b>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <FfBadge ff={o.ff} />
-                    </td>
-                    <td className="num strong">{money(o.amount, o.cur)}</td>
-                    <td>
-                      <StatusBadge s={o.status} />
-                    </td>
-                    <td className="muted" style={{ fontSize: 12 }}>
-                      {o.date}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {tab === 'orders' && <OrdersTab email={view.email} total={view.orders} />}
 
       {tab === 'wallet' && (
         <div className="acard">
@@ -217,130 +183,252 @@ export default function UserDetailPage() {
               </button>
             </div>
           </div>
-          <div className="tablewrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Transaction</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                  <th>Method</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.slice(0, 6).map((tx) => (
-                  <tr key={tx.id}>
-                    <td className="mono strong">{tx.id}</td>
-                    <td className="muted" style={{ textTransform: 'capitalize' }}>
-                      {tx.type}
-                    </td>
-                    <td className="num strong" style={{ color: tx.amount < 0 ? 'var(--danger)' : 'var(--ok)' }}>
-                      {tx.amount < 0 ? '−' : '+'}
-                      {money(Math.abs(tx.amount), tx.cur).replace('−', '')}
-                    </td>
-                    <td>{tx.method === '—' ? <span className="faint">—</span> : <PayChip p={tx.method} />}</td>
-                    <td className="muted" style={{ fontSize: 12 }}>
-                      {tx.date}
-                    </td>
+          {detail.transactions.length === 0 ? (
+            <EmptyState title="No wallet activity yet" />
+          ) : (
+            <div className="tablewrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Transaction</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {detail.transactions.map((tx) => (
+                    <tr key={tx.id}>
+                      <td className="mono strong">{tx.id.slice(-8)}</td>
+                      <td className="muted" style={{ textTransform: 'capitalize' }}>
+                        {tx.type}
+                      </td>
+                      <td className="num strong" style={{ color: tx.amount < 0 ? 'var(--danger)' : 'var(--ok)' }}>
+                        {tx.amount < 0 ? '−' : '+'}
+                        {money(Math.abs(tx.amount), view.cur).replace('−', '')}
+                      </td>
+                      <td>{tx.method ? <PayChip p={tx.method} /> : <span className="faint">—</span>}</td>
+                      <td className="muted" style={{ fontSize: 12 }}>
+                        {relativeTime(tx.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
       {tab === 'ids' && (
         <div className="g2">
-          {(
-            [
-              ['PUBG Mobile', '5521 8842 1190'],
-              ['Mobile Legends', '8842 · Server 2201'],
-              ['TikTok', '@yusuf.plays'],
-              ['Bigo Live', 'ID 44120882'],
-            ] as [string, string][]
-          ).map(([game, gid]) => (
-            <div className="acard pad" key={game} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 10,
-                  background: 'var(--grad-soft)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  color: 'var(--brand-1)',
-                }}
-              >
-                <Icon name="id" size={18} />
-              </div>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 14 }}>{game}</div>
-                <div className="mono faint" style={{ fontSize: 12.5 }}>
-                  {gid}
+          {detail.savedPlayerIds.length === 0 ? (
+            <EmptyState title="No saved game IDs" />
+          ) : (
+            detail.savedPlayerIds.map((pid) => (
+              <div className="acard pad" key={pid} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    background: 'var(--grad-soft)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    color: 'var(--brand-1)',
+                  }}
+                >
+                  <Icon name="id" size={18} />
+                </div>
+                <div>
+                  <div className="mono" style={{ fontWeight: 800, fontSize: 14 }}>
+                    {pid}
+                  </div>
+                  <div className="faint" style={{ fontSize: 12.5 }}>
+                    Saved player ID
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
 
-      {tab === 'role' && (
-        <div className="formgrid">
-          <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Role management</h3>
-            <label className="alabel">Account role</label>
-            <div className="g3">
-              {(
-                [
-                  ['customer', 'Customer'],
-                  ['reseller', 'Reseller'],
-                  ['admin', 'Admin'],
-                ] as [string, string][]
-              ).map(([k, l]) => (
-                <Chip key={k} on={u.role === k} style={{ justifyContent: 'center', padding: 12 }}>
-                  {l}
-                </Chip>
-              ))}
-            </div>
-            <div className="ahint">
-              Promoting to reseller unlocks wholesale pricing and a sub-balance. Promoting to admin grants console access.
-            </div>
-            <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
-              <button className="abtn primary">
-                <Icon name="check" size={15} /> {t('save')}
-              </button>
-            </div>
-          </div>
-          <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Danger zone</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button className="abtn danger" style={{ justifyContent: 'flex-start' }}>
-                <Icon name="x" size={14} /> Suspend account
-              </button>
-              <button className="abtn danger" style={{ justifyContent: 'flex-start' }}>
-                <Icon name="trash" size={14} /> Delete account &amp; data
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {tab === 'role' && <RoleTab id={view.id} role={view.role} onSuspend={toggleStatus} suspending={updateStatus.isPending} />}
 
-      {adjOpen && <AdjustModal user={u} onClose={() => setAdjOpen(false)} />}
+      {adjOpen && <AdjustModal user={detail} onClose={() => setAdjOpen(false)} />}
     </div>
   )
 }
 
-function AdjustModal({ user, onClose }: { user: DemoUser; onClose: () => void }) {
+/** Order history for the user — reuses the wired admin orders endpoint, searched
+ *  by the customer's email (the list backend resolves email → their orders). */
+function OrdersTab({ email, total }: { email: string; total: number }) {
+  const navigate = useNavigate()
+  const { data, isLoading, isError } = useOrders({ q: email, limit: 5 })
+  const rows = (data?.data ?? []).map(adaptOrder)
+
+  return (
+    <div className="acard">
+      <div className="panelhead">
+        <Icon name="bag" size={17} />
+        <h3>Order history</h3>
+        <span className="faint" style={{ fontSize: 12.5, marginInlineStart: 6 }}>
+          {total} completed
+        </span>
+      </div>
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : isError ? (
+        <ErrorState message="Couldn't load orders." />
+      ) : rows.length === 0 ? (
+        <EmptyState title="No orders yet" />
+      ) : (
+        <div className="tablewrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Product</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((o) => (
+                <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
+                  <td className="mono strong">{o.id.slice(-8)}</td>
+                  <td>
+                    <div className="cellprod">
+                      <Art art={o.art} size={28} radius={6} />
+                      <div className="pn">
+                        <b style={{ fontSize: 12.5 }}>{o.product}</b>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <FfBadge ff={o.ff} />
+                  </td>
+                  <td className="num strong">{money(o.amount, o.cur)}</td>
+                  <td>
+                    <StatusBadge s={o.status} />
+                  </td>
+                  <td className="muted" style={{ fontSize: 12 }}>
+                    {o.date}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Role management + danger zone. Role changes persist via the admin endpoint. */
+function RoleTab({
+  id,
+  role,
+  onSuspend,
+  suspending,
+}: {
+  id: string
+  role: UserRole
+  onSuspend: () => void
+  suspending: boolean
+}) {
+  const { t } = useTranslation()
+  const [pending, setPending] = useState<UserRole>(role)
+  const updateRole = useUpdateUserRole(id)
+
+  // Keep the selection in sync if the underlying user role changes (refetch).
+  useEffect(() => setPending(role), [role])
+
+  const roles: [UserRole, string][] = [
+    ['customer', 'Customer'],
+    ['reseller', 'Reseller'],
+    ['admin', 'Admin'],
+  ]
+
+  return (
+    <div className="formgrid">
+      <div className="acard pad">
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Role management</h3>
+        <label className="alabel">Account role</label>
+        <div className="g3">
+          {roles.map(([k, l]) => (
+            <Chip key={k} on={pending === k} onClick={() => setPending(k)} style={{ justifyContent: 'center', padding: 12 }}>
+              {l}
+            </Chip>
+          ))}
+        </div>
+        <div className="ahint">
+          Promoting to reseller unlocks wholesale pricing and a sub-balance. Promoting to admin grants console access.
+        </div>
+        <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            className="abtn primary"
+            disabled={pending === role || updateRole.isPending}
+            onClick={() => updateRole.mutate(pending)}
+          >
+            <Icon name="check" size={15} /> {t('save')}
+          </button>
+          {updateRole.isError && <span style={{ color: 'var(--danger)', fontSize: 12.5 }}>Couldn't update role.</span>}
+        </div>
+      </div>
+      <div className="acard pad">
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Danger zone</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button className="abtn danger" style={{ justifyContent: 'flex-start' }} onClick={onSuspend} disabled={suspending}>
+            <Icon name="x" size={14} /> Suspend account
+          </button>
+          <button className="abtn danger" style={{ justifyContent: 'flex-start' }} disabled title="Coming soon">
+            <Icon name="trash" size={14} /> Delete account &amp; data
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AdjustModal({ user, onClose }: { user: AdminUserDetail; onClose: () => void }) {
   const { t } = useTranslation()
   const [dir, setDir] = useState<'credit' | 'debit'>('credit')
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  const adjust = useAdjustWallet(user.id)
+
+  const apply = () => {
+    const amt = Number(amount)
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setError('Enter an amount greater than zero.')
+      return
+    }
+    if (!reason.trim()) {
+      setError('A reason is required.')
+      return
+    }
+    setError('')
+    adjust.mutate(
+      { direction: dir, amount: amt, reason: reason.trim() },
+      {
+        onSuccess: onClose,
+        onError: (e) => setError(e instanceof ApiError ? e.message : 'Adjustment failed.'),
+      },
+    )
+  }
+
   return (
     <Modal onClose={onClose} maxWidth={420}>
       <div style={{ padding: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>Adjust wallet balance</h3>
         <div className="faint" style={{ fontSize: 12.5, marginBottom: 16 }}>
-          {user.name} · current {money(user.balance, user.cur)}
+          {user.email || user.phone} · current {money(user.walletBalance)}
         </div>
         <Segmented<'credit' | 'debit'>
           block
@@ -352,18 +440,35 @@ function AdjustModal({ user, onClose }: { user: DemoUser; onClose: () => void })
           ]}
         />
         <label className="alabel" style={{ marginTop: 14 }}>
-          Amount ({user.cur})
+          Amount (USD)
         </label>
-        <input className="afield" placeholder="0.00" />
+        <input
+          className="afield"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
         <label className="alabel" style={{ marginTop: 14 }}>
           Reason (required)
         </label>
-        <textarea className="afield" placeholder="Goodwill credit, manual refund, correction…" style={{ minHeight: 64 }} />
+        <textarea
+          className="afield"
+          placeholder="Goodwill credit, manual refund, correction…"
+          style={{ minHeight: 64 }}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        {error && (
+          <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>
+        )}
         <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
-          <button className="abtn" onClick={onClose}>
+          <button className="abtn" onClick={onClose} disabled={adjust.isPending}>
             {t('cancel')}
           </button>
-          <button className="abtn primary" onClick={onClose}>
+          <button className="abtn primary" onClick={apply} disabled={adjust.isPending}>
             <Icon name="check" size={15} /> Apply adjustment
           </button>
         </div>

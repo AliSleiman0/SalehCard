@@ -15,6 +15,15 @@ const (
 	RoleAdmin    Role = "admin"
 )
 
+// Status represents the account state. An empty status (on accounts created
+// before this field existed) is treated as active everywhere it is read.
+type Status string
+
+const (
+	StatusActive    Status = "active"
+	StatusSuspended Status = "suspended"
+)
+
 // User is the primary account entity. Either Email (email/password signup) or
 // Phone (phone-OTP signup) identifies the account; both carry a sparse-unique
 // index so phone-only accounts may omit the email and vice versa.
@@ -25,6 +34,7 @@ type User struct {
 	PasswordHash   *string       `bson:"passwordHash"  json:"-"`
 	GoogleID       *string       `bson:"googleId,omitempty" json:"googleId,omitempty"`
 	Role           Role          `bson:"role"          json:"role"`
+	Status         Status        `bson:"status,omitempty" json:"status"`
 	Locale         string        `bson:"locale"        json:"locale"`
 	SavedPlayerIDs []string      `bson:"savedPlayerIds" json:"savedPlayerIds"`
 	WalletBalance  float64       `bson:"walletBalance" json:"walletBalance"`

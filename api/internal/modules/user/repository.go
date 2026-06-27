@@ -7,6 +7,7 @@ import (
 	"time"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
+	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -22,6 +23,51 @@ type Repository interface {
 	Update(ctx context.Context, user *User) error
 	SetPassword(ctx context.Context, id bson.ObjectID, passwordHash string) error
 	Delete(ctx context.Context, id bson.ObjectID) error
+
+	// Admin operations.
+	ListAll(ctx context.Context, f UserFilter, p pagination.Params) ([]*User, int64, error)
+	UpdateRole(ctx context.Context, id bson.ObjectID, role Role) (*User, error)
+	UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error)
+}
+
+// UserFilter narrows an admin user listing. Zero-valued fields are ignored.
+type UserFilter struct {
+	Role   Role
+	Status Status
+	Search string // matches an ObjectID hex, or email/phone (case-insensitive)
+}
+
+// build assembles the MongoDB filter document for f.
+func (f UserFilter) build() bson.D {
+	filter := bson.D{}
+	if f.Role != "" {
+		filter = append(filter, bson.E{Key: "role", Value: f.Role})
+	}
+	if f.Status != "" {
+		// "active" must also match legacy accounts that predate the status field
+		// (no status stored) — treat a missing status as active.
+		if f.Status == StatusActive {
+			filter = append(filter, bson.E{Key: "$or", Value: bson.A{
+				bson.D{{Key: "status", Value: StatusActive}},
+				bson.D{{Key: "status", Value: bson.D{{Key: "$exists", Value: false}}}},
+			}})
+		} else {
+			filter = append(filter, bson.E{Key: "status", Value: f.Status})
+		}
+	}
+	if s := strings.TrimSpace(f.Search); s != "" {
+		if id, err := bson.ObjectIDFromHex(s); err == nil {
+			filter = append(filter, bson.E{Key: "_id", Value: id})
+		} else {
+			pattern := regexp.QuoteMeta(s)
+			rx := bson.D{{Key: "$regex", Value: pattern}, {Key: "$options", Value: "i"}}
+			filter = append(filter, bson.E{Key: "$or", Value: bson.A{
+				bson.D{{Key: "email", Value: rx}},
+				bson.D{{Key: "phone", Value: rx}},
+			}})
+		}
+	}
+	return filter
 }
 
 // MongoRepository is a MongoDB-backed implementation of Repository.
@@ -179,6 +225,9 @@ func (r *MongoRepository) Create(ctx context.Context, user *User) error {
 	user.Email = normalizeEmail(user.Email)
 	user.CreatedAt = now
 	user.UpdatedAt = now
+	if user.Status == "" {
+		user.Status = StatusActive
+	}
 	if user.SavedPlayerIDs == nil {
 		user.SavedPlayerIDs = []string{}
 	}
@@ -228,6 +277,61 @@ func (r *MongoRepository) SetPassword(ctx context.Context, id bson.ObjectID, pas
 		return apperrors.ErrNotFound
 	}
 	return nil
+}
+
+// ListAll returns a paginated, newest-first page of users matching f, plus the
+// total count of matches (for pagination meta).
+func (r *MongoRepository) ListAll(ctx context.Context, f UserFilter, p pagination.Params) ([]*User, int64, error) {
+	filter := f.build()
+	total, err := r.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	opts := options.Find().
+		SetSkip(pagination.Skip(p)).
+		SetLimit(int64(p.Limit)).
+		SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	cur, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cur.Close(ctx)
+	out := []*User{}
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+// UpdateRole atomically sets a user's role and returns the updated document,
+// returning ErrNotFound when no user matches.
+func (r *MongoRepository) UpdateRole(ctx context.Context, id bson.ObjectID, role Role) (*User, error) {
+	return r.setFields(ctx, id, bson.D{{Key: "role", Value: role}})
+}
+
+// UpdateStatus atomically sets a user's status and returns the updated document,
+// returning ErrNotFound when no user matches.
+func (r *MongoRepository) UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error) {
+	return r.setFields(ctx, id, bson.D{{Key: "status", Value: status}})
+}
+
+// setFields applies a single-document $set (plus updatedAt) and returns the
+// post-update user.
+func (r *MongoRepository) setFields(ctx context.Context, id bson.ObjectID, fields bson.D) (*User, error) {
+	fields = append(fields, bson.E{Key: "updatedAt", Value: time.Now().UTC()})
+	var u User
+	err := r.collection.FindOneAndUpdate(ctx,
+		bson.D{{Key: "_id", Value: id}},
+		bson.D{{Key: "$set", Value: fields}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&u)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
 }
 
 // Delete removes a user by ObjectID.

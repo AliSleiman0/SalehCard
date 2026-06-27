@@ -250,6 +250,8 @@ func writeAuthError(w http.ResponseWriter, err error) {
 			response.Error(w, http.StatusConflict, appErr.Code, appErr.Message)
 		case errors.Is(appErr, apperrors.ErrUnauthorized):
 			response.Error(w, http.StatusUnauthorized, appErr.Code, appErr.Message)
+		case errors.Is(appErr, apperrors.ErrForbidden):
+			response.Error(w, http.StatusForbidden, appErr.Code, appErr.Message)
 		default:
 			response.InternalError(w)
 		}
