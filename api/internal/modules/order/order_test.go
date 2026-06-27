@@ -12,6 +12,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -293,9 +294,19 @@ func newSUTMulti(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc *fake
 		byID[p.ID.Hex()] = p
 	}
 	prodSvc := &fakeProductSvc{byID: byID}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, provider.NewRegistry())
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, provider.NewRegistry())
 	return svc, repo
 }
+
+// fakePromoSvc is a no-op promo service; the order tests never set a promo code,
+// so Validate/Redeem are not exercised (a benign zero promo keeps it safe).
+type fakePromoSvc struct{}
+
+func (f *fakePromoSvc) Validate(_ context.Context, _ promo.ValidateInput) (*promo.PromoCode, error) {
+	return &promo.PromoCode{}, nil
+}
+
+func (f *fakePromoSvc) Redeem(_ context.Context, _ string) error { return nil }
 
 func itemFor(p *product.Product, qty int) PlaceOrderItemInput {
 	return PlaceOrderItemInput{ProductID: p.ID.Hex(), VariantID: p.Variants[0].ID.Hex(), Qty: qty}

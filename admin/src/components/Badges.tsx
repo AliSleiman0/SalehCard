@@ -43,6 +43,7 @@ const STATUS_MAP: Record<string, [string, string]> = {
   pending: ['st-warn', 'Pending'],
   invited: ['st-warn', 'Invited'],
   draft: ['st-mute', 'Draft'],
+  paused: ['st-mute', 'Paused'],
   expired: ['st-mute', 'Expired'],
   depleted: ['st-mute', 'Depleted'],
   rejected: ['st-mute', 'Rejected'],

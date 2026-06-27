@@ -77,6 +77,8 @@ type Order struct {
 	UserID         bson.ObjectID `bson:"userId"        json:"userId"`
 	Items          []OrderItem   `bson:"items"         json:"items"`
 	Subtotal       float64       `bson:"subtotal"      json:"subtotal"`
+	Discount       float64       `bson:"discount,omitempty"  json:"discount,omitempty"`
+	PromoCode      string        `bson:"promoCode,omitempty" json:"promoCode,omitempty"`
 	Total          float64       `bson:"total"         json:"total"`
 	Currency       string        `bson:"currency"      json:"currency"`
 	PaymentMethod  PaymentMethod `bson:"paymentMethod" json:"paymentMethod"`
