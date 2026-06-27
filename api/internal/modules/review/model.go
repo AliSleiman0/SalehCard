@@ -6,6 +6,15 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// Moderation states for a review. A review is created pending and an admin
+// approves or rejects it; only approved reviews count toward a product's rating.
+// An empty/legacy status is treated as pending on read.
+const (
+	StatusPending  = "pending"
+	StatusApproved = "approved"
+	StatusRejected = "rejected"
+)
+
 // Review holds a customer rating and written comment for a product.
 type Review struct {
 	ID               bson.ObjectID `bson:"_id,omitempty" json:"id"`
@@ -14,6 +23,7 @@ type Review struct {
 	Rating           int           `bson:"rating"        json:"rating"`
 	Body             string        `bson:"body"          json:"body"`
 	VerifiedPurchase bool          `bson:"verifiedPurchase" json:"verifiedPurchase"`
+	Status           string        `bson:"status"        json:"status"`
 	CreatedAt        time.Time     `bson:"createdAt"     json:"createdAt"`
 }
 
