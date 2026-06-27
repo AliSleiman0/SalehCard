@@ -130,16 +130,7 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		writePromoError(w, err)
 		return
 	}
-	p, err := a.repo.Update(r.Context(), id, PromoUpdate{
-		Code:      b.Code,
-		Type:      b.Type,
-		Value:     b.Value,
-		MinOrder:  b.MinOrder,
-		MaxUses:   b.MaxUses,
-		StartsAt:  b.StartsAt,
-		ExpiresAt: b.ExpiresAt,
-		Active:    b.Active,
-	})
+	p, err := a.repo.Update(r.Context(), id, PromoUpdate(b))
 	if err != nil {
 		writePromoError(w, err)
 		return
