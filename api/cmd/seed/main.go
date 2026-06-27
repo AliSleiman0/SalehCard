@@ -10,6 +10,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	orderseed "github.com/AliSleiman0/salehcard/api/internal/modules/order/seed"
 	seed "github.com/AliSleiman0/salehcard/api/internal/modules/product/seed"
+	promoseed "github.com/AliSleiman0/salehcard/api/internal/modules/promo/seed"
 	resellerseed "github.com/AliSleiman0/salehcard/api/internal/modules/reseller/seed"
 	userseed "github.com/AliSleiman0/salehcard/api/internal/modules/user/seed"
 	walletseed "github.com/AliSleiman0/salehcard/api/internal/modules/wallet/seed"
@@ -61,6 +62,12 @@ func main() {
 
 	if err := walletseed.Seed(ctx, db); err != nil {
 		log.Fatalf("wallet seed failed: %v", err)
+	}
+
+	log.Println("running promo seed...")
+
+	if err := promoseed.Seed(ctx, db); err != nil {
+		log.Fatalf("promo seed failed: %v", err)
 	}
 
 	log.Println("seed completed successfully")

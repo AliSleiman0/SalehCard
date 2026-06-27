@@ -3,10 +3,13 @@ package order
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -34,13 +37,14 @@ type OrderService struct {
 	products  product.Service
 	codes     code.Service
 	wallet    wallet.Service
+	promo     promo.Service
 	providers *provider.Registry
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
-// inventory, wallet, and upstream-provider registry it depends on.
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, providers *provider.Registry) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, providers: providers}
+// inventory, wallet, promo, and upstream-provider registry it depends on.
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, providers *provider.Registry) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, providers: providers}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -122,7 +126,24 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		})
 		subtotal += price * float64(in.Qty)
 	}
-	total := subtotal // promo codes are a no-op until the promo module lands.
+	// Apply a promo code when supplied: re-validated server-side against the
+	// re-priced subtotal (never trust the client). An invalid/expired/below-min
+	// code fails the order so the customer learns why; the use is recorded after
+	// the charge succeeds (step 6).
+	total := subtotal
+	var discount float64
+	promoCode := strings.ToUpper(strings.TrimSpace(input.PromoCode))
+	if promoCode != "" {
+		p, err := s.promo.Validate(ctx, promo.ValidateInput{Code: promoCode, OrderTotal: subtotal})
+		if err != nil {
+			return nil, err
+		}
+		discount = promo.DiscountFor(p, subtotal)
+		total = subtotal - discount
+		if total < 0 {
+			total = 0
+		}
+	}
 
 	// 4. Fast-fail stock pre-check for code items (best effort; the atomic claim
 	//    below is the real guard against concurrent double-sell).
@@ -137,6 +158,8 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		UserID:         userID,
 		Items:          items,
 		Subtotal:       subtotal,
+		Discount:       discount,
+		PromoCode:      promoCode,
 		Total:          total,
 		Currency:       currency,
 		PaymentMethod:  input.PaymentMethod,
@@ -164,6 +187,15 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		charged = true
 	}
 	// card / usdt are mock-approved: nothing to charge.
+
+	// Record the promo redemption (best-effort): the discount is already applied
+	// and the order is persisted/charged, so a rare depleted-race is logged, not
+	// failed — consistent with the no-multi-document-transactions model.
+	if promoCode != "" {
+		if err := s.promo.Redeem(ctx, promoCode); err != nil {
+			slog.Warn("promo: redeem failed after order placement", "code", promoCode, "order", order.ID.Hex(), "error", err)
+		}
+	}
 
 	// 7. Dispatch on the order's fulfillment mode (spec §2.2).
 	switch resolveOrderMode(order.Items) {
