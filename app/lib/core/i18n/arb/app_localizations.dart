@@ -683,7 +683,7 @@ abstract class AppLocalizations {
   /// No description provided for @kycBannerPending.
   ///
   /// In en, this message translates to:
-  /// **'Your verification is being reviewed. You can purchase once it's approved.'**
+  /// **'Your verification is being reviewed. You can purchase once it\'s approved.'**
   String get kycBannerPending;
 
   /// No description provided for @promoCodePlaceholder.
@@ -967,6 +967,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'+{amount} added to your wallet'**
   String topUpSuccess(String amount);
+
+  /// No description provided for @walletPendingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Top-up pending approval} other{{count} top-ups pending approval}}'**
+  String walletPendingTitle(int count);
+
+  /// No description provided for @walletPendingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance updates once an admin confirms your payment.'**
+  String get walletPendingHint;
 
   /// No description provided for @sendMoneyComingSoon.
   ///

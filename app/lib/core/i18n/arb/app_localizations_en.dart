@@ -468,6 +468,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String walletPendingTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count top-ups pending approval',
+      one: 'Top-up pending approval',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get walletPendingHint =>
+      'Balance updates once an admin confirms your payment.';
+
+  @override
   String get sendMoneyComingSoon => 'Send money is coming soon.';
 
   @override

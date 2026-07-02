@@ -27,13 +27,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  void _comingSoon() {
-    final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.comingSoon)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -44,7 +37,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ref.watch(authControllerProvider).user?.walletBalance ?? 0;
     // Prefer the live wallet balance; fall back to the auth balance while the
     // wallet loads or if it errors.
-    final balance = ref.watch(walletProvider).maybeWhen(
+    final balance = ref
+        .watch(walletProvider)
+        .maybeWhen(
           data: (w) => w.balance,
           orElse: () => authBalance.toDouble(),
         );
@@ -61,7 +56,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
                 children: [
                   const KycBanner(),
-                  _SearchBar(hint: l10n.searchHint, onTap: _comingSoon),
+                  _SearchBar(
+                    hint: l10n.searchHint,
+                    onTap: () => context.push('/search'),
+                  ),
                   const SizedBox(height: 16),
                   _WalletCard(
                     balanceText: formatUsd(balance),
@@ -70,10 +68,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: 14),
                   _AddMoneyButton(
-                      label: l10n.addMoney,
-                      onTap: () => context.push('/wallet/topup')),
+                    label: l10n.addMoney,
+                    onTap: () => context.push('/wallet/topup'),
+                  ),
                   const SizedBox(height: 16),
-                  _PromoCard(title: l10n.promoTitle, subtitle: l10n.promoSubtitle),
+                  _PromoCard(
+                    title: l10n.promoTitle,
+                    subtitle: l10n.promoSubtitle,
+                  ),
                   const SizedBox(height: 8),
                   productsAsync.when(
                     loading: () => const Padding(
@@ -85,8 +87,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: Center(
                         child: Column(
                           children: [
-                            Text(l10n.loadFailed,
-                                style: TextStyle(color: colors.textDim)),
+                            Text(
+                              l10n.loadFailed,
+                              style: TextStyle(color: colors.textDim),
+                            ),
                             const SizedBox(height: 12),
                             FilledButton(
                               onPressed: () =>
@@ -127,12 +131,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     };
 
     Widget chip(Product p) => ProductChip(
-          name: p.title.resolve(localeCode),
-          tint: ProductChip.tintFor(tintIndex[p.id]!),
-          outOfStock: !p.inStock,
-          outOfStockLabel: l10n.outOfStock,
-          onTap: () => context.push('/product/${p.id}'),
-        );
+      name: p.title.resolve(localeCode),
+      tint: ProductChip.tintFor(tintIndex[p.id]!),
+      outOfStock: !p.inStock,
+      outOfStockLabel: l10n.outOfStock,
+      onTap: () => context.push('/product/${p.id}'),
+    );
 
     final byCategory = <String, List<Product>>{};
     for (final p in products) {
@@ -190,17 +194,18 @@ class _HomeAppBar extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(AppLocalizations.of(context).comingSoon)),
+                  onPressed: () => context.push('/notifications'),
+                  icon: Icon(
+                    Icons.notifications_none_rounded,
+                    color: colors.textDim,
                   ),
-                  icon: Icon(Icons.notifications_none_rounded,
-                      color: colors.textDim),
                 ),
                 IconButton(
                   onPressed: () => context.go('/account'),
-                  icon: Icon(Icons.person_outline_rounded,
-                      color: colors.textDim),
+                  icon: Icon(
+                    Icons.person_outline_rounded,
+                    color: colors.textDim,
+                  ),
                 ),
               ],
             ),
@@ -219,7 +224,8 @@ class _LangSegments extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
-    Widget seg(String label, bool active, VoidCallback onTap) => GestureDetector(
+    Widget seg(String label, bool active, VoidCallback onTap) =>
+        GestureDetector(
           onTap: onTap,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
@@ -281,8 +287,10 @@ class _SearchBar extends StatelessWidget {
             Icon(Icons.search_rounded, size: 20, color: colors.textFaint),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(hint,
-                  style: TextStyle(color: colors.textFaint, fontSize: 15)),
+              child: Text(
+                hint,
+                style: TextStyle(color: colors.textFaint, fontSize: 15),
+              ),
             ),
           ],
         ),
@@ -321,52 +329,62 @@ class _WalletCard extends StatelessWidget {
           ],
         ),
         child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text('S',
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'S',
                         style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16)),
-                  ),
-                  const SizedBox(width: 9),
-                  const Text('SalehCard',
-                      style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
-                          fontSize: 16)),
-                ],
-              ),
-              const Icon(Icons.wifi_rounded, color: Colors.white70, size: 22),
-            ],
-          ),
-          const SizedBox(height: 22),
-          Text(l10n.totalBalance,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    const Text(
+                      'SalehCard',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                const Icon(Icons.wifi_rounded, color: Colors.white70, size: 22),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Text(
+              l10n.totalBalance,
               style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
-          const SizedBox(height: 6),
-          Text(
-            balanceText,
-            style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              balanceText,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 28,
-                fontWeight: FontWeight.w800),
-          ),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ],
         ),
       ),
@@ -426,22 +444,34 @@ class _PromoCard extends StatelessWidget {
               gradient: AppTokens.brandGradient,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 24),
+            child: const Icon(
+              Icons.bolt_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: colors.text)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    color: colors.text,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 12.5, height: 1.4, color: colors.textDim)),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.4,
+                    color: colors.textDim,
+                  ),
+                ),
               ],
             ),
           ),
@@ -464,11 +494,14 @@ class _ProductRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: context.colors.text)),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: context.colors.text,
+            ),
+          ),
           const SizedBox(height: 12),
           SizedBox(
             height: 92,
