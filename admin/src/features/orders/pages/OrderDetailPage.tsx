@@ -14,8 +14,11 @@ import {
   ErrorState,
 } from '@/components'
 import { money } from '@/lib/utils'
+import { ApiError } from '@/lib/api-client'
 import { useOrder } from '../hooks/useOrders'
+import { useRefundOrder, useCompleteOrder } from '../hooks/useOrderMutations'
 import { adaptOrder } from '../lib/adaptOrder'
+import type { AdminOrder } from '../api/orders'
 
 export default function OrderDetailPage() {
   const { t } = useTranslation()
@@ -24,6 +27,7 @@ export default function OrderDetailPage() {
   const { data, isLoading, isError, refetch } = useOrder(id)
   const [masked, setMasked] = useState(true)
   const [refundOpen, setRefundOpen] = useState(false)
+  const [completeOpen, setCompleteOpen] = useState(false)
 
   if (isLoading) return <div className="page"><LoadingSpinner /></div>
   if (isError || !data?.data) {
@@ -37,7 +41,10 @@ export default function OrderDetailPage() {
   const o = data.data
   const v = adaptOrder(o)
   const item = o.items[0]
-  const refundable = o.status !== 'refunded' && o.status !== 'failed'
+  // Mirrors the server's transition rules: refund allows processing|completed,
+  // manual completion allows processing only.
+  const refundable = o.status === 'processing' || o.status === 'completed'
+  const completable = o.status === 'processing'
 
   return (
     <div className="page">
@@ -174,12 +181,14 @@ export default function OrderDetailPage() {
                     <span className="dv">{item?.recipient?.country || '—'}</span>
                   </div>
                 </div>
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                  <label className="alabel">Manually update transfer status</label>
-                  <div className="ahint">
-                    <Icon name="clock" size={13} /> Manual status updates are coming soon (not yet implemented).
+                {completable && (
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                    <label className="alabel">Manually update transfer status</label>
+                    <button className="abtn sm ok" onClick={() => setCompleteOpen(true)}>
+                      <Icon name="check" size={14} /> Mark transfer as completed
+                    </button>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -264,54 +273,164 @@ export default function OrderDetailPage() {
           <div className="acard pad">
             <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Quick actions</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {completable && (
+                <button className="abtn sm ok" style={{ justifyContent: 'flex-start' }} onClick={() => setCompleteOpen(true)}>
+                  <Icon name="check" size={14} /> Mark as completed
+                </button>
+              )}
               {refundable && (
                 <button className="abtn sm danger" style={{ justifyContent: 'flex-start' }} onClick={() => setRefundOpen(true)}>
                   <Icon name="refresh" size={14} /> Initiate refund
                 </button>
+              )}
+              {!completable && !refundable && (
+                <div className="faint" style={{ fontSize: 12.5 }}>No actions available for this order.</div>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {refundOpen && (
-        <Modal onClose={() => setRefundOpen(false)} maxWidth={440}>
-          <div style={{ padding: 22 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 6 }}>
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 11,
-                  background: 'rgba(255,77,109,.14)',
-                  color: 'var(--danger)',
-                  display: 'grid',
-                  placeItems: 'center',
-                }}
-              >
-                <Icon name="refresh" size={20} />
-              </div>
-              <div>
-                <h3 style={{ fontSize: 17, fontWeight: 800 }}>Refund order {v.id.slice(-8)}</h3>
-                <div className="faint" style={{ fontSize: 12.5 }}>
-                  {money(o.total, v.cur)} · {v.customer}
-                </div>
-              </div>
-            </div>
-            <div className="ahint" style={{ marginTop: 16 }}>
-              <Icon name="clock" size={13} /> Refunds aren't wired yet — this action is coming soon.
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button className="abtn" onClick={() => setRefundOpen(false)}>
-                {t('cancel')}
-              </button>
-              <button className="abtn danger" disabled title="Coming soon">
-                <Icon name="check" size={15} /> Confirm refund
-              </button>
+      {refundOpen && <RefundModal order={o} label={v.customer} cur={v.cur} onClose={() => setRefundOpen(false)} />}
+      {completeOpen && <CompleteModal order={o} onClose={() => setCompleteOpen(false)} />}
+    </div>
+  )
+}
+
+/** Confirmation dialog for refunding an order, with an optional reason. */
+function RefundModal({
+  order,
+  label,
+  cur,
+  onClose,
+}: {
+  order: AdminOrder
+  label: string
+  cur: 'USD' | 'TRY'
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  const refundM = useRefundOrder()
+
+  const apply = () => {
+    setError('')
+    refundM.mutate(
+      { id: order.id, reason: reason.trim() },
+      {
+        onSuccess: onClose,
+        onError: (e) => setError(e instanceof ApiError ? e.message : 'Refund failed.'),
+      },
+    )
+  }
+
+  const restoresWallet = order.paymentMethod === 'wallet' && order.total > 0
+
+  return (
+    <Modal onClose={onClose} maxWidth={440}>
+      <div style={{ padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 6 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 11,
+              background: 'rgba(255,77,109,.14)',
+              color: 'var(--danger)',
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
+            <Icon name="refresh" size={20} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: 17, fontWeight: 800 }}>Refund order {order.id.slice(-8)}</h3>
+            <div className="faint" style={{ fontSize: 12.5 }}>
+              {money(order.total, cur)} · {label}
             </div>
           </div>
-        </Modal>
-      )}
-    </div>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: '14px 0 12px' }}>
+          {restoresWallet
+            ? `Restores ${money(order.total, cur)} to the customer's wallet.`
+            : 'No wallet charge to reverse — this marks the order refunded.'}{' '}
+          Delivered codes are not returned to inventory. This can't be undone.
+        </p>
+        <label className="alabel">Reason (optional)</label>
+        <input
+          className="afield"
+          placeholder="e.g. customer request, failed delivery…"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+          <button className="abtn" onClick={onClose} disabled={refundM.isPending}>
+            {t('cancel')}
+          </button>
+          <button className="abtn danger" onClick={apply} disabled={refundM.isPending}>
+            <Icon name="check" size={15} /> {refundM.isPending ? 'Refunding…' : 'Confirm refund'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/** Dialog for manually completing a processing order (credit / transfer / parked). */
+function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => void }) {
+  const { t } = useTranslation()
+  const [note, setNote] = useState('')
+  const [transferRef, setTransferRef] = useState('')
+  const [error, setError] = useState('')
+  const completeM = useCompleteOrder()
+
+  const apply = () => {
+    setError('')
+    completeM.mutate(
+      { id: order.id, note: note.trim(), transferRef: transferRef.trim() },
+      {
+        onSuccess: onClose,
+        onError: (e) => setError(e instanceof ApiError ? e.message : 'Completion failed.'),
+      },
+    )
+  }
+
+  return (
+    <Modal onClose={onClose} maxWidth={440}>
+      <div style={{ padding: 22 }}>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
+          Complete order {order.id.slice(-8)}
+        </h3>
+        <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 16 }}>
+          Confirm the credit/transfer was delivered outside the platform. The order moves to
+          <b> completed</b> and the customer sees it immediately.
+        </p>
+        <label className="alabel">Reference (optional)</label>
+        <input
+          className="afield"
+          placeholder="e.g. provider transaction id…"
+          value={transferRef}
+          onChange={(e) => setTransferRef(e.target.value)}
+        />
+        <label className="alabel" style={{ marginTop: 12 }}>Note (optional)</label>
+        <input
+          className="afield"
+          placeholder="e.g. credited via partner portal…"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+          <button className="abtn" onClick={onClose} disabled={completeM.isPending}>
+            {t('cancel')}
+          </button>
+          <button className="abtn ok" onClick={apply} disabled={completeM.isPending}>
+            <Icon name="check" size={15} /> {completeM.isPending ? 'Completing…' : 'Mark completed'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

@@ -106,7 +106,7 @@ func (s *Server) Routes() {
 		code.RegisterAdminRoutes(r, s.db)
 		dashboard.RegisterAdminRoutes(r, s.db)
 		finance.RegisterAdminRoutes(r, s.db)
-		order.RegisterAdminRoutes(r, s.db)
+		order.RegisterAdminRoutes(r, s.db, rec)
 		user.RegisterAdminRoutes(r, s.db, rec)
 		reseller.RegisterAdminRoutes(r, s.db, rec)
 		promo.RegisterAdminRoutes(r, s.db)

@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -84,6 +85,20 @@ func (f *fakeOrderRepo) UpdateFulfillment(_ context.Context, id bson.ObjectID, s
 		return nil
 	}
 	return apperrors.ErrNotFound
+}
+
+func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, _ bson.D) (*Order, error) {
+	o, ok := f.byID[id]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	if !slices.Contains(from, o.Status) {
+		return nil, apperrors.ErrConflict
+	}
+	before := *o
+	o.Status = to
+	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	return &before, nil
 }
 
 func (f *fakeOrderRepo) ListAll(_ context.Context, _ OrderFilter, _ pagination.Params) ([]*Order, int64, error) {
