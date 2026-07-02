@@ -11,6 +11,9 @@ on:
   push:
     branches:
       - main
+  # Manual full redeploy (e.g. after a GitHub-side startup_failure swallowed a
+  # push): every component deploys regardless of the path filter.
+  workflow_dispatch:
 
 permissions:
   id-token: write   # required for azure/login OIDC
@@ -55,7 +58,7 @@ jobs:
 
   deploy-api:
     needs: changes
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +103,7 @@ jobs:
 
   deploy-web:
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
@@ -147,7 +150,7 @@ jobs:
 
   deploy-admin:
     needs: changes
-    if: needs.changes.outputs.admin == 'true'
+    if: needs.changes.outputs.admin == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
