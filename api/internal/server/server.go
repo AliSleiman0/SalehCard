@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/expense"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/finance"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/kyc"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
 	product "github.com/AliSleiman0/salehcard/api/internal/modules/product"
@@ -29,6 +31,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -87,17 +90,35 @@ func (s *Server) Routes() {
 	// Customer auth + profile (public; /users/* guarded by AuthRequired).
 	user.RegisterRoutes(s.router, s.db, s.cfg)
 
-	// Customer orders + wallet + promo validation + review submission
-	// (guarded by AuthRequired).
-	order.RegisterRoutes(s.router, s.db, s.cfg)
+	// Customer-facing notifications are fanned out through the notifier: an
+	// inbox row plus a best-effort push via the configured provider (log in dev).
+	sender, err := push.New(push.Config{
+		Provider: s.cfg.PushProvider,
+		FCM: push.FCMConfig{
+			CredentialsJSON: s.cfg.FCMCredentialsJSON,
+			CredentialsFile: s.cfg.FCMCredentialsFile,
+			ProjectID:       s.cfg.FCMProjectID,
+		},
+	})
+	if err != nil {
+		slog.Warn("server: push provider misconfigured — falling back to log sender", "provider", s.cfg.PushProvider, "error", err)
+		sender = push.LogSender{}
+	}
+	ntf := notification.NewNotifier(s.db, sender)
+
+	// Customer orders + wallet + promo validation + review submission +
+	// notification inbox (guarded by AuthRequired).
+	order.RegisterRoutes(s.router, s.db, s.cfg, ntf)
 	wallet.RegisterRoutes(s.router, s.db, s.cfg)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
 	kyc.RegisterRoutes(s.router, s.db, s.cfg)
+	notification.RegisterRoutes(s.router, s.db, s.cfg)
 
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role
 	// (AdminOnly bypasses only in development when no JWT secret is configured).
-	// Mutating admin actions are recorded to the audit log via rec.
+	// Mutating admin actions are recorded to the audit log via rec; customer-
+	// visible outcomes (order/top-up/KYC decisions) also notify via ntf.
 	rec := audit.NewRecorder(s.db)
 	s.router.Route("/api/admin", func(r chi.Router) {
 		r.Use(auth.AdminOnly(s.cfg.JWTSecret, s.cfg.Env == "development"))
@@ -106,15 +127,15 @@ func (s *Server) Routes() {
 		code.RegisterAdminRoutes(r, s.db)
 		dashboard.RegisterAdminRoutes(r, s.db)
 		finance.RegisterAdminRoutes(r, s.db)
-		order.RegisterAdminRoutes(r, s.db, rec)
+		order.RegisterAdminRoutes(r, s.db, rec, ntf)
 		user.RegisterAdminRoutes(r, s.db, rec)
 		reseller.RegisterAdminRoutes(r, s.db, rec)
 		promo.RegisterAdminRoutes(r, s.db)
 		offer.RegisterAdminRoutes(r, s.db)
 		review.RegisterAdminRoutes(r, s.db, rec)
-		wallet.RegisterAdminRoutes(r, s.db, rec)
+		wallet.RegisterAdminRoutes(r, s.db, rec, ntf)
 		expense.RegisterAdminRoutes(r, s.db)
-		kyc.RegisterAdminRoutes(r, s.db, rec)
+		kyc.RegisterAdminRoutes(r, s.db, rec, ntf)
 		audit.RegisterAdminRoutes(r, s.db)
 		settings.RegisterAdminRoutes(r, s.db) // still stubbed (501)
 	})

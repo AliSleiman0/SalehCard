@@ -1,9 +1,21 @@
-/// What a notification is about — drives the leading icon. Unknown future types
-/// fall back to [AppNotificationType.general].
-enum AppNotificationType { orderCompleted, walletTopUp, promo, general }
+/// What a notification is about — drives the leading icon and the localized
+/// copy. Unknown future server kinds fall back to [AppNotificationType.general],
+/// which renders the raw server title/body.
+enum AppNotificationType {
+  orderCompleted,
+  orderRefunded,
+  walletTopUp,
+  walletTopUpRejected,
+  kycApproved,
+  kycRejected,
+  promo,
+  general,
+}
 
-/// A single in-app notification (domain entity). Today these are produced by a
-/// stub; the shape mirrors what a future `GET /notifications` would return.
+/// A single in-app notification (domain entity), as returned by
+/// `GET /notifications`. [title]/[body] are the server's English fallback copy;
+/// [data] carries structured values (orderId, amount, reason, ...) the UI uses
+/// to compose localized strings for known [type]s.
 class AppNotification {
   const AppNotification({
     required this.id,
@@ -11,6 +23,8 @@ class AppNotification {
     required this.body,
     required this.createdAt,
     this.type = AppNotificationType.general,
+    this.data = const {},
+    this.isRead = true,
   });
 
   final String id;
@@ -18,4 +32,6 @@ class AppNotification {
   final String body;
   final DateTime createdAt;
   final AppNotificationType type;
+  final Map<String, String> data;
+  final bool isRead;
 }

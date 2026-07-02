@@ -205,9 +205,29 @@
   "notificationsEmptyTitle": "لا جديد لديك",
   "notificationsEmptySub": "ستظهر هنا إشعارات طلباتك ومحفظتك.",
   "notifOrderCompletedTitle": "تم إتمام الطلب",
-  "notifOrderCompletedBody": "تم تسليم رموزك. استمتع!",
+  "notifOrderCompletedBody": "تم تسليم طلبك — {amount}.",
+  "@notifOrderCompletedBody": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "notifOrderRefundedTitle": "تم استرداد الطلب",
+  "notifOrderRefundedBody": "تمت إعادة {amount} إلى محفظتك.",
+  "@notifOrderRefundedBody": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
   "notifWalletTopUpTitle": "تمت إضافة الرصيد",
-  "notifWalletTopUpBody": "تمت الموافقة على تعبئتك وإضافتها إلى محفظتك.",
+  "notifWalletTopUpBody": "تمت الموافقة على تعبئتك بقيمة {amount} وإضافتها إلى محفظتك.",
+  "@notifWalletTopUpBody": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "notifTopUpRejectedTitle": "تم رفض التعبئة",
+  "notifTopUpRejectedBody": "تم رفض طلب تعبئتك بقيمة {amount}.",
+  "@notifTopUpRejectedBody": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "notifKycApprovedTitle": "تم التحقق من هويتك",
+  "notifKycApprovedBody": "تم التحقق من حسابك — يمكنك الشراء الآن.",
+  "notifKycRejectedTitle": "تم رفض التحقق",
+  "notifKycRejectedBody": "يرجى إعادة إرسال معلوماتك.",
   "notifPromoTitle": "عرض لفترة محدودة",
   "notifPromoBody": "اكتشف أحدث بطاقات الهدايا والعروض.",
 

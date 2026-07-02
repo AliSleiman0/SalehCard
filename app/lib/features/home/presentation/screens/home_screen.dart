@@ -9,6 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/brand_logo.dart';
+import '../../../../core/widgets/notification_bell.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../catalog/domain/entities/product.dart';
@@ -193,13 +194,7 @@ class _HomeAppBar extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  onPressed: () => context.push('/notifications'),
-                  icon: Icon(
-                    Icons.notifications_none_rounded,
-                    color: colors.textDim,
-                  ),
-                ),
+                NotificationBell(color: colors.textDim),
                 IconButton(
                   onPressed: () => context.go('/account'),
                   icon: Icon(

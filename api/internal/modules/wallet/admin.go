@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
@@ -36,18 +38,21 @@ type adminHandler struct {
 	topups *TopUpRepo
 	users  *mongo.Collection
 	rec    audit.Recorder
+	ntf    notification.Notifier
 }
 
 // RegisterAdminRoutes mounts the admin top-up queue onto r (the /api/admin
 // group, guarded by AdminOnly): paginated list, approve, reject. Decisions are
-// recorded via rec; approval writes the mandatory topup ledger row.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
+// recorded via rec, write the mandatory topup ledger row on approval, and
+// notify the customer via ntf.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, ntf notification.Notifier) {
 	topups := NewTopUpRepo(db)
 	a := &adminHandler{
 		svc:    NewWalletService(NewMongoRepository(db), topups),
 		topups: topups,
 		users:  db.Collection("users"),
 		rec:    rec,
+		ntf:    ntf,
 	}
 
 	r.Get("/wallet/topups", a.list)
@@ -93,6 +98,16 @@ func (a *adminHandler) approve(w http.ResponseWriter, r *http.Request) {
 			"amount": req.Amount, "channel": req.Channel, "userId": req.UserID.Hex(),
 		},
 	})
+	a.ntf.Notify(r.Context(), req.UserID, notification.Note{
+		Kind:  notification.KindTopUpApproved,
+		Title: "Top-up approved",
+		Body:  fmt.Sprintf("$%.2f was added to your wallet.", req.Amount),
+		Data: map[string]string{
+			"topupId": id.Hex(),
+			"amount":  fmt.Sprintf("%.2f", req.Amount),
+			"channel": req.Channel,
+		},
+	})
 	response.OK(w, req)
 }
 
@@ -122,6 +137,20 @@ func (a *adminHandler) reject(w http.ResponseWriter, r *http.Request) {
 			"amount": req.Amount, "channel": req.Channel,
 			"userId": req.UserID.Hex(), "reason": req.DecisionReason,
 		},
+	})
+	data := map[string]string{
+		"topupId": id.Hex(),
+		"amount":  fmt.Sprintf("%.2f", req.Amount),
+		"channel": req.Channel,
+	}
+	if req.DecisionReason != "" {
+		data["reason"] = req.DecisionReason
+	}
+	a.ntf.Notify(r.Context(), req.UserID, notification.Note{
+		Kind:  notification.KindTopUpRejected,
+		Title: "Top-up rejected",
+		Body:  fmt.Sprintf("Your $%.2f top-up request was rejected.", req.Amount),
+		Data:  data,
 	})
 	response.OK(w, req)
 }

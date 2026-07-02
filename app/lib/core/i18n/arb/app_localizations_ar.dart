@@ -560,14 +560,45 @@ class AppLocalizationsAr extends AppLocalizations {
   String get notifOrderCompletedTitle => 'تم إتمام الطلب';
 
   @override
-  String get notifOrderCompletedBody => 'تم تسليم رموزك. استمتع!';
+  String notifOrderCompletedBody(String amount) {
+    return 'تم تسليم طلبك — $amount.';
+  }
+
+  @override
+  String get notifOrderRefundedTitle => 'تم استرداد الطلب';
+
+  @override
+  String notifOrderRefundedBody(String amount) {
+    return 'تمت إعادة $amount إلى محفظتك.';
+  }
 
   @override
   String get notifWalletTopUpTitle => 'تمت إضافة الرصيد';
 
   @override
-  String get notifWalletTopUpBody =>
-      'تمت الموافقة على تعبئتك وإضافتها إلى محفظتك.';
+  String notifWalletTopUpBody(String amount) {
+    return 'تمت الموافقة على تعبئتك بقيمة $amount وإضافتها إلى محفظتك.';
+  }
+
+  @override
+  String get notifTopUpRejectedTitle => 'تم رفض التعبئة';
+
+  @override
+  String notifTopUpRejectedBody(String amount) {
+    return 'تم رفض طلب تعبئتك بقيمة $amount.';
+  }
+
+  @override
+  String get notifKycApprovedTitle => 'تم التحقق من هويتك';
+
+  @override
+  String get notifKycApprovedBody => 'تم التحقق من حسابك — يمكنك الشراء الآن.';
+
+  @override
+  String get notifKycRejectedTitle => 'تم رفض التحقق';
+
+  @override
+  String get notifKycRejectedBody => 'يرجى إعادة إرسال معلوماتك.';
 
   @override
   String get notifPromoTitle => 'عرض لفترة محدودة';

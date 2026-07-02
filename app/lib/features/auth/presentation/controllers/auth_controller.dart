@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/error/failure.dart';
 import '../../../../core/network/providers.dart';
+import '../../../../core/push/push_service.dart';
 import '../../../../core/storage/token_store.dart';
 import '../../domain/entities/user.dart';
 import '../providers.dart';
@@ -27,13 +30,20 @@ class AuthController extends Notifier<AuthState> {
   Future<void> _restore() async {
     final TokenStore store = ref.read(tokenStoreProvider);
     final access = await store.readAccess();
-    state = (access != null && access.isNotEmpty)
+    final authenticated = access != null && access.isNotEmpty;
+    state = authenticated
         ? const AuthState(AuthStatus.authenticated)
         : const AuthState(AuthStatus.unauthenticated);
+    if (authenticated) {
+      // Cold start of an existing session: re-register the push token (covers
+      // rotation while logged out). Fire-and-forget — push is best-effort.
+      unawaited(ref.read(pushServiceProvider).register());
+    }
   }
 
   void setAuthenticated(User user) {
     state = AuthState(AuthStatus.authenticated, user: user);
+    unawaited(ref.read(pushServiceProvider).register());
   }
 
   /// Real email/password sign-in: stores the JWT (via the repository) and sets
@@ -96,10 +106,14 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
+    // Unregister the push device first — the DELETE needs the still-valid
+    // bearer token that logout() below clears.
+    await ref.read(pushServiceProvider).unregister();
     await ref.read(authRepositoryProvider).logout();
     state = const AuthState(AuthStatus.unauthenticated);
   }
 }
 
-final authControllerProvider =
-    NotifierProvider<AuthController, AuthState>(AuthController.new);
+final authControllerProvider = NotifierProvider<AuthController, AuthState>(
+  AuthController.new,
+);

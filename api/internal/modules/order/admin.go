@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -54,14 +56,15 @@ type walletRefunder interface {
 // RegisterAdminRoutes mounts the admin order routes onto r (the /api/admin
 // group, guarded by AdminOnly): list/detail (enriched with the customer),
 // refund, and manual completion of processing orders. Money/status mutations
-// are recorded via rec.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
+// are recorded via rec; customer-visible outcomes also notify via ntf.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, ntf notification.Notifier) {
 	repo := NewMongoRepository(db.Collection("orders"))
 	a := &adminHandler{
 		repo:   repo,
 		users:  user.NewMongoRepository(db),
 		wallet: wallet.NewService(db),
 		rec:    rec,
+		ntf:    ntf,
 	}
 
 	r.Get("/orders", a.list)
@@ -94,6 +97,7 @@ type adminHandler struct {
 	users  customerLookup
 	wallet walletRefunder
 	rec    audit.Recorder
+	ntf    notification.Notifier
 }
 
 // list handles GET /api/admin/orders — paginated, newest first, with optional
@@ -224,6 +228,21 @@ func (a *adminHandler) refund(w http.ResponseWriter, r *http.Request) {
 			"fromStatus": string(before.Status), "reason": reason,
 		},
 	})
+	msg := fmt.Sprintf("$%.2f was returned to your wallet.", before.Total)
+	data := map[string]string{
+		"orderId":  id.Hex(),
+		"amount":   fmt.Sprintf("%.2f", before.Total),
+		"currency": before.Currency,
+	}
+	if reason != "" {
+		data["reason"] = reason
+	}
+	a.ntf.Notify(r.Context(), before.UserID, notification.Note{
+		Kind:  notification.KindOrderRefunded,
+		Title: "Order refunded",
+		Body:  msg,
+		Data:  data,
+	})
 	a.respondFresh(w, r, id)
 }
 
@@ -277,6 +296,7 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 			"transferRef": strings.TrimSpace(body.TransferRef), "note": strings.TrimSpace(body.Note),
 		},
 	})
+	a.ntf.Notify(r.Context(), before.UserID, orderCompletedNote(id.Hex(), before.Total, before.Currency))
 	a.respondFresh(w, r, id)
 }
 

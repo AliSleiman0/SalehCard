@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Network access for the API client. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Push notifications (Android 13+ runtime permission, requested by FCM). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="SalehCard"
         android:name="${applicationName}"
