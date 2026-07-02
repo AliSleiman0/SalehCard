@@ -917,8 +917,38 @@ abstract class AppLocalizations {
   /// No description provided for @topUpVia.
   ///
   /// In en, this message translates to:
-  /// **'Top up via'**
+  /// **'How will you pay?'**
   String get topUpVia;
+
+  /// No description provided for @topUpNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reference / note (optional)'**
+  String get topUpNoteHint;
+
+  /// No description provided for @topUpRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Request submitted — your wallet is credited once an admin confirms your payment.'**
+  String get topUpRequested;
+
+  /// No description provided for @topUpRequestsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My top-up requests'**
+  String get topUpRequestsTitle;
+
+  /// No description provided for @statusApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get statusApproved;
+
+  /// No description provided for @statusRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get statusRejected;
 
   /// No description provided for @topUpSuccess.
   ///

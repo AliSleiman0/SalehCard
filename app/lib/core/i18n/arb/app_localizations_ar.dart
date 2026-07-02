@@ -432,7 +432,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get topUpAmount => 'مبلغ الإضافة';
 
   @override
-  String get topUpVia => 'الإضافة عبر';
+  String get topUpVia => 'كيف ستدفع؟';
+
+  @override
+  String get topUpNoteHint => 'مرجع الدفع / ملاحظة (اختياري)';
+
+  @override
+  String get topUpRequested => 'تم إرسال الطلب — سيُضاف الرصيد إلى محفظتك بعد تأكيد الدفع من الإدارة.';
+
+  @override
+  String get topUpRequestsTitle => 'طلبات الشحن الخاصة بي';
+
+  @override
+  String get statusApproved => 'مقبول';
+
+  @override
+  String get statusRejected => 'مرفوض';
 
   @override
   String topUpSuccess(String amount) {

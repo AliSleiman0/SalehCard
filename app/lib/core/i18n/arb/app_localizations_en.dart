@@ -436,7 +436,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get topUpAmount => 'Top-up amount';
 
   @override
-  String get topUpVia => 'Top up via';
+  String get topUpVia => 'How will you pay?';
+
+  @override
+  String get topUpNoteHint => 'Payment reference / note (optional)';
+
+  @override
+  String get topUpRequested =>
+      'Request submitted — your wallet is credited once an admin confirms your payment.';
+
+  @override
+  String get topUpRequestsTitle => 'My top-up requests';
+
+  @override
+  String get statusApproved => 'Approved';
+
+  @override
+  String get statusRejected => 'Rejected';
 
   @override
   String topUpSuccess(String amount) {

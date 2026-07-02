@@ -112,6 +112,7 @@ func (s *Server) Routes() {
 		promo.RegisterAdminRoutes(r, s.db)
 		offer.RegisterAdminRoutes(r, s.db)
 		review.RegisterAdminRoutes(r, s.db, rec)
+		wallet.RegisterAdminRoutes(r, s.db, rec)
 		expense.RegisterAdminRoutes(r, s.db)
 		kyc.RegisterAdminRoutes(r, s.db, rec)
 		audit.RegisterAdminRoutes(r, s.db)

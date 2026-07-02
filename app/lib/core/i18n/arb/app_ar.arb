@@ -163,7 +163,12 @@
   "txRefund": "استرداد",
   "txAdjustment": "تسوية",
   "topUpAmount": "مبلغ الإضافة",
-  "topUpVia": "الإضافة عبر",
+  "topUpVia": "كيف ستدفع؟",
+  "topUpNoteHint": "مرجع الدفع / ملاحظة (اختياري)",
+  "topUpRequested": "تم إرسال الطلب — سيُضاف الرصيد إلى محفظتك بعد تأكيد الدفع من الإدارة.",
+  "topUpRequestsTitle": "طلبات الشحن الخاصة بي",
+  "statusApproved": "مقبول",
+  "statusRejected": "مرفوض",
   "topUpSuccess": "تمت إضافة {amount}+ إلى محفظتك",
   "@topUpSuccess": {
     "placeholders": { "amount": { "type": "String" } }

@@ -9,6 +9,6 @@ class TopUp {
 
   final WalletRepository _repository;
 
-  Future<Either<Failure, WalletTx>> call(TopUpInput input) =>
+  Future<Either<Failure, TopUpRequest>> call(TopUpInput input) =>
       _repository.topUp(input);
 }

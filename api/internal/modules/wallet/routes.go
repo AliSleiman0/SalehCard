@@ -18,18 +18,22 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("wallet: failed to ensure indexes", "error", err)
 	}
-	svc := NewWalletService(repo)
+	if err := EnsureTopUpIndexes(context.Background(), db); err != nil {
+		slog.Warn("wallet: failed to ensure topup indexes", "error", err)
+	}
+	svc := NewWalletService(repo, NewTopUpRepo(db))
 	h := NewHandler(svc)
 
 	r.Route("/api/v1/wallet", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
 		r.Get("/", h.GetWallet)
 		r.Post("/topups", h.TopUp)
+		r.Get("/topups", h.ListTopUps)
 	})
 }
 
 // NewService exposes a constructed Service for callers (e.g. the order module)
-// that need wallet operations without re-wiring the repository.
+// that need the wallet payment surface without the top-up queue.
 func NewService(db *mongo.Database) Service {
-	return NewWalletService(NewMongoRepository(db))
+	return NewWalletService(NewMongoRepository(db), nil)
 }

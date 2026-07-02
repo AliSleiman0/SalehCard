@@ -49,12 +49,49 @@ class Wallet {
   final List<WalletTx> transactions;
 }
 
-/// Payload for a top-up. The server credits the balance immediately (card and
-/// usdt are both mock-approved in dev); [ref] is an optional external reference.
+/// Payload for a top-up REQUEST: the wallet is credited only after an admin
+/// confirms the out-of-band payment ([channel]) and approves the request.
 class TopUpInput {
-  const TopUpInput({required this.amount, required this.method, this.ref});
+  const TopUpInput({required this.amount, required this.channel, this.note});
 
   final double amount;
-  final String method; // card | usdt
-  final String? ref;
+  final String channel; // usdt | whish | omt | cash | other
+  final String? note;
+}
+
+/// Moderation state of a top-up request.
+enum TopUpStatus { pending, approved, rejected, unknown }
+
+TopUpStatus topUpStatusFromString(String value) {
+  switch (value) {
+    case 'pending':
+      return TopUpStatus.pending;
+    case 'approved':
+      return TopUpStatus.approved;
+    case 'rejected':
+      return TopUpStatus.rejected;
+    default:
+      return TopUpStatus.unknown;
+  }
+}
+
+/// A customer's top-up request and its review outcome.
+class TopUpRequest {
+  const TopUpRequest({
+    required this.id,
+    required this.amount,
+    required this.channel,
+    required this.status,
+    this.note = '',
+    this.decisionReason = '',
+    this.createdAt,
+  });
+
+  final String id;
+  final double amount;
+  final String channel;
+  final TopUpStatus status;
+  final String note;
+  final String decisionReason;
+  final DateTime? createdAt;
 }

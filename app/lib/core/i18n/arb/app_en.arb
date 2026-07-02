@@ -163,7 +163,12 @@
   "txRefund": "Refund",
   "txAdjustment": "Adjustment",
   "topUpAmount": "Top-up amount",
-  "topUpVia": "Top up via",
+  "topUpVia": "How will you pay?",
+  "topUpNoteHint": "Payment reference / note (optional)",
+  "topUpRequested": "Request submitted — your wallet is credited once an admin confirms your payment.",
+  "topUpRequestsTitle": "My top-up requests",
+  "statusApproved": "Approved",
+  "statusRejected": "Rejected",
   "topUpSuccess": "+{amount} added to your wallet",
   "@topUpSuccess": {
     "placeholders": { "amount": { "type": "String" } }

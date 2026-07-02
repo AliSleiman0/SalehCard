@@ -37,6 +37,13 @@ final walletProvider = FutureProvider.autoDispose<Wallet>((ref) async {
   return result.match((failure) => throw failure, (wallet) => wallet);
 });
 
+/// The customer's top-up request history (pending/approved/rejected).
+final topUpRequestsProvider =
+    FutureProvider.autoDispose<List<TopUpRequest>>((ref) async {
+  final result = await ref.watch(walletRepositoryProvider).listTopUps();
+  return result.match((failure) => throw failure, (reqs) => reqs);
+});
+
 /// Submit state for the top-up CTA.
 class TopUpState {
   const TopUpState({this.submitting = false, this.failure});
@@ -49,10 +56,10 @@ class TopUpController extends Notifier<TopUpState> {
   @override
   TopUpState build() => const TopUpState();
 
-  /// Submits the top-up. Returns the credited [WalletTx] on success (and
-  /// invalidates [walletProvider] so the balance + ledger refresh), or `null`
-  /// on failure (the [Failure] is surfaced via [state]).
-  Future<WalletTx?> submit(TopUpInput input) async {
+  /// Files a top-up request. Returns the pending [TopUpRequest] on success
+  /// (and refreshes the request history — the balance changes only when an
+  /// admin approves), or `null` on failure (the [Failure] is via [state]).
+  Future<TopUpRequest?> submit(TopUpInput input) async {
     if (state.submitting) return null;
     state = const TopUpState(submitting: true);
     final result = await ref.read(topUpUseCaseProvider).call(input);
@@ -61,10 +68,10 @@ class TopUpController extends Notifier<TopUpState> {
         state = TopUpState(failure: failure);
         return null;
       },
-      (tx) {
+      (req) {
         state = const TopUpState();
-        ref.invalidate(walletProvider);
-        return tx;
+        ref.invalidate(topUpRequestsProvider);
+        return req;
       },
     );
   }
