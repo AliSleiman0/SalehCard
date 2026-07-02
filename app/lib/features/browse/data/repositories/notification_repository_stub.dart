@@ -29,14 +29,14 @@ class NotificationRepositoryStub implements NotificationRepository {
         id: 'n2',
         type: AppNotificationType.walletTopUp,
         title: 'Wallet topped up',
-        body: 'Your top-up was credited to your wallet.',
+        body: 'Your top-up was approved and added to your wallet.',
         createdAt: now.subtract(const Duration(days: 1)),
       ),
       AppNotification(
         id: 'n3',
         type: AppNotificationType.promo,
         title: 'Limited-time offer',
-        body: 'Enjoy instant delivery on gift cards & top-ups.',
+        body: 'Discover the latest gift cards and offers.',
         createdAt: now.subtract(const Duration(days: 3)),
       ),
     ]);

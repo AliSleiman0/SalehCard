@@ -169,8 +169,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get promoTitle => 'تسليم فوري';
 
   @override
-  String get promoSubtitle =>
-      'بطاقات الهدايا والتعبئة تصل إلى محفظتك خلال ثوانٍ.';
+  String get promoSubtitle => 'تُسلَّم أكواد بطاقات الهدايا فوراً بعد الدفع.';
 
   @override
   String get featured => 'مميّز';
@@ -219,7 +218,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get deliveredInstantly => 'سنسلّم الرصيد إلى هذا الحساب فوراً.';
+  String get creditAfterProcessing =>
+      'يُضاف الرصيد إلى هذا الحساب بعد معالجة طلبك.';
 
   @override
   String get addToCart => 'أضف للسلة';
@@ -275,12 +275,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentMethodLabel => 'طريقة الدفع';
 
   @override
-  String get payCardTitle => 'بطاقة';
-
-  @override
-  String get payCardSub => 'موافقة فورية';
-
-  @override
   String get payWalletTitle => 'المحفظة';
 
   @override
@@ -288,12 +282,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get insufficientBalance => 'رصيد غير كافٍ';
-
-  @override
-  String get payUsdtTitle => 'USDT';
-
-  @override
-  String get payUsdtSub => 'موافقة فورية';
 
   @override
   String get topUpWalletCta => 'اشحن المحفظة';
@@ -459,11 +447,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get statusRejected => 'مرفوض';
 
   @override
-  String topUpSuccess(String amount) {
-    return 'تمت إضافة $amount+ إلى محفظتك';
-  }
-
-  @override
   String walletPendingTitle(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -583,14 +566,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get notifWalletTopUpTitle => 'تمت إضافة الرصيد';
 
   @override
-  String get notifWalletTopUpBody => 'تمت إضافة رصيدك إلى محفظتك.';
+  String get notifWalletTopUpBody =>
+      'تمت الموافقة على تعبئتك وإضافتها إلى محفظتك.';
 
   @override
   String get notifPromoTitle => 'عرض لفترة محدودة';
 
   @override
-  String get notifPromoBody =>
-      'استمتع بالتسليم الفوري على بطاقات الهدايا والتعبئة.';
+  String get notifPromoBody => 'اكتشف أحدث بطاقات الهدايا والعروض.';
 
   @override
   String get kycTitle => 'التحقق';

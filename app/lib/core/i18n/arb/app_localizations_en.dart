@@ -171,7 +171,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get promoSubtitle =>
-      'Gift cards & top-ups land in your wallet in seconds.';
+      'Gift card codes delivered instantly after checkout.';
 
   @override
   String get featured => 'Featured';
@@ -220,8 +220,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get deliveredInstantly =>
-      'Credit is delivered to this account instantly.';
+  String get creditAfterProcessing =>
+      'Credit is added to this account after we process your order.';
 
   @override
   String get addToCart => 'Add to cart';
@@ -277,12 +277,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get paymentMethodLabel => 'Payment method';
 
   @override
-  String get payCardTitle => 'Card';
-
-  @override
-  String get payCardSub => 'Instant approval';
-
-  @override
   String get payWalletTitle => 'Wallet';
 
   @override
@@ -290,12 +284,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get insufficientBalance => 'Insufficient balance';
-
-  @override
-  String get payUsdtTitle => 'USDT';
-
-  @override
-  String get payUsdtSub => 'Auto-approve · Instant';
 
   @override
   String get topUpWalletCta => 'Top up wallet';
@@ -463,11 +451,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusRejected => 'Rejected';
 
   @override
-  String topUpSuccess(String amount) {
-    return '+$amount added to your wallet';
-  }
-
-  @override
   String walletPendingTitle(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -585,14 +568,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifWalletTopUpTitle => 'Wallet topped up';
 
   @override
-  String get notifWalletTopUpBody => 'Your top-up was credited to your wallet.';
+  String get notifWalletTopUpBody =>
+      'Your top-up was approved and added to your wallet.';
 
   @override
   String get notifPromoTitle => 'Limited-time offer';
 
   @override
-  String get notifPromoBody =>
-      'Enjoy instant delivery on gift cards & top-ups.';
+  String get notifPromoBody => 'Discover the latest gift cards and offers.';
 
   @override
   String get kycTitle => 'Verification';

@@ -63,7 +63,7 @@
   "cardInfo": "معلومات البطاقة",
   "addMoney": "إضافة رصيد",
   "promoTitle": "تسليم فوري",
-  "promoSubtitle": "بطاقات الهدايا والتعبئة تصل إلى محفظتك خلال ثوانٍ.",
+  "promoSubtitle": "تُسلَّم أكواد بطاقات الهدايا فوراً بعد الدفع.",
   "featured": "مميّز",
   "navHome": "الرئيسية",
   "navCategories": "الفئات",
@@ -85,7 +85,7 @@
   "@enterValue": {
     "placeholders": { "field": { "type": "String" } }
   },
-  "deliveredInstantly": "سنسلّم الرصيد إلى هذا الحساب فوراً.",
+  "creditAfterProcessing": "يُضاف الرصيد إلى هذا الحساب بعد معالجة طلبك.",
   "addToCart": "أضف للسلة",
   "buyNow": "اشترِ الآن",
   "notifyMe": "تنبيهي",
@@ -108,13 +108,9 @@
   "paymentFailed": "فشل الدفع. يرجى تجربة طريقة دفع أخرى.",
   "deliveryDetails": "تفاصيل التسليم",
   "paymentMethodLabel": "طريقة الدفع",
-  "payCardTitle": "بطاقة",
-  "payCardSub": "موافقة فورية",
   "payWalletTitle": "المحفظة",
   "balanceLabel": "الرصيد",
   "insufficientBalance": "رصيد غير كافٍ",
-  "payUsdtTitle": "USDT",
-  "payUsdtSub": "موافقة فورية",
   "topUpWalletCta": "اشحن المحفظة",
   "kycRequiredTitle": "التحقق من الهوية مطلوب",
   "kycRequiredBody": "تحقّق من هويتك لتتمكن من الشراء. تستغرق العملية دقيقة واحدة وتُراجع من قبل فريقنا.",
@@ -171,10 +167,6 @@
   "topUpRequestsTitle": "طلبات الشحن الخاصة بي",
   "statusApproved": "مقبول",
   "statusRejected": "مرفوض",
-  "topUpSuccess": "تمت إضافة {amount}+ إلى محفظتك",
-  "@topUpSuccess": {
-    "placeholders": { "amount": { "type": "String" } }
-  },
   "walletPendingTitle": "{count, plural, =1{طلب شحن قيد الموافقة} other{{count} طلبات شحن قيد الموافقة}}",
   "@walletPendingTitle": {
     "placeholders": { "count": { "type": "int" } }
@@ -215,9 +207,9 @@
   "notifOrderCompletedTitle": "تم إتمام الطلب",
   "notifOrderCompletedBody": "تم تسليم رموزك. استمتع!",
   "notifWalletTopUpTitle": "تمت إضافة الرصيد",
-  "notifWalletTopUpBody": "تمت إضافة رصيدك إلى محفظتك.",
+  "notifWalletTopUpBody": "تمت الموافقة على تعبئتك وإضافتها إلى محفظتك.",
   "notifPromoTitle": "عرض لفترة محدودة",
-  "notifPromoBody": "استمتع بالتسليم الفوري على بطاقات الهدايا والتعبئة.",
+  "notifPromoBody": "اكتشف أحدث بطاقات الهدايا والعروض.",
 
   "kycTitle": "التحقق",
   "kycMenuLabel": "التحقق من الهوية",
