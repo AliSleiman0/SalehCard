@@ -20,6 +20,7 @@ type TopUpStore interface {
 	Create(ctx context.Context, req *TopUpRequest) error
 	FindByUser(ctx context.Context, userID bson.ObjectID) ([]*TopUpRequest, error)
 	CountPendingForUser(ctx context.Context, userID bson.ObjectID) (int64, error)
+	CountPending(ctx context.Context) (int64, error)
 	List(ctx context.Context, status string, p pagination.Params) ([]*TopUpRequest, int64, error)
 	Claim(ctx context.Context, id bson.ObjectID, to TopUpStatus, decidedBy, reason string) (*TopUpRequest, error)
 	Revert(ctx context.Context, id bson.ObjectID) error
@@ -77,6 +78,12 @@ func (r *TopUpRepo) CountPendingForUser(ctx context.Context, userID bson.ObjectI
 		{Key: "userId", Value: userID},
 		{Key: "status", Value: TopUpPending},
 	})
+}
+
+// CountPending counts all open requests across users — the admin work-queue
+// signal for the dashboard KPI + nav badge.
+func (r *TopUpRepo) CountPending(ctx context.Context) (int64, error) {
+	return r.col.CountDocuments(ctx, bson.D{{Key: "status", Value: TopUpPending}})
 }
 
 // List returns a paginated admin view, optionally filtered by status, newest

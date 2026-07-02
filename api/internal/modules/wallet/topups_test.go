@@ -93,6 +93,16 @@ func (f *fakeTopUpStore) CountPendingForUser(_ context.Context, userID bson.Obje
 	return n, nil
 }
 
+func (f *fakeTopUpStore) CountPending(_ context.Context) (int64, error) {
+	var n int64
+	for _, r := range f.byID {
+		if r.Status == TopUpPending {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (f *fakeTopUpStore) List(_ context.Context, _ string, _ pagination.Params) ([]*TopUpRequest, int64, error) {
 	out := []*TopUpRequest{}
 	for _, r := range f.byID {

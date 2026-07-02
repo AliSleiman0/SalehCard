@@ -37,11 +37,19 @@ interface KpiProps {
   spark?: number[]
   sparkColor?: string
   cls?: string
+  onClick?: () => void
 }
 
-function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkColor, cls }: KpiProps) {
+function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkColor, cls, onClick }: KpiProps) {
   return (
-    <div className={'kpi' + (cls ? ' ' + cls : '')}>
+    <div
+      className={'kpi' + (cls ? ' ' + cls : '')}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick() : undefined}
+      style={onClick ? { cursor: 'pointer' } : undefined}
+    >
       <div className="k-top">
         <div className="k-ic" style={{ background: iconBg }}>
           {icon}
@@ -179,6 +187,24 @@ export default function DashboardPage() {
           value={s ? String(s.pendingTransfers) : '—'}
           since="needs action"
           cls="alert"
+        />
+        <Kpi
+          icon={<Icon name="coins" size={17} />}
+          iconBg="rgba(255,155,61,.2)"
+          label="Pending top-ups"
+          value={s ? String(s.pendingTopups) : '—'}
+          since="awaiting approval"
+          cls="alert"
+          onClick={() => navigate('/topups')}
+        />
+        <Kpi
+          icon={<Icon name="id" size={17} />}
+          iconBg="rgba(255,155,61,.2)"
+          label="Pending KYC"
+          value={s ? String(s.pendingKyc) : '—'}
+          since="awaiting review"
+          cls="alert"
+          onClick={() => navigate('/kyc')}
         />
         <Kpi
           icon={<Icon name="alert" size={17} />}
