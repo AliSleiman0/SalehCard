@@ -17,7 +17,7 @@ type Repository interface {
 	FindTierByID(ctx context.Context, id bson.ObjectID) (*ResellerTier, error)
 	FindTierByName(ctx context.Context, name string) (*ResellerTier, error)
 	CreateTier(ctx context.Context, tier *ResellerTier) error
-	UpdateTier(ctx context.Context, id bson.ObjectID, name string, marginPercent, balanceLimit float64) (*ResellerTier, error)
+	UpdateTier(ctx context.Context, id bson.ObjectID, name string, marginPercent float64) (*ResellerTier, error)
 	DeleteTier(ctx context.Context, id bson.ObjectID) error
 	// CountByTier returns the number of reseller users per tier name.
 	CountByTier(ctx context.Context) (map[string]int64, error)
@@ -108,14 +108,13 @@ func (r *MongoRepository) CreateTier(ctx context.Context, tier *ResellerTier) er
 
 // UpdateTier atomically updates a tier's fields and returns the post-update
 // document, returning ErrNotFound when no tier matches.
-func (r *MongoRepository) UpdateTier(ctx context.Context, id bson.ObjectID, name string, marginPercent, balanceLimit float64) (*ResellerTier, error) {
+func (r *MongoRepository) UpdateTier(ctx context.Context, id bson.ObjectID, name string, marginPercent float64) (*ResellerTier, error) {
 	var t ResellerTier
 	err := r.tiers.FindOneAndUpdate(ctx,
 		bson.D{{Key: "_id", Value: id}},
 		bson.D{{Key: "$set", Value: bson.D{
 			{Key: "name", Value: name},
 			{Key: "marginPercent", Value: marginPercent},
-			{Key: "balanceLimit", Value: balanceLimit},
 		}}},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&t)

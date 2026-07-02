@@ -80,7 +80,7 @@ func (a *adminHandler) approve(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	req, err := a.svc.ApproveTopUpRequest(r.Context(), id, actorEmail(r))
+	req, err := a.svc.ApproveTopUpRequest(r.Context(), id, actorLabel(r))
 	if err != nil {
 		writeTopUpError(w, err)
 		return
@@ -109,7 +109,7 @@ func (a *adminHandler) reject(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "invalid request body")
 		return
 	}
-	req, err := a.svc.RejectTopUpRequest(r.Context(), id, actorEmail(r), body.Reason)
+	req, err := a.svc.RejectTopUpRequest(r.Context(), id, actorLabel(r), body.Reason)
 	if err != nil {
 		writeTopUpError(w, err)
 		return
@@ -173,10 +173,11 @@ func (a *adminHandler) enrich(ctx context.Context, reqs []*TopUpRequest) ([]admi
 	return views, nil
 }
 
-// actorEmail returns the acting admin's email from the JWT claims.
-func actorEmail(r *http.Request) string {
+// actorLabel returns a never-blank identifier for the acting admin (email, else
+// phone, else user id) so top-up decisions by phone-only admins are attributed.
+func actorLabel(r *http.Request) string {
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
-		return claims.Email
+		return auth.ActorLabel(claims)
 	}
 	return ""
 }

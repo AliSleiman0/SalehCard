@@ -321,7 +321,6 @@ func (a *adminHandler) listTiers(w http.ResponseWriter, r *http.Request) {
 type tierBody struct {
 	Name          string  `json:"name"`
 	MarginPercent float64 `json:"marginPercent"`
-	BalanceLimit  float64 `json:"balanceLimit"`
 }
 
 // validate checks a tier body, returning a client-facing message when invalid.
@@ -331,9 +330,6 @@ func (b tierBody) validate() (string, bool) {
 	}
 	if b.MarginPercent < 0 || b.MarginPercent > 100 {
 		return "marginPercent must be between 0 and 100", false
-	}
-	if b.BalanceLimit < 0 {
-		return "balanceLimit must not be negative", false
 	}
 	return "", true
 }
@@ -352,7 +348,6 @@ func (a *adminHandler) createTier(w http.ResponseWriter, r *http.Request) {
 	tier := &ResellerTier{
 		Name:          strings.TrimSpace(body.Name),
 		MarginPercent: body.MarginPercent,
-		BalanceLimit:  body.BalanceLimit,
 	}
 	if err := a.tiers.CreateTier(r.Context(), tier); err != nil {
 		writeRepoError(w, err)
@@ -376,7 +371,7 @@ func (a *adminHandler) updateTier(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, msg)
 		return
 	}
-	tier, err := a.tiers.UpdateTier(r.Context(), id, strings.TrimSpace(body.Name), body.MarginPercent, body.BalanceLimit)
+	tier, err := a.tiers.UpdateTier(r.Context(), id, strings.TrimSpace(body.Name), body.MarginPercent)
 	if err != nil {
 		writeRepoError(w, err)
 		return

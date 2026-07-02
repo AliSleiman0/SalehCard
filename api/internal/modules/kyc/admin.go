@@ -101,7 +101,7 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 
 	reviewedBy := ""
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
-		reviewedBy = claims.Email
+		reviewedBy = auth.ActorLabel(claims)
 	}
 
 	s, err := a.repo.UpdateStatus(r.Context(), id, b.Status, reason, reviewedBy)

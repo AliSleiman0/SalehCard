@@ -15,7 +15,6 @@ import (
 type tierSeed struct {
 	Name          string
 	MarginPercent float64
-	BalanceLimit  float64
 }
 
 // Seed ensures the three reseller tiers (Bronze/Silver/Gold) exist and assigns
@@ -30,9 +29,9 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 
 	now := time.Now().UTC()
 	tiers := []tierSeed{
-		{Name: "Bronze", MarginPercent: 5, BalanceLimit: 2000},
-		{Name: "Silver", MarginPercent: 8, BalanceLimit: 5000},
-		{Name: "Gold", MarginPercent: 12, BalanceLimit: 15000},
+		{Name: "Bronze", MarginPercent: 5},
+		{Name: "Silver", MarginPercent: 8},
+		{Name: "Gold", MarginPercent: 12},
 	}
 	tierCol := db.Collection("reseller_tiers")
 	for _, t := range tiers {
@@ -40,7 +39,6 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 			bson.D{{Key: "name", Value: t.Name}},
 			bson.D{{Key: "$setOnInsert", Value: bson.D{
 				{Key: "marginPercent", Value: t.MarginPercent},
-				{Key: "balanceLimit", Value: t.BalanceLimit},
 				{Key: "createdAt", Value: now},
 			}}},
 			options.UpdateOne().SetUpsert(true),

@@ -352,9 +352,14 @@ func (s *UserService) UpdateProfile(ctx context.Context, id bson.ObjectID, input
 
 // issueTokens mints an access JWT and a fresh, persisted refresh token for user.
 func (s *UserService) issueTokens(ctx context.Context, user *User) (*AuthResult, error) {
+	var phone string
+	if user.Phone != nil {
+		phone = *user.Phone
+	}
 	access, err := auth.IssueAccessToken(s.secret, auth.Claims{
 		UserID: user.ID.Hex(),
 		Email:  user.Email,
+		Phone:  phone,
 		Role:   string(user.Role),
 	}, s.accessTTL)
 	if err != nil {

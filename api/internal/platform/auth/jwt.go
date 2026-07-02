@@ -12,7 +12,24 @@ type Claims struct {
 	jwt.RegisteredClaims
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
+	Phone  string `json:"phone"`
 	Role   string `json:"role"`
+}
+
+// ActorLabel is a never-blank identifier for the claim holder, for attributing
+// admin actions in audit logs and top-up decisions. It prefers email, then phone
+// (phone-only admins have no email), then the user id as a last resort.
+func ActorLabel(c *Claims) string {
+	if c == nil {
+		return ""
+	}
+	if c.Email != "" {
+		return c.Email
+	}
+	if c.Phone != "" {
+		return c.Phone
+	}
+	return c.UserID
 }
 
 // IssueAccessToken signs a new JWT with HS256 and the given expiry duration.
