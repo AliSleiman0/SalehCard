@@ -175,3 +175,40 @@ func TestAdminStatusRejectsNonCompleted(t *testing.T) {
 		t.Fatalf("setting status=refunded via /status: got %d, want 400", rr.Code)
 	}
 }
+
+func TestAdminMarkFailedPendingOrder(t *testing.T) {
+	o := &Order{ID: bson.NewObjectID(), UserID: bson.NewObjectID(), Total: 25,
+		PaymentMethod: PaymentMethodWallet, Status: OrderStatusPending}
+	a, repo, w, rec := newActionFixture(o)
+
+	rr := doAdmin(t, http.MethodPost, "/orders/"+o.ID.Hex()+"/fail", `{"reason":"stuck mid-placement"}`,
+		func(r chi.Router) { r.Post("/orders/{id}/fail", a.markFailed) })
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("mark failed: got %d, want 200 (body %s)", rr.Code, rr.Body.String())
+	}
+	if repo.byID[o.ID].Status != OrderStatusFailed {
+		t.Fatalf("status = %q, want failed", repo.byID[o.ID].Status)
+	}
+	if len(w.refunded) != 0 {
+		t.Fatalf("mark failed must not move money, wallet refunds = %v", w.refunded)
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionOrderStatus {
+		t.Fatalf("expected one order.status audit entry, got %+v", rec.entries)
+	}
+}
+
+func TestAdminMarkFailedRejectsNonPending(t *testing.T) {
+	o := &Order{ID: bson.NewObjectID(), UserID: bson.NewObjectID(), Status: OrderStatusProcessing}
+	a, _, _, rec := newActionFixture(o)
+
+	rr := doAdmin(t, http.MethodPost, "/orders/"+o.ID.Hex()+"/fail", `{}`,
+		func(r chi.Router) { r.Post("/orders/{id}/fail", a.markFailed) })
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("failing a processing order: got %d, want 409", rr.Code)
+	}
+	if len(rec.entries) != 0 {
+		t.Fatalf("rejected transition must not be audited, got %+v", rec.entries)
+	}
+}

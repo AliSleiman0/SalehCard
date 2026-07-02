@@ -81,6 +81,14 @@ export function refundOrder(id: string, reason = ''): Promise<ApiResponse<AdminO
   return apiClient.post<AdminOrder>(`${ADMIN}/${id}/refund`, { reason })
 }
 
+/**
+ * Mark a stuck pending order as failed (admin cleanup). Moves no money — if the
+ * wallet was charged, the admin reverses it via the customer's wallet adjustment.
+ */
+export function failOrder(id: string, reason = ''): Promise<ApiResponse<AdminOrder>> {
+  return apiClient.post<AdminOrder>(`${ADMIN}/${id}/fail`, { reason })
+}
+
 /** Manually complete a processing order (account credit / transfer / parked). */
 export function completeOrder(
   id: string,

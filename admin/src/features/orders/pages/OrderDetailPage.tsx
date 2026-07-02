@@ -16,7 +16,7 @@ import {
 import { money } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useOrder } from '../hooks/useOrders'
-import { useRefundOrder, useCompleteOrder } from '../hooks/useOrderMutations'
+import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrderMutations'
 import { adaptOrder } from '../lib/adaptOrder'
 import type { AdminOrder } from '../api/orders'
 
@@ -28,6 +28,7 @@ export default function OrderDetailPage() {
   const [masked, setMasked] = useState(true)
   const [refundOpen, setRefundOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
+  const [failOpen, setFailOpen] = useState(false)
 
   if (isLoading) return <div className="page"><LoadingSpinner /></div>
   if (isError || !data?.data) {
@@ -42,9 +43,12 @@ export default function OrderDetailPage() {
   const v = adaptOrder(o)
   const item = o.items[0]
   // Mirrors the server's transition rules: refund allows processing|completed,
-  // manual completion allows processing only.
+  // manual completion allows processing only, and the pending→failed cleanup
+  // (money-neutral) allows pending only.
   const refundable = o.status === 'processing' || o.status === 'completed'
   const completable = o.status === 'processing'
+  const failable = o.status === 'pending'
+  const refunded = o.status === 'refunded'
 
   return (
     <div className="page">
@@ -104,13 +108,21 @@ export default function OrderDetailPage() {
                   Code delivery
                 </span>
                 <div className="ph-act">
-                  <span className={o.fulfillment.deliveredCode ? 'st st-ok' : 'st st-warn'}>
-                    <i className="d" />
-                    {o.fulfillment.deliveredCode ? 'Delivered' : 'Pending'}
-                  </span>
+                  {refunded ? (
+                    <span className="st st-danger">
+                      <i className="d" />
+                      Refunded
+                    </span>
+                  ) : (
+                    <span className={o.fulfillment.deliveredCode ? 'st st-ok' : 'st st-warn'}>
+                      <i className="d" />
+                      {o.fulfillment.deliveredCode ? 'Delivered' : 'Pending'}
+                    </span>
+                  )}
                 </div>
               </div>
               <div style={{ padding: 18 }}>
+                {refunded && <RefundedNotice order={o} />}
                 <label className="alabel">Delivered code (admin view)</label>
                 <div className={'avault' + (masked ? ' masked' : '')}>
                   <span className="vc">{o.fulfillment.deliveredCode || '— not yet delivered —'}</span>
@@ -134,13 +146,21 @@ export default function OrderDetailPage() {
                   Account credit
                 </span>
                 <div className="ph-act">
-                  <span className={o.status === 'completed' ? 'st st-ok' : 'st st-warn'}>
-                    <i className="d" />
-                    {o.status === 'completed' ? 'Credited' : 'Processing'}
-                  </span>
+                  {refunded ? (
+                    <span className="st st-danger">
+                      <i className="d" />
+                      Refunded
+                    </span>
+                  ) : (
+                    <span className={o.status === 'completed' ? 'st st-ok' : 'st st-warn'}>
+                      <i className="d" />
+                      {o.status === 'completed' ? 'Credited' : 'Processing'}
+                    </span>
+                  )}
                 </div>
               </div>
               <div style={{ padding: 18 }}>
+                {refunded && <RefundedNotice order={o} />}
                 <div className="deflist">
                   <div className="defrow">
                     <span className="dk">Player / Account ID</span>
@@ -151,6 +171,14 @@ export default function OrderDetailPage() {
                     <span className="dv">{money(o.total, v.cur)}</span>
                   </div>
                 </div>
+                {completable && (
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                    <label className="alabel">Manually complete this credit</label>
+                    <button className="abtn sm ok" onClick={() => setCompleteOpen(true)}>
+                      <Icon name="check" size={14} /> Mark credit as completed
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -167,6 +195,7 @@ export default function OrderDetailPage() {
                 </div>
               </div>
               <div style={{ padding: 18 }}>
+                {refunded && <RefundedNotice order={o} />}
                 <div className="deflist">
                   <div className="defrow">
                     <span className="dk">Reference</span>
@@ -283,7 +312,18 @@ export default function OrderDetailPage() {
                   <Icon name="refresh" size={14} /> Initiate refund
                 </button>
               )}
-              {!completable && !refundable && (
+              {failable && (
+                <>
+                  <button className="abtn sm danger" style={{ justifyContent: 'flex-start' }} onClick={() => setFailOpen(true)}>
+                    <Icon name="x" size={14} /> Mark as failed
+                  </button>
+                  <div className="faint" style={{ fontSize: 12 }}>
+                    Stuck in pending (crashed mid-placement). Marking it failed moves no money — reverse any
+                    charge via the customer's wallet adjust.
+                  </div>
+                </>
+              )}
+              {!completable && !refundable && !failable && (
                 <div className="faint" style={{ fontSize: 12.5 }}>No actions available for this order.</div>
               )}
             </div>
@@ -293,6 +333,39 @@ export default function OrderDetailPage() {
 
       {refundOpen && <RefundModal order={o} label={v.customer} cur={v.cur} onClose={() => setRefundOpen(false)} />}
       {completeOpen && <CompleteModal order={o} onClose={() => setCompleteOpen(false)} />}
+      {failOpen && <FailModal order={o} onClose={() => setFailOpen(false)} />}
+    </div>
+  )
+}
+
+/**
+ * Inline annotation shown on a refunded order's fulfillment card. Surfaces the
+ * refund reason (from the status timeline) and the fact that delivered codes are
+ * intentionally not re-pooled.
+ */
+function RefundedNotice({ order }: { order: AdminOrder }) {
+  const reason = [...(order.fulfillment.statusTimeline ?? [])]
+    .reverse()
+    .find((e) => e.status === 'refunded')?.note
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 10,
+        padding: '11px 13px',
+        marginBottom: 16,
+        borderRadius: 11,
+        background: 'rgba(255,77,109,.1)',
+        border: '1px solid var(--danger)',
+        color: 'var(--danger)',
+      }}
+    >
+      <Icon name="refresh" size={16} />
+      <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+        <b>This order was refunded.</b>
+        {reason ? ` ${reason}.` : ''} Delivered codes are not returned to inventory.
+      </div>
     </div>
   )
 }
@@ -428,6 +501,60 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
           </button>
           <button className="abtn ok" onClick={apply} disabled={completeM.isPending}>
             <Icon name="check" size={15} /> {completeM.isPending ? 'Completing…' : 'Mark completed'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * Dialog for the pending-order cleanup: moves a stuck order to `failed`. This
+ * moves NO money — the warning tells the admin to reverse any charge via the
+ * customer's wallet adjustment.
+ */
+function FailModal({ order, onClose }: { order: AdminOrder; onClose: () => void }) {
+  const { t } = useTranslation()
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  const failM = useFailOrder()
+
+  const apply = () => {
+    setError('')
+    failM.mutate(
+      { id: order.id, reason: reason.trim() },
+      {
+        onSuccess: onClose,
+        onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not mark failed.'),
+      },
+    )
+  }
+
+  return (
+    <Modal onClose={onClose} maxWidth={440}>
+      <div style={{ padding: 22 }}>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
+          Mark order {order.id.slice(-8)} as failed
+        </h3>
+        <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 16 }}>
+          Clears a stuck <b>pending</b> order (crashed mid-placement). This moves the order to
+          <b> failed</b> and does <b>not</b> move any money. If the wallet was charged, reverse it
+          via the customer's wallet adjustment.
+        </p>
+        <label className="alabel">Reason (optional)</label>
+        <input
+          className="afield"
+          placeholder="e.g. stuck pending, never fulfilled…"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+          <button className="abtn" onClick={onClose} disabled={failM.isPending}>
+            {t('cancel')}
+          </button>
+          <button className="abtn danger" onClick={apply} disabled={failM.isPending}>
+            <Icon name="x" size={15} /> {failM.isPending ? 'Marking…' : 'Mark as failed'}
           </button>
         </div>
       </div>
