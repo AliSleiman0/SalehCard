@@ -20,6 +20,8 @@ money transfers). Monorepo:
 
 ## Read these first
 
+- **`BACKLOG.md`** — the prioritized product backlog (BL-1…BL-15). When asked to
+  work on a backlog item, start from its entry there.
 - **`README.md`** — stack, prerequisites, quick start.
 - **`CONVENTIONS.md`** — backend module layout, response envelope, frontend design-system rules. **Follow it.**
 - **`HANDOFF-2026-06-27.md`** — **latest session state** (mobile app, phone-OTP + Monty SMS live, CI/CD, NAT). Start here.
