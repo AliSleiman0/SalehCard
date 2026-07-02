@@ -95,9 +95,9 @@ func (s *Server) Routes() {
 	kyc.RegisterRoutes(s.router, s.db, s.cfg)
 
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role
-	// (AdminOnly bypasses in dev when no JWT secret is configured).
+	// (AdminOnly bypasses only in development when no JWT secret is configured).
 	s.router.Route("/api/admin", func(r chi.Router) {
-		r.Use(auth.AdminOnly(s.cfg.JWTSecret))
+		r.Use(auth.AdminOnly(s.cfg.JWTSecret, s.cfg.Env == "development"))
 
 		// Fully implemented (extends the product reference slice):
 		product.RegisterAdminRoutes(r, s.db)

@@ -22,6 +22,10 @@ func main() {
 	_ = godotenv.Load()
 
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		slog.Error("invalid configuration", "env", cfg.Env, "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("connecting to MongoDB", "uri", cfg.MongoURI, "db", cfg.DBName)
 
