@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 )
@@ -57,7 +58,7 @@ func newActionFixture(orders ...*Order) (*adminHandler, *fakeOrderRepo, *fakeRef
 	}
 	w := &fakeRefunder{}
 	rec := &fakeAuditRec{}
-	return &adminHandler{repo: repo, users: fakeCustomers{}, wallet: w, rec: rec}, repo, w, rec
+	return &adminHandler{repo: repo, users: fakeCustomers{}, wallet: w, rec: rec, ntf: notification.Nop{}}, repo, w, rec
 }
 
 func doAdmin(t *testing.T, method, path, body string, register func(r chi.Router)) *httptest.ResponseRecorder {

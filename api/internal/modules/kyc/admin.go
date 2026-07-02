@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -21,16 +22,19 @@ import (
 type adminHandler struct {
 	repo Repository
 	rec  audit.Recorder
+	ntf  notification.Notifier
 }
 
 // RegisterAdminRoutes mounts the admin KYC moderation queue onto r (the
 // /api/admin group, guarded by AdminOnly): a paginated/filterable list, detail,
-// and approve/reject (PUT). Decisions are recorded via rec.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
+// and approve/reject (PUT). Decisions are recorded via rec and notify the
+// customer via ntf.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, ntf notification.Notifier) {
 	_ = EnsureIndexes(context.Background(), db)
 	a := &adminHandler{
 		repo: NewMongoRepository(db.Collection("kyc_submissions"), db.Collection("users")),
 		rec:  rec,
+		ntf:  ntf,
 	}
 
 	r.Get("/kyc", a.list)
@@ -115,6 +119,22 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		TargetID:   id.Hex(),
 		Summary:    map[string]any{"status": b.Status, "reason": reason, "userId": s.UserID.Hex()},
 	})
+	// Only decisions notify — a reset to pending is an internal queue action.
+	switch b.Status {
+	case StatusApproved:
+		a.ntf.Notify(r.Context(), s.UserID, notification.Note{
+			Kind:  notification.KindKYCApproved,
+			Title: "Identity verified",
+			Body:  "Your account is verified — you can now purchase.",
+		})
+	case StatusRejected:
+		a.ntf.Notify(r.Context(), s.UserID, notification.Note{
+			Kind:  notification.KindKYCRejected,
+			Title: "Verification rejected",
+			Body:  "Please resubmit your information.",
+			Data:  map[string]string{"reason": reason},
+		})
+	}
 	response.OK(w, s)
 }
 

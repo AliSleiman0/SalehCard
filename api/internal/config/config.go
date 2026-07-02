@@ -47,6 +47,18 @@ type Config struct {
 	TwilioAuthToken  string
 	TwilioFrom       string // sender number (E.164) or Messaging Service SID
 
+	// PushProvider selects the active push-notification adapter: "fcm" or "log"
+	// (dev — logs the push). Default "log". Credentials are validated lazily
+	// inside push.New, mirroring the SMS layer.
+	PushProvider string
+
+	// Firebase Cloud Messaging (HTTP v1) service-account credentials. Required
+	// when PushProvider is "fcm" — either the inline JSON (Azure app setting) or
+	// a file path (local dev). ProjectID is optional (derived from the account).
+	FCMCredentialsJSON string
+	FCMCredentialsFile string
+	FCMProjectID       string
+
 	// DefaultCountryCode is prefixed to local phone numbers entered without an
 	// international prefix (e.g. "+961" for Lebanon).
 	DefaultCountryCode string
@@ -91,6 +103,11 @@ func Load() *Config {
 		TwilioAccountSID: os.Getenv("TWILIO_ACCOUNT_SID"),
 		TwilioAuthToken:  os.Getenv("TWILIO_AUTH_TOKEN"),
 		TwilioFrom:       os.Getenv("TWILIO_FROM"),
+
+		PushProvider:       getEnv("PUSH_PROVIDER", "log"),
+		FCMCredentialsJSON: os.Getenv("FCM_CREDENTIALS_JSON"),
+		FCMCredentialsFile: os.Getenv("FCM_CREDENTIALS_FILE"),
+		FCMProjectID:       os.Getenv("FCM_PROJECT_ID"),
 
 		DefaultCountryCode: getEnv("DEFAULT_COUNTRY_CODE", "+961"),
 		OTPLength:          getInt("OTP_LENGTH", 6),

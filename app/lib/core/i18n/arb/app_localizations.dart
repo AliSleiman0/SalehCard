@@ -1121,8 +1121,20 @@ abstract class AppLocalizations {
   /// No description provided for @notifOrderCompletedBody.
   ///
   /// In en, this message translates to:
-  /// **'Your codes have been delivered. Enjoy!'**
-  String get notifOrderCompletedBody;
+  /// **'Your order was delivered — {amount}.'**
+  String notifOrderCompletedBody(String amount);
+
+  /// No description provided for @notifOrderRefundedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Order refunded'**
+  String get notifOrderRefundedTitle;
+
+  /// No description provided for @notifOrderRefundedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} was returned to your wallet.'**
+  String notifOrderRefundedBody(String amount);
 
   /// No description provided for @notifWalletTopUpTitle.
   ///
@@ -1133,8 +1145,44 @@ abstract class AppLocalizations {
   /// No description provided for @notifWalletTopUpBody.
   ///
   /// In en, this message translates to:
-  /// **'Your top-up was approved and added to your wallet.'**
-  String get notifWalletTopUpBody;
+  /// **'Your top-up of {amount} was approved and added to your wallet.'**
+  String notifWalletTopUpBody(String amount);
+
+  /// No description provided for @notifTopUpRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Top-up rejected'**
+  String get notifTopUpRejectedTitle;
+
+  /// No description provided for @notifTopUpRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your {amount} top-up request was rejected.'**
+  String notifTopUpRejectedBody(String amount);
+
+  /// No description provided for @notifKycApprovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity verified'**
+  String get notifKycApprovedTitle;
+
+  /// No description provided for @notifKycApprovedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is verified — you can now purchase.'**
+  String get notifKycApprovedBody;
+
+  /// No description provided for @notifKycRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification rejected'**
+  String get notifKycRejectedTitle;
+
+  /// No description provided for @notifKycRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Please resubmit your information.'**
+  String get notifKycRejectedBody;
 
   /// No description provided for @notifPromoTitle.
   ///

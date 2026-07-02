@@ -205,9 +205,29 @@
   "notificationsEmptyTitle": "You're all caught up",
   "notificationsEmptySub": "Notifications about your orders and wallet will show up here.",
   "notifOrderCompletedTitle": "Order completed",
-  "notifOrderCompletedBody": "Your codes have been delivered. Enjoy!",
+  "notifOrderCompletedBody": "Your order was delivered — {amount}.",
+  "@notifOrderCompletedBody": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "notifOrderRefundedTitle": "Order refunded",
+  "notifOrderRefundedBody": "{amount} was returned to your wallet.",
+  "@notifOrderRefundedBody": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
   "notifWalletTopUpTitle": "Wallet topped up",
-  "notifWalletTopUpBody": "Your top-up was approved and added to your wallet.",
+  "notifWalletTopUpBody": "Your top-up of {amount} was approved and added to your wallet.",
+  "@notifWalletTopUpBody": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "notifTopUpRejectedTitle": "Top-up rejected",
+  "notifTopUpRejectedBody": "Your {amount} top-up request was rejected.",
+  "@notifTopUpRejectedBody": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "notifKycApprovedTitle": "Identity verified",
+  "notifKycApprovedBody": "Your account is verified — you can now purchase.",
+  "notifKycRejectedTitle": "Verification rejected",
+  "notifKycRejectedBody": "Please resubmit your information.",
   "notifPromoTitle": "Limited-time offer",
   "notifPromoBody": "Discover the latest gift cards and offers.",
 

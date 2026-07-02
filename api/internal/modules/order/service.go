@@ -3,11 +3,13 @@ package order
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
@@ -53,13 +55,14 @@ type OrderService struct {
 	offers    offer.Service
 	providers *provider.Registry
 	kyc       kycChecker
+	ntf       notification.Notifier
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
-// inventory, wallet, promo, offers, upstream-provider registry, and KYC gate
-// it depends on.
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, kycGate kycChecker) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, kyc: kycGate}
+// inventory, wallet, promo, offers, upstream-provider registry, KYC gate, and
+// notifier it depends on.
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, kycGate kycChecker, ntf notification.Notifier) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, kyc: kycGate, ntf: ntf}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -300,7 +303,24 @@ func (s *OrderService) fulfillInventory(ctx context.Context, userID bson.ObjectI
 	if err := s.repo.UpdateFulfillment(ctx, order.ID, OrderStatusCompleted, fulfillment); err != nil {
 		return nil, err
 	}
+	s.ntf.Notify(ctx, userID, orderCompletedNote(order.ID.Hex(), order.Total, order.Currency))
 	return s.repo.FindByID(ctx, order.ID)
+}
+
+// orderCompletedNote builds the customer notification for a completed order —
+// shared by the instant code-claim path, a successful api-mode provider, and
+// the admin manual-completion endpoint.
+func orderCompletedNote(orderID string, total float64, currency string) notification.Note {
+	return notification.Note{
+		Kind:  notification.KindOrderCompleted,
+		Title: "Order completed",
+		Body:  fmt.Sprintf("Your order was delivered — $%.2f.", total),
+		Data: map[string]string{
+			"orderId":  orderID,
+			"amount":   fmt.Sprintf("%.2f", total),
+			"currency": currency,
+		},
+	}
 }
 
 // fulfillProcessing records a processing order for manual (admin) fulfillment of
@@ -371,6 +391,7 @@ func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, ord
 		if uerr := s.repo.UpdateFulfillment(ctx, order.ID, OrderStatusCompleted, fulfillment); uerr != nil {
 			return nil, uerr
 		}
+		s.ntf.Notify(ctx, userID, orderCompletedNote(order.ID.Hex(), order.Total, order.Currency))
 		return s.repo.FindByID(ctx, order.ID)
 	}
 }

@@ -7,6 +7,7 @@ import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
+import '../../../../core/widgets/notification_bell.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../domain/entities/category.dart';
 import '../providers.dart';
@@ -30,13 +31,7 @@ class CategoriesScreen extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: colors.topbar,
         title: Text(l10n.browseTitle),
-        actions: [
-          IconButton(
-            tooltip: l10n.notificationsTitle,
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () => context.push('/notifications'),
-          ),
-        ],
+        actions: [NotificationBell(tooltip: l10n.notificationsTitle)],
       ),
       body: categoriesAsync.when(
         loading: () => const LoadingView(),
@@ -125,8 +120,10 @@ class _SearchBox extends StatelessWidget {
             Icon(Icons.search_rounded, size: 20, color: colors.textFaint),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(hint,
-                  style: TextStyle(color: colors.textFaint, fontSize: 15)),
+              child: Text(
+                hint,
+                style: TextStyle(color: colors.textFaint, fontSize: 15),
+              ),
             ),
           ],
         ),
@@ -217,11 +214,11 @@ class _CategoryTile extends StatelessWidget {
   }
 
   Widget _initials(String name) => Text(
-        ProductChip.initialsFor(name),
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: 15,
-        ),
-      );
+    ProductChip.initialsFor(name),
+    style: const TextStyle(
+      color: Colors.white,
+      fontWeight: FontWeight.w800,
+      fontSize: 15,
+    ),
+  );
 }

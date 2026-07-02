@@ -561,15 +561,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifOrderCompletedTitle => 'Order completed';
 
   @override
-  String get notifOrderCompletedBody =>
-      'Your codes have been delivered. Enjoy!';
+  String notifOrderCompletedBody(String amount) {
+    return 'Your order was delivered — $amount.';
+  }
+
+  @override
+  String get notifOrderRefundedTitle => 'Order refunded';
+
+  @override
+  String notifOrderRefundedBody(String amount) {
+    return '$amount was returned to your wallet.';
+  }
 
   @override
   String get notifWalletTopUpTitle => 'Wallet topped up';
 
   @override
-  String get notifWalletTopUpBody =>
-      'Your top-up was approved and added to your wallet.';
+  String notifWalletTopUpBody(String amount) {
+    return 'Your top-up of $amount was approved and added to your wallet.';
+  }
+
+  @override
+  String get notifTopUpRejectedTitle => 'Top-up rejected';
+
+  @override
+  String notifTopUpRejectedBody(String amount) {
+    return 'Your $amount top-up request was rejected.';
+  }
+
+  @override
+  String get notifKycApprovedTitle => 'Identity verified';
+
+  @override
+  String get notifKycApprovedBody =>
+      'Your account is verified — you can now purchase.';
+
+  @override
+  String get notifKycRejectedTitle => 'Verification rejected';
+
+  @override
+  String get notifKycRejectedBody => 'Please resubmit your information.';
 
   @override
   String get notifPromoTitle => 'Limited-time offer';

@@ -10,6 +10,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/kyc"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
@@ -20,8 +21,9 @@ import (
 
 // RegisterRoutes wires the customer-facing order routes onto r. /api/v1/orders
 // is guarded by AuthRequired. The order service depends on the product catalog
-// (pricing), code inventory (fulfillment), and wallet (payment).
-func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
+// (pricing), code inventory (fulfillment), wallet (payment), and the notifier
+// (customer inbox + push on instant completion).
+func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf notification.Notifier) {
 	repo := NewMongoRepository(db.Collection("orders"))
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("order: failed to ensure indexes", "error", err)
@@ -36,7 +38,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	providers := provider.NewRegistry()
 	kycGate := kyc.NewGate(db)
 
-	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, kycGate)
+	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, kycGate, ntf)
 	h := NewHandler(svc)
 
 	r.Route("/api/v1/orders", func(r chi.Router) {
