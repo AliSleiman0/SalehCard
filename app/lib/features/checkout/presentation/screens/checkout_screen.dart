@@ -16,6 +16,8 @@ import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../catalog/domain/entities/product.dart';
 import '../../../cart/domain/entities/cart_item.dart';
 import '../../../cart/presentation/controllers/cart_controller.dart';
+import '../../../kyc/domain/entities/kyc.dart';
+import '../../../kyc/presentation/providers.dart' show kycProfileProvider;
 import '../../domain/entities/order.dart';
 import '../providers.dart';
 import '../widgets/dynamic_input_field.dart';
@@ -37,7 +39,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final Map<String, TextEditingController> _fieldControllers = {};
   final Map<String, String> _selectValues = {};
   Map<String, String?> _fieldErrors = {};
-  String _payment = 'card'; // card | wallet | usdt
+  // Wallet is the only live payment method (card/usdt disabled until a real
+  // gateway is integrated).
+  final String _payment = 'wallet';
 
   @override
   void initState() {
@@ -79,9 +83,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final submitState = ref.watch(placeOrderControllerProvider);
     final balance =
         ref.watch(authControllerProvider).user?.walletBalance ?? 0;
+    final kycAsync = ref.watch(kycProfileProvider);
 
     final walletInsufficient = balance < subtotal;
-    if (_payment == 'wallet' && walletInsufficient) _payment = 'card';
+    // Purchasing requires an approved KYC — the server enforces it
+    // (KYC_REQUIRED); this panel is the friendly client-side gate. While the
+    // profile loads (or fails to load) checkout renders normally and the
+    // server stays the backstop.
+    final kycStatus = kycAsync.asData?.value.status;
+    final kycBlocked = kycStatus != null && kycStatus != KycStatus.verified;
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -93,7 +103,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ? Center(
               child: Text(l10n.cartEmptyTitle,
                   style: TextStyle(color: colors.textDim)))
-          : Column(
+          : kycBlocked
+              ? _KycGatePanel(status: kycStatus, l10n: l10n)
+              : Column(
               children: [
                 Expanded(
                   child: ListView(
@@ -117,11 +129,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               color: colors.text)),
                       const SizedBox(height: 12),
                       _PaymentSelector(
-                        selected: _payment,
                         balance: balance,
                         walletInsufficient: walletInsufficient,
                         l10n: l10n,
-                        onSelect: (m) => setState(() => _payment = m),
                       ),
                       const SizedBox(height: 18),
                       _PromoField(controller: _promo, l10n: l10n),
@@ -131,6 +141,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 _PlaceOrderBar(
                   total: subtotal,
                   submitting: submitState.submitting,
+                  enabled: !walletInsufficient,
                   l10n: l10n,
                   colors: colors,
                   onPlaceOrder: () => _submit(items,
@@ -296,8 +307,79 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   String _errorMessage(Failure failure, AppLocalizations l10n) {
     if (failure is InsufficientFundsFailure) return l10n.insufficientBalance;
+    if (failure is ServerFailure && failure.code == 'KYC_REQUIRED') {
+      return l10n.kycRequiredBody;
+    }
     if (failure.message.isNotEmpty) return failure.message;
     return l10n.paymentFailed;
+  }
+}
+
+/// Full-screen blocking panel shown when the customer's KYC is not approved:
+/// unverified/rejected users are routed to the verification form, pending
+/// users see an "in review" notice.
+class _KycGatePanel extends StatelessWidget {
+  const _KycGatePanel({required this.status, required this.l10n});
+
+  final KycStatus status;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final pending = status == KycStatus.pending;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppTokens.accent.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                pending
+                    ? Icons.hourglass_top_rounded
+                    : Icons.verified_user_outlined,
+                size: 34,
+                color: AppTokens.accent,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              pending ? l10n.kycPendingTitle : l10n.kycRequiredTitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w800, color: colors.text),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              pending ? l10n.kycPendingBody : l10n.kycRequiredBody,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 13.5, height: 1.5, color: colors.textDim),
+            ),
+            const SizedBox(height: 22),
+            FilledButton(
+              onPressed: () => context.push('/kyc'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(220, 50),
+                backgroundColor: AppTokens.cta,
+                foregroundColor: Colors.white,
+                shape: const StadiumBorder(),
+                textStyle:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              ),
+              child: Text(pending ? l10n.kycTitle : l10n.kycRequiredCta),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -411,38 +493,27 @@ class _OrderSummary extends StatelessWidget {
   }
 }
 
+/// Wallet is the single live payment method at launch: the row shows the
+/// balance, and an insufficient balance swaps in a "Top up wallet" CTA
+/// (funding happens via the wallet top-up request flow).
 class _PaymentSelector extends StatelessWidget {
   const _PaymentSelector({
-    required this.selected,
     required this.balance,
     required this.walletInsufficient,
     required this.l10n,
-    required this.onSelect,
   });
 
-  final String selected;
   final double balance;
   final bool walletInsufficient;
   final AppLocalizations l10n;
-  final ValueChanged<String> onSelect;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         _PayRow(
-          selected: selected == 'card',
+          selected: !walletInsufficient,
           enabled: true,
-          icon: Icons.credit_card_rounded,
-          iconGradient: true,
-          title: l10n.payCardTitle,
-          subtitle: l10n.payCardSub,
-          onTap: () => onSelect('card'),
-        ),
-        const SizedBox(height: 10),
-        _PayRow(
-          selected: selected == 'wallet' && !walletInsufficient,
-          enabled: !walletInsufficient,
           icon: Icons.account_balance_wallet_outlined,
           iconColor: AppTokens.accent,
           title: l10n.payWalletTitle,
@@ -450,18 +521,28 @@ class _PaymentSelector extends StatelessWidget {
               ? '${l10n.insufficientBalance} · ${formatUsd(balance)}'
               : '${l10n.balanceLabel} ${formatUsd(balance)}',
           subtitleDanger: walletInsufficient,
-          onTap: () => onSelect('wallet'),
+          onTap: () {},
         ),
-        const SizedBox(height: 10),
-        _PayRow(
-          selected: selected == 'usdt',
-          enabled: true,
-          icon: Icons.currency_exchange_rounded,
-          iconColor: const Color(0xFF26A17B),
-          title: l10n.payUsdtTitle,
-          subtitle: l10n.payUsdtSub,
-          onTap: () => onSelect('usdt'),
-        ),
+        if (walletInsufficient) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => context.push('/wallet/topup'),
+              icon: const Icon(Icons.add_card_rounded, size: 18),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                foregroundColor: AppTokens.accent,
+                side: const BorderSide(color: AppTokens.accent),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTokens.rMd)),
+                textStyle: const TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w800),
+              ),
+              label: Text(l10n.topUpWalletCta),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -475,7 +556,6 @@ class _PayRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.iconGradient = false,
     this.iconColor,
     this.subtitleDanger = false,
   });
@@ -486,7 +566,6 @@ class _PayRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final bool iconGradient;
   final Color? iconColor;
   final bool subtitleDanger;
 
@@ -523,15 +602,10 @@ class _PayRow extends StatelessWidget {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  gradient: iconGradient ? AppTokens.brandGradient : null,
-                  color: iconGradient
-                      ? null
-                      : (iconColor ?? AppTokens.accent).withValues(alpha: 0.16),
+                  color: (iconColor ?? AppTokens.accent).withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(icon,
-                    size: 19,
-                    color: iconGradient ? Colors.white : iconColor),
+                child: Icon(icon, size: 19, color: iconColor),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -656,6 +730,7 @@ class _PlaceOrderBar extends StatelessWidget {
   const _PlaceOrderBar({
     required this.total,
     required this.submitting,
+    required this.enabled,
     required this.l10n,
     required this.colors,
     required this.onPlaceOrder,
@@ -663,6 +738,7 @@ class _PlaceOrderBar extends StatelessWidget {
 
   final double total;
   final bool submitting;
+  final bool enabled;
   final AppLocalizations l10n;
   final AppColors colors;
   final VoidCallback onPlaceOrder;
@@ -677,7 +753,7 @@ class _PlaceOrderBar extends StatelessWidget {
         border: Border(top: BorderSide(color: colors.border)),
       ),
       child: FilledButton(
-        onPressed: submitting ? null : onPlaceOrder,
+        onPressed: (submitting || !enabled) ? null : onPlaceOrder,
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(54),
           backgroundColor: AppTokens.cta,

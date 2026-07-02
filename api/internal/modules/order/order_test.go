@@ -311,6 +311,13 @@ func newSUTMulti(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc *fake
 	return newSUTWithOffers(prods, codeSvc, walletSvc, &fakeOfferSvc{})
 }
 
+// fakeKycGate approves or rejects everyone (the checkout KYC gate).
+type fakeKycGate struct{ approved bool }
+
+func (f *fakeKycGate) IsApproved(_ context.Context, _ bson.ObjectID) (bool, error) {
+	return f.approved, nil
+}
+
 func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc *fakeWalletSvc, offerSvc *fakeOfferSvc) (*OrderService, *fakeOrderRepo) {
 	repo := newFakeOrderRepo()
 	byID := make(map[string]*product.Product, len(prods))
@@ -318,7 +325,7 @@ func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc 
 		byID[p.ID.Hex()] = p
 	}
 	prodSvc := &fakeProductSvc{byID: byID}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry())
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), &fakeKycGate{approved: true})
 	return svc, repo
 }
 
@@ -377,7 +384,7 @@ func TestPlaceOrder_UsesResellerPriceWhenReseller(t *testing.T) {
 
 	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), true, "k1", PlaceOrderInput{
 		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
-		PaymentMethod: PaymentMethodCard,
+		PaymentMethod: PaymentMethodWallet,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 7.0, order.Total) // reseller price, not retail 10
@@ -411,7 +418,7 @@ func TestPlaceOrder_OfferNotStackedForReseller(t *testing.T) {
 
 	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), true, "k1", PlaceOrderInput{
 		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
-		PaymentMethod: PaymentMethodCard,
+		PaymentMethod: PaymentMethodWallet,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 7.0, order.Total) // reseller price wins; the 50% offer is not applied
@@ -503,12 +510,44 @@ func TestPlaceOrder_CreditGoesProcessing(t *testing.T) {
 	item.PlayerID = "player-123"
 	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
 		Items:         []PlaceOrderItemInput{item},
-		PaymentMethod: PaymentMethodCard,
+		PaymentMethod: PaymentMethodWallet,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, OrderStatusProcessing, order.Status)
 	assert.Equal(t, "player-123", order.Fulfillment.CreditedToID)
 	assert.Equal(t, 0, codeSvc.claimCalls) // no codes claimed for credit
+}
+
+func TestPlaceOrder_RejectsUnverifiedUser(t *testing.T) {
+	p := codeProduct(10, nil)
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, repo := newSUT(p, codeSvc, walletSvc)
+	svc.kyc = &fakeKycGate{approved: false}
+
+	_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.ErrorIs(t, err, ErrKYCRequired)
+	assert.Len(t, repo.byID, 0)              // rejected before any order exists
+	assert.Equal(t, 0, walletSvc.debitCalls) // never charged
+}
+
+func TestPlaceOrder_RejectsCardAndUSDT(t *testing.T) {
+	p := codeProduct(10, nil)
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	svc, repo := newSUT(p, codeSvc, &fakeWalletSvc{balance: 100})
+
+	for _, method := range []PaymentMethod{PaymentMethodCard, PaymentMethodUSDT} {
+		_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k-"+string(method), PlaceOrderInput{
+			Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+			PaymentMethod: method,
+		})
+		require.Error(t, err, string(method))
+		assert.True(t, errors.Is(err, apperrors.ErrBadRequest), string(method))
+	}
+	assert.Len(t, repo.byID, 0) // nothing persisted for rejected methods
 }
 
 func TestPlaceOrder_RejectsUnknownVariant(t *testing.T) {
@@ -517,7 +556,7 @@ func TestPlaceOrder_RejectsUnknownVariant(t *testing.T) {
 
 	_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
 		Items:         []PlaceOrderItemInput{{ProductID: p.ID.Hex(), VariantID: bson.NewObjectID().Hex(), Qty: 1}},
-		PaymentMethod: PaymentMethodCard,
+		PaymentMethod: PaymentMethodWallet,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, apperrors.ErrBadRequest))
@@ -543,7 +582,7 @@ func TestPlaceOrder_APIModeParks(t *testing.T) {
 	item.PlayerID = "player-9"
 	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
 		Items:         []PlaceOrderItemInput{item},
-		PaymentMethod: PaymentMethodCard,
+		PaymentMethod: PaymentMethodWallet,
 	})
 	require.NoError(t, err)
 	// No real provider wired → the stub reports not-implemented → order parks.
@@ -560,7 +599,7 @@ func TestPlaceOrder_BridgeModeParks(t *testing.T) {
 
 	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
 		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
-		PaymentMethod: PaymentMethodCard,
+		PaymentMethod: PaymentMethodWallet,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, OrderStatusProcessing, order.Status)
@@ -577,7 +616,7 @@ func TestPlaceOrder_MixedCartGoesProcessing(t *testing.T) {
 
 	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
 		Items:         []PlaceOrderItemInput{itemFor(codeP, 1), itemFor(transferP, 1)},
-		PaymentMethod: PaymentMethodCard,
+		PaymentMethod: PaymentMethodWallet,
 	})
 	require.NoError(t, err)
 	// A mixed cart parks the whole order; no partial code delivery.

@@ -22,6 +22,17 @@ func badRequest(msg string) error {
 	return &apperrors.AppError{Code: "BAD_REQUEST", Message: msg, Err: apperrors.ErrBadRequest}
 }
 
+// ErrKYCRequired rejects checkout for users without an approved KYC
+// submission; the handler maps it to 403 KYC_REQUIRED so clients can route
+// the customer into the verification flow.
+var ErrKYCRequired = errors.New("identity verification required")
+
+// kycChecker is the slice of the KYC module the order service needs to gate
+// checkout on identity verification (kept minimal for testability).
+type kycChecker interface {
+	IsApproved(ctx context.Context, userID bson.ObjectID) (bool, error)
+}
+
 // Service defines the business-logic operations for the order domain.
 type Service interface {
 	PlaceOrder(ctx context.Context, userID bson.ObjectID, isReseller bool, idempotencyKey string, input PlaceOrderInput) (*Order, error)
@@ -30,7 +41,7 @@ type Service interface {
 }
 
 // OrderService is the concrete implementation of Service. It orchestrates
-// pricing (from the product catalog), payment (wallet/card/usdt), and
+// pricing (from the product catalog), payment (wallet-only at launch), and
 // fulfillment — dispatching each order down one of four paths keyed on the
 // product's fulfillment mode (inventory / api / manual_operator / bridge_device).
 type OrderService struct {
@@ -41,12 +52,14 @@ type OrderService struct {
 	promo     promo.Service
 	offers    offer.Service
 	providers *provider.Registry
+	kyc       kycChecker
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
-// inventory, wallet, promo, offers, and upstream-provider registry it depends on.
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers}
+// inventory, wallet, promo, offers, upstream-provider registry, and KYC gate
+// it depends on.
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, kycGate kycChecker) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, kyc: kycGate}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -55,14 +68,33 @@ func NewOrderService(repo Repository, products product.Service, codes code.Servi
 // fulfilled, then flipped to completed/processing; any failure compensates
 // (releasing claimed codes, refunding the wallet) and marks the order failed.
 func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isReseller bool, idempotencyKey string, input PlaceOrderInput) (*Order, error) {
-	// 1. Validate.
+	// 0. KYC gate: every purchase requires an approved identity verification.
+	//    Checked first — before pricing/inventory — so both the cart and the
+	//    direct-checkout paths are covered by the one gate.
+	if s.kyc != nil {
+		approved, err := s.kyc.IsApproved(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if !approved {
+			return nil, ErrKYCRequired
+		}
+	}
+
+	// 1. Validate. Wallet is the only live payment method: card/usdt were
+	//    mock-approved (delivering real inventory with no charge) and stay
+	//    rejected until a real gateway is integrated.
 	if len(input.Items) == 0 {
 		return nil, badRequest("order must contain at least one item")
 	}
 	switch input.PaymentMethod {
-	case PaymentMethodWallet, PaymentMethodCard, PaymentMethodUSDT:
+	case PaymentMethodWallet:
 	default:
-		return nil, badRequest("unsupported payment method")
+		return nil, &apperrors.AppError{
+			Code:    "PAYMENT_METHOD_UNAVAILABLE",
+			Message: "only wallet payment is available — top up your wallet to purchase",
+			Err:     apperrors.ErrBadRequest,
+		}
 	}
 	currency := input.Currency
 	if currency == "" {
@@ -186,16 +218,16 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		return nil, err
 	}
 
-	// 6. Charge.
+	// 6. Charge. Only wallet reaches this point (validated above); the guard
+	//    stays so a zero-total order simply skips the debit.
 	charged := false
-	if input.PaymentMethod == PaymentMethodWallet {
+	if input.PaymentMethod == PaymentMethodWallet && total > 0 {
 		if _, err := s.wallet.Debit(ctx, userID, total, order.ID.Hex()); err != nil {
 			_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
 			return nil, err
 		}
 		charged = true
 	}
-	// card / usdt are mock-approved: nothing to charge.
 
 	// Record the promo redemption (best-effort): the discount is already applied
 	// and the order is persisted/charged, so a rare depleted-race is logged, not

@@ -650,6 +650,30 @@ abstract class AppLocalizations {
   /// **'Auto-approve · Instant'**
   String get payUsdtSub;
 
+  /// No description provided for @topUpWalletCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up wallet'**
+  String get topUpWalletCta;
+
+  /// No description provided for @kycRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification required'**
+  String get kycRequiredTitle;
+
+  /// No description provided for @kycRequiredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your identity to place orders. It only takes a minute and is reviewed by our team.'**
+  String get kycRequiredBody;
+
+  /// No description provided for @kycRequiredCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify identity'**
+  String get kycRequiredCta;
+
   /// No description provided for @promoCodePlaceholder.
   ///
   /// In en, this message translates to:

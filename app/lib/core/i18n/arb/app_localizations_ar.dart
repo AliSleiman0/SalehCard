@@ -296,6 +296,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payUsdtSub => 'موافقة فورية';
 
   @override
+  String get topUpWalletCta => 'اشحن المحفظة';
+
+  @override
+  String get kycRequiredTitle => 'التحقق من الهوية مطلوب';
+
+  @override
+  String get kycRequiredBody =>
+      'تحقّق من هويتك لتتمكن من الشراء. تستغرق العملية دقيقة واحدة وتُراجع من قبل فريقنا.';
+
+  @override
+  String get kycRequiredCta => 'التحقق من الهوية';
+
+  @override
   String get promoCodePlaceholder => 'رمز الخصم';
 
   @override

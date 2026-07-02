@@ -298,6 +298,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get payUsdtSub => 'Auto-approve · Instant';
 
   @override
+  String get topUpWalletCta => 'Top up wallet';
+
+  @override
+  String get kycRequiredTitle => 'Verification required';
+
+  @override
+  String get kycRequiredBody =>
+      'Verify your identity to place orders. It only takes a minute and is reviewed by our team.';
+
+  @override
+  String get kycRequiredCta => 'Verify identity';
+
+  @override
   String get promoCodePlaceholder => 'Promo code';
 
   @override
