@@ -13,6 +13,5 @@ type ResellerTier struct {
 	ID            bson.ObjectID `bson:"_id,omitempty" json:"id"`
 	Name          string        `bson:"name"          json:"name"`
 	MarginPercent float64       `bson:"marginPercent" json:"marginPercent"`
-	BalanceLimit  float64       `bson:"balanceLimit"  json:"balanceLimit"`
 	CreatedAt     time.Time     `bson:"createdAt"     json:"createdAt"`
 }

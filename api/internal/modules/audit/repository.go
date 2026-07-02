@@ -118,7 +118,12 @@ func NewRecorder(db *mongo.Database) Recorder {
 func (rec *recorder) Record(ctx context.Context, e Entry) {
 	if claims, ok := auth.ClaimsFromContext(ctx); ok {
 		e.ActorID = claims.UserID
+		// Keep real emails intact; fall back to phone/user-id only when empty so a
+		// phone-only admin never records a blank actor.
 		e.ActorEmail = claims.Email
+		if e.ActorEmail == "" {
+			e.ActorEmail = auth.ActorLabel(claims)
+		}
 	}
 	e.At = time.Now().UTC()
 	if err := rec.repo.Insert(ctx, &e); err != nil {

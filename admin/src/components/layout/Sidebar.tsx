@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Icon } from '@/components'
 import { NAV } from '@/app/nav'
+import { useDashboardStats } from '@/features/dashboard/hooks/useDashboard'
 import { useUiStore } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +16,14 @@ export function Sidebar() {
   const { collapsed, toggleCollapsed } = useUiStore()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+
+  // Live work-queue badges: shared cache with the dashboard stats query (no extra
+  // request); refreshes on window focus / navigation.
+  const { data: statsRes } = useDashboardStats()
+  const pendingByRoute: Record<string, number | undefined> = {
+    '/topups': statsRes?.data?.pendingTopups,
+    '/kyc': statsRes?.data?.pendingKyc,
+  }
 
   return (
     <aside className="sidebar">
@@ -33,20 +42,25 @@ export function Sidebar() {
         {NAV.map((g) => (
           <div className="sb-group" key={g.group}>
             <div className="sb-grouplabel">{t(g.group)}</div>
-            {g.items.map((item) => (
-              <div
-                key={item.to}
-                className={cn('sb-link', isActive(pathname, item.to) && 'on')}
-                onClick={() => navigate(item.to)}
-                title={t(item.label)}
-              >
-                <Icon name={item.icon} size={19} />
-                <span>{t(item.label)}</span>
-                {item.badge && (
-                  <span className={cn('sb-badge', item.badgeType === 'warn' && 'warn')}>{item.badge}</span>
-                )}
-              </div>
-            ))}
+            {g.items.map((item) => {
+              const pending = pendingByRoute[item.to]
+              const badge = item.badge ?? (pending && pending > 0 ? String(pending) : undefined)
+              const badgeType = item.badge ? item.badgeType : 'warn'
+              return (
+                <div
+                  key={item.to}
+                  className={cn('sb-link', isActive(pathname, item.to) && 'on')}
+                  onClick={() => navigate(item.to)}
+                  title={t(item.label)}
+                >
+                  <Icon name={item.icon} size={19} />
+                  <span>{t(item.label)}</span>
+                  {badge && (
+                    <span className={cn('sb-badge', badgeType === 'warn' && 'warn')}>{badge}</span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         ))}
       </nav>

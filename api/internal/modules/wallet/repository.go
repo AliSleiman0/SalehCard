@@ -5,6 +5,7 @@ import (
 	"time"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
+	"github.com/AliSleiman0/salehcard/api/pkg/timeutil"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -27,8 +28,9 @@ type Repository interface {
 	Credit(ctx context.Context, userID bson.ObjectID, amount float64) (float64, error)
 	Debit(ctx context.Context, userID bson.ObjectID, amount float64) (float64, error)
 
-	// TopUpsForDay sums top-up ledger amounts created within the UTC day that
-	// contains `day`. Powers the dashboard "wallet top-ups today" metric.
+	// TopUpsForDay sums top-up ledger amounts created within the business-tz day
+	// (BUSINESS_TZ, default UTC) that contains `day`. Powers the dashboard
+	// "wallet top-ups today" metric, aligned with the orders-today window.
 	TopUpsForDay(ctx context.Context, day time.Time) (float64, error)
 }
 
@@ -97,11 +99,14 @@ func (r *MongoRepository) GetBalance(ctx context.Context, userID bson.ObjectID) 
 	return doc.WalletBalance, nil
 }
 
-// TopUpsForDay sums top-up amounts in the UTC day window containing `day`.
-// Mirrors finance.walletTopups (all-time) scoped to a single day.
+// TopUpsForDay sums top-up amounts in the business-tz day window containing
+// `day` (BUSINESS_TZ, default UTC) — the same window order.DayStats uses, so the
+// dashboard's top-ups-today and orders-today figures line up. Mirrors
+// finance.walletTopups (all-time) scoped to a single day.
 func (r *MongoRepository) TopUpsForDay(ctx context.Context, day time.Time) (float64, error) {
-	d := day.UTC()
-	start := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
+	loc := timeutil.BusinessLocation()
+	d := day.In(loc)
+	start := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 0, 1)
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.D{

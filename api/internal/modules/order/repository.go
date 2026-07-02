@@ -3,32 +3,20 @@ package order
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
-	_ "time/tzdata" // embed the IANA tz database so BUSINESS_TZ resolves regardless of the host OS
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
+	"github.com/AliSleiman0/salehcard/api/pkg/timeutil"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // businessLocation is the timezone used to bucket day-grained dashboard figures
-// ("today" revenue/orders, the daily revenue chart). It defaults to UTC; set
-// BUSINESS_TZ to an IANA name (e.g. "Asia/Beirut") so day boundaries line up
-// with the operating market rather than UTC. An unparseable value falls back to
-// UTC so the dashboard never fails to load.
-var businessLocation = loadBusinessLocation()
-
-func loadBusinessLocation() *time.Location {
-	if name := os.Getenv("BUSINESS_TZ"); name != "" {
-		if loc, err := time.LoadLocation(name); err == nil {
-			return loc
-		}
-	}
-	return time.UTC
-}
+// ("today" revenue/orders, the daily revenue chart) — the single source of truth
+// lives in pkg/timeutil so the wallet KPI shares the same day boundaries.
+var businessLocation = timeutil.BusinessLocation()
 
 // Repository defines persistence operations for the Order entity.
 type Repository interface {

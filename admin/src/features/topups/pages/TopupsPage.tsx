@@ -9,6 +9,7 @@ import {
   LoadingSpinner,
   ErrorState,
   EmptyState,
+  RoleBadge,
 } from '@/components'
 import { money } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
@@ -101,6 +102,7 @@ export default function TopupsPage() {
                     <span className="faint" style={{ fontSize: 12.5 }}>
                       {r.customerEmail || r.customerPhone || r.userId.slice(-8)}
                     </span>
+                    {r.role && <RoleBadge role={r.role} />}
                     <span className="faint" style={{ fontSize: 12 }}>
                       · {new Date(r.createdAt).toLocaleString()}
                     </span>

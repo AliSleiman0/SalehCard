@@ -109,22 +109,12 @@ export default function ResellerListPage() {
                     {tn.count} agents
                   </span>
                 </div>
-                <div className="g2">
-                  <div>
-                    <div className="faint" style={{ fontSize: 11.5, fontWeight: 700 }}>
-                      Discount
-                    </div>
-                    <div className="num" style={{ fontSize: 19, fontWeight: 800, color: tc }}>
-                      {tn.marginPercent}%
-                    </div>
+                <div>
+                  <div className="faint" style={{ fontSize: 11.5, fontWeight: 700 }}>
+                    Discount
                   </div>
-                  <div>
-                    <div className="faint" style={{ fontSize: 11.5, fontWeight: 700 }}>
-                      Balance limit
-                    </div>
-                    <div className="num" style={{ fontSize: 19, fontWeight: 800 }}>
-                      ${(tn.balanceLimit / 1000).toLocaleString()}k
-                    </div>
+                  <div className="num" style={{ fontSize: 19, fontWeight: 800, color: tc }}>
+                    {tn.marginPercent}%
                   </div>
                 </div>
                 <button className="abtn xs" style={{ width: '100%', marginTop: 12 }} onClick={() => setEditTier(tn)}>
@@ -256,18 +246,16 @@ export default function ResellerListPage() {
   )
 }
 
-/** Edit a tier definition's margin + balance limit. */
+/** Edit a tier definition's margin. */
 function TierEditModal({ tier, onClose }: { tier: TierDef; onClose: () => void }) {
   const { t } = useTranslation()
   const [name, setName] = useState(tier.name)
   const [margin, setMargin] = useState(String(tier.marginPercent))
-  const [limit, setLimit] = useState(String(tier.balanceLimit))
   const [error, setError] = useState('')
   const update = useUpdateTier()
 
   const save = () => {
     const m = Number(margin)
-    const l = Number(limit)
     if (!name.trim()) {
       setError('Name is required.')
       return
@@ -276,13 +264,9 @@ function TierEditModal({ tier, onClose }: { tier: TierDef; onClose: () => void }
       setError('Margin must be between 0 and 100.')
       return
     }
-    if (!Number.isFinite(l) || l < 0) {
-      setError('Balance limit must not be negative.')
-      return
-    }
     setError('')
     update.mutate(
-      { id: tier.id, input: { name: name.trim(), marginPercent: m, balanceLimit: l } },
+      { id: tier.id, input: { name: name.trim(), marginPercent: m } },
       {
         onSuccess: onClose,
         onError: (e) => setError(e instanceof ApiError ? e.message : 'Update failed.'),
@@ -307,17 +291,6 @@ function TierEditModal({ tier, onClose }: { tier: TierDef; onClose: () => void }
           step="0.5"
           value={margin}
           onChange={(e) => setMargin(e.target.value)}
-        />
-        <label className="alabel" style={{ marginTop: 14 }}>
-          Balance limit (USD)
-        </label>
-        <input
-          className="afield"
-          type="number"
-          min="0"
-          step="100"
-          value={limit}
-          onChange={(e) => setLimit(e.target.value)}
         />
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>

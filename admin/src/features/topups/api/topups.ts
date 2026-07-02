@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { ApiResponse, PaginationMeta } from '@/types'
+import type { ApiResponse, PaginationMeta, UserRole } from '@/types'
 
 /** Moderation state of a top-up request. */
 export type TopUpStatus = 'pending' | 'approved' | 'rejected'
@@ -20,6 +20,7 @@ export interface AdminTopUp {
   decidedAt?: string
   customerEmail: string
   customerPhone?: string
+  role?: UserRole
 }
 
 export interface TopUpListParams {

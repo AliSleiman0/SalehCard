@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/kyc"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
@@ -38,6 +39,9 @@ type Stats struct {
 	// Real (derived from users / wallet ledger):
 	ActiveUsers  int     `json:"activeUsers"`  // accounts seen in the last 24h
 	WalletTopups float64 `json:"walletTopups"` // top-ups credited today
+	// Work-queue signals (money is blocked on these):
+	PendingTopups int `json:"pendingTopups"` // open top-up requests awaiting a decision
+	PendingKyc    int `json:"pendingKyc"`    // KYC submissions awaiting review
 }
 
 // ffSlice is one segment of the fulfillment-breakdown donut.
@@ -54,6 +58,8 @@ type Handler struct {
 	orders   order.Repository
 	users    user.Repository
 	wallet   wallet.Repository
+	topups   wallet.TopUpStore
+	kyc      kyc.Repository
 }
 
 // RegisterAdminRoutes mounts the dashboard routes onto r (the /api/admin group).
@@ -64,6 +70,8 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 		orders:   order.NewMongoRepository(db.Collection("orders")),
 		users:    user.NewMongoRepository(db),
 		wallet:   wallet.NewMongoRepository(db),
+		topups:   wallet.NewTopUpRepo(db),
+		kyc:      kyc.NewMongoRepository(db.Collection("kyc_submissions"), db.Collection("users")),
 	}
 	r.Get("/dashboard/stats", h.GetStats)
 	r.Get("/dashboard/low-stock", h.GetLowStock)
@@ -130,6 +138,18 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pendingTopups, err := h.topups.CountPending(ctx)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+
+	pendingKyc, err := h.kyc.CountPending(ctx)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+
 	stats := Stats{
 		TotalProducts:    totalProducts,
 		LowStockCount:    lowStock,
@@ -144,6 +164,8 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		OrdersSpark:      ordersSpark,
 		ActiveUsers:      int(activeUsers),
 		WalletTopups:     walletTopups,
+		PendingTopups:    int(pendingTopups),
+		PendingKyc:       int(pendingKyc),
 	}
 	response.OK(w, stats)
 }

@@ -10,7 +10,6 @@ export interface TierDef {
   id: string
   name: string
   marginPercent: number
-  balanceLimit: number
   count: number
 }
 
@@ -53,7 +52,6 @@ export interface BalanceAdjustInput {
 export interface TierInput {
   name: string
   marginPercent: number
-  balanceLimit: number
 }
 
 const RESELLERS = '/api/admin/resellers'

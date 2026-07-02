@@ -48,9 +48,10 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Stamp the uploader from the verified JWT (server-set, never trusted from the
-	// body). Empty in the dev AdminOnly bypass → shown as "—" in the UI.
+	// body). Falls back to phone/user-id for phone-only admins; empty only in the
+	// dev AdminOnly bypass → shown as "—" in the UI.
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
-		in.UploadedBy = claims.Email
+		in.UploadedBy = auth.ActorLabel(claims)
 	}
 
 	result, err := h.svc.Upload(r.Context(), productID, in)

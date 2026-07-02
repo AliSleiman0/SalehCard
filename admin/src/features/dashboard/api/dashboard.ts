@@ -18,6 +18,9 @@ export interface DashboardStats {
   // Derived from users / wallet ledger:
   activeUsers: number // accounts seen in the last 24h
   walletTopups: number // top-ups credited today
+  // Work-queue signals (money blocked until an admin acts):
+  pendingTopups: number // open top-up requests awaiting a decision
+  pendingKyc: number // KYC submissions awaiting review
 }
 
 export function getDashboardStats(): Promise<ApiResponse<DashboardStats>> {
