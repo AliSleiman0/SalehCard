@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, Card, Button, CodeVault, LoadingSpinner, ErrorState } from '@/components'
-import { OrderHead, CreditConfirm, TransferDetail } from '@/features/orders/components/OrderParts'
+import { OrderHead, CreditConfirm, TransferDetail, StatusNotice } from '@/features/orders/components/OrderParts'
 import { useLocaleStore } from '@/stores/locale'
 import { useOrder } from '../hooks/useOrder'
 import { adaptOrder } from '../lib/adaptOrder'
@@ -41,16 +41,22 @@ export default function OrderDetailPage() {
       <Card style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <OrderHead o={o} />
         <hr className="divider" />
-        {(!o.fulfill || o.fulfill === 'code') &&
-          (o.code ? (
-            <CodeVault label={t('your_code')} code={o.code} pin={o.pin} />
-          ) : (
-            <div className="slot" style={{ padding: 24 }}>
-              {t('processing')}…
-            </div>
-          ))}
-        {o.fulfill === 'credit' && <CreditConfirm o={o} />}
-        {o.fulfill === 'transfer' && <TransferDetail o={o} />}
+        {o.status === 'refunded' || o.status === 'failed' ? (
+          <StatusNotice status={o.status} />
+        ) : (
+          <>
+            {(!o.fulfill || o.fulfill === 'code') &&
+              (o.code ? (
+                <CodeVault label={t('your_code')} code={o.code} pin={o.pin} />
+              ) : (
+                <div className="slot" style={{ padding: 24 }}>
+                  {t('processing')}…
+                </div>
+              ))}
+            {o.fulfill === 'credit' && <CreditConfirm o={o} />}
+            {o.fulfill === 'transfer' && <TransferDetail o={o} />}
+          </>
+        )}
         <div className="row" style={{ gap: 12 }}>
           <Button
             variant="ghost"

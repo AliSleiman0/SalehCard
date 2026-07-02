@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,14 +16,78 @@ import '../providers.dart';
 
 /// Wallet landing: a gradient balance card, top-up / send-money actions, and the
 /// newest-first transaction ledger. Watches [walletProvider] (`GET /wallet`).
-class WalletScreen extends ConsumerWidget {
+///
+/// Supports pull-to-refresh and a lightweight 45s poll while the screen is
+/// foregrounded, so an admin-approved top-up (or a completed order's refund)
+/// appears without navigating away. Polling is paused while the app is
+/// backgrounded and fires an immediate refresh on resume.
+class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WalletScreen> createState() => _WalletScreenState();
+}
+
+class _WalletScreenState extends ConsumerState<WalletScreen>
+    with WidgetsBindingObserver {
+  static const _pollInterval = Duration(seconds: 45);
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startPolling();
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refresh();
+      _startPolling();
+    } else {
+      _stopPolling();
+    }
+  }
+
+  void _startPolling() {
+    _pollTimer ??= Timer.periodic(_pollInterval, (_) => _refresh());
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  /// Re-fetch the balance/ledger and the top-up request history together — an
+  /// approval moves both. `.when` keeps the current data on screen during the
+  /// refetch (skipLoadingOnRefresh defaults to true), so this does not flash the
+  /// full-screen spinner.
+  void _refresh() {
+    ref.invalidate(walletProvider);
+    ref.invalidate(topUpRequestsProvider);
+  }
+
+  /// Pull-to-refresh handler: invalidate, then await the wallet refetch so the
+  /// pull spinner stays until fresh data is in.
+  Future<void> _pullRefresh() async {
+    _refresh();
+    await ref.read(walletProvider.future);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
     final walletAsync = ref.watch(walletProvider);
+    final requestsAsync = ref.watch(topUpRequestsProvider);
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -47,57 +113,88 @@ class WalletScreen extends ConsumerWidget {
             ),
           ),
         ),
-        data: (wallet) => ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          children: [
-            _BalanceCard(balance: wallet.balance, l10n: l10n),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _ActionButton(
-                    icon: Icons.add_rounded,
-                    label: l10n.topUpCta,
-                    onTap: () => context.push('/wallet/topup'),
+        data: (wallet) => RefreshIndicator(
+          onRefresh: _pullRefresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            children: [
+              _BalanceCard(balance: wallet.balance, l10n: l10n),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ActionButton(
+                      icon: Icons.add_rounded,
+                      label: l10n.topUpCta,
+                      onTap: () => context.push('/wallet/topup'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _ActionButton(
-                    icon: Icons.send_rounded,
-                    label: l10n.sendMoney,
-                    onTap: () => context.push('/wallet/send'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _ActionButton(
+                      icon: Icons.send_rounded,
+                      label: l10n.sendMoney,
+                      onTap: () => context.push('/wallet/send'),
+                    ),
                   ),
+                ],
+              ),
+              // Pending top-up requests: explain why the balance hasn't moved.
+              // Renders nothing until pending data is available, so it never
+              // blocks the wallet.
+              requestsAsync.maybeWhen(
+                data: (requests) {
+                  final pending = requests
+                      .where((r) => r.status == TopUpStatus.pending)
+                      .toList();
+                  if (pending.isEmpty) return const SizedBox.shrink();
+                  final total = pending.fold<double>(
+                    0,
+                    (sum, r) => sum + r.amount,
+                  );
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: _PendingTopUpBanner(
+                      count: pending.length,
+                      total: total,
+                      l10n: l10n,
+                    ),
+                  );
+                },
+                orElse: () => const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                l10n.txHistory,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: colors.text,
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.txHistory,
-              style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w800, color: colors.text),
-            ),
-            const SizedBox(height: 4),
-            if (wallet.transactions.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 24),
-                child: EmptyState(
-                  icon: Icons.account_balance_wallet_outlined,
-                  title: l10n.walletEmptyTitle,
-                  message: l10n.walletEmptySub,
-                  actionLabel: l10n.topUpCta,
-                  onAction: () => context.push('/wallet/topup'),
-                ),
-              )
-            else
-              for (final tx in wallet.transactions)
-                LedgerRow(
-                  icon: _iconFor(tx.type),
-                  title: _labelFor(tx.type, l10n),
-                  subtitle: _shortDate(tx.createdAt),
-                  amount: tx.amount,
-                ),
-          ],
+              ),
+              const SizedBox(height: 4),
+              if (wallet.transactions.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 24),
+                  child: EmptyState(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: l10n.walletEmptyTitle,
+                    message: l10n.walletEmptySub,
+                    actionLabel: l10n.topUpCta,
+                    onAction: () => context.push('/wallet/topup'),
+                  ),
+                )
+              else
+                for (final tx in wallet.transactions)
+                  LedgerRow(
+                    icon: _iconFor(tx.type),
+                    title: _labelFor(tx.type, l10n),
+                    subtitle: _shortDate(tx.createdAt),
+                    amount: tx.amount,
+                  ),
+            ],
+          ),
         ),
       ),
     );
@@ -140,6 +237,90 @@ class WalletScreen extends ConsumerWidget {
   }
 }
 
+/// Compact summary banner shown when the user has pending top-up requests, so an
+/// unchanged balance is explained (funding is admin-approved). Taps through to
+/// the top-up screen for the full request list + any rejection reasons.
+class _PendingTopUpBanner extends StatelessWidget {
+  const _PendingTopUpBanner({
+    required this.count,
+    required this.total,
+    required this.l10n,
+  });
+
+  final int count;
+  final double total;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return GestureDetector(
+      onTap: () => context.push('/wallet/topup'),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(AppTokens.rMd),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppTokens.brand1.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.schedule_rounded,
+                color: AppTokens.brand1,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.walletPendingTitle(count),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: colors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    l10n.walletPendingHint,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: colors.textDim,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              formatUsd(total),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: AppTokens.brand1,
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: colors.textFaint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BalanceCard extends StatelessWidget {
   const _BalanceCard({required this.balance, required this.l10n});
 
@@ -167,17 +348,19 @@ class _BalanceCard extends StatelessWidget {
           Text(
             l10n.currentBalance,
             style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 13,
-                fontWeight: FontWeight.w600),
+              color: Colors.white70,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             formatUsd(balance),
             style: const TextStyle(
-                color: Colors.white,
-                fontSize: 34,
-                fontWeight: FontWeight.w800),
+              color: Colors.white,
+              fontSize: 34,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 16),
           Container(
@@ -194,9 +377,10 @@ class _BalanceCard extends StatelessWidget {
                 Text(
                   l10n.promoTitle,
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700),
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -246,9 +430,10 @@ class _ActionButton extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w800,
-                  color: colors.text),
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: colors.text,
+              ),
             ),
           ],
         ),

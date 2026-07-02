@@ -167,6 +167,11 @@
   "topUpRequestsTitle": "طلبات الشحن الخاصة بي",
   "statusApproved": "مقبول",
   "statusRejected": "مرفوض",
+  "walletPendingTitle": "{count, plural, =1{طلب شحن قيد الموافقة} other{{count} طلبات شحن قيد الموافقة}}",
+  "@walletPendingTitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "walletPendingHint": "يُحدَّث الرصيد بعد أن يؤكد المشرف عملية الدفع.",
   "sendMoneyComingSoon": "إرسال الأموال قريباً.",
   "recipientLabel": "المستلِم (هاتف أو بريد إلكتروني)",
   "amountLabel": "المبلغ",

@@ -447,6 +447,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get statusRejected => 'مرفوض';
 
   @override
+  String walletPendingTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلبات شحن قيد الموافقة',
+      one: 'طلب شحن قيد الموافقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get walletPendingHint =>
+      'يُحدَّث الرصيد بعد أن يؤكد المشرف عملية الدفع.';
+
+  @override
   String get sendMoneyComingSoon => 'إرسال الأموال قريباً.';
 
   @override

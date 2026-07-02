@@ -29,6 +29,13 @@ class OrdersListScreen extends ConsumerStatefulWidget {
 class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
   _OrderFilter _filter = _OrderFilter.all;
 
+  /// Pull-to-refresh: invalidate then await the refetch so the pull spinner
+  /// stays until fresh order history is in.
+  Future<void> _refresh() async {
+    ref.invalidate(ordersProvider);
+    await ref.read(ordersProvider.future);
+  }
+
   bool _matches(Order order) {
     switch (_filter) {
       case _OrderFilter.all:
@@ -83,24 +90,42 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                 l10n: l10n,
               ),
               Expanded(
-                child: filtered.isEmpty
-                    ? EmptyState(
-                        icon: Icons.receipt_long_rounded,
-                        title: l10n.ordersEmptyTitle,
-                        message: l10n.ordersEmptySub,
-                        actionLabel: l10n.browseCatalog,
-                        onAction: () => context.go('/browse'),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, i) => _OrderRow(
-                          order: filtered[i],
-                          localeCode: localeCode,
-                          l10n: l10n,
+                child: RefreshIndicator(
+                  onRefresh: _refresh,
+                  // Keep the empty state pullable: a user with no matching
+                  // orders should still be able to pull to check for new ones.
+                  child: filtered.isEmpty
+                      ? LayoutBuilder(
+                          builder: (context, constraints) =>
+                              SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight,
+                                  ),
+                                  child: EmptyState(
+                                    icon: Icons.receipt_long_rounded,
+                                    title: l10n.ordersEmptyTitle,
+                                    message: l10n.ordersEmptySub,
+                                    actionLabel: l10n.browseCatalog,
+                                    onAction: () => context.go('/browse'),
+                                  ),
+                                ),
+                              ),
+                        )
+                      : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, i) => _OrderRow(
+                            order: filtered[i],
+                            localeCode: localeCode,
+                            l10n: l10n,
+                          ),
                         ),
-                      ),
+                ),
               ),
             ],
           );
@@ -228,8 +253,9 @@ class _OrderRow extends StatelessWidget {
     final colors = context.colors;
     final (statusLabel, statusColor) = _status();
     final hasItems = order.items.isNotEmpty;
-    final firstTitle =
-        hasItems ? order.items.first.title.resolve(localeCode) : '';
+    final firstTitle = hasItems
+        ? order.items.first.title.resolve(localeCode)
+        : '';
     final extraCount = order.items.length - 1;
     final date = _shortDate(order.createdAt);
 
@@ -251,7 +277,8 @@ class _OrderRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: hasItems
                     ? ProductChip.tintFor(
-                        order.items.first.productId.hashCode.abs())
+                        order.items.first.productId.hashCode.abs(),
+                      )
                     : StatusBadge.neutral,
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -259,9 +286,10 @@ class _OrderRow extends StatelessWidget {
               child: Text(
                 hasItems ? ProductChip.initialsFor(firstTitle) : '?',
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -274,9 +302,10 @@ class _OrderRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: colors.text),
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      color: colors.text,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -297,9 +326,10 @@ class _OrderRow extends StatelessWidget {
                 Text(
                   formatUsd(order.total),
                   style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: colors.text),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: colors.text,
+                  ),
                 ),
               ],
             ),

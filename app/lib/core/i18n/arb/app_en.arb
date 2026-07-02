@@ -167,6 +167,11 @@
   "topUpRequestsTitle": "My top-up requests",
   "statusApproved": "Approved",
   "statusRejected": "Rejected",
+  "walletPendingTitle": "{count, plural, =1{Top-up pending approval} other{{count} top-ups pending approval}}",
+  "@walletPendingTitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "walletPendingHint": "Balance updates once an admin confirms your payment.",
   "sendMoneyComingSoon": "Send money is coming soon.",
   "recipientLabel": "Recipient (phone or email)",
   "amountLabel": "Amount",

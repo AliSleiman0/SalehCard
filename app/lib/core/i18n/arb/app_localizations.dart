@@ -938,6 +938,18 @@ abstract class AppLocalizations {
   /// **'Rejected'**
   String get statusRejected;
 
+  /// No description provided for @walletPendingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Top-up pending approval} other{{count} top-ups pending approval}}'**
+  String walletPendingTitle(int count);
+
+  /// No description provided for @walletPendingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance updates once an admin confirms your payment.'**
+  String get walletPendingHint;
+
   /// No description provided for @sendMoneyComingSoon.
   ///
   /// In en, this message translates to:
