@@ -72,7 +72,6 @@
   "login_email": "E-posta",
   "login_password": "Parola",
   "login_submit": "Giriş yap",
-  "login_dev_note": "Geliştirme modu — herhangi bir kimlik bilgisi sizi yönetici olarak oturum açar.",
   "loading": "Yükleniyor…",
   "coming_soon": "Bu ekran tasarımın bir parçasıdır ve sonraki adımda arka uca bağlanacaktır.",
   "not_implemented": "Sunucu uç noktası henüz uygulanmadı (501).",

@@ -9,7 +9,7 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const login = useAuthStore((s) => s.login)
-  const [email, setEmail] = useState('admin@salehcard.com')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -94,13 +94,6 @@ export default function LoginPage() {
             <Icon name="logout" size={16} /> {t('login_submit')}
           </button>
         </form>
-
-        <div
-          className="faint"
-          style={{ marginTop: 16, fontSize: 11.5, display: 'flex', gap: 7, alignItems: 'center' }}
-        >
-          <Icon name="bolt" size={13} /> {t('login_dev_note')}
-        </div>
       </div>
     </div>
   )

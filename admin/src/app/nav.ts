@@ -13,22 +13,21 @@ export interface NavGroup {
   items: NavItem[]
 }
 
-// Sidebar structure mirrors the prototype's NAV (badge counts are demo values
-// from the design until those modules are wired).
+// Sidebar structure mirrors the prototype's NAV.
 export const NAV: NavGroup[] = [
   { group: 'grp_overview', items: [{ to: '/', icon: 'grid', label: 'nav_dashboard' }] },
   {
     group: 'grp_catalog',
     items: [
       { to: '/products', icon: 'box', label: 'nav_products' },
-      { to: '/inventory', icon: 'layers', label: 'nav_inventory', badge: '8', badgeType: 'warn' },
+      { to: '/inventory', icon: 'layers', label: 'nav_inventory' },
       { to: '/offers', icon: 'tag', label: 'nav_offers' },
     ],
   },
   {
     group: 'grp_operations',
     items: [
-      { to: '/orders', icon: 'bag', label: 'nav_orders', badge: '3', badgeType: 'danger' },
+      { to: '/orders', icon: 'bag', label: 'nav_orders' },
       { to: '/users', icon: 'users', label: 'nav_users' },
       { to: '/resellers', icon: 'handshake', label: 'nav_resellers' },
       { to: '/kyc', icon: 'id', label: 'nav_kyc' },
