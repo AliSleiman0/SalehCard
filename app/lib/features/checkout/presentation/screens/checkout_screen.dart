@@ -18,6 +18,7 @@ import '../../../cart/domain/entities/cart_item.dart';
 import '../../../cart/presentation/controllers/cart_controller.dart';
 import '../../../kyc/domain/entities/kyc.dart';
 import '../../../kyc/presentation/providers.dart' show kycProfileProvider;
+import '../../../wallet/presentation/providers.dart' show walletProvider;
 import '../../domain/entities/order.dart';
 import '../providers.dart';
 import '../widgets/dynamic_input_field.dart';
@@ -81,11 +82,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final subtotal = ref.watch(cartSubtotalProvider);
     final productsAsync = ref.watch(checkoutProductsProvider);
     final submitState = ref.watch(placeOrderControllerProvider);
-    final balance =
-        ref.watch(authControllerProvider).user?.walletBalance ?? 0;
+    // Prefer the live wallet balance (fresh on every checkout entry); the auth
+    // snapshot is only a fallback while it loads. The auth user is null after
+    // a session restore and stale after top-ups/purchases, so gating the CTA
+    // on it alone would lock funded returning users out of checkout.
+    final authBalance =
+        ref.watch(authControllerProvider).user?.walletBalance.toDouble() ?? 0;
+    final walletAsync = ref.watch(walletProvider);
+    final balance = walletAsync.maybeWhen(
+      data: (w) => w.balance,
+      orElse: () => authBalance,
+    );
     final kycAsync = ref.watch(kycProfileProvider);
 
-    final walletInsufficient = balance < subtotal;
+    // Only gate the CTA once the live balance has actually loaded — while it
+    // is loading (or errored) the server-side INSUFFICIENT_FUNDS check is the
+    // backstop rather than a possibly-stale local number.
+    final walletInsufficient = walletAsync.hasValue && balance < subtotal;
     // Purchasing requires an approved KYC — the server enforces it
     // (KYC_REQUIRED); this panel is the friendly client-side gate. While the
     // profile loads (or fails to load) checkout renders normally and the

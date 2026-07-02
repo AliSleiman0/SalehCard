@@ -5,10 +5,26 @@ import { AcctSidebar } from '@/features/auth/components/AcctSidebar'
 import { useCurrencyStore } from '@/stores/currency'
 import { fmtPrice } from '@/lib/utils'
 import { useWallet } from '../hooks/useWallet'
-import { useTopUp } from '../hooks/useTopUp'
+import { useTopUp, useTopUpRequests } from '../hooks/useTopUp'
+import type { TopUpChannel } from '../api/wallet'
 import type { WalletTransaction } from '@/types'
 
 const PRESETS = [25, 50, 100, 250]
+
+// Out-of-band payment channels for top-up requests (credited after an admin
+// confirms receipt — there is no instant/self-serve card gateway).
+const CHANNELS: { k: TopUpChannel; label: string; badge: string; c: string }[] = [
+  { k: 'whish', label: 'Whish', badge: 'W', c: '#e0195c' },
+  { k: 'omt', label: 'OMT', badge: 'O', c: '#f39200' },
+  { k: 'cash', label: 'Cash', badge: '$', c: '#4a4f5c' },
+  { k: 'usdt', label: 'USDT', badge: '₮', c: '#26a17b' },
+]
+
+const REQ_STATUS_COLOR: Record<string, string> = {
+  pending: 'var(--warn, #f5a623)',
+  approved: 'var(--ok)',
+  rejected: 'var(--danger, #e5484d)',
+}
 
 // txLabel renders a human label for a ledger row from its type.
 function txLabel(tx: WalletTransaction, t: (k: string) => string): string {
@@ -36,19 +52,22 @@ export default function WalletPage() {
   const cur = useCurrencyStore((s) => s.currency)
   const walletQuery = useWallet()
   const topUp = useTopUp()
+  const requestsQuery = useTopUpRequests()
   const [amt, setAmt] = useState(50)
-  const [via, setVia] = useState<'visa' | 'usdt'>('visa')
+  const [via, setVia] = useState<TopUpChannel>('whish')
 
   const balance = walletQuery.data?.balance ?? 0
   const txs = walletQuery.data?.transactions ?? []
+  const requests = requestsQuery.data ?? []
 
   const onTopUp = (): void => {
     if (topUp.isPending) return
     topUp.mutate(
-      { amount: amt, method: via === 'visa' ? 'card' : 'usdt' },
+      { amount: amt, channel: via },
       {
-        onSuccess: () => toast(`+${fmtPrice(amt, cur)}`, 'wallet'),
-        onError: (err) => toast(err.message || 'Top-up failed', 'user'),
+        onSuccess: () =>
+          toast('Request submitted — your wallet is credited once we confirm your payment.', 'wallet'),
+        onError: (err) => toast(err.message || 'Top-up request failed', 'user'),
       },
     )
   }
@@ -70,10 +89,6 @@ export default function WalletPage() {
                 <div className="display-xl num" style={{ color: '#fff', margin: '6px 0' }}>
                   {fmtPrice(balance, cur)}
                 </div>
-                <span className="badge" style={{ background: 'rgba(255,255,255,.16)', color: '#fff' }}>
-                  <Icon name="bolt" size={12} />
-                  {t('trust_instant')}
-                </span>
               </div>
               <div className="panel card-pad">
                 <h3 className="h3" style={{ marginBottom: 14 }}>
@@ -93,28 +108,25 @@ export default function WalletPage() {
                   ))}
                 </div>
                 <div className="label">{t('topup_via')}</div>
-                <div className="row" style={{ gap: 10, marginBottom: 16 }}>
-                  <div
-                    className={'method' + (via === 'visa' ? ' on' : '')}
-                    style={{ flex: 1, padding: 12 }}
-                    onClick={() => setVia('visa')}
-                  >
-                    <span className="mi" style={{ background: '#1a1f71' }}>
-                      VISA
-                    </span>
-                    <span style={{ fontWeight: 700 }}>{t('pay_visa')}</span>
-                  </div>
-                  <div
-                    className={'method' + (via === 'usdt' ? ' on' : '')}
-                    style={{ flex: 1, padding: 12 }}
-                    onClick={() => setVia('usdt')}
-                  >
-                    <span className="mi" style={{ background: '#26a17b' }}>
-                      ₮
-                    </span>
-                    <span style={{ fontWeight: 700 }}>USDT</span>
-                  </div>
+                <div className="row wrap-gap" style={{ gap: 10, marginBottom: 12 }}>
+                  {CHANNELS.map((ch) => (
+                    <div
+                      key={ch.k}
+                      className={'method' + (via === ch.k ? ' on' : '')}
+                      style={{ flex: 1, padding: 12, minWidth: 90 }}
+                      onClick={() => setVia(ch.k)}
+                    >
+                      <span className="mi" style={{ background: ch.c }}>
+                        {ch.badge}
+                      </span>
+                      <span style={{ fontWeight: 700 }}>{ch.label}</span>
+                    </div>
+                  ))}
                 </div>
+                <p className="tiny muted" style={{ marginBottom: 14 }}>
+                  Top-ups are credited after we confirm your payment — usually within a few
+                  minutes during business hours.
+                </p>
                 <Button
                   variant="primary"
                   size="lg"
@@ -122,8 +134,34 @@ export default function WalletPage() {
                   disabled={topUp.isPending}
                   onClick={onTopUp}
                 >
-                  {topUp.isPending ? t('processing') : `${t('topup')} ${fmtPrice(amt, cur)}`}
+                  {topUp.isPending ? t('processing') : `Request top-up · ${fmtPrice(amt, cur)}`}
                 </Button>
+                {requests.length > 0 && (
+                  <div style={{ marginTop: 18 }}>
+                    <div className="label">My top-up requests</div>
+                    {requests.slice(0, 5).map((r) => (
+                      <div className="lrow" key={r.id}>
+                        <div className="col" style={{ gap: 1, flex: 1 }}>
+                          <span style={{ fontWeight: 700, fontSize: 14 }}>
+                            {fmtPrice(r.amount, cur)}{' '}
+                            <span className="tiny faint">· {r.channel.toUpperCase()}</span>
+                          </span>
+                          {r.status === 'rejected' && r.decisionReason && (
+                            <span className="tiny" style={{ color: 'var(--danger, #e5484d)' }}>
+                              {r.decisionReason}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className="tiny"
+                          style={{ fontWeight: 800, color: REQ_STATUS_COLOR[r.status] ?? 'var(--text-dim)' }}
+                        >
+                          {r.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

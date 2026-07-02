@@ -5,6 +5,7 @@ import '../../../core/network/providers.dart';
 import '../../cart/presentation/controllers/cart_controller.dart';
 import '../../catalog/domain/entities/product.dart';
 import '../../catalog/presentation/providers.dart';
+import '../../wallet/presentation/providers.dart' show walletProvider;
 import '../data/datasources/order_remote_data_source.dart';
 import '../data/repositories/order_repository_impl.dart';
 import '../domain/entities/order.dart';
@@ -111,6 +112,10 @@ class PlaceOrderController extends Notifier<PlaceOrderState> {
       },
       (order) {
         state = const PlaceOrderState();
+        // The wallet was just debited — refresh the balance/ledger and the
+        // order history everywhere they are watched.
+        ref.invalidate(walletProvider);
+        ref.invalidate(ordersProvider);
         return order;
       },
     );
