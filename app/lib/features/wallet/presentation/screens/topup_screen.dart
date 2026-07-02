@@ -63,12 +63,14 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     final l10n = AppLocalizations.of(context);
     final amount = _amount;
     if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.topUpAmount)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.topUpAmount)));
       return;
     }
-    final req = await ref.read(topUpControllerProvider.notifier).submit(
+    final req = await ref
+        .read(topUpControllerProvider.notifier)
+        .submit(
           TopUpInput(
             amount: amount,
             channel: _channel,
@@ -85,12 +87,22 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       final failure = ref.read(topUpControllerProvider).failure;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(failure?.message.isNotEmpty == true
-              ? failure!.message
-              : l10n.paymentFailed),
+          content: Text(
+            failure?.message.isNotEmpty == true
+                ? failure!.message
+                : l10n.paymentFailed,
+          ),
         ),
       );
     }
+  }
+
+  /// Pull-to-refresh for the request history: an admin approval moves both the
+  /// request status and the wallet balance, so refresh both.
+  Future<void> _refreshRequests() async {
+    ref.invalidate(topUpRequestsProvider);
+    ref.invalidate(walletProvider);
+    await ref.read(topUpRequestsProvider.future);
   }
 
   @override
@@ -110,90 +122,98 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       body: Column(
         children: [
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-              children: [
-                Text(
-                  l10n.topUpAmount,
-                  style: TextStyle(
+            child: RefreshIndicator(
+              onRefresh: _refreshRequests,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                children: [
+                  Text(
+                    l10n.topUpAmount,
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: colors.text),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    for (final preset in _presets)
-                      _AmountChip(
-                        label: formatUsd(preset),
-                        selected: _selectedPreset == preset &&
-                            _customController.text.trim().isEmpty,
-                        onTap: () {
-                          FocusScope.of(context).unfocus();
-                          setState(() {
-                            _selectedPreset = preset;
-                            _customController.clear();
-                          });
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _CustomAmountField(
-                  controller: _customController,
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  l10n.topUpVia,
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: colors.text),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    for (final (channel, icon) in _channels)
-                      _ChannelChip(
-                        label: channel.toUpperCase(),
-                        icon: icon,
-                        selected: _channel == channel,
-                        onTap: () => setState(() => _channel = channel),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _NoteField(controller: _noteController),
-                const SizedBox(height: 26),
-                Text(
-                  l10n.topUpRequestsTitle,
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: colors.text),
-                ),
-                const SizedBox(height: 10),
-                requestsAsync.when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(child: AppSpinner(size: 22)),
+                      color: colors.text,
+                    ),
                   ),
-                  error: (_, stack) => const SizedBox.shrink(),
-                  data: (requests) => requests.isEmpty
-                      ? const SizedBox.shrink()
-                      : Column(
-                          children: [
-                            for (final req in requests)
-                              _RequestTile(request: req, l10n: l10n),
-                          ],
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final preset in _presets)
+                        _AmountChip(
+                          label: formatUsd(preset),
+                          selected:
+                              _selectedPreset == preset &&
+                              _customController.text.trim().isEmpty,
+                          onTap: () {
+                            FocusScope.of(context).unfocus();
+                            setState(() {
+                              _selectedPreset = preset;
+                              _customController.clear();
+                            });
+                          },
                         ),
-                ),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _CustomAmountField(
+                    controller: _customController,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    l10n.topUpVia,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: colors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final (channel, icon) in _channels)
+                        _ChannelChip(
+                          label: channel.toUpperCase(),
+                          icon: icon,
+                          selected: _channel == channel,
+                          onTap: () => setState(() => _channel = channel),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _NoteField(controller: _noteController),
+                  const SizedBox(height: 26),
+                  Text(
+                    l10n.topUpRequestsTitle,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: colors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  requestsAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: AppSpinner(size: 22)),
+                    ),
+                    error: (_, stack) => const SizedBox.shrink(),
+                    data: (requests) => requests.isEmpty
+                        ? const SizedBox.shrink()
+                        : Column(
+                            children: [
+                              for (final req in requests)
+                                _RequestTile(request: req, l10n: l10n),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
           _TopUpBar(
@@ -240,8 +260,11 @@ class _ChannelChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 16, color: selected ? Colors.white : colors.textDim),
+            Icon(
+              icon,
+              size: 16,
+              color: selected ? Colors.white : colors.textDim,
+            ),
             const SizedBox(width: 7),
             Text(
               label,
@@ -284,8 +307,10 @@ class _NoteField extends StatelessWidget {
         counterText: '',
         hintText: AppLocalizations.of(context).topUpNoteHint,
         hintStyle: TextStyle(color: colors.textFaint),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: border,
         enabledBorder: border,
         focusedBorder: OutlineInputBorder(
@@ -337,22 +362,23 @@ class _RequestTile extends StatelessWidget {
               Text(
                 formatUsd(request.amount),
                 style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: colors.text),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: colors.text,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
                 request.channel.toUpperCase(),
                 style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: colors.textFaint),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: colors.textFaint,
+                ),
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(999),
@@ -374,9 +400,10 @@ class _RequestTile extends StatelessWidget {
             Text(
               request.decisionReason,
               style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppTokens.danger),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppTokens.danger,
+              ),
             ),
           ],
         ],
@@ -442,9 +469,7 @@ class _CustomAmountField extends StatelessWidget {
       controller: controller,
       onChanged: onChanged,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-      ],
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
       style: TextStyle(fontSize: 15, color: colors.text),
       cursorColor: AppTokens.brand1,
       decoration: InputDecoration(
@@ -453,8 +478,10 @@ class _CustomAmountField extends StatelessWidget {
         prefixIcon: Icon(Icons.attach_money_rounded, color: colors.textFaint),
         hintText: AppLocalizations.of(context).amountLabel,
         hintStyle: TextStyle(color: colors.textFaint),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         border: border,
         enabledBorder: border,
         focusedBorder: OutlineInputBorder(
@@ -485,7 +512,11 @@ class _TopUpBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(
-          18, 13, 18, 13 + MediaQuery.of(context).padding.bottom),
+        18,
+        13,
+        18,
+        13 + MediaQuery.of(context).padding.bottom,
+      ),
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(top: BorderSide(color: colors.border)),
@@ -501,8 +532,10 @@ class _TopUpBar extends StatelessWidget {
           shape: const StadiumBorder(),
           elevation: 8,
           shadowColor: AppTokens.cta.withValues(alpha: 0.3),
-          textStyle:
-              const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),
+          textStyle: const TextStyle(
+            fontSize: 16.5,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         child: submitting
             ? const AppSpinner(color: Colors.white, size: 22, stroke: 2.5)

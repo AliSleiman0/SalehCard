@@ -56,15 +56,27 @@ class OrderDetailScreen extends ConsumerWidget {
             ),
           ),
         ),
-        data: (order) => _Body(order: order, localeCode: localeCode, l10n: l10n),
+        data: (order) => RefreshIndicator(
+          // The user watches this screen while an order sits in `processing`
+          // waiting for a code drop / manual completion — let them pull to
+          // check without leaving.
+          onRefresh: () async {
+            ref.invalidate(orderDetailProvider(id));
+            await ref.read(orderDetailProvider(id).future);
+          },
+          child: _Body(order: order, localeCode: localeCode, l10n: l10n),
+        ),
       ),
     );
   }
 }
 
 class _Body extends StatelessWidget {
-  const _Body(
-      {required this.order, required this.localeCode, required this.l10n});
+  const _Body({
+    required this.order,
+    required this.localeCode,
+    required this.l10n,
+  });
 
   final Order order;
   final String localeCode;
@@ -112,17 +124,21 @@ class _Body extends StatelessWidget {
     final (label, color) = _status(context);
 
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             StatusBadge(label: label, color: color),
-            Text(order.paymentMethod.toUpperCase(),
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: colors.textFaint)),
+            Text(
+              order.paymentMethod.toUpperCase(),
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: colors.textFaint,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 20),
@@ -136,9 +152,14 @@ class _Body extends StatelessWidget {
           _RefundedNote(amount: order.total, l10n: l10n),
           const SizedBox(height: 20),
         ],
-        Text(l10n.orderItemsLabel,
-            style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w800, color: colors.text)),
+        Text(
+          l10n.orderItemsLabel,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: colors.text,
+          ),
+        ),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(14),
@@ -159,17 +180,20 @@ class _Body extends StatelessWidget {
                         height: 38,
                         decoration: BoxDecoration(
                           color: ProductChip.tintFor(
-                              item.productId.hashCode.abs()),
+                            item.productId.hashCode.abs(),
+                          ),
                           borderRadius: BorderRadius.circular(11),
                         ),
                         alignment: Alignment.center,
                         child: Text(
                           ProductChip.initialsFor(
-                              item.title.resolve(localeCode)),
+                            item.title.resolve(localeCode),
+                          ),
                           style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13),
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -182,22 +206,30 @@ class _Body extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: colors.text),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: colors.text,
+                              ),
                             ),
                             if (item.denomination.isNotEmpty)
-                              Text(item.denomination,
-                                  style: TextStyle(
-                                      fontSize: 12.5, color: colors.textDim)),
+                              Text(
+                                item.denomination,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: colors.textDim,
+                                ),
+                              ),
                           ],
                         ),
                       ),
-                      Text(formatUsd(item.lineTotal),
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: colors.text)),
+                      Text(
+                        formatUsd(item.lineTotal),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: colors.text,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -205,17 +237,23 @@ class _Body extends StatelessWidget {
               const SizedBox(height: 8),
               MoneyRow(label: l10n.subtotalLabel, value: order.subtotal),
               MoneyRow(
-                  label: l10n.totalLabel, value: order.total, emphasized: true),
+                label: l10n.totalLabel,
+                value: order.total,
+                emphasized: true,
+              ),
             ],
           ),
         ),
         if (order.fulfillment.statusTimeline.isNotEmpty) ...[
           const SizedBox(height: 24),
-          Text(l10n.orderTimelineLabel,
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: colors.text)),
+          Text(
+            l10n.orderTimelineLabel,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: colors.text,
+            ),
+          ),
           const SizedBox(height: 10),
           _Timeline(
             events: order.fulfillment.statusTimeline,
@@ -246,22 +284,33 @@ class _RefundedNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.assignment_return_rounded,
-              size: 20, color: StatusBadge.danger),
+          const Icon(
+            Icons.assignment_return_rounded,
+            size: 20,
+            color: StatusBadge.danger,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.orderRefundedNote,
-                    style: TextStyle(
-                        fontSize: 13, height: 1.4, color: colors.textDim)),
+                Text(
+                  l10n.orderRefundedNote,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: colors.textDim,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(formatUsd(amount),
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: StatusBadge.danger)),
+                Text(
+                  formatUsd(amount),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: StatusBadge.danger,
+                  ),
+                ),
               ],
             ),
           ),
@@ -320,10 +369,7 @@ class _Timeline extends StatelessWidget {
                       ),
                       if (i != events.length - 1)
                         Expanded(
-                          child: Container(
-                            width: 2,
-                            color: colors.border,
-                          ),
+                          child: Container(width: 2, color: colors.border),
                         ),
                     ],
                   ),
@@ -331,28 +377,39 @@ class _Timeline extends StatelessWidget {
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(
-                          bottom: i == events.length - 1 ? 0 : 16),
+                        bottom: i == events.length - 1 ? 0 : 16,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(labelOf(events[i].status),
-                              style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: colors.text)),
+                          Text(
+                            labelOf(events[i].status),
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              color: colors.text,
+                            ),
+                          ),
                           if (events[i].note.isNotEmpty) ...[
                             const SizedBox(height: 2),
-                            Text(events[i].note,
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    height: 1.35,
-                                    color: colors.textDim)),
+                            Text(
+                              events[i].note,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                height: 1.35,
+                                color: colors.textDim,
+                              ),
+                            ),
                           ],
                           if (_time(events[i].at).isNotEmpty) ...[
                             const SizedBox(height: 2),
-                            Text(_time(events[i].at),
-                                style: TextStyle(
-                                    fontSize: 11.5, color: colors.textFaint)),
+                            Text(
+                              _time(events[i].at),
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: colors.textFaint,
+                              ),
+                            ),
                           ],
                         ],
                       ),
@@ -386,41 +443,52 @@ class _CodeCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.deliveredCodesLabel,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: colors.textDim)),
+          Text(
+            l10n.deliveredCodesLabel,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: colors.textDim,
+            ),
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
-                child: Text(code,
-                    style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: colors.text)),
+                child: Text(
+                  code,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: colors.text,
+                  ),
+                ),
               ),
               GestureDetector(
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: code));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l10n.copiedLabel)),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(l10n.copiedLabel)));
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     gradient: AppTokens.brandGradient,
                     borderRadius: BorderRadius.circular(AppTokens.rPill),
                   ),
-                  child: Text(l10n.copyLabel,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
+                  child: Text(
+                    l10n.copyLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -448,13 +516,17 @@ class _ProcessingNote extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.schedule_rounded,
-              size: 20, color: AppTokens.brand1),
+          const Icon(Icons.schedule_rounded, size: 20, color: AppTokens.brand1),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(l10n.orderProcessingNote,
-                style: TextStyle(
-                    fontSize: 13, height: 1.4, color: colors.textDim)),
+            child: Text(
+              l10n.orderProcessingNote,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: colors.textDim,
+              ),
+            ),
           ),
         ],
       ),

@@ -309,10 +309,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kycRequiredCta => 'التحقق من الهوية';
 
   @override
-  String get kycBannerBody => 'تحقّق من حسابك لتتمكن من الشراء — تستغرق العملية دقيقة واحدة. اضغط للبدء.';
+  String get kycBannerBody =>
+      'تحقّق من حسابك لتتمكن من الشراء — تستغرق العملية دقيقة واحدة. اضغط للبدء.';
 
   @override
-  String get kycBannerPending => 'طلب التحقق قيد المراجعة. يمكنك الشراء فور الموافقة عليه.';
+  String get kycBannerPending =>
+      'طلب التحقق قيد المراجعة. يمكنك الشراء فور الموافقة عليه.';
 
   @override
   String get promoCodePlaceholder => 'رمز الخصم';
@@ -444,7 +446,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get topUpNoteHint => 'مرجع الدفع / ملاحظة (اختياري)';
 
   @override
-  String get topUpRequested => 'تم إرسال الطلب — سيُضاف الرصيد إلى محفظتك بعد تأكيد الدفع من الإدارة.';
+  String get topUpRequested =>
+      'تم إرسال الطلب — سيُضاف الرصيد إلى محفظتك بعد تأكيد الدفع من الإدارة.';
 
   @override
   String get topUpRequestsTitle => 'طلبات الشحن الخاصة بي';
@@ -459,6 +462,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String topUpSuccess(String amount) {
     return 'تمت إضافة $amount+ إلى محفظتك';
   }
+
+  @override
+  String walletPendingTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلبات شحن قيد الموافقة',
+      one: 'طلب شحن قيد الموافقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get walletPendingHint =>
+      'يُحدَّث الرصيد بعد أن يؤكد المشرف عملية الدفع.';
 
   @override
   String get sendMoneyComingSoon => 'إرسال الأموال قريباً.';
