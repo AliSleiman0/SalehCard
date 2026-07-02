@@ -1,54 +1,28 @@
-import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
-import { Icon, ImageArt, Button } from '@/components'
-import type { SavedId } from '@/lib/mock/demo'
+import { Icon } from '@/components'
 
-export function gameToProduct(g: string): string {
-  const m: Record<string, string> = {
-    'PUBG MOBILE': 'pubg-uc',
-    'MOBILE LEGENDS': 'mlbb',
-    TIKTOK: 'tiktok',
-  }
-  return m[g] || 'pubg-uc'
-}
-
-export function SavedIdCard({ s, compact = false }: { s: SavedId; compact?: boolean }) {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
+// SavedIdCard renders a single saved player ID (a plain string). The backend
+// stores saved IDs as bare strings, so there is no game/art/reorder affordance.
+export function SavedIdCard({ value, onDelete }: { value: string; onDelete?: () => void }) {
   return (
-    <div
-      className="panel card-pad hover-pop"
-      style={{ padding: 14, cursor: 'pointer' }}
-      onClick={() => navigate('/product/' + gameToProduct(s.game))}
-    >
-      <div className="row" style={{ gap: 10 }}>
-        <ImageArt
-          art={s.art}
-          word={s.game.split(' ')[0]}
-          h={40}
-          wordSize={11}
-          radius={10}
-          style={{ width: 52, flex: 'none' }}
-        />
-        <div className="col" style={{ gap: 1, minWidth: 0 }}>
-          <span style={{ fontWeight: 800, fontSize: 13 }}>{s.game}</span>
-          <span
-            className="tiny faint num"
-            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+    <div className="panel card-pad" style={{ padding: 14 }}>
+      <div className="row between" style={{ gap: 10 }}>
+        <span
+          className="num"
+          style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {value}
+        </span>
+        {onDelete && (
+          <button
+            className="icon-btn"
+            style={{ width: 32, height: 32, flex: 'none' }}
+            onClick={onDelete}
+            aria-label="delete"
           >
-            {s.value}
-          </span>
-        </div>
+            <Icon name="trash" size={15} />
+          </button>
+        )}
       </div>
-      {!compact && (
-        <div className="row between" style={{ marginTop: 10 }}>
-          <span className="tiny faint">{s.label}</span>
-        </div>
-      )}
-      <Button variant="cyan" size="sm" block style={{ marginTop: 12 }}>
-        <Icon name="repeat" size={14} />
-        {t('reorder')}
-      </Button>
     </div>
   )
 }

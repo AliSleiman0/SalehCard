@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
+	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
 
 // maxBodyLen bounds a review comment to a sane length.
@@ -16,6 +17,7 @@ const maxBodyLen = 2000
 // Service defines the business-logic operations for the review domain.
 type Service interface {
 	Create(ctx context.Context, userID bson.ObjectID, input CreateReviewInput) (*Review, error)
+	ListApproved(ctx context.Context, productID bson.ObjectID, p pagination.Params) ([]ReviewRow, int64, error)
 }
 
 // ReviewService is the concrete implementation of Service.
@@ -60,6 +62,13 @@ func (s *ReviewService) Create(ctx context.Context, userID bson.ObjectID, input 
 		return nil, err
 	}
 	return rv, nil
+}
+
+// ListApproved returns the approved reviews for a product, newest-first and
+// paginated, for the public product page. Only approved reviews are surfaced;
+// pending/rejected ones stay hidden.
+func (s *ReviewService) ListApproved(ctx context.Context, productID bson.ObjectID, p pagination.Params) ([]ReviewRow, int64, error) {
+	return s.repo.List(ctx, ReviewFilter{Status: StatusApproved, ProductID: &productID}, p)
 }
 
 // badRequest builds a 400-classified validation error.

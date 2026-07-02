@@ -14,8 +14,9 @@ import (
 // fakeRepo is a minimal Repository for exercising the service validation. Create
 // records the review it was handed; the other methods are unused here.
 type fakeRepo struct {
-	created *Review
-	err     error
+	created    *Review
+	err        error
+	listFilter ReviewFilter
 }
 
 func (f *fakeRepo) Create(_ context.Context, rv *Review) error {
@@ -29,7 +30,8 @@ func (f *fakeRepo) Delete(context.Context, bson.ObjectID) error { return nil }
 func (f *fakeRepo) FindByID(context.Context, bson.ObjectID) (*Review, error) {
 	return nil, nil
 }
-func (f *fakeRepo) List(context.Context, ReviewFilter, pagination.Params) ([]ReviewRow, int64, error) {
+func (f *fakeRepo) List(_ context.Context, filt ReviewFilter, _ pagination.Params) ([]ReviewRow, int64, error) {
+	f.listFilter = filt
 	return nil, 0, nil
 }
 func (f *fakeRepo) UpdateStatus(context.Context, bson.ObjectID, string) (*Review, error) {
@@ -86,6 +88,21 @@ func TestCreateTrimsBody(t *testing.T) {
 	}
 	if repo.created.Body != "spaced" {
 		t.Errorf("body = %q, want trimmed %q", repo.created.Body, "spaced")
+	}
+}
+
+func TestListApprovedFilter(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := NewReviewService(repo)
+	pid := bson.NewObjectID()
+	if _, _, err := svc.ListApproved(context.Background(), pid, pagination.Params{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if repo.listFilter.Status != StatusApproved {
+		t.Errorf("status filter = %q, want %q", repo.listFilter.Status, StatusApproved)
+	}
+	if repo.listFilter.ProductID == nil || *repo.listFilter.ProductID != pid {
+		t.Errorf("product filter = %v, want %v", repo.listFilter.ProductID, pid)
 	}
 }
 
