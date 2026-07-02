@@ -413,7 +413,7 @@ abstract class AppLocalizations {
   /// No description provided for @promoSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Gift cards & top-ups land in your wallet in seconds.'**
+  /// **'Gift card codes delivered instantly after checkout.'**
   String get promoSubtitle;
 
   /// No description provided for @featured.
@@ -500,11 +500,11 @@ abstract class AppLocalizations {
   /// **'Enter {field}'**
   String enterValue(String field);
 
-  /// No description provided for @deliveredInstantly.
+  /// No description provided for @creditAfterProcessing.
   ///
   /// In en, this message translates to:
-  /// **'Credit is delivered to this account instantly.'**
-  String get deliveredInstantly;
+  /// **'Credit is added to this account after we process your order.'**
+  String get creditAfterProcessing;
 
   /// No description provided for @addToCart.
   ///
@@ -608,18 +608,6 @@ abstract class AppLocalizations {
   /// **'Payment method'**
   String get paymentMethodLabel;
 
-  /// No description provided for @payCardTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Card'**
-  String get payCardTitle;
-
-  /// No description provided for @payCardSub.
-  ///
-  /// In en, this message translates to:
-  /// **'Instant approval'**
-  String get payCardSub;
-
   /// No description provided for @payWalletTitle.
   ///
   /// In en, this message translates to:
@@ -637,18 +625,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Insufficient balance'**
   String get insufficientBalance;
-
-  /// No description provided for @payUsdtTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'USDT'**
-  String get payUsdtTitle;
-
-  /// No description provided for @payUsdtSub.
-  ///
-  /// In en, this message translates to:
-  /// **'Auto-approve · Instant'**
-  String get payUsdtSub;
 
   /// No description provided for @topUpWalletCta.
   ///
@@ -683,7 +659,7 @@ abstract class AppLocalizations {
   /// No description provided for @kycBannerPending.
   ///
   /// In en, this message translates to:
-  /// **'Your verification is being reviewed. You can purchase once it's approved.'**
+  /// **'Your verification is being reviewed. You can purchase once it\'s approved.'**
   String get kycBannerPending;
 
   /// No description provided for @promoCodePlaceholder.
@@ -962,12 +938,6 @@ abstract class AppLocalizations {
   /// **'Rejected'**
   String get statusRejected;
 
-  /// No description provided for @topUpSuccess.
-  ///
-  /// In en, this message translates to:
-  /// **'+{amount} added to your wallet'**
-  String topUpSuccess(String amount);
-
   /// No description provided for @sendMoneyComingSoon.
   ///
   /// In en, this message translates to:
@@ -1151,7 +1121,7 @@ abstract class AppLocalizations {
   /// No description provided for @notifWalletTopUpBody.
   ///
   /// In en, this message translates to:
-  /// **'Your top-up was credited to your wallet.'**
+  /// **'Your top-up was approved and added to your wallet.'**
   String get notifWalletTopUpBody;
 
   /// No description provided for @notifPromoTitle.
@@ -1163,7 +1133,7 @@ abstract class AppLocalizations {
   /// No description provided for @notifPromoBody.
   ///
   /// In en, this message translates to:
-  /// **'Enjoy instant delivery on gift cards & top-ups.'**
+  /// **'Discover the latest gift cards and offers.'**
   String get notifPromoBody;
 
   /// No description provided for @kycTitle.

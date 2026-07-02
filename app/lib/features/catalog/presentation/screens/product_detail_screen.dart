@@ -143,16 +143,18 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   TextSpan(
                     text: '${l10n.fromLabel} ',
                     style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: colors.textDim),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: colors.textDim,
+                    ),
                     children: [
                       TextSpan(
                         text: formatUsd(product.fromPrice!),
                         style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: colors.text),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: colors.text,
+                        ),
                       ),
                     ],
                   ),
@@ -160,11 +162,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ],
               if (hasVariants) ...[
                 const SizedBox(height: 22),
-                Text(l10n.chooseAmount,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: colors.text)),
+                Text(
+                  l10n.chooseAmount,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: colors.text,
+                  ),
+                ),
                 const SizedBox(height: 11),
                 _DenomChips(
                   variants: variants,
@@ -176,11 +181,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(l10n.quantityLabel,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: colors.text)),
+                  Text(
+                    l10n.quantityLabel,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: colors.text,
+                    ),
+                  ),
                   _QtyStepper(
                     qty: _qty,
                     onDec: () => setState(() => _qty = (_qty - 1).clamp(1, 99)),
@@ -198,15 +206,20 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  l10n.deliveredInstantly,
+                  l10n.creditAfterProcessing,
                   style: TextStyle(
-                      fontSize: 12.5, height: 1.45, color: colors.textFaint),
+                    fontSize: 12.5,
+                    height: 1.45,
+                    color: colors.textFaint,
+                  ),
                 ),
               ],
               if (!hasVariants) ...[
                 const SizedBox(height: 16),
-                Text(l10n.productDetailUnavailable,
-                    style: TextStyle(color: colors.textDim)),
+                Text(
+                  l10n.productDetailUnavailable,
+                  style: TextStyle(color: colors.textDim),
+                ),
               ],
             ],
           ),
@@ -216,10 +229,20 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           enabled: inStock && hasVariants,
           l10n: l10n,
           colors: colors,
-          onAddToCart: () => _addToCart(product, selected!, firstField,
-              localeCode, goCheckout: false),
-          onBuyNow: () => _addToCart(product, selected!, firstField,
-              localeCode, goCheckout: true),
+          onAddToCart: () => _addToCart(
+            product,
+            selected!,
+            firstField,
+            localeCode,
+            goCheckout: false,
+          ),
+          onBuyNow: () => _addToCart(
+            product,
+            selected!,
+            firstField,
+            localeCode,
+            goCheckout: true,
+          ),
         ),
       ],
     );
@@ -232,10 +255,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     String localeCode, {
     required bool goCheckout,
   }) {
-    final playerId =
-        firstField != null && _field.text.trim().isNotEmpty
-            ? _field.text.trim()
-            : null;
+    final playerId = firstField != null && _field.text.trim().isNotEmpty
+        ? _field.text.trim()
+        : null;
     // Direct-checkout funnel: the cart UI is hidden, so clear any stale item
     // from a previously abandoned checkout before adding this one — each
     // checkout reflects only the current product. (Drop this when the cart
@@ -243,7 +265,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     if (goCheckout) {
       ref.read(cartControllerProvider.notifier).clear();
     }
-    ref.read(cartControllerProvider.notifier).add(
+    ref
+        .read(cartControllerProvider.notifier)
+        .add(
           CartItem(
             productId: product.id,
             variantId: variant.id,
@@ -304,8 +328,10 @@ class _Banner extends StatelessWidget {
                 color: const Color(0x8C0D0D17),
                 alignment: Alignment.center,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTokens.danger,
                     borderRadius: BorderRadius.circular(AppTokens.rPill),
@@ -347,17 +373,26 @@ class _RatingRow extends StatelessWidget {
       children: [
         for (var i = 0; i < 5; i++)
           Icon(
-            i < rating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
+            i < rating.round()
+                ? Icons.star_rounded
+                : Icons.star_outline_rounded,
             size: 17,
             color: const Color(0xFFF5A623),
           ),
         const SizedBox(width: 7),
-        Text(rating.toStringAsFixed(1),
-            style: TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w800, color: colors.text)),
+        Text(
+          rating.toStringAsFixed(1),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: colors.text,
+          ),
+        ),
         const SizedBox(width: 6),
-        Text(l10n.ratingsCount(count),
-            style: TextStyle(fontSize: 13, color: colors.textFaint)),
+        Text(
+          l10n.ratingsCount(count),
+          style: TextStyle(fontSize: 13, color: colors.textFaint),
+        ),
       ],
     );
   }
@@ -395,9 +430,7 @@ class _DenomChips extends StatelessWidget {
                     : colors.surface,
                 borderRadius: BorderRadius.circular(AppTokens.rMd),
                 border: Border.all(
-                  color: i == selectedIndex
-                      ? AppTokens.cta
-                      : colors.border,
+                  color: i == selectedIndex ? AppTokens.cta : colors.border,
                   width: i == selectedIndex ? 2 : 1,
                 ),
               ),
@@ -431,28 +464,31 @@ class _QtyStepper extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     Widget btn(IconData icon, VoidCallback onTap) => GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: colors.surface,
-              borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: colors.borderStrong),
-            ),
-            child: Icon(icon, size: 18, color: colors.text),
-          ),
-        );
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: colors.borderStrong),
+        ),
+        child: Icon(icon, size: 18, color: colors.text),
+      ),
+    );
     return Row(
       children: [
         btn(Icons.remove_rounded, onDec),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Text('$qty',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: colors.text)),
+          child: Text(
+            '$qty',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: colors.text,
+            ),
+          ),
         ),
         btn(Icons.add_rounded, onInc),
       ],
@@ -481,7 +517,11 @@ class _BottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(
-          18, 13, 18, 13 + MediaQuery.of(context).padding.bottom),
+        18,
+        13,
+        18,
+        13 + MediaQuery.of(context).padding.bottom,
+      ),
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(top: BorderSide(color: colors.border)),
@@ -492,16 +532,22 @@ class _BottomBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(l10n.totalLabel,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textDim)),
-              Text(formatUsd(total),
-                  style: TextStyle(
-                      fontSize: 21,
-                      fontWeight: FontWeight.w800,
-                      color: colors.text)),
+              Text(
+                l10n.totalLabel,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textDim,
+                ),
+              ),
+              Text(
+                formatUsd(total),
+                style: TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
+                  color: colors.text,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 11),
@@ -539,7 +585,9 @@ class _BottomBar extends StatelessWidget {
                     elevation: enabled ? 8 : 0,
                     shadowColor: AppTokens.cta.withValues(alpha: 0.3),
                     textStyle: const TextStyle(
-                        fontSize: 15.5, fontWeight: FontWeight.w800),
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   child: Text(enabled ? l10n.buyNow : l10n.outOfStock),
                 ),

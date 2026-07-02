@@ -169,8 +169,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get promoTitle => 'تسليم فوري';
 
   @override
-  String get promoSubtitle =>
-      'بطاقات الهدايا والتعبئة تصل إلى محفظتك خلال ثوانٍ.';
+  String get promoSubtitle => 'تُسلَّم أكواد بطاقات الهدايا فوراً بعد الدفع.';
 
   @override
   String get featured => 'مميّز';
@@ -219,7 +218,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get deliveredInstantly => 'سنسلّم الرصيد إلى هذا الحساب فوراً.';
+  String get creditAfterProcessing =>
+      'يُضاف الرصيد إلى هذا الحساب بعد معالجة طلبك.';
 
   @override
   String get addToCart => 'أضف للسلة';
@@ -275,12 +275,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentMethodLabel => 'طريقة الدفع';
 
   @override
-  String get payCardTitle => 'بطاقة';
-
-  @override
-  String get payCardSub => 'موافقة فورية';
-
-  @override
   String get payWalletTitle => 'المحفظة';
 
   @override
@@ -288,12 +282,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get insufficientBalance => 'رصيد غير كافٍ';
-
-  @override
-  String get payUsdtTitle => 'USDT';
-
-  @override
-  String get payUsdtSub => 'موافقة فورية';
 
   @override
   String get topUpWalletCta => 'اشحن المحفظة';
@@ -309,10 +297,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kycRequiredCta => 'التحقق من الهوية';
 
   @override
-  String get kycBannerBody => 'تحقّق من حسابك لتتمكن من الشراء — تستغرق العملية دقيقة واحدة. اضغط للبدء.';
+  String get kycBannerBody =>
+      'تحقّق من حسابك لتتمكن من الشراء — تستغرق العملية دقيقة واحدة. اضغط للبدء.';
 
   @override
-  String get kycBannerPending => 'طلب التحقق قيد المراجعة. يمكنك الشراء فور الموافقة عليه.';
+  String get kycBannerPending =>
+      'طلب التحقق قيد المراجعة. يمكنك الشراء فور الموافقة عليه.';
 
   @override
   String get promoCodePlaceholder => 'رمز الخصم';
@@ -444,7 +434,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get topUpNoteHint => 'مرجع الدفع / ملاحظة (اختياري)';
 
   @override
-  String get topUpRequested => 'تم إرسال الطلب — سيُضاف الرصيد إلى محفظتك بعد تأكيد الدفع من الإدارة.';
+  String get topUpRequested =>
+      'تم إرسال الطلب — سيُضاف الرصيد إلى محفظتك بعد تأكيد الدفع من الإدارة.';
 
   @override
   String get topUpRequestsTitle => 'طلبات الشحن الخاصة بي';
@@ -454,11 +445,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get statusRejected => 'مرفوض';
-
-  @override
-  String topUpSuccess(String amount) {
-    return 'تمت إضافة $amount+ إلى محفظتك';
-  }
 
   @override
   String get sendMoneyComingSoon => 'إرسال الأموال قريباً.';
@@ -565,14 +551,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get notifWalletTopUpTitle => 'تمت إضافة الرصيد';
 
   @override
-  String get notifWalletTopUpBody => 'تمت إضافة رصيدك إلى محفظتك.';
+  String get notifWalletTopUpBody =>
+      'تمت الموافقة على تعبئتك وإضافتها إلى محفظتك.';
 
   @override
   String get notifPromoTitle => 'عرض لفترة محدودة';
 
   @override
-  String get notifPromoBody =>
-      'استمتع بالتسليم الفوري على بطاقات الهدايا والتعبئة.';
+  String get notifPromoBody => 'اكتشف أحدث بطاقات الهدايا والعروض.';
 
   @override
   String get kycTitle => 'التحقق';
