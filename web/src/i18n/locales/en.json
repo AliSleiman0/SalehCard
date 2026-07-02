@@ -187,6 +187,8 @@
   "completed": "Completed",
   "failed": "Failed",
   "refunded": "Refunded",
+  "order_refunded_note": "This order was refunded. The amount was returned to your wallet.",
+  "order_failed_note": "This order could not be completed. Any amount charged was returned to your wallet.",
   "failed_title": "Payment failed",
   "failed_sub": "We couldn't process your payment. No funds were taken.",
   "retry": "Try again",

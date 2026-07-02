@@ -187,6 +187,8 @@
   "completed": "Tamamlandı",
   "failed": "Başarısız",
   "refunded": "İade edildi",
+  "order_refunded_note": "Bu sipariş iade edildi. Tutar cüzdanınıza geri yatırıldı.",
+  "order_failed_note": "Bu sipariş tamamlanamadı. Tahsil edilen tutar cüzdanınıza geri yatırıldı.",
   "failed_title": "Ödeme başarısız",
   "failed_sub": "Ödemenizi işleyemedik. Hesabınızdan para çekilmedi.",
   "retry": "Tekrar dene",

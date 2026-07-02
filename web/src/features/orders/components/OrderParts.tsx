@@ -3,6 +3,53 @@ import { Icon, ImageArt, Price, Badge, Button, useToast } from '@/components'
 import { useCurrencyStore } from '@/stores/currency'
 import type { OrderView } from '../types'
 
+// Single source of truth for order-status badges (head, list rows, credit card).
+const STATUS_VARIANT: Record<string, 'instant' | 'soft' | 'disc'> = {
+  completed: 'instant',
+  refunded: 'disc',
+  failed: 'disc',
+}
+
+export function OrderStatusBadge({ status }: { status?: string }) {
+  const { t } = useTranslation()
+  if (!status) return null
+  const variant = STATUS_VARIANT[status] ?? 'soft'
+  return (
+    <Badge variant={variant}>
+      {variant === 'instant' ? <Icon name="check" size={11} /> : null}
+      {t(status)}
+    </Badge>
+  )
+}
+
+// StatusNotice replaces the fulfillment details for terminal non-success orders
+// (refunded / failed), where showing a code vault or "completed" credit card lies.
+export function StatusNotice({ status }: { status?: string }) {
+  const { t } = useTranslation()
+  const note = status === 'failed' ? t('order_failed_note') : t('order_refunded_note')
+  return (
+    <div
+      className="panel card-pad"
+      style={{
+        border: '1px solid var(--danger)',
+        display: 'flex',
+        gap: 12,
+        alignItems: 'flex-start',
+      }}
+    >
+      <span style={{ color: 'var(--danger)', flex: 'none', marginTop: 2 }}>
+        <Icon name="wallet" size={18} />
+      </span>
+      <div className="col" style={{ gap: 4 }}>
+        <span style={{ fontWeight: 800 }}>{t(status ?? 'refunded')}</span>
+        <p className="small muted" style={{ margin: 0 }}>
+          {note}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function OrderHead({ o }: { o: OrderView }) {
   const cur = useCurrencyStore((s) => s.currency)
   return (
@@ -16,11 +63,14 @@ export function OrderHead({ o }: { o: OrderView }) {
           radius={12}
           style={{ width: 72 }}
         />
-        <div className="col" style={{ gap: 2 }}>
+        <div className="col" style={{ gap: 2, alignItems: 'flex-start' }}>
           <span style={{ fontWeight: 800 }}>{o.product}</span>
           <span className="tiny faint num">
             {o.id} · {o.method}
           </span>
+          <div style={{ marginTop: 4 }}>
+            <OrderStatusBadge status={o.status} />
+          </div>
         </div>
       </div>
       <Price usd={o.total} cur={cur} className="h3 num" />
@@ -46,10 +96,7 @@ export function CreditConfirm({ o }: { o: OrderView }) {
           <Icon name="user" size={16} />
           {t('credited_to')}
         </span>
-        <Badge variant="instant">
-          <Icon name="check" size={11} />
-          {t('completed')}
-        </Badge>
+        <OrderStatusBadge status={o.status} />
       </div>
       <div className="row between">
         <span className="muted small">{t('credited_to')}</span>
