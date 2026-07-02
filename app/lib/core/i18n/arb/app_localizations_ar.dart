@@ -309,6 +309,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kycRequiredCta => 'التحقق من الهوية';
 
   @override
+  String get kycBannerBody => 'تحقّق من حسابك لتتمكن من الشراء — تستغرق العملية دقيقة واحدة. اضغط للبدء.';
+
+  @override
+  String get kycBannerPending => 'طلب التحقق قيد المراجعة. يمكنك الشراء فور الموافقة عليه.';
+
+  @override
   String get promoCodePlaceholder => 'رمز الخصم';
 
   @override

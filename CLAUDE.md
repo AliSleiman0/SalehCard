@@ -76,8 +76,11 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
   each module's `EnsureIndexes` (sparse-unique `email`/`phone`, TTL on `otp_codes`/`refresh_tokens`).
 - **Auth**: JWT access token in memory + rotating refresh token in an httpOnly cookie.
   `auth.AuthRequired` gates customer routes; `auth.AdminOnly` gates `/api/admin/*` and
-  **dev-bypasses when `JWT_SECRET` is empty** (logs a warning). `api/.env` ships a
-  `JWT_SECRET`, so to bypass admin auth in dev you must run with `JWT_SECRET=` empty.
+  **dev-bypasses only when `ENV=development` AND `JWT_SECRET` is empty** (logs a warning).
+  `ENV` defaults to **production** (fail-closed) and `config.Validate()` refuses to boot
+  outside development without `JWT_SECRET` + `ALLOWED_ORIGINS`. `api/.env` sets
+  `ENV=development` and ships a `JWT_SECRET`, so to bypass admin auth in dev run with
+  `JWT_SECRET=` empty.
 - **Phone-OTP auth** (`internal/modules/user`): `POST /auth/otp/request` + `/auth/otp/verify`
   (find-or-create by phone, optional password-set) + `/auth/login-phone`, alongside email/password.
   Users carry a sparse-unique `phone`; codes live in `otp_codes`. The mobile login offers
@@ -90,9 +93,25 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
 - **Orders / payment / fulfillment** (implemented): server **re-prices from the catalog**
   (never trusts client price/fulfillment); `Idempotency-Key` header dedupes via a
   partial-unique index; order-first → atomic code claim → `completed`, with compensation
-  (release codes + wallet refund) on failure; `account_credit`/`transfer` → `processing`
-  (manual admin completion is a future step). Payment methods: card (mock approve), wallet
-  (real ledger debit), usdt (auto-approve mock).
+  (release codes + wallet refund) on failure; `account_credit`/`transfer` → `processing`,
+  which admins complete via `PUT /api/admin/orders/{id}/status` or reverse via
+  `POST /api/admin/orders/{id}/refund` (guarded `TransitionStatus` FindOneAndUpdate =
+  the double-refund lock; **delivered codes are never re-pooled on refund**).
+  **Payments are wallet-only** — card/usdt are rejected (`PAYMENT_METHOD_UNAVAILABLE`)
+  until a real gateway exists; only the wallet ledger moves real balance.
+- **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
+  KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
+  ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout
+  shows a blocking verify panel until an admin approves the submission (`/api/admin/kyc`).
+- **Wallet funding is an admin-approved request queue** (`topup_requests`): customers file
+  amount + out-of-band channel (whish/omt/cash/usdt/other) via `POST /api/v1/wallet/topups`;
+  admins approve (atomic pending-claim → credit → **mandatory** ledger row, with
+  compensation) or reject at `/api/admin/wallet/topups`. There is NO instant top-up.
+- **Admin audit log** (`audit` module, `admin_audit_log`): role/status changes, wallet &
+  reseller adjustments, product deletes, order refunds/completions, KYC/review/top-up
+  decisions are recorded (actor from JWT) and browsable at `/audit` + `GET
+  /api/admin/audit-log`. Guardrails: last-admin demote/suspend → `409 LAST_ADMIN`;
+  admin money adjustments reverse the balance if the ledger insert fails.
 - **CORS gotcha**: any custom request header must be in the server's CORS `AllowedHeaders`
   (`internal/server/server.go`) or the browser preflight blocks it — `Idempotency-Key` is
   there for this reason. curl won't catch this (no preflight); test in a real browser.
@@ -100,11 +119,11 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
   **NOT** Tailwind `dark:` utilities. Components emit ported class names (`.abtn .acard
   .tbl .bdg .st-* .ff-*` etc.). Theme via `[data-theme]`; locale forced to English on load.
 - **Frontend data**: catalog + orders + wallet are wired to the API via React-Query hooks
-  + `adapt*` mappers (`features/*/lib/adapt*.ts`). Remaining mock data lives in
-  `web/src/lib/mock/demo.ts` / `admin/src/lib/mock/demo.ts` behind `// TODO` markers.
-  In `/admin` the dashboard (fully real), products (incl. category dropdowns), inventory
-  (incl. upload history), and the settings admin-users table are API-wired; see
-  `CONVENTIONS.md` → "What is wired vs mock" for the current split.
+  + `adapt*` mappers (`features/*/lib/adapt*.ts`). **The `/admin` console is fully
+  API-wired** (no mock data file; the old `admin/src/lib/mock/demo.ts` is deleted) —
+  see `admin/BACKLOG.md` for the honest wired-vs-missing split (the settings module
+  backend is still a 501 stub; only its admin-accounts list is real). `/web` still has
+  `web/src/lib/mock/demo.ts` remnants behind `// TODO` markers.
 - **Customer routes guarded** by `RequireAuth` in `web/src/app/router.tsx`: `/dashboard`,
   `/wallet`, `/orders`, `/orders/:id`, `/checkout`, `/order-success/:id`.
 

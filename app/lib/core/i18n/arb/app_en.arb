@@ -119,6 +119,8 @@
   "kycRequiredTitle": "Verification required",
   "kycRequiredBody": "Verify your identity to place orders. It only takes a minute and is reviewed by our team.",
   "kycRequiredCta": "Verify identity",
+  "kycBannerBody": "Verify your account to make purchases — it only takes a minute. Tap to start.",
+  "kycBannerPending": "Your verification is being reviewed. You can purchase once it's approved.",
   "promoCodePlaceholder": "Promo code",
   "applyLabel": "Apply",
   "placeOrderCta": "Place order",

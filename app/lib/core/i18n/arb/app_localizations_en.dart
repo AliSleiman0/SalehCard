@@ -311,6 +311,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kycRequiredCta => 'Verify identity';
 
   @override
+  String get kycBannerBody =>
+      'Verify your account to make purchases — it only takes a minute. Tap to start.';
+
+  @override
+  String get kycBannerPending =>
+      'Your verification is being reviewed. You can purchase once it\'s approved.';
+
+  @override
   String get promoCodePlaceholder => 'Promo code';
 
   @override

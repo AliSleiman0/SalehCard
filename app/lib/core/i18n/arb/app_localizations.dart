@@ -674,6 +674,18 @@ abstract class AppLocalizations {
   /// **'Verify identity'**
   String get kycRequiredCta;
 
+  /// No description provided for @kycBannerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your account to make purchases — it only takes a minute. Tap to start.'**
+  String get kycBannerBody;
+
+  /// No description provided for @kycBannerPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Your verification is being reviewed. You can purchase once it's approved.'**
+  String get kycBannerPending;
+
   /// No description provided for @promoCodePlaceholder.
   ///
   /// In en, this message translates to:
