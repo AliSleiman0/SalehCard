@@ -72,6 +72,7 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	r.Get("/orders/{id}", a.detail)
 	r.Post("/orders/{id}/refund", a.refund)
 	r.Put("/orders/{id}/status", a.updateStatus)
+	r.Post("/orders/{id}/fail", a.markFailed)
 }
 
 // soldByProductHandler serves GET /api/admin/orders/sold-by-product — a map of
@@ -274,6 +275,49 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		Summary: map[string]any{
 			"fromStatus": string(before.Status), "toStatus": string(OrderStatusCompleted),
 			"transferRef": strings.TrimSpace(body.TransferRef), "note": strings.TrimSpace(body.Note),
+		},
+	})
+	a.respondFresh(w, r, id)
+}
+
+// markFailed handles POST /api/admin/orders/{id}/fail — an admin cleanup for a
+// stuck pending order (one that crashed mid-placement before its fulfillment
+// step ran). It moves pending → failed with NO wallet movement: nothing on the
+// order records whether the wallet was actually debited, so an automatic credit
+// could double-refund an order that was never charged. If a charge did occur,
+// the admin reverses it manually via the customer's wallet adjustment.
+func (a *adminHandler) markFailed(w http.ResponseWriter, r *http.Request) {
+	id, err := bson.ObjectIDFromHex(chi.URLParam(r, "id"))
+	if err != nil {
+		response.NotFound(w)
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&body) // reason is optional; an empty body is fine
+	}
+	reason := strings.TrimSpace(body.Reason)
+
+	before, err := a.repo.TransitionStatus(r.Context(), id,
+		[]OrderStatus{OrderStatusPending},
+		OrderStatusFailed,
+		TimelineEvent{Status: "failed", Note: reason, At: time.Now().UTC()},
+		nil,
+	)
+	if err != nil {
+		a.writeTransitionError(w, err, "only pending orders can be marked failed")
+		return
+	}
+
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionOrderStatus,
+		TargetType: "order",
+		TargetID:   id.Hex(),
+		Summary: map[string]any{
+			"fromStatus": string(before.Status), "toStatus": string(OrderStatusFailed),
+			"reason": reason,
 		},
 	})
 	a.respondFresh(w, r, id)
