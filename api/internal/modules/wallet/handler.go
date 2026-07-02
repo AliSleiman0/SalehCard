@@ -10,13 +10,15 @@ import (
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
-// Handler exposes wallet domain operations over HTTP.
+// Handler exposes wallet domain operations over HTTP. It holds the concrete
+// WalletService because the top-up request queue lives outside the shared
+// Service interface.
 type Handler struct {
-	service Service
+	service *WalletService
 }
 
 // NewHandler constructs a Handler backed by the given service.
-func NewHandler(service Service) *Handler {
+func NewHandler(service *WalletService) *Handler {
 	return &Handler{service: service}
 }
 
@@ -46,7 +48,9 @@ func (h *Handler) GetWallet(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, walletView{Balance: balance, Transactions: txs})
 }
 
-// TopUp handles POST /api/v1/wallet/topups.
+// TopUp handles POST /api/v1/wallet/topups — files a PENDING top-up request
+// (the wallet is credited only when an admin approves; the previous instant
+// mock credit is gone).
 func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 	id, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -58,12 +62,27 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "invalid request body")
 		return
 	}
-	tx, err := h.service.TopUp(r.Context(), id, in)
+	req, err := h.service.CreateTopUpRequest(r.Context(), id, in)
 	if err != nil {
 		writeWalletError(w, err)
 		return
 	}
-	response.OK(w, tx)
+	response.OK(w, req)
+}
+
+// ListTopUps handles GET /api/v1/wallet/topups — the user's request history.
+func (h *Handler) ListTopUps(w http.ResponseWriter, r *http.Request) {
+	id, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		response.Unauthorized(w, "authentication required")
+		return
+	}
+	reqs, err := h.service.ListTopUpRequests(r.Context(), id)
+	if err != nil {
+		writeWalletError(w, err)
+		return
+	}
+	response.OK(w, reqs)
 }
 
 // writeWalletError maps domain errors to HTTP responses.

@@ -35,6 +35,9 @@ type Repository interface {
 	UpdateRole(ctx context.Context, id bson.ObjectID, role Role) (*User, error)
 	UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error)
 	UpdateResellerTier(ctx context.Context, id bson.ObjectID, tier string) (*User, error)
+	// CountActiveAdmins counts non-suspended admin accounts (the last-admin
+	// demotion/suspension guard).
+	CountActiveAdmins(ctx context.Context) (int64, error)
 }
 
 // UserFilter narrows an admin user listing. Zero-valued fields are ignored.
@@ -342,6 +345,15 @@ func (r *MongoRepository) UpdateRole(ctx context.Context, id bson.ObjectID, role
 // returning ErrNotFound when no user matches.
 func (r *MongoRepository) UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error) {
 	return r.setFields(ctx, id, bson.D{{Key: "status", Value: status}})
+}
+
+// CountActiveAdmins counts non-suspended admin accounts. The $ne keeps legacy
+// documents without a status field counted as active.
+func (r *MongoRepository) CountActiveAdmins(ctx context.Context) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.D{
+		{Key: "role", Value: RoleAdmin},
+		{Key: "status", Value: bson.D{{Key: "$ne", Value: StatusSuspended}}},
+	})
 }
 
 // UpdateResellerTier atomically sets a user's reseller tier name and returns the

@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -16,6 +17,9 @@ import (
 // Handler exposes product domain operations over HTTP.
 type Handler struct {
 	svc Service
+	// rec records destructive admin actions; nil on the public (read-only)
+	// registration, set by RegisterAdminRoutes.
+	rec audit.Recorder
 }
 
 // NewHandler constructs a Handler backed by the given service.
@@ -127,5 +131,12 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.rec != nil {
+		h.rec.Record(r.Context(), audit.Entry{
+			Action:     audit.ActionProductDelete,
+			TargetType: "product",
+			TargetID:   id,
+		})
+	}
 	w.WriteHeader(http.StatusNoContent)
 }

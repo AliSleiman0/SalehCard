@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -62,18 +63,21 @@ type adminHandler struct {
 	users  user.Repository
 	wallet wallet.Repository
 	orders *mongo.Collection
+	rec    audit.Recorder
 }
 
 // RegisterAdminRoutes mounts the admin reseller routes onto r (the /api/admin
 // group, guarded by AdminOnly): reseller list/detail, tier assignment, sub-
-// balance adjustment, and tier-definition CRUD.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
+// balance adjustment, and tier-definition CRUD. Money mutations are recorded
+// via rec.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	_ = EnsureIndexes(context.Background(), db)
 	a := &adminHandler{
 		tiers:  NewMongoRepository(db),
 		users:  user.NewMongoRepository(db),
 		wallet: wallet.NewMongoRepository(db),
 		orders: db.Collection("orders"),
+		rec:    rec,
 	}
 
 	r.Get("/resellers", a.list)
@@ -216,8 +220,9 @@ func (a *adminHandler) assignTier(w http.ResponseWriter, r *http.Request) {
 
 // balanceAdjust handles POST /api/admin/resellers/{id}/balance-adjust — a manual
 // credit or debit of the reseller's wallet (their sub-balance). The balance
-// change is atomic; the ledger row is a best-effort follow-up (logged, not
-// failed, on insert error — consistent with the no-transactions model).
+// change is atomic; the ledger row is mandatory: if the insert fails, the
+// balance change is reversed (compensation, per the no-transactions model) and
+// the request fails — money never moves without a ledger row.
 func (a *adminHandler) balanceAdjust(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
@@ -266,8 +271,29 @@ func (a *adminHandler) balanceAdjust(w http.ResponseWriter, r *http.Request) {
 		Method:       "admin",
 		Ref:          strings.TrimSpace(body.Reason),
 	}); err != nil {
-		log.Printf("reseller balance-adjust: balance updated for %s but ledger insert failed: %v", id.Hex(), err)
+		// Mandatory ledger: reverse the balance change so success always implies
+		// a ledger row. A failed reversal is logged loudly for reconciliation.
+		var undoErr error
+		if signed > 0 {
+			_, undoErr = a.wallet.Debit(r.Context(), id, body.Amount)
+		} else {
+			_, undoErr = a.wallet.Credit(r.Context(), id, body.Amount)
+		}
+		slog.Error("reseller balance-adjust: ledger insert failed; balance change reverted",
+			"reseller", id.Hex(), "amount", signed, "ledgerError", err, "revertError", undoErr)
+		response.Error(w, http.StatusInternalServerError, "LEDGER_WRITE_FAILED",
+			"adjustment was reverted: the ledger row could not be written")
+		return
 	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionBalanceAdjust,
+		TargetType: "user",
+		TargetID:   id.Hex(),
+		Summary: map[string]any{
+			"direction": body.Direction, "amount": body.Amount,
+			"balanceAfter": newBal, "reason": strings.TrimSpace(body.Reason),
+		},
+	})
 	response.OK(w, map[string]float64{"walletBalance": newBal})
 }
 

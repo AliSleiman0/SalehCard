@@ -42,6 +42,48 @@ class WalletTxDto {
       );
 }
 
+/// Hand-written DTO (no build_runner needed) for a top-up request.
+class TopUpRequestDto {
+  const TopUpRequestDto({
+    required this.id,
+    this.amount = 0,
+    this.channel = '',
+    this.status = '',
+    this.note = '',
+    this.decisionReason = '',
+    this.createdAt,
+  });
+
+  final String id;
+  final double amount;
+  final String channel;
+  final String status;
+  final String note;
+  final String decisionReason;
+  final String? createdAt;
+
+  factory TopUpRequestDto.fromJson(Map<String, dynamic> json) =>
+      TopUpRequestDto(
+        id: json['id'] as String? ?? '',
+        amount: (json['amount'] as num?)?.toDouble() ?? 0,
+        channel: json['channel'] as String? ?? '',
+        status: json['status'] as String? ?? '',
+        note: json['note'] as String? ?? '',
+        decisionReason: json['decisionReason'] as String? ?? '',
+        createdAt: json['createdAt'] as String?,
+      );
+
+  TopUpRequest toEntity() => TopUpRequest(
+        id: id,
+        amount: amount,
+        channel: channel,
+        status: topUpStatusFromString(status),
+        note: note,
+        decisionReason: decisionReason,
+        createdAt: createdAt == null ? null : DateTime.tryParse(createdAt!),
+      );
+}
+
 @JsonSerializable(explicitToJson: true)
 class WalletDto {
   const WalletDto({this.balance = 0, this.transactions});

@@ -15,6 +15,7 @@ const UserDetailPage = lazy(() => import('@/features/users/pages/UserDetailPage'
 const ResellerListPage = lazy(() => import('@/features/resellers/pages/ResellerListPage'))
 const ResellerDetailPage = lazy(() => import('@/features/resellers/pages/ResellerDetailPage'))
 const FinancePage = lazy(() => import('@/features/finance/pages/FinancePage'))
+const TopupsPage = lazy(() => import('@/features/topups/pages/TopupsPage'))
 const PromoListPage = lazy(() => import('@/features/promos/pages/PromoListPage'))
 const PromoEditPage = lazy(() => import('@/features/promos/pages/PromoEditPage'))
 const OffersListPage = lazy(() => import('@/features/offers/pages/OffersListPage'))
@@ -23,6 +24,7 @@ const ExpensesListPage = lazy(() => import('@/features/expenses/pages/ExpensesLi
 const ExpenseEditPage = lazy(() => import('@/features/expenses/pages/ExpenseEditPage'))
 const ReviewsPage = lazy(() => import('@/features/reviews/pages/ReviewsPage'))
 const KycPage = lazy(() => import('@/features/kyc/pages/KycPage'))
+const AuditLogPage = lazy(() => import('@/features/audit/pages/AuditLogPage'))
 const SettingsPage = lazy(() => import('@/features/settings/pages/SettingsPage'))
 const NotFoundPage = lazy(() => import('@/features/misc/NotFoundPage'))
 
@@ -49,6 +51,7 @@ export default function AppRouter() {
         <Route path="/resellers" element={<ResellerListPage />} />
         <Route path="/resellers/:id" element={<ResellerDetailPage />} />
         <Route path="/finance" element={<FinancePage />} />
+        <Route path="/topups" element={<TopupsPage />} />
         <Route path="/promos" element={<PromoListPage />} />
         <Route path="/promos/new" element={<PromoEditPage />} />
         <Route path="/promos/:id/edit" element={<PromoEditPage />} />
@@ -60,6 +63,7 @@ export default function AppRouter() {
         <Route path="/expenses/:id/edit" element={<ExpenseEditPage />} />
         <Route path="/reviews" element={<ReviewsPage />} />
         <Route path="/kyc" element={<KycPage />} />
+        <Route path="/audit" element={<AuditLogPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

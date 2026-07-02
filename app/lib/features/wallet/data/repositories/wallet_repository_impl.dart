@@ -21,10 +21,20 @@ class WalletRepositoryImpl implements WalletRepository {
   }
 
   @override
-  Future<Either<Failure, WalletTx>> topUp(TopUpInput input) async {
+  Future<Either<Failure, TopUpRequest>> topUp(TopUpInput input) async {
     try {
       final dto = await _remote.topUp(input);
       return Right(dto.toEntity());
+    } catch (error) {
+      return Left(mapError(error));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<TopUpRequest>>> listTopUps() async {
+    try {
+      final dtos = await _remote.listTopUps();
+      return Right([for (final dto in dtos) dto.toEntity()]);
     } catch (error) {
       return Left(mapError(error));
     }

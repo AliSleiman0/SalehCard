@@ -25,9 +25,6 @@ export default function InventoryPage() {
         title="Inventory & code management"
         sub="Mission-critical — if codes run out, purchases fail."
       >
-        <button className="abtn">
-          <Icon name="download" size={15} /> {t('export')}
-        </button>
         <button className="abtn primary" onClick={() => setTab('upload')}>
           <Icon name="upload" size={15} /> Bulk upload codes
         </button>

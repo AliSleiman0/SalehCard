@@ -17,11 +17,10 @@ func RegisterRoutes(r chi.Router, db *mongo.Database) {
 	svc := NewProductService(repo)
 	h := NewHandler(svc)
 
+	// Read-only catalog. Mutations live exclusively under /api/admin/products
+	// (RegisterAdminRoutes), behind auth.AdminOnly.
 	r.Route("/api/v1/products", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
-		r.Post("/", h.Create)     // TODO: admin auth middleware
-		r.Patch("/{id}", h.Update) // TODO: admin auth middleware
-		r.Delete("/{id}", h.Delete) // TODO: admin auth middleware
 	})
 }

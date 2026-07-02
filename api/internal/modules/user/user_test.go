@@ -122,6 +122,16 @@ func (f *fakeUserRepo) CountActiveSince(_ context.Context, since time.Time) (int
 	return n, nil
 }
 
+func (f *fakeUserRepo) CountActiveAdmins(_ context.Context) (int64, error) {
+	var n int64
+	for _, u := range f.byID {
+		if u.Role == RoleAdmin && u.Status != StatusSuspended {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (f *fakeUserRepo) ListAll(_ context.Context, _ UserFilter, _ pagination.Params) ([]*User, int64, error) {
 	out := make([]*User, 0, len(f.byID))
 	for _, u := range f.byID {

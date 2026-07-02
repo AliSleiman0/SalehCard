@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -16,11 +17,13 @@ import (
 
 // RegisterAdminRoutes mounts the admin product CRUD onto r. The caller is
 // responsible for applying the AdminOnly middleware to r (the /api/admin group).
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
+// Destructive actions are recorded via rec.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	repo := NewMongoRepository(db)
 	_ = EnsureIndexes(context.Background(), db)
 	svc := NewProductService(repo)
 	h := NewHandler(svc)
+	h.rec = rec
 
 	// Flat registration (not a sub-router) so the code module can mount its own
 	// /products/{id}/codes routes on the same /api/admin router without a Mount

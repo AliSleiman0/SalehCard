@@ -107,17 +107,13 @@ export function Topbar() {
             </div>
           )}
         </div>
-        <button className="iconbtn" title="Notifications">
-          <Icon name="bell" size={18} />
-          <span className="ping">5</span>
-        </button>
         {/* admin */}
         <div style={{ position: 'relative' }} onClick={stop}>
           <div className="tb-admin" onClick={() => setMenu(menu === 'admin' ? null : 'admin')}>
             <div className="tb-ava">{initials}</div>
             <div className="desktop-only" style={{ lineHeight: 1.15 }}>
               <div style={{ fontWeight: 800, fontSize: 13 }}>{user?.name ?? 'Admin'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Super admin</div>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{user?.email ?? 'Admin'}</div>
             </div>
             <Icon name="chevdown" size={15} />
           </div>
@@ -130,7 +126,12 @@ export function Topbar() {
               <button onClick={() => navigate('/settings')}>
                 <Icon name="settings" size={16} /> Account settings
               </button>
-              <button>
+              <button
+                onClick={() => {
+                  close()
+                  navigate('/audit')
+                }}
+              >
                 <Icon name="shield" size={16} /> Activity log
               </button>
               <button

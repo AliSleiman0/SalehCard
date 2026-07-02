@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -19,14 +20,18 @@ import (
 // directly (no service layer — the KYC service exists for the customer path).
 type adminHandler struct {
 	repo Repository
+	rec  audit.Recorder
 }
 
 // RegisterAdminRoutes mounts the admin KYC moderation queue onto r (the
 // /api/admin group, guarded by AdminOnly): a paginated/filterable list, detail,
-// and approve/reject (PUT).
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
+// and approve/reject (PUT). Decisions are recorded via rec.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	_ = EnsureIndexes(context.Background(), db)
-	a := &adminHandler{repo: NewMongoRepository(db.Collection("kyc_submissions"), db.Collection("users"))}
+	a := &adminHandler{
+		repo: NewMongoRepository(db.Collection("kyc_submissions"), db.Collection("users")),
+		rec:  rec,
+	}
 
 	r.Get("/kyc", a.list)
 	r.Get("/kyc/{id}", a.detail)
@@ -104,6 +109,12 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		writeKycError(w, err)
 		return
 	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionKYCDecision,
+		TargetType: "kyc",
+		TargetID:   id.Hex(),
+		Summary:    map[string]any{"status": b.Status, "reason": reason, "userId": s.UserID.Hex()},
+	})
 	response.OK(w, s)
 }
 

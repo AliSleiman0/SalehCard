@@ -298,6 +298,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get payUsdtSub => 'Auto-approve · Instant';
 
   @override
+  String get topUpWalletCta => 'Top up wallet';
+
+  @override
+  String get kycRequiredTitle => 'Verification required';
+
+  @override
+  String get kycRequiredBody =>
+      'Verify your identity to place orders. It only takes a minute and is reviewed by our team.';
+
+  @override
+  String get kycRequiredCta => 'Verify identity';
+
+  @override
+  String get kycBannerBody =>
+      'Verify your account to make purchases — it only takes a minute. Tap to start.';
+
+  @override
+  String get kycBannerPending =>
+      'Your verification is being reviewed. You can purchase once it\'s approved.';
+
+  @override
   String get promoCodePlaceholder => 'Promo code';
 
   @override
@@ -423,7 +444,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get topUpAmount => 'Top-up amount';
 
   @override
-  String get topUpVia => 'Top up via';
+  String get topUpVia => 'How will you pay?';
+
+  @override
+  String get topUpNoteHint => 'Payment reference / note (optional)';
+
+  @override
+  String get topUpRequested =>
+      'Request submitted — your wallet is credited once an admin confirms your payment.';
+
+  @override
+  String get topUpRequestsTitle => 'My top-up requests';
+
+  @override
+  String get statusApproved => 'Approved';
+
+  @override
+  String get statusRejected => 'Rejected';
 
   @override
   String topUpSuccess(String amount) {

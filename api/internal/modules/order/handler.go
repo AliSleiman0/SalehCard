@@ -94,6 +94,8 @@ func (h *Handler) GetOrder(w http.ResponseWriter, r *http.Request) {
 // writeOrderError maps domain errors to HTTP responses.
 func writeOrderError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrKYCRequired):
+		response.Error(w, http.StatusForbidden, "KYC_REQUIRED", "identity verification is required before purchasing")
 	case errors.Is(err, code.ErrOutOfStock):
 		response.Error(w, http.StatusConflict, "OUT_OF_STOCK", "one or more items are out of stock")
 	case errors.Is(err, wallet.ErrInsufficientFunds):

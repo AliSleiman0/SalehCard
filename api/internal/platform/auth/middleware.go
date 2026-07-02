@@ -22,15 +22,17 @@ var devWarnOnce sync.Once
 // AdminOnly returns middleware that authorizes requests carrying a JWT whose
 // role claim is "admin", attaching the verified Claims to the request context.
 //
-// Development bypass: when secret is empty (no JWT_SECRET configured, as in the
-// default local setup) the middleware lets requests through with a synthetic
-// admin identity so the wired product/inventory pages work end-to-end without a
-// token-issuing auth module. It logs a one-time warning. In any environment
-// where a secret IS set, the middleware strictly enforces a valid admin token.
-func AdminOnly(secret string) func(http.Handler) http.Handler {
+// Development bypass: only when devBypass is true (the caller confirms
+// ENV=development) AND secret is empty does the middleware let requests through
+// with a synthetic admin identity, so the admin console works locally without a
+// token-issuing setup. It logs a one-time warning. In every other case —
+// including an empty secret outside development — requests without a valid
+// admin token are rejected (an empty secret verifies no token, so all requests
+// get 401; config.Validate additionally refuses to boot in that state).
+func AdminOnly(secret string, devBypass bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if secret == "" {
+			if devBypass && secret == "" {
 				devWarnOnce.Do(func() {
 					slog.Warn("AdminOnly: JWT_SECRET is empty — admin auth is BYPASSED (development only)")
 				})

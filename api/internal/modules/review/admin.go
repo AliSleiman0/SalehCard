@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
@@ -19,15 +20,19 @@ import (
 // submission path).
 type adminHandler struct {
 	repo Repository
+	rec  audit.Recorder
 }
 
 // RegisterAdminRoutes mounts the admin review moderation queue onto r (the
 // /api/admin group, guarded by AdminOnly): a paginated/filterable list,
 // approve/reject (PUT), and delete. Approving/rejecting/deleting recomputes the
-// affected product's denormalized rating.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
+// affected product's denormalized rating. Decisions are recorded via rec.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	_ = EnsureIndexes(context.Background(), db)
-	a := &adminHandler{repo: NewMongoRepository(db.Collection("reviews"), db.Collection("products"))}
+	a := &adminHandler{
+		repo: NewMongoRepository(db.Collection("reviews"), db.Collection("products")),
+		rec:  rec,
+	}
 
 	r.Get("/reviews", a.list)
 	r.Put("/reviews/{id}", a.update)
@@ -89,6 +94,12 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w)
 		return
 	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionReviewDecision,
+		TargetType: "review",
+		TargetID:   id.Hex(),
+		Summary:    map[string]any{"status": b.Status},
+	})
 	response.OK(w, rv)
 }
 
@@ -112,6 +123,11 @@ func (a *adminHandler) delete(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w)
 		return
 	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionReviewDelete,
+		TargetType: "review",
+		TargetID:   id.Hex(),
+	})
 	response.OK(w, map[string]bool{"deleted": true})
 }
 

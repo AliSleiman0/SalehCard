@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Icon, Price, Button, Panel, Badge, Input, useToast } from '@/components'
+import { Icon, Price, Button, Panel, Badge, useToast } from '@/components'
 import { LineItem } from '@/features/checkout/components/LineItem'
 import { PromoField } from '@/features/checkout/components/OrderSummary'
 import { fmtPrice } from '@/lib/utils'
@@ -10,19 +10,12 @@ import { useCurrencyStore } from '@/stores/currency'
 import { useUiStore } from '@/stores/ui'
 import { useLocaleStore } from '@/stores/locale'
 import { useWallet } from '@/features/wallet/hooks/useWallet'
-import { usePlaceOrder } from '@/features/orders/hooks/usePlaceOrder'
+import { usePlaceOrder, OrderError } from '@/features/orders/hooks/usePlaceOrder'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
-import type { PaymentMethod, PlaceOrderInput } from '@/types'
+import type { PlaceOrderInput } from '@/types'
 
-type Method = 'wallet' | 'visa' | 'usdt'
-
-// methodToPayment maps the UI's method labels to the API's payment methods
-// ('visa' is the card path).
-const methodToPayment: Record<Method, PaymentMethod> = {
-  wallet: 'wallet',
-  visa: 'card',
-  usdt: 'usdt',
-}
+// Wallet is the only live payment method (card/usdt were mock-approved and
+// are disabled until a real gateway exists — mirrors the API's validation).
 
 export default function CheckoutPage() {
   const { t } = useTranslation()
@@ -39,8 +32,7 @@ export default function CheckoutPage() {
   const sub = cartItems.reduce((s, x) => s + x.price * x.qty, 0)
   const total = sub
 
-  const [method, setMethod] = useState<Method>('wallet')
-  const insufficient = method === 'wallet' && balance < total
+  const insufficient = balance < total
   // One idempotency key per checkout attempt; held in a ref so React re-renders
   // while the request is in flight don't regenerate it (React-Query retries reuse it).
   const keyRef = useRef<string | null>(null)
@@ -59,7 +51,7 @@ export default function CheckoutPage() {
         recipient: it.recipient ?? undefined,
       })),
       currency: 'USD', // prices are USD; display currency is applied at render time
-      paymentMethod: methodToPayment[method],
+      paymentMethod: 'wallet',
     }
 
     // Fresh key per click (a corrective re-submit after an error is a new attempt).
@@ -74,32 +66,16 @@ export default function CheckoutPage() {
           navigate('/order-success/' + order.id, { state: { order: view } })
         },
         onError: (err) => {
+          if (err instanceof OrderError && err.code === 'KYC_REQUIRED') {
+            toast('Identity verification is required — please verify in the SalehCard app.', 'user')
+            return
+          }
           toast(err.message || t('failed_title'), 'user')
         },
       },
     )
   }
 
-  const methods: {
-    k: Method
-    icon: 'wallet' | null
-    c: string
-    l: string
-    tag?: string
-    badge?: string
-    sub: string
-  }[] = [
-    {
-      k: 'wallet',
-      icon: 'wallet',
-      c: 'var(--grad)',
-      l: t('pay_wallet'),
-      tag: t('recommended'),
-      sub: `${t('balance')}: ${fmtPrice(balance, currency)}`,
-    },
-    { k: 'visa', icon: null, c: '#1a1f71', l: t('pay_visa'), badge: 'VISA', sub: '•••• 4242' },
-    { k: 'usdt', icon: null, c: '#26a17b', l: t('pay_usdt'), badge: '₮', sub: 'TRC-20 / ERC-20' },
-  ]
 
   if (empty) {
     return (
@@ -143,44 +119,37 @@ export default function CheckoutPage() {
               {t('pay_method')}
             </div>
             <div className="col" style={{ gap: 12 }}>
-              {methods.map((m) => (
-                <div
-                  key={m.k}
-                  className={'method' + (method === m.k ? ' on' : '')}
-                  onClick={() => setMethod(m.k)}
-                >
-                  <span className="mi" style={{ background: m.c }}>
-                    {m.icon ? <Icon name={m.icon} size={18} /> : m.badge}
+              <div className="method on">
+                <span className="mi" style={{ background: 'var(--grad)' }}>
+                  <Icon name="wallet" size={18} />
+                </span>
+                <div className="col" style={{ gap: 2, flex: 1 }}>
+                  <span className="row" style={{ gap: 8 }}>
+                    <span style={{ fontWeight: 800 }}>{t('pay_wallet')}</span>
+                    <Badge variant="instant" style={{ fontSize: 10 }}>
+                      {t('recommended')}
+                    </Badge>
                   </span>
-                  <div className="col" style={{ gap: 2, flex: 1 }}>
-                    <span className="row" style={{ gap: 8 }}>
-                      <span style={{ fontWeight: 800 }}>{m.l}</span>
-                      {m.tag && (
-                        <Badge variant="instant" style={{ fontSize: 10 }}>
-                          {m.tag}
-                        </Badge>
-                      )}
-                    </span>
-                    <span className="tiny faint num">{m.sub}</span>
-                  </div>
-                  <span
-                    className="icon-btn"
-                    style={{
-                      width: 26,
-                      height: 26,
-                      background: method === m.k ? 'var(--grad)' : 'var(--surface-2)',
-                      color: '#fff',
-                      border: 0,
-                    }}
-                  >
-                    {method === m.k && <Icon name="check" size={14} />}
+                  <span className="tiny faint num">
+                    {t('balance')}: {fmtPrice(balance, currency)}
                   </span>
                 </div>
-              ))}
+                <span
+                  className="icon-btn"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    background: 'var(--grad)',
+                    color: '#fff',
+                    border: 0,
+                  }}
+                >
+                  <Icon name="check" size={14} />
+                </span>
+              </div>
             </div>
 
-            {/* method-specific panels */}
-            {method === 'wallet' && insufficient && (
+            {insufficient && (
               <Panel
                 style={{
                   marginTop: 14,
@@ -195,41 +164,6 @@ export default function CheckoutPage() {
                   <Button variant="cyan" size="sm" onClick={() => navigate('/wallet')}>
                     {t('topup')}
                   </Button>
-                </div>
-              </Panel>
-            )}
-            {method === 'visa' && (
-              <div
-                className="grid"
-                style={{ marginTop: 16, gridTemplateColumns: '1fr 1fr', gap: 12 }}
-              >
-                <div style={{ gridColumn: '1/-1' }}>
-                  <Input
-                    label={t('card_num')}
-                    className="num"
-                    placeholder="4242 4242 4242 4242"
-                  />
-                </div>
-                <Input label={t('expiry')} placeholder="12 / 28" />
-                <Input label={t('cvc')} placeholder="•••" />
-                <div style={{ gridColumn: '1/-1' }}>
-                  <Input label={t('name_card')} placeholder="Y. Demir" />
-                </div>
-              </div>
-            )}
-            {method === 'usdt' && (
-              <Panel style={{ marginTop: 16 }}>
-                <p className="small muted" style={{ marginBottom: 12 }}>
-                  {t('usdt_note')}
-                </p>
-                <div className="vault" style={{ fontSize: 13 }}>
-                  <span
-                    className="code"
-                    style={{ filter: 'none', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  >
-                    TQn9Y2khE...r5v8f29ab
-                  </span>
-                  <Badge variant="secure">TRC-20</Badge>
                 </div>
               </Panel>
             )}
@@ -279,11 +213,7 @@ export default function CheckoutPage() {
             disabled={insufficient || placing}
           >
             <Icon name="shield" size={18} />
-            {placing
-              ? t('processing')
-              : method === 'wallet'
-                ? t('place_order')
-                : `${t('pay')} ${fmtPrice(total, currency)}`}
+            {placing ? t('processing') : t('place_order')}
           </Button>
           <div className="row center" style={{ gap: 8, color: 'var(--ok)' }}>
             <Icon name="bolt" size={14} />

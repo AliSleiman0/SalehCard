@@ -38,6 +38,13 @@ type Repository interface {
 	Create(ctx context.Context, order *Order) error
 	UpdateStatus(ctx context.Context, id bson.ObjectID, status OrderStatus) error
 	UpdateFulfillment(ctx context.Context, id bson.ObjectID, status OrderStatus, fulfillment Fulfillment) error
+	// TransitionStatus atomically moves an order from one of `from` to `to`,
+	// appending a timeline event (and optionally setting extra fields). It
+	// returns the PRE-transition document — callers need the original status,
+	// total, and payment method for compensation. ErrConflict when the order is
+	// not in one of the `from` states (e.g. an already-refunded order), which
+	// makes the single document write the double-refund lock.
+	TransitionStatus(ctx context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error)
 	ListAll(ctx context.Context, f OrderFilter, p pagination.Params) ([]*Order, int64, error)
 
 	// Admin dashboard aggregations.
@@ -246,6 +253,43 @@ func (r *MongoRepository) UpdateFulfillment(ctx context.Context, id bson.ObjectI
 		return apperrors.ErrNotFound
 	}
 	return nil
+}
+
+// TransitionStatus atomically moves an order from one of `from` to `to` in a
+// single FindOneAndUpdate, appending event to the fulfillment timeline and
+// applying extraSet (may be nil). Returns the pre-transition document;
+// ErrConflict when no document matches (wrong current status), ErrNotFound
+// when the order does not exist at all.
+func (r *MongoRepository) TransitionStatus(ctx context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error) {
+	set := bson.D{
+		{Key: "status", Value: to},
+		{Key: "updatedAt", Value: time.Now().UTC()},
+	}
+	set = append(set, extraSet...)
+
+	var before Order
+	err := r.collection.FindOneAndUpdate(ctx,
+		bson.D{
+			{Key: "_id", Value: id},
+			{Key: "status", Value: bson.D{{Key: "$in", Value: from}}},
+		},
+		bson.D{
+			{Key: "$set", Value: set},
+			{Key: "$push", Value: bson.D{{Key: "fulfillment.statusTimeline", Value: event}}},
+		},
+		options.FindOneAndUpdate().SetReturnDocument(options.Before),
+	).Decode(&before)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			// Distinguish "order missing" from "order in the wrong state".
+			if _, ferr := r.FindByID(ctx, id); ferr != nil {
+				return nil, apperrors.ErrNotFound
+			}
+			return nil, apperrors.ErrConflict
+		}
+		return nil, err
+	}
+	return &before, nil
 }
 
 // ListAll returns a paginated slice of orders matching f (admin), newest first.

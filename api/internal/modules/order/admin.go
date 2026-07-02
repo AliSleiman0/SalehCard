@@ -2,14 +2,20 @@ package order
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -39,16 +45,23 @@ type adminOrderView struct {
 	Customer *CustomerInfo `json:"customer"`
 }
 
+// walletRefunder is the slice of the wallet service the admin order handler
+// needs to credit a refund back (kept minimal for testability).
+type walletRefunder interface {
+	Refund(ctx context.Context, userID bson.ObjectID, amount float64, ref string) (*wallet.WalletTransaction, error)
+}
+
 // RegisterAdminRoutes mounts the admin order routes onto r (the /api/admin
-// group, guarded by AdminOnly). The read endpoints (list/detail) are
-// implemented and enrich each order with its customer; refund and manual status
-// updates remain stubbed (they touch the wallet ledger / manual fulfillment,
-// handled in a later step).
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
+// group, guarded by AdminOnly): list/detail (enriched with the customer),
+// refund, and manual completion of processing orders. Money/status mutations
+// are recorded via rec.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	repo := NewMongoRepository(db.Collection("orders"))
 	a := &adminHandler{
-		repo:  repo,
-		users: user.NewMongoRepository(db),
+		repo:   repo,
+		users:  user.NewMongoRepository(db),
+		wallet: wallet.NewService(db),
+		rec:    rec,
 	}
 
 	r.Get("/orders", a.list)
@@ -57,8 +70,8 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 	// off the Repository interface and its test fake.
 	r.Get("/orders/sold-by-product", soldByProductHandler(repo))
 	r.Get("/orders/{id}", a.detail)
-	r.Post("/orders/{id}/refund", response.Stub("order refund"))
-	r.Put("/orders/{id}/status", response.Stub("transfer status update"))
+	r.Post("/orders/{id}/refund", a.refund)
+	r.Put("/orders/{id}/status", a.updateStatus)
 }
 
 // soldByProductHandler serves GET /api/admin/orders/sold-by-product — a map of
@@ -76,8 +89,10 @@ func soldByProductHandler(repo *MongoRepository) http.HandlerFunc {
 }
 
 type adminHandler struct {
-	repo  Repository
-	users customerLookup
+	repo   Repository
+	users  customerLookup
+	wallet walletRefunder
+	rec    audit.Recorder
 }
 
 // list handles GET /api/admin/orders — paginated, newest first, with optional
@@ -140,6 +155,150 @@ func (a *adminHandler) detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	view := adminOrderView{Order: o}
+	if u, err := a.users.FindByID(r.Context(), o.UserID); err == nil {
+		view.Customer = customerOf(u)
+	}
+	response.OK(w, view)
+}
+
+// refund handles POST /api/admin/orders/{id}/refund — reverse a processing or
+// completed order. The guarded status transition (a single FindOneAndUpdate)
+// is the double-refund lock: exactly one of two concurrent refunds wins. A
+// wallet charge is credited back through the mandatory-ledger wallet service;
+// delivered codes are never re-pooled (the customer has seen them — a refunded
+// completed order intentionally burns its codes).
+func (a *adminHandler) refund(w http.ResponseWriter, r *http.Request) {
+	id, err := bson.ObjectIDFromHex(chi.URLParam(r, "id"))
+	if err != nil {
+		response.NotFound(w)
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&body) // reason is optional; an empty body is fine
+	}
+	reason := strings.TrimSpace(body.Reason)
+
+	before, err := a.repo.TransitionStatus(r.Context(), id,
+		[]OrderStatus{OrderStatusProcessing, OrderStatusCompleted},
+		OrderStatusRefunded,
+		TimelineEvent{Status: "refunded", Note: reason, At: time.Now().UTC()},
+		nil,
+	)
+	if err != nil {
+		a.writeTransitionError(w, err, "order is not refundable (already refunded, failed, or still pending)")
+		return
+	}
+
+	// Credit the money back for wallet-paid orders. Card/usdt never charged
+	// anything (mock-approved historically), so there is nothing to reverse.
+	if before.PaymentMethod == PaymentMethodWallet && before.Total > 0 {
+		if _, err := a.wallet.Refund(r.Context(), before.UserID, before.Total, before.ID.Hex()); err != nil {
+			// Compensation: put the order back in its pre-refund state so the
+			// admin can retry. The wallet service already reversed any partial
+			// credit internally (mandatory ledger).
+			if _, rerr := a.repo.TransitionStatus(r.Context(), id,
+				[]OrderStatus{OrderStatusRefunded}, before.Status,
+				TimelineEvent{Status: "refund_reverted", Note: "wallet credit failed", At: time.Now().UTC()},
+				nil,
+			); rerr != nil {
+				slog.Error("order refund: wallet credit failed AND status revert failed — order marked refunded without credit",
+					"order", id.Hex(), "creditError", err, "revertError", rerr)
+			}
+			response.Error(w, http.StatusInternalServerError, "REFUND_CREDIT_FAILED",
+				"the wallet credit failed; the order was left unrefunded — retry")
+			return
+		}
+	}
+
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionOrderRefund,
+		TargetType: "order",
+		TargetID:   id.Hex(),
+		Summary: map[string]any{
+			"amount": before.Total, "paymentMethod": string(before.PaymentMethod),
+			"fromStatus": string(before.Status), "reason": reason,
+		},
+	})
+	a.respondFresh(w, r, id)
+}
+
+// updateStatus handles PUT /api/admin/orders/{id}/status — manual completion
+// of a processing (account_credit / transfer / parked) order. Completion is
+// the ONLY transition this endpoint allows: anything money-reversing goes
+// through /refund, and `failed` stays internal to PlaceOrder compensation, so
+// there is exactly one money-out path.
+func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := bson.ObjectIDFromHex(chi.URLParam(r, "id"))
+	if err != nil {
+		response.NotFound(w)
+		return
+	}
+	var body struct {
+		Status      string `json:"status"`
+		Note        string `json:"note"`
+		TransferRef string `json:"transferRef"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	if body.Status != string(OrderStatusCompleted) {
+		response.BadRequest(w, "status must be completed (use the refund endpoint to reverse an order)")
+		return
+	}
+
+	var extra bson.D
+	if ref := strings.TrimSpace(body.TransferRef); ref != "" {
+		extra = bson.D{{Key: "fulfillment.transferRef", Value: ref}}
+	}
+
+	before, err := a.repo.TransitionStatus(r.Context(), id,
+		[]OrderStatus{OrderStatusProcessing},
+		OrderStatusCompleted,
+		TimelineEvent{Status: "completed", Note: strings.TrimSpace(body.Note), At: time.Now().UTC()},
+		extra,
+	)
+	if err != nil {
+		a.writeTransitionError(w, err, "only processing orders can be completed")
+		return
+	}
+
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionOrderStatus,
+		TargetType: "order",
+		TargetID:   id.Hex(),
+		Summary: map[string]any{
+			"fromStatus": string(before.Status), "toStatus": string(OrderStatusCompleted),
+			"transferRef": strings.TrimSpace(body.TransferRef), "note": strings.TrimSpace(body.Note),
+		},
+	})
+	a.respondFresh(w, r, id)
+}
+
+// writeTransitionError maps TransitionStatus errors: missing order → 404,
+// wrong current status → 409 with the given message.
+func (a *adminHandler) writeTransitionError(w http.ResponseWriter, err error, conflictMsg string) {
+	switch {
+	case errors.Is(err, apperrors.ErrNotFound):
+		response.NotFound(w)
+	case errors.Is(err, apperrors.ErrConflict):
+		response.Error(w, http.StatusConflict, "INVALID_STATUS", conflictMsg)
+	default:
+		response.InternalError(w)
+	}
+}
+
+// respondFresh returns the order's current (post-mutation) admin view.
+func (a *adminHandler) respondFresh(w http.ResponseWriter, r *http.Request, id bson.ObjectID) {
+	o, err := a.repo.FindByID(r.Context(), id)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
 	view := adminOrderView{Order: o}
 	if u, err := a.users.FindByID(r.Context(), o.UserID); err == nil {
 		view.Customer = customerOf(u)

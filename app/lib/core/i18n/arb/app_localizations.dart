@@ -650,6 +650,42 @@ abstract class AppLocalizations {
   /// **'Auto-approve · Instant'**
   String get payUsdtSub;
 
+  /// No description provided for @topUpWalletCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up wallet'**
+  String get topUpWalletCta;
+
+  /// No description provided for @kycRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification required'**
+  String get kycRequiredTitle;
+
+  /// No description provided for @kycRequiredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your identity to place orders. It only takes a minute and is reviewed by our team.'**
+  String get kycRequiredBody;
+
+  /// No description provided for @kycRequiredCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify identity'**
+  String get kycRequiredCta;
+
+  /// No description provided for @kycBannerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your account to make purchases — it only takes a minute. Tap to start.'**
+  String get kycBannerBody;
+
+  /// No description provided for @kycBannerPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Your verification is being reviewed. You can purchase once it's approved.'**
+  String get kycBannerPending;
+
   /// No description provided for @promoCodePlaceholder.
   ///
   /// In en, this message translates to:
@@ -893,8 +929,38 @@ abstract class AppLocalizations {
   /// No description provided for @topUpVia.
   ///
   /// In en, this message translates to:
-  /// **'Top up via'**
+  /// **'How will you pay?'**
   String get topUpVia;
+
+  /// No description provided for @topUpNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reference / note (optional)'**
+  String get topUpNoteHint;
+
+  /// No description provided for @topUpRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Request submitted — your wallet is credited once an admin confirms your payment.'**
+  String get topUpRequested;
+
+  /// No description provided for @topUpRequestsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My top-up requests'**
+  String get topUpRequestsTitle;
+
+  /// No description provided for @statusApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get statusApproved;
+
+  /// No description provided for @statusRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get statusRejected;
 
   /// No description provided for @topUpSuccess.
   ///

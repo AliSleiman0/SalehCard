@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
@@ -11,12 +10,11 @@ import '../../../../core/widgets/app_spinner.dart';
 import '../../domain/entities/wallet.dart';
 import '../providers.dart';
 
-/// Top-up screen: preset amount chips + a custom amount field, a card/USDT
-/// method selector, and a "Top up $X" CTA. Submits via `POST /wallet/topups`.
-///
-/// NOTE: both `card` and `usdt` top-ups are mock-approved and credited
-/// immediately in dev — there is no pending/poll state. On success we just pop
-/// back to the wallet, which refreshes (TopUpController invalidates the wallet).
+/// Top-up screen: preset amount chips + a custom amount field, an out-of-band
+/// payment channel selector (Whish/OMT/cash/USDT), an optional payment note,
+/// and a request history list. Submits a PENDING request via
+/// `POST /wallet/topups` — the wallet is credited only when an admin approves
+/// after confirming the payment.
 class TopUpScreen extends ConsumerStatefulWidget {
   const TopUpScreen({super.key});
 
@@ -26,10 +24,18 @@ class TopUpScreen extends ConsumerStatefulWidget {
 
 class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   static const List<double> _presets = [25, 50, 100, 250];
+  static const List<(String, IconData)> _channels = [
+    ('whish', Icons.phone_iphone_rounded),
+    ('omt', Icons.storefront_rounded),
+    ('cash', Icons.payments_rounded),
+    ('usdt', Icons.currency_exchange_rounded),
+    ('other', Icons.more_horiz_rounded),
+  ];
 
   final _customController = TextEditingController();
+  final _noteController = TextEditingController();
   double? _selectedPreset = 50;
-  String _method = 'card'; // card | usdt
+  String _channel = 'whish';
 
   @override
   void initState() {
@@ -42,6 +48,7 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   @override
   void dispose() {
     _customController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
@@ -61,15 +68,19 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       );
       return;
     }
-    final tx = await ref.read(topUpControllerProvider.notifier).submit(
-          TopUpInput(amount: amount, method: _method),
+    final req = await ref.read(topUpControllerProvider.notifier).submit(
+          TopUpInput(
+            amount: amount,
+            channel: _channel,
+            note: _noteController.text.trim(),
+          ),
         );
     if (!mounted) return;
-    if (tx != null) {
+    if (req != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.topUpSuccess(formatUsd(tx.amount.abs())))),
+        SnackBar(content: Text(AppLocalizations.of(context).topUpRequested)),
       );
-      context.pop();
+      _noteController.clear();
     } else {
       final failure = ref.read(topUpControllerProvider).failure;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -87,6 +98,7 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
     final submitting = ref.watch(topUpControllerProvider).submitting;
+    final requestsAsync = ref.watch(topUpRequestsProvider);
     final amount = _amount;
 
     return Scaffold(
@@ -142,22 +154,44 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                       color: colors.text),
                 ),
                 const SizedBox(height: 12),
-                _MethodTile(
-                  selected: _method == 'card',
-                  icon: Icons.credit_card_rounded,
-                  iconGradient: true,
-                  title: l10n.payCardTitle,
-                  subtitle: l10n.payCardSub,
-                  onTap: () => setState(() => _method = 'card'),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final (channel, icon) in _channels)
+                      _ChannelChip(
+                        label: channel.toUpperCase(),
+                        icon: icon,
+                        selected: _channel == channel,
+                        onTap: () => setState(() => _channel = channel),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _NoteField(controller: _noteController),
+                const SizedBox(height: 26),
+                Text(
+                  l10n.topUpRequestsTitle,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: colors.text),
                 ),
                 const SizedBox(height: 10),
-                _MethodTile(
-                  selected: _method == 'usdt',
-                  icon: Icons.currency_exchange_rounded,
-                  iconColor: const Color(0xFF26A17B),
-                  title: l10n.payUsdtTitle,
-                  subtitle: l10n.payUsdtSub,
-                  onTap: () => setState(() => _method = 'usdt'),
+                requestsAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(child: AppSpinner(size: 22)),
+                  ),
+                  error: (_, stack) => const SizedBox.shrink(),
+                  data: (requests) => requests.isEmpty
+                      ? const SizedBox.shrink()
+                      : Column(
+                          children: [
+                            for (final req in requests)
+                              _RequestTile(request: req, l10n: l10n),
+                          ],
+                        ),
                 ),
               ],
             ),
@@ -169,6 +203,182 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
             colors: colors,
             onTap: _submit,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A selectable out-of-band payment channel chip.
+class _ChannelChip extends StatelessWidget {
+  const _ChannelChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          gradient: selected ? AppTokens.brandGradient : null,
+          color: selected ? null : colors.surface,
+          border: selected ? null : Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(AppTokens.rMd),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 16, color: selected ? Colors.white : colors.textDim),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: selected ? Colors.white : colors.text,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Optional payment-reference note.
+class _NoteField extends StatelessWidget {
+  const _NoteField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppTokens.rMd),
+      borderSide: BorderSide(color: colors.border),
+    );
+    return TextField(
+      controller: controller,
+      maxLength: 500,
+      maxLines: 2,
+      minLines: 1,
+      style: TextStyle(fontSize: 14, color: colors.text),
+      cursorColor: AppTokens.brand1,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: colors.surface,
+        counterText: '',
+        hintText: AppLocalizations.of(context).topUpNoteHint,
+        hintStyle: TextStyle(color: colors.textFaint),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppTokens.rMd),
+          borderSide: const BorderSide(color: AppTokens.brand1, width: 1.6),
+        ),
+      ),
+    );
+  }
+}
+
+/// One row in the request history: amount + channel + status chip (+ rejection
+/// reason when present).
+class _RequestTile extends StatelessWidget {
+  const _RequestTile({required this.request, required this.l10n});
+
+  final TopUpRequest request;
+  final AppLocalizations l10n;
+
+  (String, Color) _statusView() {
+    switch (request.status) {
+      case TopUpStatus.approved:
+        return (l10n.statusApproved, AppTokens.accent);
+      case TopUpStatus.rejected:
+        return (l10n.statusRejected, AppTokens.danger);
+      case TopUpStatus.pending:
+      case TopUpStatus.unknown:
+        return (l10n.statusPending, AppTokens.brand1);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final (statusLabel, statusColor) = _statusView();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                formatUsd(request.amount),
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: colors.text),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                request.channel.toUpperCase(),
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors.textFaint),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (request.status == TopUpStatus.rejected &&
+              request.decisionReason.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              request.decisionReason,
+              style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppTokens.danger),
+            ),
+          ],
         ],
       ),
     );
@@ -252,116 +462,6 @@ class _CustomAmountField extends StatelessWidget {
           borderSide: const BorderSide(color: AppTokens.brand1, width: 1.6),
         ),
       ),
-    );
-  }
-}
-
-class _MethodTile extends StatelessWidget {
-  const _MethodTile({
-    required this.selected,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.iconGradient = false,
-    this.iconColor,
-  });
-
-  final bool selected;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final bool iconGradient;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(AppTokens.rMd),
-          border: Border.all(
-            color: selected ? AppTokens.cta : colors.border,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                gradient: iconGradient ? AppTokens.brandGradient : null,
-                color: iconGradient
-                    ? null
-                    : (iconColor ?? AppTokens.accent).withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(icon,
-                  size: 19, color: iconGradient ? Colors.white : iconColor),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w800,
-                          color: colors.text)),
-                  const SizedBox(height: 1),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: colors.textDim)),
-                ],
-              ),
-            ),
-            _Radio(selected: selected),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Radio extends StatelessWidget {
-  const _Radio({required this.selected});
-
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 22,
-      height: 22,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: selected ? AppTokens.cta : context.colors.borderStrong,
-          width: 2,
-        ),
-      ),
-      child: selected
-          ? Center(
-              child: Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTokens.cta,
-                ),
-              ),
-            )
-          : null,
     );
   }
 }

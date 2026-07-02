@@ -75,3 +75,20 @@ export function listOrders(params: OrderListParams): Promise<ApiResponse<AdminOr
 export function getOrder(id: string): Promise<ApiResponse<AdminOrder>> {
   return apiClient.get<AdminOrder>(`${ADMIN}/${id}`)
 }
+
+/** Refund a processing or completed order (credits a wallet charge back). */
+export function refundOrder(id: string, reason = ''): Promise<ApiResponse<AdminOrder>> {
+  return apiClient.post<AdminOrder>(`${ADMIN}/${id}/refund`, { reason })
+}
+
+/** Manually complete a processing order (account credit / transfer / parked). */
+export function completeOrder(
+  id: string,
+  opts: { note?: string; transferRef?: string } = {},
+): Promise<ApiResponse<AdminOrder>> {
+  return apiClient.put<AdminOrder>(`${ADMIN}/${id}/status`, {
+    status: 'completed',
+    note: opts.note ?? '',
+    transferRef: opts.transferRef ?? '',
+  })
+}

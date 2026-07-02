@@ -296,6 +296,25 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payUsdtSub => 'موافقة فورية';
 
   @override
+  String get topUpWalletCta => 'اشحن المحفظة';
+
+  @override
+  String get kycRequiredTitle => 'التحقق من الهوية مطلوب';
+
+  @override
+  String get kycRequiredBody =>
+      'تحقّق من هويتك لتتمكن من الشراء. تستغرق العملية دقيقة واحدة وتُراجع من قبل فريقنا.';
+
+  @override
+  String get kycRequiredCta => 'التحقق من الهوية';
+
+  @override
+  String get kycBannerBody => 'تحقّق من حسابك لتتمكن من الشراء — تستغرق العملية دقيقة واحدة. اضغط للبدء.';
+
+  @override
+  String get kycBannerPending => 'طلب التحقق قيد المراجعة. يمكنك الشراء فور الموافقة عليه.';
+
+  @override
   String get promoCodePlaceholder => 'رمز الخصم';
 
   @override
@@ -419,7 +438,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get topUpAmount => 'مبلغ الإضافة';
 
   @override
-  String get topUpVia => 'الإضافة عبر';
+  String get topUpVia => 'كيف ستدفع؟';
+
+  @override
+  String get topUpNoteHint => 'مرجع الدفع / ملاحظة (اختياري)';
+
+  @override
+  String get topUpRequested => 'تم إرسال الطلب — سيُضاف الرصيد إلى محفظتك بعد تأكيد الدفع من الإدارة.';
+
+  @override
+  String get topUpRequestsTitle => 'طلبات الشحن الخاصة بي';
+
+  @override
+  String get statusApproved => 'مقبول';
+
+  @override
+  String get statusRejected => 'مرفوض';
 
   @override
   String topUpSuccess(String amount) {

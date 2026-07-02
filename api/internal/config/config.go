@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strconv"
 	"time"
@@ -59,9 +60,12 @@ type Config struct {
 	OTPMaxAttempts int
 }
 
-// Load reads configuration from environment variables, applying defaults where needed.
+// Load reads configuration from environment variables, applying defaults where
+// needed. ENV defaults to "production" so a deployment that forgets to set it
+// fails closed (strict auth, Validate enforced) rather than silently running
+// with development affordances; local dev sets ENV=development in api/.env.
 func Load() *Config {
-	env := getEnv("ENV", "development")
+	env := getEnv("ENV", "production")
 	return &Config{
 		MongoURI:       getEnv("MONGO_URI", "mongodb://localhost:27017"),
 		DBName:         getEnv("DB_NAME", "salehcard"),
@@ -94,6 +98,22 @@ func Load() *Config {
 		OTPResendInterval:  getDuration("OTP_RESEND_INTERVAL", 60*time.Second),
 		OTPMaxAttempts:     getInt("OTP_MAX_ATTEMPTS", 5),
 	}
+}
+
+// Validate rejects configurations that would run an unsafe server outside
+// development: an empty JWT_SECRET would disable admin auth entirely, and an
+// empty ALLOWED_ORIGINS leaves CORS misconfigured for the deployed SPAs.
+func (c *Config) Validate() error {
+	if c.Env == "development" {
+		return nil
+	}
+	if c.JWTSecret == "" {
+		return errors.New("JWT_SECRET is required when ENV is not development (admin auth would be disabled)")
+	}
+	if c.AllowedOrigins == "" {
+		return errors.New("ALLOWED_ORIGINS is required when ENV is not development")
+	}
+	return nil
 }
 
 // getInt parses an integer from the environment, falling back to defaultVal when

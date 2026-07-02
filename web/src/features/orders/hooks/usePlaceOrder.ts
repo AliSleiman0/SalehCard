@@ -7,6 +7,16 @@ export interface PlaceOrderArgs {
   idempotencyKey: string
 }
 
+/** Order failure carrying the API's machine code (e.g. KYC_REQUIRED). */
+export class OrderError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+  ) {
+    super(message)
+  }
+}
+
 // usePlaceOrder submits a checkout. On success it invalidates the orders and
 // wallet caches so history and balance reflect the new order.
 export function usePlaceOrder() {
@@ -15,7 +25,7 @@ export function usePlaceOrder() {
     mutationFn: async ({ input, idempotencyKey }) => {
       const res = await placeOrder(input, idempotencyKey)
       if (!res.success || !res.data) {
-        throw new Error(res.error?.message ?? 'Order failed')
+        throw new OrderError(res.error?.message ?? 'Order failed', res.error?.code)
       }
       return res.data
     },

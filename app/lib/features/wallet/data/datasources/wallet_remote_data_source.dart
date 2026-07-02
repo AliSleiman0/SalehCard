@@ -15,17 +15,27 @@ class WalletRemoteDataSource {
     return WalletDto.fromJson(unwrap(response) as Map<String, dynamic>);
   }
 
-  /// POST /wallet/topups → the newly-created (already credited) transaction.
-  /// Both `card` and `usdt` are mock-approved and credited immediately in dev.
-  Future<WalletTxDto> topUp(TopUpInput input) async {
+  /// POST /wallet/topups → the newly-created PENDING request. The wallet is
+  /// credited only when an admin approves after confirming the payment.
+  Future<TopUpRequestDto> topUp(TopUpInput input) async {
     final response = await _dio.post<dynamic>(
       '/wallet/topups',
       data: {
         'amount': input.amount,
-        'method': input.method,
-        if (input.ref != null && input.ref!.isNotEmpty) 'ref': input.ref,
+        'channel': input.channel,
+        if (input.note != null && input.note!.isNotEmpty) 'note': input.note,
       },
     );
-    return WalletTxDto.fromJson(unwrap(response) as Map<String, dynamic>);
+    return TopUpRequestDto.fromJson(unwrap(response) as Map<String, dynamic>);
+  }
+
+  /// GET /wallet/topups → the user's request history, newest first.
+  Future<List<TopUpRequestDto>> listTopUps() async {
+    final response = await _dio.get<dynamic>('/wallet/topups');
+    final list = unwrap(response) as List<dynamic>? ?? const [];
+    return [
+      for (final item in list)
+        TopUpRequestDto.fromJson(item as Map<String, dynamic>),
+    ];
   }
 }

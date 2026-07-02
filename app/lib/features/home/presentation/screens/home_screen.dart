@@ -13,6 +13,7 @@ import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../catalog/domain/entities/product.dart';
 import '../../../catalog/presentation/providers.dart';
+import '../../../kyc/presentation/widgets/kyc_banner.dart';
 import '../../../wallet/presentation/providers.dart';
 
 /// Home / wallet landing (content only — the bottom nav is provided by the app
@@ -59,6 +60,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
                 children: [
+                  const KycBanner(),
                   _SearchBar(hint: l10n.searchHint, onTap: _comingSoon),
                   const SizedBox(height: 16),
                   _WalletCard(
