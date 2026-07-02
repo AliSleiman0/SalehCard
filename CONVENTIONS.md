@@ -38,6 +38,26 @@ Always use `pkg/response` helpers:
 ### Pagination
 Use `pkg/pagination`: ParseParams(r) → Params → pass to repo → CalcMeta(params, total) → OKWithMeta
 
+### Wallet Funding & Ledger Types
+`wallet_transactions` is the immutable ledger; the source-of-truth balance is
+`users.walletBalance`. There are four ledger types (`wallet/model.go`): `topup`,
+`purchase`, `refund`, `adjustment`.
+
+**Convention: fund wallets through the top-up queue.** All money-in funding — for
+**customers and resellers alike** — goes through the top-up request queue
+(`POST /api/v1/wallet/topups` → admin approves at `/api/admin/wallet/topups`),
+which writes ledger type **`topup`**. This is the only funding path counted by the
+finance KPIs `TopUpsForDay` (`wallet/repository.go`) and `finance.walletTopups`
+(`finance/finance.go`), so routing all deposits here keeps those figures coherent.
+The admin top-up queue shows the requester's role, so reseller deposits are
+visible without leaving the queue.
+
+**Balance-adjust is for corrections only.** The direct balance-adjust endpoints
+(`/api/admin/users/{id}/wallet-adjust`, `/api/admin/resellers/{id}/balance-adjust`)
+write ledger type **`adjustment`** and are intentionally **excluded** from the
+top-up KPIs. Use them to fix mistakes or make back-office ledger corrections, not
+to fund a wallet as a matter of course.
+
 ## Frontend Conventions
 
 ### Feature Structure

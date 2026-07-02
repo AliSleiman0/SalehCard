@@ -25,6 +25,9 @@ type adminTopUpView struct {
 	*TopUpRequest
 	CustomerEmail string  `json:"customerEmail"`
 	CustomerPhone *string `json:"customerPhone,omitempty"`
+	// Role is the requester's account role (customer/reseller/admin) so the
+	// admin queue can distinguish reseller funding from customer top-ups.
+	Role string `json:"role,omitempty"`
 }
 
 // adminHandler serves the admin top-up request queue.
@@ -132,6 +135,7 @@ func (a *adminHandler) enrich(ctx context.Context, reqs []*TopUpRequest) ([]admi
 	byID := map[bson.ObjectID]struct {
 		Email string
 		Phone *string
+		Role  string
 	}{}
 	if len(ids) > 0 {
 		cur, err := a.users.Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}})
@@ -143,6 +147,7 @@ func (a *adminHandler) enrich(ctx context.Context, reqs []*TopUpRequest) ([]admi
 			ID    bson.ObjectID `bson:"_id"`
 			Email string        `bson:"email"`
 			Phone *string       `bson:"phone"`
+			Role  string        `bson:"role"`
 		}
 		if err := cur.All(ctx, &rows); err != nil {
 			return nil, err
@@ -151,7 +156,8 @@ func (a *adminHandler) enrich(ctx context.Context, reqs []*TopUpRequest) ([]admi
 			byID[row.ID] = struct {
 				Email string
 				Phone *string
-			}{row.Email, row.Phone}
+				Role  string
+			}{row.Email, row.Phone, row.Role}
 		}
 	}
 
@@ -161,6 +167,7 @@ func (a *adminHandler) enrich(ctx context.Context, reqs []*TopUpRequest) ([]admi
 		if u, ok := byID[req.UserID]; ok {
 			views[i].CustomerEmail = u.Email
 			views[i].CustomerPhone = u.Phone
+			views[i].Role = u.Role
 		}
 	}
 	return views, nil
