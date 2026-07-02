@@ -13,7 +13,7 @@ Legend: **P1** do first (customer/operator pain) · **P2** soon (trust/coherence
 
 ## P1 — Customer & operator pain
 
-### BL-1 Wallet refresh loop (Flutter)
+### ✅ BL-1 Wallet refresh loop (Flutter)
 The funding journey ends with "admin approves → balance appears", but the app
 only refetches providers when a screen is disposed and re-entered. No
 pull-to-refresh, no polling. A user watching the Wallet or Home screen never
@@ -26,13 +26,13 @@ sees their approved credit or a completed order without navigating away.
   `wallet/presentation/providers.dart` (walletProvider, topUpRequestsProvider),
   `checkout/presentation/providers.dart` (ordersProvider), orders screens.
 
-### BL-2 Pending top-up requests visible on the Wallet screen (Flutter)
+### ✅ BL-2 Pending top-up requests visible on the Wallet screen (Flutter)
 The pending/approved/rejected request list renders only inside the top-up
 screen. Surface a compact "pending request" banner/row on the Wallet screen
 (`topUpRequestsProvider` already exists) so users understand why their balance
 hasn't moved.
 
-### BL-3 Admin work-queue signals (dashboard KPIs + nav badges)
+### ✅ BL-3 Admin work-queue signals (dashboard KPIs + nav badges)
 Admins have no signal that top-up requests or KYC submissions are waiting —
 they must remember to open `/topups` and `/kyc`. Money is blocked on these.
 - Backend: add pending counts to `GET /api/admin/dashboard/stats`
@@ -42,13 +42,13 @@ they must remember to open `/topups` and `/kyc`. Money is blocked on these.
   the queues, and live nav badges (`admin/src/app/nav.ts` supports `badge`;
   feed it from a small query instead of the removed hardcoded values).
 
-### BL-4 Home screen search + bell wiring (Flutter)
+### ✅ BL-4 Home screen search + bell wiring (Flutter)
 `home_screen.dart` wires the search bar and the notification bell to a
 "coming soon" snackbar, while fully working `/search` and `/notifications`
 screens exist and are already wired from the Browse tab
 (`categories_screen.dart:37,64`). Two one-line fixes.
 
-### BL-5 Purge stale "instant" copy (Flutter l10n)
+### ✅ BL-5 Purge stale "instant" copy (Flutter l10n)
 Copy contradicting the manual top-up / processing model, all still rendered:
 - `promoSubtitle` ("land in your wallet in seconds") — Home promo card.
 - `deliveredInstantly` ("Credit is delivered to this account instantly") —
@@ -61,7 +61,7 @@ app_localizations files).
 
 ## P2 — Trust & coherence
 
-### BL-6 Web order detail must reflect order status
+### ✅ BL-6 Web order detail must reflect order status
 `web/src/features/orders/pages/OrderDetailPage.tsx` branches only on
 fulfillment kind, never on `o.status`: a refunded code order still shows the
 delivered code in the vault, and `CreditConfirm`
@@ -70,7 +70,7 @@ that refunds are real, add a status badge to the order head, a refunded
 notice, and suppress/annotate the code vault + credit card for refunded
 orders (`adaptOrder.ts` already computes the status label).
 
-### BL-7 Remove remaining mock data from live web pages
+### ✅ BL-7 Remove remaining mock data from live web pages
 `web/src/lib/mock/demo.ts` is still imported by: `DashboardPage.tsx` (fake
 cashback tile + saved-players grid), `ResellerDashboardPage.tsx` (entire page
 mock, "Bulk order" CTA is a toast no-op — hide the route or wire it),
@@ -78,7 +78,7 @@ mock, "Bulk order" CTA is a toast no-op — hide the route or wire it),
 `Header.tsx`. Wire to real endpoints where they exist (saved player IDs and
 reviews exist in the API) or remove the sections.
 
-### BL-8 Admin order-detail edges
+### ✅ BL-8 Admin order-detail edges
 - Add an inline "Mark completed" button on the account-credit card
   (`OrderDetailPage.tsx` ff==='credit' branch) — today only the sidebar quick
   action covers it.
@@ -87,7 +87,7 @@ reviews exist in the API) or remove the sections.
 - Decide the `pending`-status story: such orders (crash mid-placement) show
   "No actions available" — probably allow refund→failed or a cleanup action.
 
-### BL-9 Reseller funding coherence
+### ✅ BL-9 Reseller funding coherence
 - Reseller top-up requests land in the same admin queue as customers' with no
   role indicator — add the user's role to `adminTopUpView`
   (`api/internal/modules/wallet/admin.go`) and a chip in `TopupsPage.tsx`.
@@ -96,7 +96,7 @@ reviews exist in the API) or remove the sections.
   differently (`TopUpsForDay`, `finance.walletTopups`). Pick one and note it
   in CONVENTIONS.md, or make the finance rollup show both.
 
-### BL-10 Backend small inconsistencies
+### ✅ BL-10 Backend small inconsistencies
 - "Wallet top-ups today" uses UTC day boundaries
   (`wallet/repository.go TopUpsForDay`) while "orders today" uses
   `BUSINESS_TZ` (`order/repository.go DayStats`) — align on businessLocation.
@@ -109,25 +109,29 @@ reviews exist in the API) or remove the sections.
 
 ## P3 — Decide, then build or hide
 
-### BL-11 Notifications: build minimal or hide
-There is ZERO notifications backend; the Flutter screen shows three hardcoded
-fake items (`notification_repository_stub.dart`). Option A (recommended):
-minimal `notifications` module — write a row on order completed/refunded,
-top-up approved/rejected, KYC decided (all these code paths exist and are
-already audit-logged); `GET /api/v1/notifications` + unread count; wire the
-app screen + bell badge. Option B: hide the screen and bells until built.
+### ✅ BL-11 Notifications: build minimal or hide
+**Decided: build, with FCM push (PR #27, merged & deployed 2026-07-02).**
+Go `notification` module (inbox rows on order completed/refunded, top-up
+approved/rejected, KYC decided; list/unread-count/read-all/device-token
+endpoints) + `platform/push` FCM adapter (`PUSH_PROVIDER`, log default) +
+Flutter wiring (real repository, bell badges, mark-read, firebase_messaging
+token lifecycle). Remaining ops steps (prod `PUSH_PROVIDER=fcm` app settings)
+in `DEVOPS-TODO.md`; deferred manual checks in `QA-TODO.md`.
 
-### BL-12 Send Money: hide or implement
-`/wallet/send` renders a full form whose repository stub always fails
-("coming soon"). Hide the entry point on the Wallet screen until a real
-peer-transfer endpoint exists (`TransferRepositoryStub` is the single wiring
-point).
+### ✅ BL-12 Send Money: hide or implement
+**Decided: hide (2026-07-03).** The "Send money" action button is removed from
+the Wallet screen; the `/wallet/send` route, `SendMoneyScreen`, and
+`TransferRepositoryStub` stay dormant with a re-enable comment at the button
+site. Revisit as a real peer-transfer feature post-launch (needs guarded
+debit + credit + compensation, two ledger rows — see BL-15 territory).
 
-### BL-13 Cart: enable or remove
-The app is buy-now-only: "Add to cart" is commented out
-(`product_detail_screen.dart:513-528`) and the cart nav tab is disabled
-(`app_shell.dart`), yet the whole cart machinery + `/cart` route exist.
-Product decision: re-enable multi-item carts or delete the dead code.
+### ✅ BL-13 Cart: enable or remove
+**Decided: keep hidden, don't delete (2026-07-03).** Already the shipped
+state: the cart nav tab and "Add to cart" button are commented out with
+re-enable notes; Buy Now clears the cart and goes straight to checkout; no
+user-reachable path into `/cart` remains. Cart machinery stays dormant for a
+possible multi-item/bulk future (checkout + order model are single-product
+today — enabling it is a backend feature, not a UI toggle).
 
 ### BL-14 Admin "coming soon" set (unchanged, honestly labeled)
 CSV/PDF exports (orders/users/resellers/finance/codes), bulk order actions,
