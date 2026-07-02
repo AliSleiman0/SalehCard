@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -66,7 +67,10 @@ func (s *WalletService) ListTransactions(ctx context.Context, userID bson.Object
 	return s.repo.FindByUserID(ctx, userID)
 }
 
-// Debit atomically charges the wallet and records a purchase ledger row.
+// Debit atomically charges the wallet and records a purchase ledger row. The
+// ledger row is mandatory: if its insert fails the debit is reversed
+// (compensation, per the no-transactions model) before the error is returned,
+// so callers can safely retry without double-charging.
 func (s *WalletService) Debit(ctx context.Context, userID bson.ObjectID, amount float64, ref string) (*WalletTransaction, error) {
 	if amount <= 0 {
 		return nil, &apperrors.AppError{Code: "BAD_REQUEST", Message: "charge amount must be positive", Err: apperrors.ErrBadRequest}
@@ -85,12 +89,19 @@ func (s *WalletService) Debit(ctx context.Context, userID bson.ObjectID, amount 
 		CreatedAt:    time.Now().UTC(),
 	}
 	if err := s.repo.Create(ctx, tx); err != nil {
+		if _, undoErr := s.repo.Credit(ctx, userID, amount); undoErr != nil {
+			slog.Error("wallet: debit ledger insert failed AND reversal failed — balance charged without a ledger row",
+				"user", userID.Hex(), "amount", amount, "ref", ref, "ledgerError", err, "revertError", undoErr)
+		}
 		return nil, err
 	}
 	return tx, nil
 }
 
-// Refund credits the wallet back and records a refund ledger row.
+// Refund credits the wallet back and records a refund ledger row. The ledger
+// row is mandatory: if its insert fails the credit is reversed (guarded debit)
+// before the error is returned, so callers can safely retry without
+// double-crediting.
 func (s *WalletService) Refund(ctx context.Context, userID bson.ObjectID, amount float64, ref string) (*WalletTransaction, error) {
 	if amount <= 0 {
 		return nil, &apperrors.AppError{Code: "BAD_REQUEST", Message: "refund amount must be positive", Err: apperrors.ErrBadRequest}
@@ -109,6 +120,10 @@ func (s *WalletService) Refund(ctx context.Context, userID bson.ObjectID, amount
 		CreatedAt:    time.Now().UTC(),
 	}
 	if err := s.repo.Create(ctx, tx); err != nil {
+		if _, undoErr := s.repo.Debit(ctx, userID, amount); undoErr != nil {
+			slog.Error("wallet: refund ledger insert failed AND reversal failed — balance credited without a ledger row",
+				"user", userID.Hex(), "amount", amount, "ref", ref, "ledgerError", err, "revertError", undoErr)
+		}
 		return nil, err
 	}
 	return tx, nil

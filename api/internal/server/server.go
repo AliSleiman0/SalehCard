@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/category"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/dashboard"
@@ -96,25 +97,25 @@ func (s *Server) Routes() {
 
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role
 	// (AdminOnly bypasses only in development when no JWT secret is configured).
+	// Mutating admin actions are recorded to the audit log via rec.
+	rec := audit.NewRecorder(s.db)
 	s.router.Route("/api/admin", func(r chi.Router) {
 		r.Use(auth.AdminOnly(s.cfg.JWTSecret, s.cfg.Env == "development"))
 
-		// Fully implemented (extends the product reference slice):
-		product.RegisterAdminRoutes(r, s.db)
+		product.RegisterAdminRoutes(r, s.db, rec)
 		code.RegisterAdminRoutes(r, s.db)
 		dashboard.RegisterAdminRoutes(r, s.db)
 		finance.RegisterAdminRoutes(r, s.db)
-
-		// Route map registered; handlers stubbed (501) pending implementation:
 		order.RegisterAdminRoutes(r, s.db)
-		user.RegisterAdminRoutes(r, s.db)
-		reseller.RegisterAdminRoutes(r, s.db)
+		user.RegisterAdminRoutes(r, s.db, rec)
+		reseller.RegisterAdminRoutes(r, s.db, rec)
 		promo.RegisterAdminRoutes(r, s.db)
 		offer.RegisterAdminRoutes(r, s.db)
-		review.RegisterAdminRoutes(r, s.db)
+		review.RegisterAdminRoutes(r, s.db, rec)
 		expense.RegisterAdminRoutes(r, s.db)
-		kyc.RegisterAdminRoutes(r, s.db)
-		settings.RegisterAdminRoutes(r, s.db)
+		kyc.RegisterAdminRoutes(r, s.db, rec)
+		audit.RegisterAdminRoutes(r, s.db)
+		settings.RegisterAdminRoutes(r, s.db) // still stubbed (501)
 	})
 }
 

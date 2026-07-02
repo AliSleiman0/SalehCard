@@ -23,6 +23,7 @@ const ExpensesListPage = lazy(() => import('@/features/expenses/pages/ExpensesLi
 const ExpenseEditPage = lazy(() => import('@/features/expenses/pages/ExpenseEditPage'))
 const ReviewsPage = lazy(() => import('@/features/reviews/pages/ReviewsPage'))
 const KycPage = lazy(() => import('@/features/kyc/pages/KycPage'))
+const AuditLogPage = lazy(() => import('@/features/audit/pages/AuditLogPage'))
 const SettingsPage = lazy(() => import('@/features/settings/pages/SettingsPage'))
 const NotFoundPage = lazy(() => import('@/features/misc/NotFoundPage'))
 
@@ -60,6 +61,7 @@ export default function AppRouter() {
         <Route path="/expenses/:id/edit" element={<ExpenseEditPage />} />
         <Route path="/reviews" element={<ReviewsPage />} />
         <Route path="/kyc" element={<KycPage />} />
+        <Route path="/audit" element={<AuditLogPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

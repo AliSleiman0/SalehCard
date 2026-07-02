@@ -130,7 +130,12 @@ export function Topbar() {
               <button onClick={() => navigate('/settings')}>
                 <Icon name="settings" size={16} /> Account settings
               </button>
-              <button>
+              <button
+                onClick={() => {
+                  close()
+                  navigate('/audit')
+                }}
+              >
                 <Icon name="shield" size={16} /> Activity log
               </button>
               <button

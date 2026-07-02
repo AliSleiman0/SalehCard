@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
@@ -51,17 +52,19 @@ type adminHandler struct {
 	repo   Repository
 	wallet wallet.Repository
 	orders *mongo.Collection
+	rec    audit.Recorder
 }
 
 // RegisterAdminRoutes mounts the admin user routes onto r (the /api/admin group,
 // guarded by AdminOnly): paginated/filterable list, detail, role + status
 // changes, and manual wallet adjustment (credit/debit with a reason logged to the
-// ledger).
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
+// ledger). Mutations are recorded via rec.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	a := &adminHandler{
 		repo:   NewMongoRepository(db),
 		wallet: wallet.NewMongoRepository(db),
 		orders: db.Collection("orders"),
+		rec:    rec,
 	}
 
 	r.Get("/users", a.list)
@@ -156,12 +159,46 @@ func (a *adminHandler) updateRole(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "role must be one of customer, reseller, admin")
 		return
 	}
+	current, err := a.repo.FindByID(r.Context(), id)
+	if err != nil {
+		a.writeRepoError(w, err)
+		return
+	}
+	// Never demote the platform's last remaining admin — that would lock
+	// everyone out of the console. (Count-then-update; the admin-only surface
+	// makes the race window acceptable.)
+	if current.Role == RoleAdmin && body.Role != RoleAdmin {
+		if ok := a.requireAnotherAdmin(w, r, "cannot demote the last remaining admin"); !ok {
+			return
+		}
+	}
 	u, err := a.repo.UpdateRole(r.Context(), id, body.Role)
 	if err != nil {
 		a.writeRepoError(w, err)
 		return
 	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionRoleChange,
+		TargetType: "user",
+		TargetID:   id.Hex(),
+		Summary:    map[string]any{"from": string(current.Role), "to": string(body.Role)},
+	})
 	response.OK(w, u)
+}
+
+// requireAnotherAdmin writes a 409 and returns false when the platform has at
+// most one active admin left (so the caller must not demote/suspend it).
+func (a *adminHandler) requireAnotherAdmin(w http.ResponseWriter, r *http.Request, msg string) bool {
+	n, err := a.repo.CountActiveAdmins(r.Context())
+	if err != nil {
+		response.InternalError(w)
+		return false
+	}
+	if n <= 1 {
+		response.Error(w, http.StatusConflict, "LAST_ADMIN", msg)
+		return false
+	}
+	return true
 }
 
 // updateStatus handles PUT /api/admin/users/{id}/status.
@@ -183,18 +220,36 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "status must be one of active, suspended")
 		return
 	}
+	current, err := a.repo.FindByID(r.Context(), id)
+	if err != nil {
+		a.writeRepoError(w, err)
+		return
+	}
+	// Suspending the last active admin would lock everyone out, same as a demote.
+	if current.Role == RoleAdmin && body.Status == StatusSuspended && current.Status != StatusSuspended {
+		if ok := a.requireAnotherAdmin(w, r, "cannot suspend the last remaining admin"); !ok {
+			return
+		}
+	}
 	u, err := a.repo.UpdateStatus(r.Context(), id, body.Status)
 	if err != nil {
 		a.writeRepoError(w, err)
 		return
 	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionStatusChange,
+		TargetType: "user",
+		TargetID:   id.Hex(),
+		Summary:    map[string]any{"from": string(current.Status), "to": string(body.Status)},
+	})
 	response.OK(w, u)
 }
 
 // walletAdjust handles POST /api/admin/users/{id}/wallet-adjust — a manual
-// credit or debit. The balance change is atomic; the ledger row is a best-effort
-// follow-up (logged, not failed, on insert error — consistent with the
-// no-multi-document-transactions model).
+// credit or debit. The balance change is atomic; the ledger row is mandatory:
+// if the insert fails, the balance change is reversed (compensation, per the
+// no-multi-document-transactions model) and the request fails — money never
+// moves without a ledger row.
 func (a *adminHandler) walletAdjust(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
@@ -235,8 +290,6 @@ func (a *adminHandler) walletAdjust(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Record the adjustment in the immutable ledger (best-effort): the balance is
-	// already updated, so a ledger insert failure is logged, not surfaced.
 	if err := a.wallet.Create(r.Context(), &wallet.WalletTransaction{
 		UserID:       id,
 		Type:         wallet.TxTypeAdjustment,
@@ -245,8 +298,30 @@ func (a *adminHandler) walletAdjust(w http.ResponseWriter, r *http.Request) {
 		Method:       "admin",
 		Ref:          strings.TrimSpace(body.Reason),
 	}); err != nil {
-		log.Printf("wallet-adjust: balance updated for %s but ledger insert failed: %v", id.Hex(), err)
+		// Mandatory ledger: reverse the balance change so success always implies
+		// a ledger row. A failed reversal (e.g. a credit already spent) is logged
+		// loudly for manual reconciliation.
+		var undoErr error
+		if signed > 0 {
+			_, undoErr = a.wallet.Debit(r.Context(), id, body.Amount)
+		} else {
+			_, undoErr = a.wallet.Credit(r.Context(), id, body.Amount)
+		}
+		slog.Error("wallet-adjust: ledger insert failed; balance change reverted",
+			"user", id.Hex(), "amount", signed, "ledgerError", err, "revertError", undoErr)
+		response.Error(w, http.StatusInternalServerError, "LEDGER_WRITE_FAILED",
+			"adjustment was reverted: the ledger row could not be written")
+		return
 	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionWalletAdjust,
+		TargetType: "user",
+		TargetID:   id.Hex(),
+		Summary: map[string]any{
+			"direction": body.Direction, "amount": body.Amount,
+			"balanceAfter": newBal, "reason": strings.TrimSpace(body.Reason),
+		},
+	})
 	response.OK(w, map[string]float64{"walletBalance": newBal})
 }
 
