@@ -34,3 +34,14 @@ export async function logout(): Promise<ApiResponse<{ success: boolean }>> {
 export async function fetchMe(): Promise<ApiResponse<User>> {
   return apiClient.get<User>('/api/v1/users/me')
 }
+
+export interface UpdateProfileInput {
+  locale?: string
+  savedPlayerIds?: string[]
+}
+
+// updateProfile PATCHes the current user's profile; the API returns the full
+// updated user, which callers push into the auth store.
+export async function updateProfile(input: UpdateProfileInput): Promise<ApiResponse<User>> {
+  return apiClient.patch<User>('/api/v1/users/me', input)
+}

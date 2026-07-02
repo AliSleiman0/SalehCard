@@ -1,40 +1,34 @@
-import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Icon, ImageArt, Stepper, Button, Panel, Badge, useToast } from '@/components'
+import { Icon, ImageArt, Button, Panel, Badge } from '@/components'
 import { useUiStore } from '@/stores/ui'
 import { useCurrencyStore } from '@/stores/currency'
+import { useLocaleStore } from '@/stores/locale'
+import { useAuthStore } from '@/stores/auth'
 import { fmtPrice } from '@/lib/utils'
 import { fromPrice } from '@/lib/pricing'
-import { DEMO, BEST } from '@/lib/mock/demo'
-
-function Stat({ l, v, sub }: { l: string; v: ReactNode; sub: string }) {
-  return (
-    <div className="stat" style={{ borderTop: '3px solid var(--agent)' }}>
-      <span className="eyebrow">{l}</span>
-      <div className="h1 num" style={{ marginTop: 8 }}>
-        {v}
-      </div>
-      <span className="tiny faint">{sub}</span>
-    </div>
-  )
-}
+import { displayName } from '@/features/auth/userDisplay'
+import { useWallet } from '@/features/wallet/hooks/useWallet'
+import { useOrders } from '@/features/orders/hooks/useOrders'
+import { useProducts } from '@/features/catalog/hooks/useProducts'
+import { adaptProduct } from '@/features/catalog/lib/adaptProduct'
 
 export default function ResellerDashboardPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const toast = useToast()
   const { currency } = useCurrencyStore()
+  const locale = useLocaleStore((s) => s.locale)
+  const user = useAuthStore((s) => s.user)
 
   useEffect(() => {
     useUiStore.getState().setAgent(true)
   }, [])
 
-  const bulk = BEST.slice(0, 6)
-  const [cart, setCart] = useState<Record<string, number>>({})
-  const totalUnits = Object.values(cart).reduce((a, b) => a + b, 0)
-  const totalCost = bulk.reduce((s, p) => s + (cart[p.id] || 0) * fromPrice(p, true), 0)
+  const balance = useWallet().data?.balance ?? 0
+  const orders = useOrders().data ?? []
+  const productsQuery = useProducts({ limit: 20 })
+  const products = (productsQuery.data?.data ?? []).map((x) => adaptProduct(x, locale))
 
   return (
     <div className="wrap" style={{ padding: '26px 0 50px' }}>
@@ -73,15 +67,12 @@ export default function ResellerDashboardPage() {
               <h1 className="h2" style={{ color: '#fff' }}>
                 {t('agent_dash')}
               </h1>
-              <Badge
-                variant="agent"
-                style={{ background: 'rgba(255,255,255,.16)', color: '#ffd76b' }}
-              >
-                {t('agent_tier')}
+              <Badge variant="agent" style={{ background: 'rgba(255,255,255,.16)', color: '#ffd76b' }}>
+                {user?.resellerTier || t('agent_tier')}
               </Badge>
             </span>
             <span className="small" style={{ opacity: 0.85 }}>
-              {DEMO.user.name} · {t('agent_pricing')}
+              {displayName(user)} · {t('agent_pricing')}
             </span>
           </div>
         </div>
@@ -97,33 +88,34 @@ export default function ResellerDashboardPage() {
         </Button>
       </div>
 
-      <div className="statgrid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 24 }}>
-        <div
-          className="stat bigbal"
-          style={{ background: 'linear-gradient(135deg,#3a2a0c,#5a3f0e)' }}
-        >
+      <div className="statgrid" style={{ gridTemplateColumns: 'repeat(2,1fr)', marginBottom: 24 }}>
+        <div className="stat bigbal" style={{ background: 'linear-gradient(135deg,#3a2a0c,#5a3f0e)' }}>
           <span className="eyebrow" style={{ color: 'rgba(255,255,255,.8)' }}>
-            {t('agent_balance')}
+            {t('current_balance')}
           </span>
           <div className="h1 num" style={{ color: '#fff', margin: '8px 0 12px' }}>
-            {fmtPrice(DEMO.agentBalance, currency)}
+            {fmtPrice(balance, currency)}
           </div>
-          <Button variant="gold" size="sm">
+          <Button variant="gold" size="sm" onClick={() => navigate('/wallet')}>
             {t('topup')}
           </Button>
         </div>
-        <Stat l={t('margin')} v="14.2%" sub={t('agent_pricing')} />
-        <Stat l={t('this_month')} v="2,481" sub={t('orders_n')} />
-        <Stat l={t('limits')} v={fmtPrice(10000, currency)} sub="68% used" />
+        <div className="stat" style={{ borderTop: '3px solid var(--agent)' }}>
+          <span className="eyebrow">{t('orders')}</span>
+          <div className="h1 num" style={{ marginTop: 8 }}>
+            {orders.length}
+          </div>
+          <span className="tiny faint">{t('orders_n')}</span>
+        </div>
       </div>
 
-      {/* bulk order */}
+      {/* reseller pricing catalog */}
       <Panel>
         <div className="row between" style={{ marginBottom: 16 }}>
-          <h3 className="h3">{t('bulk_order')}</h3>
+          <h3 className="h3">{t('agent_pricing')}</h3>
           <Badge variant="agent">
             <Icon name="shield" size={12} />
-            {t('agent_pricing')}
+            {t('agent_price')}
           </Badge>
         </div>
         <div className="col" style={{ gap: 0 }}>
@@ -141,62 +133,49 @@ export default function ResellerDashboardPage() {
             <span style={{ flex: 1, paddingInlineStart: 86 }}>Product</span>
             <span style={{ width: 100 }}>Retail</span>
             <span style={{ width: 110 }}>{t('agent_price')}</span>
-            <span style={{ width: 140, textAlign: 'center' }}>{t('quantity')}</span>
+            <span style={{ width: 120, textAlign: 'center' }} />
           </div>
-          {bulk.map((p) => {
-            const retail = fromPrice(p, false)
-            const ag = fromPrice(p, true)
-            const q = cart[p.id] || 0
-            return (
-              <div className="lrow" key={p.id}>
-                <ImageArt
-                  art={p.art}
-                  word={p.brand.split(' ')[0]}
-                  h={46}
-                  wordSize={12}
-                  radius={10}
-                  style={{ width: 62, flex: 'none' }}
-                />
-                <div className="col" style={{ gap: 1, flex: 1, minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>{p.brand}</span>
-                  <span className="tiny faint">{p.title}</span>
+          {products.length === 0 ? (
+            <p className="muted" style={{ padding: '12px 4px' }}>
+              {t('empty_state')}
+            </p>
+          ) : (
+            products.map((p) => {
+              const retail = fromPrice(p, false)
+              const ag = fromPrice(p, true)
+              return (
+                <div className="lrow" key={p.id}>
+                  <ImageArt
+                    art={p.art}
+                    word={p.brand.split(' ')[0]}
+                    h={46}
+                    wordSize={12}
+                    radius={10}
+                    style={{ width: 62, flex: 'none' }}
+                  />
+                  <div className="col" style={{ gap: 1, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>{p.brand}</span>
+                    <span className="tiny faint">{p.title}</span>
+                  </div>
+                  <span className="strike small num desktop-only" style={{ width: 100 }}>
+                    {fmtPrice(retail, currency)}
+                  </span>
+                  <span
+                    className="num desktop-only"
+                    style={{ width: 110, fontWeight: 800, color: 'var(--agent)' }}
+                  >
+                    {fmtPrice(ag, currency)}
+                  </span>
+                  <div style={{ width: 120, display: 'flex', justifyContent: 'center' }}>
+                    <Button variant="gold" size="sm" onClick={() => navigate('/product/' + p.id)}>
+                      <Icon name="cart" size={15} />
+                      {t('order_now')}
+                    </Button>
+                  </div>
                 </div>
-                <span className="strike small num desktop-only" style={{ width: 100 }}>
-                  {fmtPrice(retail, currency)}
-                </span>
-                <span
-                  className="num desktop-only"
-                  style={{ width: 110, fontWeight: 800, color: 'var(--agent)' }}
-                >
-                  {fmtPrice(ag, currency)}
-                </span>
-                <div style={{ width: 140, display: 'flex', justifyContent: 'center' }}>
-                  <Stepper value={q} set={(v) => setCart((c) => ({ ...c, [p.id]: v }))} min={0} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <hr className="divider" style={{ margin: '16px 0' }} />
-        <div className="row between wrap-gap" style={{ gap: 14 }}>
-          <span className="muted">
-            {totalUnits} {t('orders_n')} ·{' '}
-            <b className="num" style={{ color: 'var(--text)' }}>
-              {fmtPrice(totalCost, currency)}
-            </b>
-          </span>
-          <Button
-            variant="gold"
-            size="lg"
-            disabled={!totalUnits}
-            style={!totalUnits ? { opacity: 0.5 } : {}}
-            onClick={() => {
-              toast(`${totalUnits} ${t('orders_n')}`, 'check')
-            }}
-          >
-            <Icon name="bolt" size={18} />
-            {t('bulk_order')} · {fmtPrice(totalCost, currency)}
-          </Button>
+              )
+            })
+          )}
         </div>
       </Panel>
     </div>

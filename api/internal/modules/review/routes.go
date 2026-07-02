@@ -25,4 +25,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
 		r.Post("/", h.Create)
 	})
+
+	// Public: the storefront product page reads a product's approved reviews.
+	r.Get("/api/v1/products/{id}/reviews", h.ListForProduct)
 }

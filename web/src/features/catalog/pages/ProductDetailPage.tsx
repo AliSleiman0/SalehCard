@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Icon, ImageArt, Stars, Price, Stepper, LoadingSpinner, ErrorState, useToast } from '@/components'
-import { DEMO, REVIEWS } from '@/lib/mock/demo'
 import { rootMeta } from '@/lib/categoryPresentation'
 import { fmtPrice } from '@/lib/utils'
 import { priceFor } from '@/lib/pricing'
@@ -10,12 +9,13 @@ import { useUiStore } from '@/stores/ui'
 import { useCurrencyStore } from '@/stores/currency'
 import { useLocaleStore } from '@/stores/locale'
 import { useCartStore } from '@/stores/cart'
+import { useAuthStore } from '@/stores/auth'
 import { useProduct } from '../hooks/useProduct'
 import { useProducts } from '../hooks/useProducts'
+import { useReviews } from '../hooks/useReviews'
 import { adaptProduct } from '../lib/adaptProduct'
+import { adaptReview } from '../lib/adaptReview'
 import { ProductCard } from '../components/ProductCard'
-
-// TODO: reviews are mock until the review module API lands
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -26,6 +26,8 @@ export default function ProductDetailPage() {
   const cur = useCurrencyStore((s) => s.currency)
   const locale = useLocaleStore((s) => s.locale)
   const addToCart = useCartStore((s) => s.add)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const savedIds = useAuthStore((s) => s.user?.savedPlayerIds ?? [])
 
   const query = useProduct(id ?? '')
 
@@ -39,6 +41,13 @@ export default function ProductDetailPage() {
   const p = useMemo(
     () => (query.data?.data ? adaptProduct(query.data.data, locale) : null),
     [query.data, locale],
+  )
+
+  // approved reviews for this product (real API; aggregate rating stays on p)
+  const reviewsQuery = useReviews(id ?? '')
+  const reviews = useMemo(
+    () => (reviewsQuery.data ?? []).map(adaptReview),
+    [reviewsQuery.data],
   )
 
   // related products from the same category (excluding current)
@@ -230,13 +239,15 @@ export default function ProductDetailPage() {
                   <span className="label" style={{ whiteSpace: 'nowrap', margin: 0 }}>
                     {p.idLabel || t('player_id')}
                   </span>
-                  <a
-                    className="tiny clickable"
-                    style={{ color: 'var(--brand-1)', fontWeight: 700 }}
-                    onClick={() => setPickId((s) => !s)}
-                  >
-                    {t('saved_ids')} ▾
-                  </a>
+                  {isAuthenticated && savedIds.length > 0 && (
+                    <a
+                      className="tiny clickable"
+                      style={{ color: 'var(--brand-1)', fontWeight: 700 }}
+                      onClick={() => setPickId((s) => !s)}
+                    >
+                      {t('saved_ids')} ▾
+                    </a>
+                  )}
                 </div>
                 <input
                   className="field"
@@ -246,28 +257,19 @@ export default function ProductDetailPage() {
                 />
                 {pickId && (
                   <div className="panel card-pad" style={{ marginTop: 8, padding: 10 }}>
-                    {DEMO.savedIds.map((s) => (
+                    {savedIds.map((sv) => (
                       <div
-                        key={s.id}
+                        key={sv}
                         className="lrow clickable"
                         style={{ padding: '10px 6px' }}
                         onClick={() => {
-                          setPid(s.value)
+                          setPid(sv)
                           setPickId(false)
                         }}
                       >
-                        <ImageArt
-                          art={s.art}
-                          word={s.game.split(' ')[0]}
-                          h={36}
-                          wordSize={11}
-                          radius={8}
-                          style={{ width: 48, flex: 'none' }}
-                        />
-                        <div className="col" style={{ gap: 1 }}>
-                          <span style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</span>
-                          <span className="tiny faint num">{s.value}</span>
-                        </div>
+                        <span className="num" style={{ fontWeight: 700, fontSize: 14 }}>
+                          {sv}
+                        </span>
                         <span className="spacer" />
                         <Icon name="chevron" size={16} />
                       </div>
@@ -345,26 +347,35 @@ export default function ProductDetailPage() {
             <Icon name="check" size={12} /> {p.reviews.toLocaleString()} {t('reviews')}
           </span>
         </div>
-        <div className="prodgrid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-          {REVIEWS.map((r, i) => (
-            <div key={i} className="panel card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div className="row between">
-                <div className="row" style={{ gap: 10 }}>
-                  <span className="avatar" style={{ width: 34, height: 34, fontSize: 13 }}>
-                    {r.i}
-                  </span>
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>{r.n}</span>
+        {reviews.length === 0 ? (
+          <p className="muted" style={{ padding: '8px 4px' }}>
+            {t('no_reviews')}
+          </p>
+        ) : (
+          <div className="prodgrid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+            {reviews.map((r) => (
+              <div key={r.id} className="panel card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="row between">
+                  <div className="row" style={{ gap: 10 }}>
+                    <span className="avatar" style={{ width: 34, height: 34, fontSize: 13 }}>
+                      {r.initials}
+                    </span>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>{r.name}</span>
+                  </div>
+                  <Stars value={r.stars} size={12} />
                 </div>
-                <Stars value={r.s} size={12} />
+                <p className="small muted">{r.body}</p>
+                <span
+                  className={'badge ' + (r.verified ? 'badge-instant' : 'badge-soft')}
+                  style={{ alignSelf: 'flex-start' }}
+                >
+                  {r.verified && <Icon name="check" size={11} />}
+                  {r.verified ? `${t('verified')} · ${r.date}` : r.date}
+                </span>
               </div>
-              <p className="small muted">{r.tx}</p>
-              <span className="badge badge-instant" style={{ alignSelf: 'flex-start' }}>
-                <Icon name="check" size={11} />
-                {t('verified')} · {r.d}
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* related */}

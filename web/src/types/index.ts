@@ -58,6 +58,7 @@ export interface User {
   email: string
   googleId?: string
   role: UserRole
+  resellerTier?: string
   locale: string
   savedPlayerIds: string[]
   walletBalance: number

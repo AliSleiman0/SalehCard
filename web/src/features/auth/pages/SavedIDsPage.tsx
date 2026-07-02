@@ -1,14 +1,45 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
-import { Icon, ImageArt, Button, useToast } from '@/components'
+import { Icon, Button, useToast } from '@/components'
 import { AcctSidebar } from '@/features/auth/components/AcctSidebar'
-import { gameToProduct } from '@/features/auth/components/SavedIdCard'
-import { DEMO } from '@/lib/mock/demo'
+import { SavedIdCard } from '@/features/auth/components/SavedIdCard'
+import { useUpdateProfile } from '@/features/auth/hooks/useUpdateProfile'
+import { useAuthStore } from '@/stores/auth'
 
 export default function SavedIDsPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const toast = useToast()
+  const user = useAuthStore((s) => s.user)
+  const ids = user?.savedPlayerIds ?? []
+  const updateProfile = useUpdateProfile()
+
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  const addId = () => {
+    const v = draft.trim()
+    if (!v) return
+    if (ids.includes(v)) {
+      toast(t('saved_players'), 'user')
+      return
+    }
+    updateProfile.mutate(
+      { savedPlayerIds: [...ids, v] },
+      {
+        onSuccess: () => {
+          setDraft('')
+          setAdding(false)
+        },
+        onError: (err) => toast(err.message, 'user'),
+      },
+    )
+  }
+
+  const removeId = (id: string) =>
+    updateProfile.mutate(
+      { savedPlayerIds: ids.filter((x) => x !== id) },
+      { onError: (err) => toast(err.message, 'user') },
+    )
 
   return (
     <div className="wrap" style={{ padding: '26px 0 50px' }}>
@@ -19,65 +50,57 @@ export default function SavedIDsPage() {
         <AcctSidebar active="savedids" />
         <div className="col" style={{ gap: 16 }}>
           <div className="grid" style={{ gridTemplateColumns: 'repeat(2,1fr)', gap: 16 }}>
-            {DEMO.savedIds.map((s) => (
-              <div key={s.id} className="panel card-pad">
-                <div className="row between">
-                  <div className="row" style={{ gap: 12 }}>
-                    <ImageArt
-                      art={s.art}
-                      word={s.game.split(' ')[0]}
-                      h={48}
-                      wordSize={12}
-                      radius={12}
-                      style={{ width: 64, flex: 'none' }}
-                    />
-                    <div className="col" style={{ gap: 2 }}>
-                      <span style={{ fontWeight: 800 }}>{s.game}</span>
-                      <span className="tiny faint">
-                        {s.label}
-                        {s.nick && ` · ${s.nick}`}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    className="icon-btn"
-                    style={{ width: 32, height: 32 }}
-                    onClick={() => toast(t('manage'), 'user')}
-                  >
-                    <Icon name="trash" size={15} />
-                  </button>
-                </div>
-                <div className="vault" style={{ marginTop: 14, fontSize: 14, padding: '12px 14px' }}>
-                  <span className="code" style={{ filter: 'none' }}>
-                    {s.value}
-                  </span>
+            {ids.map((id) => (
+              <SavedIdCard
+                key={id}
+                value={id}
+                onDelete={updateProfile.isPending ? undefined : () => removeId(id)}
+              />
+            ))}
+            {adding ? (
+              <div className="panel card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <input
+                  className="field"
+                  autoFocus
+                  placeholder={t('id_ph')}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addId()}
+                />
+                <div className="row" style={{ gap: 8 }}>
+                  <Button variant="primary" size="sm" onClick={addId} disabled={updateProfile.isPending}>
+                    {t('save_changes')}
+                  </Button>
                   <Button
-                    variant="cyan"
+                    variant="ghost"
                     size="sm"
-                    onClick={() => navigate('/product/' + gameToProduct(s.game))}
+                    onClick={() => {
+                      setAdding(false)
+                      setDraft('')
+                    }}
                   >
-                    <Icon name="repeat" size={14} />
-                    {t('reorder')}
+                    {t('cancel')}
                   </Button>
                 </div>
               </div>
-            ))}
-            <button
-              className="panel card-pad clickable"
-              style={{
-                border: '1.5px dashed var(--border-strong)',
-                display: 'grid',
-                placeItems: 'center',
-                minHeight: 150,
-                background: 'transparent',
-              }}
-              onClick={() => toast(t('add_id'), 'plus')}
-            >
-              <div className="col center" style={{ gap: 8, color: 'var(--text-dim)' }}>
-                <Icon name="plusc" size={30} />
-                <span style={{ fontWeight: 700 }}>{t('add_id')}</span>
-              </div>
-            </button>
+            ) : (
+              <button
+                className="panel card-pad clickable"
+                style={{
+                  border: '1.5px dashed var(--border-strong)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  minHeight: 96,
+                  background: 'transparent',
+                }}
+                onClick={() => setAdding(true)}
+              >
+                <div className="col center" style={{ gap: 8, color: 'var(--text-dim)' }}>
+                  <Icon name="plusc" size={30} />
+                  <span style={{ fontWeight: 700 }}>{t('add_id')}</span>
+                </div>
+              </button>
+            )}
           </div>
         </div>
       </div>

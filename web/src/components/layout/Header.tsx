@@ -10,7 +10,7 @@ import { useCartCount } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { useLocaleStore } from '@/stores/locale'
 import { fmtPrice } from '@/lib/utils'
-import { DEMO } from '@/lib/mock/demo'
+import { initials } from '@/features/auth/userDisplay'
 import { useCategories } from '@/features/catalog/hooks/useCategories'
 import { adaptRootCategory } from '@/features/catalog/lib/adaptCategory'
 
@@ -21,7 +21,7 @@ export function Header() {
   const { agent } = useUiStore()
   const { currency } = useCurrencyStore()
   const cartCount = useCartCount()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
   const balance = useWallet(isAuthenticated).data?.balance ?? 0
   const locale = useLocaleStore((s) => s.locale)
   const cats = (useCategories({ depth: 0 }).data?.data ?? [])
@@ -103,7 +103,7 @@ export function Header() {
             className="avatar desktop-only"
             onClick={() => navigate(isAuthenticated ? '/dashboard' : '/login')}
           >
-            {isAuthenticated ? DEMO.user.initials : <Icon name="user" size={18} />}
+            {isAuthenticated ? initials(user) : <Icon name="user" size={18} />}
           </div>
         </div>
       </div>

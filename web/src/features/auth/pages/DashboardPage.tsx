@@ -12,7 +12,6 @@ import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import { fmtPrice } from '@/lib/utils'
-import { DEMO } from '@/lib/mock/demo'
 
 export default function DashboardPage() {
   const { t } = useTranslation()
@@ -20,15 +19,13 @@ export default function DashboardPage() {
   const cur = useCurrencyStore((s) => s.currency)
   const locale = useLocaleStore((s) => s.locale)
   const user = useAuthStore((s) => s.user)
+  const ids = user?.savedPlayerIds ?? []
   const balance = useWallet().data?.balance ?? 0
   const ordersQuery = useOrders()
   const recentOrders = useMemo(
     () => (ordersQuery.data ?? []).slice(0, 3).map((o) => adaptOrder(o, locale)),
     [ordersQuery.data, locale],
   )
-  // cashback and saved IDs remain mock until the loyalty/profile work lands.
-  const u = DEMO.user
-
   return (
     <div className="wrap" style={{ padding: '26px 0 50px' }}>
       <div className="cols-acct">
@@ -47,16 +44,9 @@ export default function DashboardPage() {
               </Button>
             </div>
             <div className="stat">
-              <span className="eyebrow">{t('cashback')}</span>
-              <div className="h1 num" style={{ marginTop: 8 }}>
-                {fmtPrice(u.cashback, cur)}
-              </div>
-              <span className="tiny faint">{t('this_month')}</span>
-            </div>
-            <div className="stat">
               <span className="eyebrow">{t('loyalty')}</span>
               <div className="h1 num" style={{ marginTop: 8 }}>
-                {(user?.loyaltyPoints ?? u.loyalty).toLocaleString()}
+                {(user?.loyaltyPoints ?? 0).toLocaleString()}
               </div>
               <span className="tiny faint">pts</span>
             </div>
@@ -93,11 +83,17 @@ export default function DashboardPage() {
                 {t('manage')} →
               </a>
             </div>
-            <div className="savedgrid">
-              {DEMO.savedIds.map((s) => (
-                <SavedIdCard key={s.id} s={s} compact />
-              ))}
-            </div>
+            {ids.length === 0 ? (
+              <p className="muted" style={{ padding: '4px 2px' }}>
+                {t('no_saved_ids')}
+              </p>
+            ) : (
+              <div className="savedgrid">
+                {ids.map((id) => (
+                  <SavedIdCard key={id} value={id} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
