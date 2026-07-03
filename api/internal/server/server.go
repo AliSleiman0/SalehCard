@@ -124,7 +124,7 @@ func (s *Server) Routes() {
 		r.Use(auth.AdminOnly(s.cfg.JWTSecret, s.cfg.Env == "development"))
 
 		product.RegisterAdminRoutes(r, s.db, rec)
-		code.RegisterAdminRoutes(r, s.db)
+		code.RegisterAdminRoutes(r, s.db, rec, ntf)
 		dashboard.RegisterAdminRoutes(r, s.db)
 		finance.RegisterAdminRoutes(r, s.db)
 		order.RegisterAdminRoutes(r, s.db, rec, ntf)
@@ -137,7 +137,7 @@ func (s *Server) Routes() {
 		expense.RegisterAdminRoutes(r, s.db)
 		kyc.RegisterAdminRoutes(r, s.db, rec, ntf)
 		audit.RegisterAdminRoutes(r, s.db)
-		settings.RegisterAdminRoutes(r, s.db) // still stubbed (501)
+		settings.RegisterAdminRoutes(r, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider)
 	})
 }
 

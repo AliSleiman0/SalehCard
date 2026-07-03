@@ -36,6 +36,11 @@ type Repository interface {
 	// ReleaseByOrder reverses a claim, returning the delivered codes of an order
 	// to the available pool. Used to compensate a failed order.
 	ReleaseByOrder(ctx context.Context, orderID string) error
+	// MarkExpired atomically transitions one available code (matched by product +
+	// value) to expired. Returns ErrNotFound when no matching available code exists.
+	MarkExpired(ctx context.Context, productID, code string) (*Code, error)
+	// FindByOrder returns the delivered codes claimed under an order (for resend).
+	FindByOrder(ctx context.Context, orderID string) ([]Code, error)
 	// RecordBatch persists an upload-batch record (best-effort history).
 	RecordBatch(ctx context.Context, b UploadBatch) error
 	// ListUploadHistory returns the most recent upload batches (newest first),
@@ -79,6 +84,7 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		},
 		{Keys: bson.D{{Key: "code", Value: 1}}},
 		{Keys: bson.D{{Key: "productId", Value: 1}, {Key: "status", Value: 1}}},
+		{Keys: bson.D{{Key: "orderId", Value: 1}}}, // resend: find an order's delivered codes
 	})
 	if err != nil {
 		return err
@@ -401,6 +407,39 @@ func (r *MongoRepository) ClaimOne(ctx context.Context, productID, orderID, deli
 		return nil, err
 	}
 	return &c, nil
+}
+
+// MarkExpired atomically transitions one available code (matched by product +
+// value) to expired. The single FindOneAndUpdate guards against expiring a code
+// that was just claimed. Returns ErrNotFound when no matching available code exists.
+func (r *MongoRepository) MarkExpired(ctx context.Context, productID, code string) (*Code, error) {
+	var c Code
+	err := r.codes.FindOneAndUpdate(ctx,
+		bson.D{{Key: "productId", Value: productID}, {Key: "code", Value: code}, {Key: "status", Value: StatusAvailable}},
+		bson.D{{Key: "$set", Value: bson.D{{Key: "status", Value: StatusExpired}}}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&c)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+// FindByOrder returns the delivered codes claimed under orderID (for resend).
+func (r *MongoRepository) FindByOrder(ctx context.Context, orderID string) ([]Code, error) {
+	cur, err := r.codes.Find(ctx, bson.D{{Key: "orderId", Value: orderID}, {Key: "status", Value: StatusDelivered}})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var out []Code
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // ReleaseByOrder returns every delivered code claimed under orderID to the

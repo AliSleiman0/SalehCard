@@ -3,12 +3,14 @@ package user
 import (
 	"context"
 	"log/slog"
+	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/ratelimit"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 )
 
@@ -58,11 +60,26 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	svc := NewUserService(repo, refreshRepo, otpRepo, sender, otpCfg, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	h := NewHandler(svc, cfg.CookieSecure)
 
+	// Per-IP rate limiting on the public auth endpoints (RealIP upstream gives the
+	// true client IP). A general cap on all auth calls + a tighter cap on OTP
+	// requests, which cost SMS. Fails open on a limiter backend error.
+	limiter := ratelimit.New(ratelimit.Config{Provider: cfg.RateLimitProvider}, db)
+	if _, ok := limiter.(ratelimit.NoopLimiter); !ok {
+		if err := ratelimit.EnsureIndexes(context.Background(), db); err != nil {
+			slog.Warn("user: failed to ensure rate-limit indexes", "error", err)
+		}
+	}
+	authLimit := ratelimit.Middleware(limiter, cfg.RateLimitAuthMax, cfg.RateLimitAuthWindow, ratelimit.ClientIP)
+	otpLimit := ratelimit.Middleware(limiter, cfg.RateLimitOTPMax, cfg.RateLimitOTPWindow, func(req *http.Request) string {
+		return "otp:" + ratelimit.ClientIP(req)
+	})
+
 	r.Route("/api/v1/auth", func(r chi.Router) {
+		r.Use(authLimit)
 		r.Post("/register", h.Register)
 		r.Post("/login", h.Login)
 		r.Post("/login-phone", h.LoginPhone)
-		r.Post("/otp/request", h.RequestOTP)
+		r.With(otpLimit).Post("/otp/request", h.RequestOTP)
 		r.Post("/otp/verify", h.VerifyOTP)
 		r.Post("/refresh", h.Refresh)
 		r.Post("/logout", h.Logout)

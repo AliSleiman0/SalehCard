@@ -20,6 +20,7 @@ const (
 	KindTopUpRejected  = "topup_rejected"
 	KindKYCApproved    = "kyc_approved"
 	KindKYCRejected    = "kyc_rejected"
+	KindCodeDelivered  = "code_delivered"
 )
 
 // Notification is one inbox row. Title/Body are the English fallback copy (also
