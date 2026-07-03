@@ -20,6 +20,7 @@ import type { FfKey } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
 import { money, downloadCsv } from '@/lib/utils'
 import { useOrders } from '../hooks/useOrders'
+import { useRefundBulk } from '../hooks/useOrderMutations'
 import { adaptOrder } from '../lib/adaptOrder'
 import { listOrders, type OrderStatus, type PaymentMethod, type AdminOrder } from '../api/orders'
 import type { FulfillmentType } from '@/types'
@@ -79,6 +80,26 @@ export default function OrderListPage() {
   const rows = useMemo(() => (data?.data ?? []).map(adaptOrder), [data])
   const meta = data?.meta
   const bulk = useBulk(rows.map((r) => r.id))
+  const refundBulk = useRefundBulk()
+
+  // Bulk refund: each order refunds independently (its own atomic lock + ledger),
+  // so the result is a per-order summary — some may be skipped as not-refundable.
+  const runBulkRefund = () => {
+    if (!window.confirm(`Refund ${bulk.sel.length} order(s)? Wallet-paid orders are credited back — this cannot be undone.`))
+      return
+    refundBulk.mutate(
+      { ids: bulk.sel },
+      {
+        onSuccess: (res) => {
+          const r = res.data
+          const skipped = r ? r.results.filter((x) => x.status !== 'refunded').length : 0
+          window.alert(`Refunded ${r?.refunded ?? 0} of ${r?.total ?? 0}.${skipped ? ` ${skipped} skipped (not refundable).` : ''}`)
+          bulk.clear()
+        },
+        onError: () => window.alert('Bulk refund request failed.'),
+      },
+    )
+  }
 
   // Reset to page 1 whenever a filter changes (search resets via its debounce).
   const onFilter = <T,>(setter: (v: T) => void) => (v: T) => {
@@ -182,8 +203,8 @@ export default function OrderListPage() {
               <button className="abtn xs" onClick={() => handleExport(true)} disabled={exporting}>
                 <Icon name="download" size={13} /> {exporting ? '…' : t('export')}
               </button>
-              <button className="abtn xs danger" disabled title="Bulk refund is deferred (money-mutation) — refund orders individually">
-                <Icon name="refresh" size={13} /> {t('refund')}
+              <button className="abtn xs danger" onClick={runBulkRefund} disabled={refundBulk.isPending}>
+                <Icon name="refresh" size={13} /> {refundBulk.isPending ? '…' : t('refund')}
               </button>
             </div>
           </div>

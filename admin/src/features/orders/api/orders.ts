@@ -81,6 +81,25 @@ export function refundOrder(id: string, reason = ''): Promise<ApiResponse<AdminO
   return apiClient.post<AdminOrder>(`${ADMIN}/${id}/refund`, { reason })
 }
 
+/** Per-order outcome of a bulk refund. */
+export interface BulkRefundOutcome {
+  id: string
+  status: 'refunded' | 'conflict' | 'error'
+  message?: string
+}
+
+export interface BulkRefundResult {
+  refunded: number
+  total: number
+  results: BulkRefundOutcome[]
+}
+
+/** Refund many orders at once. Partial failure is isolated: the result reports a
+ *  per-order status (refunded / conflict / error). */
+export function refundBulkOrders(ids: string[], reason = ''): Promise<ApiResponse<BulkRefundResult>> {
+  return apiClient.post<BulkRefundResult>(`${ADMIN}/refund-bulk`, { ids, reason })
+}
+
 /**
  * Mark a stuck pending order as failed (admin cleanup). Moves no money — if the
  * wallet was charged, the admin reverses it via the customer's wallet adjustment.

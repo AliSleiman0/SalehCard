@@ -84,6 +84,9 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	r.Get("/resellers/{id}", a.detail)
 	r.Put("/resellers/{id}/tier", a.assignTier)
 	r.Post("/resellers/{id}/balance-adjust", a.balanceAdjust)
+	r.Get("/resellers/{id}/prices", a.listPrices)
+	r.Post("/resellers/{id}/prices", a.setPrice)
+	r.Delete("/resellers/{id}/prices/{variantId}", a.deletePrice)
 
 	r.Get("/reseller-tiers", a.listTiers)
 	r.Post("/reseller-tiers", a.createTier)
@@ -389,6 +392,79 @@ func (a *adminHandler) deleteTier(w http.ResponseWriter, r *http.Request) {
 		writeRepoError(w, err)
 		return
 	}
+	response.OK(w, map[string]bool{"deleted": true})
+}
+
+// listPrices handles GET /api/admin/resellers/{id}/prices — the reseller's
+// per-variant price overrides.
+func (a *adminHandler) listPrices(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	prices, err := a.tiers.ListPricesForUser(r.Context(), id)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	response.OK(w, prices)
+}
+
+// setPrice handles POST /api/admin/resellers/{id}/prices — create or update a
+// per-variant price override for the reseller (upsert on userId+variantId).
+func (a *adminHandler) setPrice(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		ProductID string  `json:"productId"`
+		VariantID string  `json:"variantId"`
+		Price     float64 `json:"price"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(body.VariantID) == "" {
+		response.BadRequest(w, "variantId is required")
+		return
+	}
+	if body.Price < 0 {
+		response.BadRequest(w, "price must be zero or greater")
+		return
+	}
+	p, err := a.tiers.SetPrice(r.Context(), id, strings.TrimSpace(body.ProductID), strings.TrimSpace(body.VariantID), body.Price)
+	if err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionResellerPriceSet,
+		TargetType: "user",
+		TargetID:   id.Hex(),
+		Summary:    map[string]any{"variantId": p.VariantID, "productId": p.ProductID, "price": p.Price},
+	})
+	response.OK(w, p)
+}
+
+// deletePrice handles DELETE /api/admin/resellers/{id}/prices/{variantId}.
+func (a *adminHandler) deletePrice(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	variantID := chi.URLParam(r, "variantId")
+	if err := a.tiers.DeletePrice(r.Context(), id, variantID); err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionResellerPriceDelete,
+		TargetType: "user",
+		TargetID:   id.Hex(),
+		Summary:    map[string]any{"variantId": variantID},
+	})
 	response.OK(w, map[string]bool{"deleted": true})
 }
 

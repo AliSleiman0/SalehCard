@@ -330,11 +330,19 @@ func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc 
 	return svc, repo
 }
 
-// fakeMargins returns a fixed reseller-tier margin percent for every user.
-type fakeMargins struct{ pct float64 }
+// fakeMargins returns a fixed reseller-tier margin percent for every user, plus
+// an optional per-variant custom price map.
+type fakeMargins struct {
+	pct    float64
+	prices map[string]float64
+}
 
 func (f fakeMargins) MarginForUser(_ context.Context, _ bson.ObjectID) (float64, error) {
 	return f.pct, nil
+}
+
+func (f fakeMargins) PricesForUser(_ context.Context, _ bson.ObjectID) (map[string]float64, error) {
+	return f.prices, nil
 }
 
 // fakeOfferSvc serves at most one live offer per product; an absent product
@@ -425,6 +433,21 @@ func TestPlaceOrder_ResellerPaysLowestOfMarginAndOverride(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 7.0, order.Total) // min(retail 10, margin 8, override 7)
+}
+
+func TestPlaceOrder_ResellerCustomPriceWins(t *testing.T) {
+	p := codeProduct(10, nil) // retail 10, no per-variant override
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	svc, _ := newSUT(p, codeSvc, &fakeWalletSvc{balance: 100})
+	// 20% margin → 8, but a per-reseller custom price of 6 for this variant wins.
+	svc.margins = fakeMargins{pct: 20, prices: map[string]float64{p.Variants[0].ID.Hex(): 6}}
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), true, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 6.0, order.Total) // per-reseller custom price, the lowest layer
 }
 
 func TestPlaceOrder_AppliesLiveOffer(t *testing.T) {

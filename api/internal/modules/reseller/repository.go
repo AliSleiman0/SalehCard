@@ -24,27 +24,45 @@ type Repository interface {
 	// MarginForUser resolves a user's reseller-tier margin percent (0 when the
 	// user has no tier or the tier is unknown).
 	MarginForUser(ctx context.Context, userID bson.ObjectID) (float64, error)
+	// PricesForUser returns a reseller's per-variant price overrides as a
+	// variantId → price map (empty when none), for a single batched pricing read.
+	PricesForUser(ctx context.Context, userID bson.ObjectID) (map[string]float64, error)
+	// ListPricesForUser returns a reseller's price-override documents (admin view).
+	ListPricesForUser(ctx context.Context, userID bson.ObjectID) ([]*ResellerPrice, error)
+	// SetPrice upserts a per-reseller variant price override.
+	SetPrice(ctx context.Context, userID bson.ObjectID, productID, variantID string, price float64) (*ResellerPrice, error)
+	// DeletePrice removes a per-reseller variant price override.
+	DeletePrice(ctx context.Context, userID bson.ObjectID, variantID string) error
 }
 
 // MongoRepository is a MongoDB-backed implementation of Repository.
 type MongoRepository struct {
-	tiers *mongo.Collection
-	users *mongo.Collection
+	tiers  *mongo.Collection
+	users  *mongo.Collection
+	prices *mongo.Collection
 }
 
-// NewMongoRepository constructs a MongoRepository over the reseller_tiers and
-// users collections.
+// NewMongoRepository constructs a MongoRepository over the reseller_tiers, users,
+// and reseller_prices collections.
 func NewMongoRepository(db *mongo.Database) *MongoRepository {
 	return &MongoRepository{
-		tiers: db.Collection("reseller_tiers"),
-		users: db.Collection("users"),
+		tiers:  db.Collection("reseller_tiers"),
+		users:  db.Collection("users"),
+		prices: db.Collection("reseller_prices"),
 	}
 }
 
-// EnsureIndexes creates the unique index on tier name.
+// EnsureIndexes creates the unique index on tier name and the unique compound
+// index on a reseller price override (userId + variantId).
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
-	_, err := db.Collection("reseller_tiers").Indexes().CreateOne(ctx, mongo.IndexModel{
+	if _, err := db.Collection("reseller_tiers").Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "name", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	}); err != nil {
+		return err
+	}
+	_, err := db.Collection("reseller_prices").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "variantId", Value: 1}},
 		Options: options.Index().SetUnique(true),
 	})
 	return err
@@ -175,6 +193,69 @@ func (r *MongoRepository) MarginForUser(ctx context.Context, userID bson.ObjectI
 		return 0, err
 	}
 	return t.MarginPercent, nil
+}
+
+// PricesForUser returns a reseller's per-variant price overrides as a
+// variantId → price map (empty when none) — one batched read used at checkout.
+func (r *MongoRepository) PricesForUser(ctx context.Context, userID bson.ObjectID) (map[string]float64, error) {
+	cur, err := r.prices.Find(ctx, bson.D{{Key: "userId", Value: userID}})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var rows []ResellerPrice
+	if err := cur.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]float64, len(rows))
+	for _, p := range rows {
+		out[p.VariantID] = p.Price
+	}
+	return out, nil
+}
+
+// ListPricesForUser returns a reseller's price-override documents (admin view).
+func (r *MongoRepository) ListPricesForUser(ctx context.Context, userID bson.ObjectID) ([]*ResellerPrice, error) {
+	cur, err := r.prices.Find(ctx, bson.D{{Key: "userId", Value: userID}}, options.Find().SetSort(bson.D{{Key: "createdAt", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	out := []*ResellerPrice{}
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SetPrice upserts a per-reseller variant price override, keyed on (userId,
+// variantId), and returns the stored document.
+func (r *MongoRepository) SetPrice(ctx context.Context, userID bson.ObjectID, productID, variantID string, price float64) (*ResellerPrice, error) {
+	now := time.Now().UTC()
+	var p ResellerPrice
+	err := r.prices.FindOneAndUpdate(ctx,
+		bson.D{{Key: "userId", Value: userID}, {Key: "variantId", Value: variantID}},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "productId", Value: productID},
+				{Key: "price", Value: price},
+				{Key: "updatedAt", Value: now},
+			}},
+			{Key: "$setOnInsert", Value: bson.D{{Key: "createdAt", Value: now}}},
+		},
+		options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
+	).Decode(&p)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// DeletePrice removes a per-reseller variant price override. A missing override
+// is not an error (idempotent delete).
+func (r *MongoRepository) DeletePrice(ctx context.Context, userID bson.ObjectID, variantID string) error {
+	_, err := r.prices.DeleteOne(ctx, bson.D{{Key: "userId", Value: userID}, {Key: "variantId", Value: variantID}})
+	return err
 }
 
 // CountByTier aggregates the number of reseller users grouped by their tier name.
