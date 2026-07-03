@@ -17,6 +17,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/reseller"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/payments"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 )
 
@@ -34,13 +35,21 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	wlt := wallet.NewService(db)
 	promos := promo.NewPromoService(promo.NewMongoRepository(db.Collection("promos")))
 	offers := offer.NewOfferService(offer.NewMongoRepository(db.Collection("offers")))
-	// No real upstream adapters yet → every api-mode order resolves to a stub
-	// and parks. Register adapters here as the owner provides credentials (§5).
-	providers := provider.NewRegistry()
+	// Upstream fulfillment adapters. The reference (mock) adapter is registered
+	// when FULFILLMENT_MOCK is on, so an api-mode order routed to its id completes
+	// instead of parking. Real adapters register here as credentials arrive (§5).
+	var adapters []provider.Provider
+	if cfg.FulfillmentMock {
+		adapters = append(adapters, provider.NewReference(cfg.FulfillmentMockID))
+	}
+	providers := provider.NewRegistry(adapters...)
+	// Payment gateway: "mock" enables the sandbox card/usdt path; default keeps
+	// checkout wallet-only.
+	pay := payments.New(payments.Config{Provider: cfg.PaymentProvider})
 	kycGate := kyc.NewGate(db)
 	margins := reseller.NewMongoRepository(db)
 
-	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, kycGate, margins, ntf)
+	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, kycGate, margins, ntf)
 	h := NewHandler(svc)
 
 	r.Route("/api/v1/orders", func(r chi.Router) {

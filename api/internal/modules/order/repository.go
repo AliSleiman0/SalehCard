@@ -25,6 +25,8 @@ type Repository interface {
 	FindByIdempotencyKey(ctx context.Context, userID bson.ObjectID, key string) (*Order, error)
 	Create(ctx context.Context, order *Order) error
 	UpdateStatus(ctx context.Context, id bson.ObjectID, status OrderStatus) error
+	// SetPaymentRef stores the gateway transaction id on a card/usdt order.
+	SetPaymentRef(ctx context.Context, id bson.ObjectID, ref string) error
 	UpdateFulfillment(ctx context.Context, id bson.ObjectID, status OrderStatus, fulfillment Fulfillment) error
 	// TransitionStatus atomically moves an order from one of `from` to `to`,
 	// appending a timeline event (and optionally setting extra fields). It
@@ -207,6 +209,18 @@ func (r *MongoRepository) Create(ctx context.Context, order *Order) error {
 }
 
 // UpdateStatus sets the order's status and refreshes UpdatedAt.
+// SetPaymentRef stores the gateway transaction id on a card/usdt order.
+func (r *MongoRepository) SetPaymentRef(ctx context.Context, id bson.ObjectID, ref string) error {
+	_, err := r.collection.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: id}},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "paymentRef", Value: ref},
+			{Key: "updatedAt", Value: time.Now().UTC()},
+		}}},
+	)
+	return err
+}
+
 func (r *MongoRepository) UpdateStatus(ctx context.Context, id bson.ObjectID, status OrderStatus) error {
 	res, err := r.collection.UpdateOne(ctx,
 		bson.D{{Key: "_id", Value: id}},

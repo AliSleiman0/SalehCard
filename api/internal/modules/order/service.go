@@ -14,6 +14,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/payments"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -63,6 +64,7 @@ type OrderService struct {
 	promo     promo.Service
 	offers    offer.Service
 	providers *provider.Registry
+	payments  *payments.Registry
 	kyc       kycChecker
 	margins   resellerPricing
 	ntf       notification.Notifier
@@ -72,8 +74,8 @@ type OrderService struct {
 // inventory, wallet, promo, offers, upstream-provider registry, KYC gate,
 // reseller-margin lookup, and notifier it depends on. A nil margins port
 // disables tier-margin pricing (resellers fall back to per-variant overrides).
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, kyc: kycGate, margins: margins, ntf: ntf}
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, pay *payments.Registry, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, payments: pay, kyc: kycGate, margins: margins, ntf: ntf}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -103,10 +105,20 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	}
 	switch input.PaymentMethod {
 	case PaymentMethodWallet:
+	case PaymentMethodCard, PaymentMethodUSDT:
+		// Card/USDT are accepted only when a gateway provider is configured
+		// (PAYMENT_PROVIDER); otherwise checkout stays wallet-only.
+		if s.payments == nil || !s.payments.Enabled(string(input.PaymentMethod)) {
+			return nil, &apperrors.AppError{
+				Code:    "PAYMENT_METHOD_UNAVAILABLE",
+				Message: "this payment method is not available — top up your wallet to purchase",
+				Err:     apperrors.ErrBadRequest,
+			}
+		}
 	default:
 		return nil, &apperrors.AppError{
 			Code:    "PAYMENT_METHOD_UNAVAILABLE",
-			Message: "only wallet payment is available — top up your wallet to purchase",
+			Message: "unsupported payment method",
 			Err:     apperrors.ErrBadRequest,
 		}
 	}
@@ -256,12 +268,28 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	// 6. Charge. Only wallet reaches this point (validated above); the guard
 	//    stays so a zero-total order simply skips the debit.
 	charged := false
-	if input.PaymentMethod == PaymentMethodWallet && total > 0 {
-		if _, err := s.wallet.Debit(ctx, userID, total, order.ID.Hex()); err != nil {
-			_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
-			return nil, err
+	if total > 0 {
+		switch order.PaymentMethod {
+		case PaymentMethodWallet:
+			if _, err := s.wallet.Debit(ctx, userID, total, order.ID.Hex()); err != nil {
+				_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
+				return nil, err
+			}
+			charged = true
+		default:
+			// Card/USDT via the configured gateway (validated enabled in step 1).
+			// The returned transaction id is persisted so refund/compensation can
+			// reverse the charge.
+			prov, _ := s.payments.For(string(order.PaymentMethod))
+			txn, err := prov.ProcessPayment(ctx, total, currency, order.ID.Hex())
+			if err != nil {
+				_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
+				return nil, &apperrors.AppError{Code: "PAYMENT_FAILED", Message: "the payment was declined", Err: apperrors.ErrBadRequest}
+			}
+			order.PaymentRef = txn
+			_ = s.repo.SetPaymentRef(ctx, order.ID, txn)
+			charged = true
 		}
-		charged = true
 	}
 
 	// Record the promo redemption (best-effort): the discount is already applied
@@ -440,7 +468,13 @@ func (s *OrderService) fulfillBridge(ctx context.Context, order *Order) (*Order,
 func (s *OrderService) compensate(ctx context.Context, userID bson.ObjectID, order *Order, claimedProducts []string, charged bool) {
 	_ = s.codes.ReleaseForOrder(ctx, order.ID.Hex(), claimedProducts)
 	if charged {
-		_, _ = s.wallet.Refund(ctx, userID, order.Total, order.ID.Hex())
+		if order.PaymentMethod == PaymentMethodWallet {
+			_, _ = s.wallet.Refund(ctx, userID, order.Total, order.ID.Hex())
+		} else if order.PaymentRef != "" && s.payments != nil {
+			if prov, ok := s.payments.For(string(order.PaymentMethod)); ok {
+				_ = prov.RefundPayment(ctx, order.PaymentRef)
+			}
+		}
 	}
 	_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
 }

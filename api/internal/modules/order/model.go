@@ -82,6 +82,9 @@ type Order struct {
 	Total          float64       `bson:"total"         json:"total"`
 	Currency       string        `bson:"currency"      json:"currency"`
 	PaymentMethod  PaymentMethod `bson:"paymentMethod" json:"paymentMethod"`
+	// PaymentRef is the gateway transaction id for card/usdt orders (empty for
+	// wallet orders); used to reverse the charge on refund / compensation.
+	PaymentRef     string        `bson:"paymentRef,omitempty" json:"paymentRef,omitempty"`
 	Status         OrderStatus   `bson:"status"        json:"status"`
 	Fulfillment    Fulfillment   `bson:"fulfillment"   json:"fulfillment"`
 	IdempotencyKey string        `bson:"idempotencyKey,omitempty" json:"-"`
