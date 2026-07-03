@@ -37,6 +37,31 @@ export function formatLongDate(d: Date = new Date()): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+/** Trigger a client-side PDF download of a titled table. jspdf is dynamically
+ *  imported so it stays out of the main bundle (loaded on first PDF export). */
+export async function downloadPdf(
+  filename: string,
+  title: string,
+  header: string[],
+  rows: (string | number)[][],
+): Promise<void> {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
+  const doc = new jsPDF()
+  doc.setFontSize(14)
+  doc.text(title, 14, 16)
+  autoTable(doc, {
+    startY: 22,
+    head: [header],
+    body: rows.map((r) => r.map((c) => String(c))),
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [138, 59, 255] },
+  })
+  doc.save(filename)
+}
+
 /** Trigger a client-side CSV download from a 2-D array of rows (first row = header). */
 export function downloadCsv(filename: string, rows: (string | number)[][]): void {
   const esc = (c: string | number): string => {

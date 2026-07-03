@@ -18,7 +18,8 @@ import {
 } from '@/components'
 import type { FfKey } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
-import { money, downloadCsv } from '@/lib/utils'
+import { money, downloadCsv, downloadPdf } from '@/lib/utils'
+import { toast } from '@/stores/toast'
 import { useOrders } from '../hooks/useOrders'
 import { useRefundBulk } from '../hooks/useOrderMutations'
 import { adaptOrder } from '../lib/adaptOrder'
@@ -93,10 +94,11 @@ export default function OrderListPage() {
         onSuccess: (res) => {
           const r = res.data
           const skipped = r ? r.results.filter((x) => x.status !== 'refunded').length : 0
-          window.alert(`Refunded ${r?.refunded ?? 0} of ${r?.total ?? 0}.${skipped ? ` ${skipped} skipped (not refundable).` : ''}`)
+          const msg = `Refunded ${r?.refunded ?? 0} of ${r?.total ?? 0}.${skipped ? ` ${skipped} skipped (not refundable).` : ''}`
+          if (skipped) toast.info(msg)
+          else toast.success(msg)
           bulk.clear()
         },
-        onError: () => window.alert('Bulk refund request failed.'),
       },
     )
   }
@@ -109,7 +111,7 @@ export default function OrderListPage() {
 
   // Export orders matching the current filters (all pages — the backend caps
   // limit at 100, so page to total). selectedOnly narrows to the checked rows.
-  const handleExport = async (selectedOnly = false) => {
+  const handleExport = async (format: 'csv' | 'pdf' = 'csv', selectedOnly = false) => {
     if (exporting) return
     setExporting(true)
     try {
@@ -126,8 +128,13 @@ export default function OrderListPage() {
       let view = all.map(adaptOrder)
       if (selectedOnly) view = view.filter((o) => bulk.sel.includes(o.id))
       const header = ['Order ID', 'Customer', 'Email', 'Product', 'Qty', 'Amount', 'Currency', 'Payment', 'Status', 'Date']
-      const csvRows = view.map((o) => [o.id, o.customer, o.email, o.product, o.qty, o.amount.toFixed(2), o.cur, o.pay, o.status, o.date])
-      downloadCsv(`orders-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
+      const dataRows = view.map((o) => [o.id, o.customer, o.email, o.product, o.qty, o.amount.toFixed(2), o.cur, o.pay, o.status, o.date])
+      const date = new Date().toISOString().slice(0, 10)
+      if (format === 'pdf') {
+        await downloadPdf(`orders-${date}.pdf`, `Orders — ${date}`, header, dataRows)
+      } else {
+        downloadCsv(`orders-${date}.csv`, [header, ...dataRows])
+      }
     } finally {
       setExporting(false)
     }
@@ -140,8 +147,11 @@ export default function OrderListPage() {
         title={t('nav_orders')}
         sub={meta ? `${meta.total.toLocaleString()} orders` : ''}
       >
-        <button className="abtn" onClick={() => handleExport(false)} disabled={exporting}>
+        <button className="abtn" onClick={() => handleExport('csv')} disabled={exporting}>
           <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
+        </button>
+        <button className="abtn" onClick={() => handleExport('pdf')} disabled={exporting}>
+          <Icon name="file" size={15} /> PDF
         </button>
         <button className="abtn" onClick={() => refetch()}>
           <Icon name="refresh" size={15} /> Refresh
@@ -200,7 +210,7 @@ export default function OrderListPage() {
               {bulk.sel.length} {t('selected')}
             </span>
             <div className="ba-act">
-              <button className="abtn xs" onClick={() => handleExport(true)} disabled={exporting}>
+              <button className="abtn xs" onClick={() => handleExport('csv', true)} disabled={exporting}>
                 <Icon name="download" size={13} /> {exporting ? '…' : t('export')}
               </button>
               <button className="abtn xs danger" onClick={runBulkRefund} disabled={refundBulk.isPending}>

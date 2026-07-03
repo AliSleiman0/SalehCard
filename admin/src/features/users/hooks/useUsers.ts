@@ -7,6 +7,7 @@ import {
   adjustWallet,
   bulkUserAction,
   deleteUser,
+  bulkEmailUsers,
   type UserListParams,
   type UserStatus,
   type BulkUserAction,
@@ -69,6 +70,13 @@ export function useBulkUserAction() {
   return useMutation({
     mutationFn: ({ ids, action }: { ids: string[]; action: BulkUserAction }) => bulkUserAction(ids, action),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  })
+}
+
+export function useBulkEmail() {
+  return useMutation({
+    mutationFn: ({ ids, subject, body }: { ids: string[]; subject: string; body: string }) =>
+      bulkEmailUsers(ids, subject, body),
   })
 }
 

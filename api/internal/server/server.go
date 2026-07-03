@@ -31,6 +31,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/email"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
@@ -106,6 +107,24 @@ func (s *Server) Routes() {
 	}
 	ntf := notification.NewNotifier(s.db, sender)
 
+	// Outbound email (bulk admin messaging). Built once here (shared) and injected
+	// into the admin user routes; falls open to the dev log sender on misconfig.
+	mailer, err := email.New(email.Config{
+		Provider: s.cfg.EmailProvider,
+		SMTP: email.SMTPConfig{
+			Host:     s.cfg.SMTPHost,
+			Port:     s.cfg.SMTPPort,
+			Username: s.cfg.SMTPUsername,
+			Password: s.cfg.SMTPPassword,
+			From:     s.cfg.EmailFrom,
+		},
+		SendGrid: email.SendGridConfig{APIKey: s.cfg.SendGridAPIKey, From: s.cfg.EmailFrom},
+	})
+	if err != nil {
+		slog.Warn("server: email provider misconfigured — falling back to log sender", "provider", s.cfg.EmailProvider, "error", err)
+		mailer = email.LogSender{}
+	}
+
 	// Customer orders + wallet + promo validation + review submission +
 	// notification inbox (guarded by AuthRequired).
 	order.RegisterRoutes(s.router, s.db, s.cfg, ntf)
@@ -128,7 +147,7 @@ func (s *Server) Routes() {
 		dashboard.RegisterAdminRoutes(r, s.db)
 		finance.RegisterAdminRoutes(r, s.db)
 		order.RegisterAdminRoutes(r, s.db, rec, ntf)
-		user.RegisterAdminRoutes(r, s.db, rec)
+		user.RegisterAdminRoutes(r, s.db, rec, mailer)
 		reseller.RegisterAdminRoutes(r, s.db, rec)
 		promo.RegisterAdminRoutes(r, s.db)
 		offer.RegisterAdminRoutes(r, s.db)
