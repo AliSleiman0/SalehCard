@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { LoadingSpinner } from '@/components'
+import { Toaster } from '@/components/Toaster'
 import { useUiStore } from '@/stores/ui'
 
 export function AdminLayout() {
@@ -18,6 +19,7 @@ export function AdminLayout() {
           </Suspense>
         </main>
       </div>
+      <Toaster />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -14,10 +15,14 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/email"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
+
+// bulkEmailTimeout bounds the detached bulk-email fan-out.
+const bulkEmailTimeout = 2 * time.Minute
 
 // orderStats is the per-user order aggregate shown in the admin user views.
 type orderStats struct {
@@ -53,22 +58,25 @@ type adminHandler struct {
 	wallet wallet.Repository
 	orders *mongo.Collection
 	rec    audit.Recorder
+	mailer email.Sender
 }
 
 // RegisterAdminRoutes mounts the admin user routes onto r (the /api/admin group,
 // guarded by AdminOnly): paginated/filterable list, detail, role + status
 // changes, and manual wallet adjustment (credit/debit with a reason logged to the
 // ledger). Mutations are recorded via rec.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, mailer email.Sender) {
 	a := &adminHandler{
 		repo:   NewMongoRepository(db),
 		wallet: wallet.NewMongoRepository(db),
 		orders: db.Collection("orders"),
 		rec:    rec,
+		mailer: mailer,
 	}
 
 	r.Get("/users", a.list)
 	r.Post("/users/bulk", a.bulkStatus)
+	r.Post("/users/bulk-email", a.bulkEmail)
 	r.Get("/users/{id}", a.detail)
 	r.Put("/users/{id}/role", a.updateRole)
 	r.Put("/users/{id}/status", a.updateStatus)
@@ -248,6 +256,71 @@ func (a *adminHandler) bulkStatus(w http.ResponseWriter, r *http.Request) {
 		Summary:    map[string]any{"action": body.Action, "count": modified},
 	})
 	response.OK(w, map[string]int64{"modified": modified})
+}
+
+// bulkEmail handles POST /api/admin/users/bulk-email — send a plain-text email to
+// many users at once. Recipients are resolved from the id list; users without an
+// email (phone-only or deleted accounts) are skipped. The fan-out runs detached
+// from the request (best-effort, log-and-continue per recipient), so the response
+// returns immediately with how many were queued.
+func (a *adminHandler) bulkEmail(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs     []string `json:"ids"`
+		Subject string   `json:"subject"`
+		Body    string   `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	subject := strings.TrimSpace(body.Subject)
+	text := strings.TrimSpace(body.Body)
+	if subject == "" || text == "" {
+		response.BadRequest(w, "subject and body are required")
+		return
+	}
+	ids := make([]bson.ObjectID, 0, len(body.IDs))
+	for _, s := range body.IDs {
+		if id, err := bson.ObjectIDFromHex(s); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		response.BadRequest(w, "no valid user ids supplied")
+		return
+	}
+	users, err := a.repo.FindByIDs(r.Context(), ids)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	recipients := make([]string, 0, len(users))
+	for _, u := range users {
+		if e := strings.TrimSpace(u.Email); e != "" && u.Status != StatusDeleted {
+			recipients = append(recipients, e)
+		}
+	}
+
+	if a.mailer != nil && len(recipients) > 0 {
+		bg := context.WithoutCancel(r.Context())
+		go func() {
+			ctx, cancel := context.WithTimeout(bg, bulkEmailTimeout)
+			defer cancel()
+			for _, to := range recipients {
+				if err := a.mailer.Send(ctx, email.Message{To: to, Subject: subject, Body: text}); err != nil {
+					slog.Warn("bulk-email: send failed", "to", to, "error", err)
+				}
+			}
+		}()
+	}
+
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionUserBulkEmail,
+		TargetType: "user",
+		TargetID:   "bulk",
+		Summary:    map[string]any{"recipients": len(recipients), "subject": subject},
+	})
+	response.OK(w, map[string]int{"queued": len(recipients)})
 }
 
 // deleteUser handles DELETE /api/admin/users/{id} — a soft-delete (anonymize).

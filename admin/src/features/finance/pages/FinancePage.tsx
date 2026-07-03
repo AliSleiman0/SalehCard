@@ -18,7 +18,7 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
-import { money, downloadCsv } from '@/lib/utils'
+import { money, downloadCsv, downloadPdf } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useTransactions, useRevenueSummary } from '../hooks/useFinance'
 import { adaptTx } from '../lib/adaptFinance'
@@ -265,9 +265,9 @@ function TransactionsTab() {
   )
 }
 
-/** Build a CSV from the revenue summary (KPIs + the three breakdown tables). */
-function exportRevenue(rev: RevenueSummary, range: string): void {
-  const rows: (string | number)[][] = [
+/** The revenue summary (KPIs + the three breakdown tables) as CSV/PDF rows. */
+function revenueRows(rev: RevenueSummary): (string | number)[][] {
+  return [
     ['Metric', 'Value'],
     ['Total revenue', rev.totalRevenue.toFixed(2)],
     ['This month', rev.monthRevenue.toFixed(2)],
@@ -283,7 +283,15 @@ function exportRevenue(rev: RevenueSummary, range: string): void {
     ['By currency', 'Amount'],
     ...rev.byCurrency.map((d) => [d.label, d.value.toFixed(2)]),
   ]
-  downloadCsv(`revenue-${range}-${new Date().toISOString().slice(0, 10)}.csv`, rows)
+}
+
+function exportRevenue(rev: RevenueSummary, range: string): void {
+  downloadCsv(`revenue-${range}-${new Date().toISOString().slice(0, 10)}.csv`, revenueRows(rev))
+}
+
+function exportRevenuePdf(rev: RevenueSummary, range: string): void {
+  const date = new Date().toISOString().slice(0, 10)
+  void downloadPdf(`revenue-${range}-${date}.pdf`, `Revenue summary (${range}) — ${date}`, ['Metric', 'Value'], revenueRows(rev))
 }
 
 /** Convert absolute revenue buckets to display percentages (whole numbers). */
@@ -421,6 +429,9 @@ function RevenueTab() {
           <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
             <button className="abtn sm" onClick={() => exportRevenue(rev, range)}>
               <Icon name="download" size={14} /> Export CSV
+            </button>
+            <button className="abtn sm" onClick={() => exportRevenuePdf(rev, range)}>
+              <Icon name="file" size={14} /> Export PDF
             </button>
           </div>
         </div>

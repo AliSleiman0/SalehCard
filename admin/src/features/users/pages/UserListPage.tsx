@@ -9,6 +9,7 @@ import {
   StatusBadge,
   Checkbox,
   Chip,
+  Modal,
   Pagination,
   LoadingSpinner,
   ErrorState,
@@ -16,7 +17,9 @@ import {
 } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
 import { money, downloadCsv } from '@/lib/utils'
-import { useUsers, useBulkUserAction } from '../hooks/useUsers'
+import { toast } from '@/stores/toast'
+import { ApiError } from '@/lib/api-client'
+import { useUsers, useBulkUserAction, useBulkEmail } from '../hooks/useUsers'
 import { adaptUser } from '../lib/adaptUser'
 import { listUsers, type UserStatus, type BulkUserAction, type AdminUser } from '../api/users'
 import type { UserRole } from '@/types'
@@ -39,6 +42,7 @@ export default function UserListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [page, setPage] = useState(1)
   const [exporting, setExporting] = useState(false)
+  const [emailIds, setEmailIds] = useState<string[] | null>(null)
 
   // Adopt the URL's ?q= (e.g. the top-bar global search navigates to /users?q=…).
   useEffect(() => {
@@ -163,7 +167,7 @@ export default function UserListPage() {
               <button className="abtn xs danger" onClick={() => runBulk('suspend')} disabled={bulkAction.isPending}>
                 <Icon name="x" size={13} /> {t('suspend')}
               </button>
-              <button className="abtn xs" disabled title="Bulk email is deferred — no email provider is configured yet (BL-15)">
+              <button className="abtn xs" onClick={() => setEmailIds(bulk.sel)}>
                 <Icon name="send" size={13} /> Email
               </button>
             </div>
@@ -246,6 +250,76 @@ export default function UserListPage() {
           </>
         )}
       </div>
+
+      {emailIds && (
+        <BulkEmailModal
+          ids={emailIds}
+          onClose={() => setEmailIds(null)}
+          onSent={() => {
+            setEmailIds(null)
+            bulk.clear()
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+/** Compose + send a plain-text email to the selected users. Recipients without
+ *  an email are skipped server-side; the toast reports how many were queued. */
+function BulkEmailModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => void; onSent: () => void }) {
+  const { t } = useTranslation()
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [error, setError] = useState('')
+  const send = useBulkEmail()
+
+  const submit = () => {
+    if (!subject.trim() || !body.trim()) {
+      setError('Subject and message are required.')
+      return
+    }
+    setError('')
+    send.mutate(
+      { ids, subject: subject.trim(), body: body.trim() },
+      {
+        onSuccess: (res) => {
+          toast.success(`Email queued to ${res.data?.queued ?? 0} recipient(s).`)
+          onSent()
+        },
+        onError: (e) => setError(e instanceof ApiError ? e.message : 'Send failed.'),
+      },
+    )
+  }
+
+  return (
+    <Modal onClose={onClose} maxWidth={520}>
+      <div style={{ padding: 22 }}>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Email {ids.length} user(s)</h3>
+        <p style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 16 }}>
+          Users without an email address are skipped automatically.
+        </p>
+        <label className="alabel">Subject</label>
+        <input className="afield" value={subject} onChange={(e) => setSubject(e.target.value)} />
+        <label className="alabel" style={{ marginTop: 14 }}>
+          Message
+        </label>
+        <textarea
+          className="afield"
+          style={{ minHeight: 120 }}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+        />
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button className="abtn" onClick={onClose} disabled={send.isPending}>
+            {t('cancel')}
+          </button>
+          <button className="abtn primary" onClick={submit} disabled={send.isPending}>
+            <Icon name="send" size={15} /> {send.isPending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

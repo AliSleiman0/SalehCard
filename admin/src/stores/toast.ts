@@ -1,0 +1,36 @@
+import { create } from 'zustand'
+
+export type ToastKind = 'success' | 'error' | 'info'
+
+export interface Toast {
+  id: number
+  kind: ToastKind
+  message: string
+}
+
+interface ToastState {
+  toasts: Toast[]
+  push: (message: string, kind?: ToastKind) => void
+  dismiss: (id: number) => void
+}
+
+let seq = 0
+
+/** Global toast store. A mounted <Toaster/> renders the queue; any code can push
+ *  via the `toast` helper below (no hook/context needed). Toasts auto-dismiss. */
+export const useToastStore = create<ToastState>((set) => ({
+  toasts: [],
+  push: (message, kind = 'info') => {
+    const id = ++seq
+    set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }))
+    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4000)
+  },
+  dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+}))
+
+/** Convenience helper for non-component callers (e.g. React-Query mutation hooks). */
+export const toast = {
+  success: (m: string) => useToastStore.getState().push(m, 'success'),
+  error: (m: string) => useToastStore.getState().push(m, 'error'),
+  info: (m: string) => useToastStore.getState().push(m, 'info'),
+}

@@ -80,6 +80,17 @@ type Config struct {
 	RateLimitAuthWindow time.Duration
 	RateLimitOTPMax     int
 	RateLimitOTPWindow  time.Duration
+
+	// Email provider for bulk/transactional email. EmailProvider is "smtp",
+	// "sendgrid", or "log" (default; logs instead of sending). EmailFrom is the
+	// shared sender address for both adapters.
+	EmailProvider  string
+	EmailFrom      string
+	SMTPHost       string
+	SMTPPort       int
+	SMTPUsername   string
+	SMTPPassword   string
+	SendGridAPIKey string
 }
 
 // Load reads configuration from environment variables, applying defaults where
@@ -130,6 +141,14 @@ func Load() *Config {
 		RateLimitAuthWindow: getDuration("RATE_LIMIT_AUTH_WINDOW", time.Minute),
 		RateLimitOTPMax:     getInt("RATE_LIMIT_OTP_MAX", 5),
 		RateLimitOTPWindow:  getDuration("RATE_LIMIT_OTP_WINDOW", time.Minute),
+
+		EmailProvider:  getEnv("EMAIL_PROVIDER", "log"),
+		EmailFrom:      os.Getenv("EMAIL_FROM"),
+		SMTPHost:       os.Getenv("SMTP_HOST"),
+		SMTPPort:       getInt("SMTP_PORT", 587),
+		SMTPUsername:   os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:   os.Getenv("SMTP_PASSWORD"),
+		SendGridAPIKey: os.Getenv("SENDGRID_API_KEY"),
 	}
 }
 

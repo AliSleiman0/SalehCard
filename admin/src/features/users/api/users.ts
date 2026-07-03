@@ -97,3 +97,9 @@ export function bulkUserAction(ids: string[], action: BulkUserAction): Promise<A
 export function deleteUser(id: string): Promise<ApiResponse<AdminUser>> {
   return apiClient.delete<AdminUser>(`${ADMIN}/${id}`)
 }
+
+/** Send a plain-text email to many users at once. Users without an email are
+ *  skipped server-side; the result reports how many were queued. */
+export function bulkEmailUsers(ids: string[], subject: string, body: string): Promise<ApiResponse<{ queued: number }>> {
+  return apiClient.post<{ queued: number }>(`${ADMIN}/bulk-email`, { ids, subject, body })
+}
