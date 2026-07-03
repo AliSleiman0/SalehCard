@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { refundOrder, completeOrder, failOrder } from '../api/orders'
+import { refundOrder, refundBulkOrders, completeOrder, failOrder } from '../api/orders'
 
 /** Invalidates the order detail + list queries after a mutation. */
 function useInvalidateOrders() {
@@ -15,6 +15,14 @@ export function useRefundOrder() {
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason?: string }) => refundOrder(id, reason ?? ''),
     onSuccess: (_, { id }) => invalidate(id),
+  })
+}
+
+export function useRefundBulk() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, reason }: { ids: string[]; reason?: string }) => refundBulkOrders(ids, reason ?? ''),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'orders'] }),
   })
 }
 

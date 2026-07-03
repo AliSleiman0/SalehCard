@@ -39,6 +39,9 @@ const (
 	ActionSettingsUpdate = "settings.update"
 	ActionCodeExpire     = "code.expire"
 	ActionCodeResend     = "order.resend_code"
+
+	ActionResellerPriceSet    = "reseller.price_set"
+	ActionResellerPriceDelete = "reseller.price_delete"
 )
 
 // Recorder is the write side of the audit log, passed into each admin module.

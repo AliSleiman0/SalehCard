@@ -35,11 +35,13 @@ type kycChecker interface {
 	IsApproved(ctx context.Context, userID bson.ObjectID) (bool, error)
 }
 
-// resellerMargins resolves the buyer's reseller-tier margin percent for
-// reseller pricing (0 = no discount). Kept as a narrow port so the order
-// module stays decoupled from the reseller module's concrete repository.
-type resellerMargins interface {
+// resellerPricing resolves the buyer's reseller pricing inputs: their tier
+// margin percent (0 = no discount) and any per-variant custom price overrides.
+// Kept as one narrow port so the order module stays decoupled from the reseller
+// module's concrete repository.
+type resellerPricing interface {
 	MarginForUser(ctx context.Context, userID bson.ObjectID) (float64, error)
+	PricesForUser(ctx context.Context, userID bson.ObjectID) (map[string]float64, error)
 }
 
 // Service defines the business-logic operations for the order domain.
@@ -62,7 +64,7 @@ type OrderService struct {
 	offers    offer.Service
 	providers *provider.Registry
 	kyc       kycChecker
-	margins   resellerMargins
+	margins   resellerPricing
 	ntf       notification.Notifier
 }
 
@@ -70,7 +72,7 @@ type OrderService struct {
 // inventory, wallet, promo, offers, upstream-provider registry, KYC gate,
 // reseller-margin lookup, and notifier it depends on. A nil margins port
 // disables tier-margin pricing (resellers fall back to per-variant overrides).
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, kycGate kycChecker, margins resellerMargins, ntf notification.Notifier) *OrderService {
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier) *OrderService {
 	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, kyc: kycGate, margins: margins, ntf: ntf}
 }
 
@@ -127,6 +129,25 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	items := make([]OrderItem, 0, len(input.Items))
 	var subtotal float64
 	codeNeed := map[string]int{} // productID(hex) -> qty for inventory items
+
+	// Preload the reseller's pricing inputs once (tier margin + per-variant custom
+	// overrides) rather than per line — PlaceOrder re-prices every item. A lookup
+	// error degrades to the remaining pricing layers (logged, never fails the order).
+	var resellerMargin float64
+	var resellerCustom map[string]float64
+	if isReseller && s.margins != nil {
+		if pct, err := s.margins.MarginForUser(ctx, userID); err != nil {
+			slog.Warn("order: reseller margin lookup failed", "user", userID.Hex(), "error", err)
+		} else {
+			resellerMargin = pct
+		}
+		if m, err := s.margins.PricesForUser(ctx, userID); err != nil {
+			slog.Warn("order: reseller custom-price lookup failed", "user", userID.Hex(), "error", err)
+		} else {
+			resellerCustom = m
+		}
+	}
+
 	for _, in := range input.Items {
 		if in.Qty <= 0 {
 			return nil, badRequest("item quantity must be positive")
@@ -144,10 +165,10 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		}
 		price := variant.Price
 		if isReseller {
-			// Resellers pay the lowest of retail, the tier-margin price, and any
-			// explicit per-variant reseller override. Offers don't stack on top of
-			// reseller pricing.
-			price = s.resellerPrice(ctx, userID, variant)
+			// Resellers pay the lowest of retail, the tier-margin price, the
+			// per-variant global override, and any per-reseller custom price.
+			// Offers don't stack on top of reseller pricing.
+			price = resellerPrice(variant, resellerMargin, resellerCustom)
 		} else if s.offers != nil {
 			// Honor a live sale-price offer on the retail price. Absence of an
 			// offer (ErrNotFound) leaves the price unchanged.
@@ -443,23 +464,23 @@ func (s *OrderService) ListOrders(ctx context.Context, userID bson.ObjectID) ([]
 }
 
 // resellerPrice computes the price a reseller pays for a variant: the lowest of
-// retail, the tier-margin price (retail * (1 - margin%/100)), and an explicit
-// per-variant reseller override when set. A margin-lookup error degrades to
-// retail/override pricing (logged, not failed) so a transient DB blip never
-// blocks a purchase.
-func (s *OrderService) resellerPrice(ctx context.Context, userID bson.ObjectID, v product.Variant) float64 {
+// retail, the tier-margin price (retail * (1 - margin%/100)), the per-variant
+// global reseller override, and a per-reseller custom price. margin (percent)
+// and custom (variantId → price) are preloaded once per order by PlaceOrder.
+func resellerPrice(v product.Variant, marginPct float64, custom map[string]float64) float64 {
 	price := v.Price
-	if s.margins != nil {
-		if pct, err := s.margins.MarginForUser(ctx, userID); err != nil {
-			slog.Warn("order: reseller margin lookup failed", "user", userID.Hex(), "error", err)
-		} else if pct > 0 && pct < 100 {
-			if marginPrice := v.Price * (1 - pct/100); marginPrice < price {
-				price = marginPrice
-			}
+	if marginPct > 0 && marginPct < 100 {
+		if marginPrice := v.Price * (1 - marginPct/100); marginPrice < price {
+			price = marginPrice
 		}
 	}
 	if v.ResellerPrice != nil && *v.ResellerPrice < price {
 		price = *v.ResellerPrice
+	}
+	if custom != nil {
+		if cp, ok := custom[v.ID.Hex()]; ok && cp < price {
+			price = cp
+		}
 	}
 	return price
 }

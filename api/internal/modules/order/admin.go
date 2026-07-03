@@ -74,9 +74,14 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, n
 	r.Get("/orders/sold-by-product", soldByProductHandler(repo))
 	r.Get("/orders/{id}", a.detail)
 	r.Post("/orders/{id}/refund", a.refund)
+	r.Post("/orders/refund-bulk", a.refundBulk)
 	r.Put("/orders/{id}/status", a.updateStatus)
 	r.Post("/orders/{id}/fail", a.markFailed)
 }
+
+// errRefundCreditFailed marks a refund whose wallet credit failed: the order was
+// left in its pre-refund state (compensated) so the admin can retry.
+var errRefundCreditFailed = errors.New("refund credit failed")
 
 // soldByProductHandler serves GET /api/admin/orders/sold-by-product — a map of
 // product id -> total units sold across completed orders. It feeds the admin
@@ -185,27 +190,93 @@ func (a *adminHandler) refund(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&body) // reason is optional; an empty body is fine
 	}
+
+	if _, err := a.doRefund(r.Context(), id, strings.TrimSpace(body.Reason)); err != nil {
+		if errors.Is(err, errRefundCreditFailed) {
+			response.Error(w, http.StatusInternalServerError, "REFUND_CREDIT_FAILED",
+				"the wallet credit failed; the order was left unrefunded — retry")
+			return
+		}
+		a.writeTransitionError(w, err, "order is not refundable (already refunded, failed, or still pending)")
+		return
+	}
+	a.respondFresh(w, r, id)
+}
+
+// refundBulk handles POST /api/admin/orders/refund-bulk — refunds many orders in
+// one call. Because there are no cross-document transactions, each order owns its
+// own atomic lock + wallet ledger + audit row, so a failure on one order never
+// aborts the rest: the response is a per-id result array (refunded / conflict /
+// error) plus a refunded count.
+func (a *adminHandler) refundBulk(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs    []string `json:"ids"`
+		Reason string   `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	if len(body.IDs) == 0 {
+		response.BadRequest(w, "no order ids supplied")
+		return
+	}
 	reason := strings.TrimSpace(body.Reason)
 
-	before, err := a.repo.TransitionStatus(r.Context(), id,
+	type outcome struct {
+		ID      string `json:"id"`
+		Status  string `json:"status"` // refunded | conflict | error
+		Message string `json:"message,omitempty"`
+	}
+	results := make([]outcome, 0, len(body.IDs))
+	refunded := 0
+	for _, raw := range body.IDs {
+		id, err := bson.ObjectIDFromHex(raw)
+		if err != nil {
+			results = append(results, outcome{ID: raw, Status: "error", Message: "invalid id"})
+			continue
+		}
+		switch _, err := a.doRefund(r.Context(), id, reason); {
+		case err == nil:
+			results = append(results, outcome{ID: raw, Status: "refunded"})
+			refunded++
+		case errors.Is(err, apperrors.ErrConflict):
+			results = append(results, outcome{ID: raw, Status: "conflict", Message: "not refundable (already refunded, failed, or still pending)"})
+		case errors.Is(err, apperrors.ErrNotFound):
+			results = append(results, outcome{ID: raw, Status: "error", Message: "not found"})
+		case errors.Is(err, errRefundCreditFailed):
+			results = append(results, outcome{ID: raw, Status: "error", Message: "wallet credit failed — left unrefunded"})
+		default:
+			results = append(results, outcome{ID: raw, Status: "error", Message: "internal error"})
+		}
+	}
+	response.OK(w, map[string]any{"refunded": refunded, "total": len(body.IDs), "results": results})
+}
+
+// doRefund performs the guarded refund transition + wallet credit + audit +
+// customer notification for one order, returning the pre-refund order on success.
+// It is the shared body of the single and bulk refund endpoints. Errors:
+// apperrors.ErrNotFound (missing), apperrors.ErrConflict (not refundable), or
+// errRefundCreditFailed (money couldn't be returned; order left compensated).
+func (a *adminHandler) doRefund(ctx context.Context, id bson.ObjectID, reason string) (*Order, error) {
+	before, err := a.repo.TransitionStatus(ctx, id,
 		[]OrderStatus{OrderStatusProcessing, OrderStatusCompleted},
 		OrderStatusRefunded,
 		TimelineEvent{Status: "refunded", Note: reason, At: time.Now().UTC()},
 		nil,
 	)
 	if err != nil {
-		a.writeTransitionError(w, err, "order is not refundable (already refunded, failed, or still pending)")
-		return
+		return nil, err
 	}
 
 	// Credit the money back for wallet-paid orders. Card/usdt never charged
 	// anything (mock-approved historically), so there is nothing to reverse.
 	if before.PaymentMethod == PaymentMethodWallet && before.Total > 0 {
-		if _, err := a.wallet.Refund(r.Context(), before.UserID, before.Total, before.ID.Hex()); err != nil {
-			// Compensation: put the order back in its pre-refund state so the
-			// admin can retry. The wallet service already reversed any partial
-			// credit internally (mandatory ledger).
-			if _, rerr := a.repo.TransitionStatus(r.Context(), id,
+		if _, err := a.wallet.Refund(ctx, before.UserID, before.Total, before.ID.Hex()); err != nil {
+			// Compensation: put the order back in its pre-refund state so the admin
+			// can retry. The wallet service already reversed any partial credit
+			// internally (mandatory ledger).
+			if _, rerr := a.repo.TransitionStatus(ctx, id,
 				[]OrderStatus{OrderStatusRefunded}, before.Status,
 				TimelineEvent{Status: "refund_reverted", Note: "wallet credit failed", At: time.Now().UTC()},
 				nil,
@@ -213,13 +284,11 @@ func (a *adminHandler) refund(w http.ResponseWriter, r *http.Request) {
 				slog.Error("order refund: wallet credit failed AND status revert failed — order marked refunded without credit",
 					"order", id.Hex(), "creditError", err, "revertError", rerr)
 			}
-			response.Error(w, http.StatusInternalServerError, "REFUND_CREDIT_FAILED",
-				"the wallet credit failed; the order was left unrefunded — retry")
-			return
+			return nil, errRefundCreditFailed
 		}
 	}
 
-	a.rec.Record(r.Context(), audit.Entry{
+	a.rec.Record(ctx, audit.Entry{
 		Action:     audit.ActionOrderRefund,
 		TargetType: "order",
 		TargetID:   id.Hex(),
@@ -228,7 +297,6 @@ func (a *adminHandler) refund(w http.ResponseWriter, r *http.Request) {
 			"fromStatus": string(before.Status), "reason": reason,
 		},
 	})
-	msg := fmt.Sprintf("$%.2f was returned to your wallet.", before.Total)
 	data := map[string]string{
 		"orderId":  id.Hex(),
 		"amount":   fmt.Sprintf("%.2f", before.Total),
@@ -237,13 +305,13 @@ func (a *adminHandler) refund(w http.ResponseWriter, r *http.Request) {
 	if reason != "" {
 		data["reason"] = reason
 	}
-	a.ntf.Notify(r.Context(), before.UserID, notification.Note{
+	a.ntf.Notify(ctx, before.UserID, notification.Note{
 		Kind:  notification.KindOrderRefunded,
 		Title: "Order refunded",
-		Body:  msg,
+		Body:  fmt.Sprintf("$%.2f was returned to your wallet.", before.Total),
 		Data:  data,
 	})
-	a.respondFresh(w, r, id)
+	return before, nil
 }
 
 // updateStatus handles PUT /api/admin/orders/{id}/status — manual completion
