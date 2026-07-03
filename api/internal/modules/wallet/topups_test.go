@@ -103,7 +103,7 @@ func (f *fakeTopUpStore) CountPending(_ context.Context) (int64, error) {
 	return n, nil
 }
 
-func (f *fakeTopUpStore) List(_ context.Context, _ string, _ pagination.Params) ([]*TopUpRequest, int64, error) {
+func (f *fakeTopUpStore) List(_ context.Context, _, _ string, _ pagination.Params) ([]*TopUpRequest, int64, error) {
 	out := []*TopUpRequest{}
 	for _, r := range f.byID {
 		out = append(out, r)

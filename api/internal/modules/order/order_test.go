@@ -326,8 +326,15 @@ func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc 
 		byID[p.ID.Hex()] = p
 	}
 	prodSvc := &fakeProductSvc{byID: byID}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), &fakeKycGate{approved: true}, notification.Nop{})
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), &fakeKycGate{approved: true}, nil, notification.Nop{})
 	return svc, repo
+}
+
+// fakeMargins returns a fixed reseller-tier margin percent for every user.
+type fakeMargins struct{ pct float64 }
+
+func (f fakeMargins) MarginForUser(_ context.Context, _ bson.ObjectID) (float64, error) {
+	return f.pct, nil
 }
 
 // fakeOfferSvc serves at most one live offer per product; an absent product
@@ -389,6 +396,35 @@ func TestPlaceOrder_UsesResellerPriceWhenReseller(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 7.0, order.Total) // reseller price, not retail 10
+}
+
+func TestPlaceOrder_AppliesTierMarginForReseller(t *testing.T) {
+	p := codeProduct(10, nil) // no per-variant override
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	svc, _ := newSUT(p, codeSvc, &fakeWalletSvc{balance: 100})
+	svc.margins = fakeMargins{pct: 20} // 20% tier margin → 10 * 0.8 = 8
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), true, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 8.0, order.Total) // tier-margin price, not retail 10
+}
+
+func TestPlaceOrder_ResellerPaysLowestOfMarginAndOverride(t *testing.T) {
+	override := 7.0
+	p := codeProduct(10, &override) // explicit override 7 beats 20%-margin 8
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	svc, _ := newSUT(p, codeSvc, &fakeWalletSvc{balance: 100})
+	svc.margins = fakeMargins{pct: 20}
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), true, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 7.0, order.Total) // min(retail 10, margin 8, override 7)
 }
 
 func TestPlaceOrder_AppliesLiveOffer(t *testing.T) {

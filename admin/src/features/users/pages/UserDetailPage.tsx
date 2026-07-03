@@ -21,7 +21,7 @@ import { money, relativeTime } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
-import { useUser, useUpdateUserRole, useUpdateUserStatus, useAdjustWallet } from '../hooks/useUsers'
+import { useUser, useUpdateUserRole, useUpdateUserStatus, useAdjustWallet, useDeleteUser } from '../hooks/useUsers'
 import { adaptUser } from '../lib/adaptUser'
 import type { AdminUserDetail, UserStatus } from '../api/users'
 import type { UserRole } from '@/types'
@@ -342,15 +342,29 @@ function RoleTab({
   suspending: boolean
 }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [pending, setPending] = useState<UserRole>(role)
   const updateRole = useUpdateUserRole(id)
+  const del = useDeleteUser(id)
 
   // Keep the selection in sync if the underlying user role changes (refetch).
   useEffect(() => setPending(role), [role])
 
+  const remove = () => {
+    if (
+      !window.confirm(
+        'Delete this account? It is anonymized — email/phone are freed and it can no longer sign in, but its orders and ledger are kept. This cannot be undone.',
+      )
+    )
+      return
+    del.mutate(undefined, { onSuccess: () => navigate('/users') })
+  }
+
+  // Reseller management is hidden for now, so promotion to reseller is not
+  // offered here. Re-add ['reseller', 'Reseller'] to restore it (also un-hide
+  // the /resellers nav item + routes).
   const roles: [UserRole, string][] = [
     ['customer', 'Customer'],
-    ['reseller', 'Reseller'],
     ['admin', 'Admin'],
   ]
 
@@ -366,9 +380,7 @@ function RoleTab({
             </Chip>
           ))}
         </div>
-        <div className="ahint">
-          Promoting to reseller unlocks wholesale pricing and a sub-balance. Promoting to admin grants console access.
-        </div>
+        <div className="ahint">Promoting to admin grants full console access.</div>
         <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
           <button
             className="abtn primary"
@@ -386,7 +398,12 @@ function RoleTab({
           <button className="abtn danger" style={{ justifyContent: 'flex-start' }} onClick={onSuspend} disabled={suspending}>
             <Icon name="x" size={14} /> Suspend account
           </button>
-          <button className="abtn danger" style={{ justifyContent: 'flex-start' }} disabled title="Coming soon">
+          <button
+            className="abtn danger"
+            style={{ justifyContent: 'flex-start' }}
+            onClick={remove}
+            disabled={del.isPending}
+          >
             <Icon name="trash" size={14} /> Delete account &amp; data
           </button>
         </div>

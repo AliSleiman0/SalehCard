@@ -21,7 +21,7 @@ type TopUpStore interface {
 	FindByUser(ctx context.Context, userID bson.ObjectID) ([]*TopUpRequest, error)
 	CountPendingForUser(ctx context.Context, userID bson.ObjectID) (int64, error)
 	CountPending(ctx context.Context) (int64, error)
-	List(ctx context.Context, status string, p pagination.Params) ([]*TopUpRequest, int64, error)
+	List(ctx context.Context, status, channel string, p pagination.Params) ([]*TopUpRequest, int64, error)
 	Claim(ctx context.Context, id bson.ObjectID, to TopUpStatus, decidedBy, reason string) (*TopUpRequest, error)
 	Revert(ctx context.Context, id bson.ObjectID) error
 	SetTxID(ctx context.Context, id bson.ObjectID, txID string) error
@@ -88,10 +88,13 @@ func (r *TopUpRepo) CountPending(ctx context.Context) (int64, error) {
 
 // List returns a paginated admin view, optionally filtered by status, newest
 // first (pending queues are typically consumed oldest-first via the UI sort).
-func (r *TopUpRepo) List(ctx context.Context, status string, p pagination.Params) ([]*TopUpRequest, int64, error) {
+func (r *TopUpRepo) List(ctx context.Context, status, channel string, p pagination.Params) ([]*TopUpRequest, int64, error) {
 	filter := bson.D{}
 	if s := strings.TrimSpace(status); s != "" {
-		filter = bson.D{{Key: "status", Value: s}}
+		filter = append(filter, bson.E{Key: "status", Value: s})
+	}
+	if c := strings.TrimSpace(channel); c != "" {
+		filter = append(filter, bson.E{Key: "channel", Value: c})
 	}
 	total, err := r.col.CountDocuments(ctx, filter)
 	if err != nil {

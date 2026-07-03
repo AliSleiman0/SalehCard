@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { updateUserRole } from '@/features/users/api/users'
 import {
   listResellers,
   getReseller,
@@ -84,5 +85,22 @@ export function useDeleteTier() {
   return useMutation({
     mutationFn: (id: string) => deleteTier(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'reseller-tiers'] }),
+  })
+}
+
+/** Promote a user to the reseller role and assign a starting tier — the
+ *  "add reseller" flow (reuses the existing role + tier endpoints). */
+export function usePromoteToReseller() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, tier }: { userId: string; tier: string }) => {
+      await updateUserRole(userId, 'reseller')
+      if (tier) await updateResellerTier(userId, tier)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'resellers'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'reseller-tiers'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
   })
 }

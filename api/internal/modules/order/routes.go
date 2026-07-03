@@ -14,6 +14,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/reseller"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
@@ -37,8 +38,9 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	// and parks. Register adapters here as the owner provides credentials (§5).
 	providers := provider.NewRegistry()
 	kycGate := kyc.NewGate(db)
+	margins := reseller.NewMongoRepository(db)
 
-	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, kycGate, ntf)
+	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, kycGate, margins, ntf)
 	h := NewHandler(svc)
 
 	r.Route("/api/v1/orders", func(r chi.Router) {

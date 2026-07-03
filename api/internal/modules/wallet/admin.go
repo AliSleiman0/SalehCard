@@ -65,8 +65,9 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, n
 func (a *adminHandler) list(w http.ResponseWriter, r *http.Request) {
 	p := pagination.ParseParams(r)
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	channel := strings.TrimSpace(r.URL.Query().Get("channel"))
 
-	reqs, total, err := a.topups.List(r.Context(), status, p)
+	reqs, total, err := a.topups.List(r.Context(), status, channel, p)
 	if err != nil {
 		response.InternalError(w)
 		return

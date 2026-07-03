@@ -15,10 +15,10 @@ import {
   EmptyState,
 } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
-import { money } from '@/lib/utils'
-import { useUsers } from '../hooks/useUsers'
+import { money, downloadCsv } from '@/lib/utils'
+import { useUsers, useBulkUserAction } from '../hooks/useUsers'
 import { adaptUser } from '../lib/adaptUser'
-import type { UserStatus } from '../api/users'
+import { listUsers, type UserStatus, type BulkUserAction, type AdminUser } from '../api/users'
 import type { UserRole } from '@/types'
 
 const ROLES: [string, string][] = [
@@ -38,6 +38,7 @@ export default function UserListPage() {
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [page, setPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
 
   // Adopt the URL's ?q= (e.g. the top-bar global search navigates to /users?q=…).
   useEffect(() => {
@@ -53,12 +54,15 @@ export default function UserListPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const { data, isLoading, isError, refetch } = useUsers({
-    page,
-    role: role === 'all' ? '' : role,
-    status: status === 'all' ? '' : status,
+  // Filters shared by the list query and the CSV export (page added per call).
+  const filters = {
+    role: role === 'all' ? ('' as const) : role,
+    status: status === 'all' ? ('' as const) : status,
     q: debouncedSearch.trim(),
-  })
+  }
+
+  const { data, isLoading, isError, refetch } = useUsers({ page, ...filters })
+  const bulkAction = useBulkUserAction()
 
   const rows = useMemo(() => (data?.data ?? []).map(adaptUser), [data])
   const meta = data?.meta
@@ -68,6 +72,39 @@ export default function UserListPage() {
   const onFilter = <T,>(setter: (v: T) => void) => (v: T) => {
     setter(v)
     setPage(1)
+  }
+
+  const runBulk = (action: BulkUserAction) => {
+    const verb = action === 'suspend' ? 'Suspend' : 'Activate'
+    if (!window.confirm(`${verb} ${bulk.sel.length} user(s)?`)) return
+    bulkAction.mutate({ ids: bulk.sel, action }, { onSuccess: () => bulk.clear() })
+  }
+
+  // Export users matching the current filters (all pages — the backend caps
+  // limit at 100, so page to total). CSV mirrors the table columns.
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const all: AdminUser[] = []
+      let p = 1
+      let pages = 1
+      do {
+        const res = await listUsers({ ...filters, page: p, limit: 100 })
+        all.push(...(res.data ?? []))
+        pages = res.meta?.pages ?? 1
+        p++
+      } while (p <= pages)
+
+      const header = ['ID', 'Email', 'Phone', 'Role', 'Status', 'Wallet', 'Orders', 'Total spent', 'Joined']
+      const csvRows = all.map((u) => {
+        const v = adaptUser(u)
+        return [v.id, v.email, v.phone, v.role, v.status, v.balance.toFixed(2), v.orders, v.spent.toFixed(2), v.joined]
+      })
+      downloadCsv(`users-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -80,8 +117,8 @@ export default function UserListPage() {
         <button className="abtn" onClick={() => refetch()}>
           <Icon name="refresh" size={15} /> Refresh
         </button>
-        <button className="abtn" disabled title="Coming soon">
-          <Icon name="download" size={15} /> {t('export')}
+        <button className="abtn" onClick={handleExport} disabled={exporting}>
+          <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
         </button>
       </PageHead>
 
@@ -120,11 +157,14 @@ export default function UserListPage() {
               {bulk.sel.length} {t('selected')}
             </span>
             <div className="ba-act">
-              <button className="abtn xs" disabled title="Coming soon">
-                <Icon name="send" size={13} /> Email
+              <button className="abtn xs ok" onClick={() => runBulk('activate')} disabled={bulkAction.isPending}>
+                <Icon name="check" size={13} /> {t('activate')}
               </button>
-              <button className="abtn xs danger" disabled title="Coming soon">
+              <button className="abtn xs danger" onClick={() => runBulk('suspend')} disabled={bulkAction.isPending}>
                 <Icon name="x" size={13} /> {t('suspend')}
+              </button>
+              <button className="abtn xs" disabled title="Bulk email is deferred — no email provider is configured yet (BL-15)">
+                <Icon name="send" size={13} /> Email
               </button>
             </div>
           </div>

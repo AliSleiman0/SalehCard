@@ -29,7 +29,10 @@ export const NAV: NavGroup[] = [
     items: [
       { to: '/orders', icon: 'bag', label: 'nav_orders' },
       { to: '/users', icon: 'users', label: 'nav_users' },
-      { to: '/resellers', icon: 'handshake', label: 'nav_resellers' },
+      // Reseller management is hidden for now. Re-enable this item (and the
+      // /resellers routes in router.tsx + the "Reseller" role option in
+      // UserDetailPage) to bring the feature back. Backend + data are untouched.
+      // { to: '/resellers', icon: 'handshake', label: 'nav_resellers' },
       { to: '/kyc', icon: 'id', label: 'nav_kyc' },
     ],
   },
@@ -43,5 +46,11 @@ export const NAV: NavGroup[] = [
     ],
   },
   { group: 'grp_content', items: [{ to: '/reviews', icon: 'star', label: 'nav_reviews' }] },
-  { group: 'grp_system', items: [{ to: '/settings', icon: 'settings', label: 'nav_settings' }] },
+  {
+    group: 'grp_system',
+    items: [
+      { to: '/audit', icon: 'shield', label: 'nav_audit' },
+      { to: '/settings', icon: 'settings', label: 'nav_settings' },
+    ],
+  },
 ]

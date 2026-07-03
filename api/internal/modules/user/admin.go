@@ -68,10 +68,12 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	}
 
 	r.Get("/users", a.list)
+	r.Post("/users/bulk", a.bulkStatus)
 	r.Get("/users/{id}", a.detail)
 	r.Put("/users/{id}/role", a.updateRole)
 	r.Put("/users/{id}/status", a.updateStatus)
 	r.Post("/users/{id}/wallet-adjust", a.walletAdjust)
+	r.Delete("/users/{id}", a.deleteUser)
 }
 
 // list handles GET /api/admin/users — paginated, newest first, with optional
@@ -182,6 +184,101 @@ func (a *adminHandler) updateRole(w http.ResponseWriter, r *http.Request) {
 		TargetType: "user",
 		TargetID:   id.Hex(),
 		Summary:    map[string]any{"from": string(current.Role), "to": string(body.Role)},
+	})
+	response.OK(w, u)
+}
+
+// bulkStatus handles POST /api/admin/users/bulk — suspend or activate many users
+// in one call. For the suspend action, admin accounts are dropped from the batch
+// (they must be suspended individually via the last-admin-guarded single
+// endpoint) so a bulk action can never lock everyone out of the console.
+func (a *adminHandler) bulkStatus(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs    []string `json:"ids"`
+		Action string   `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	var status Status
+	switch body.Action {
+	case "suspend":
+		status = StatusSuspended
+	case "activate":
+		status = StatusActive
+	default:
+		response.BadRequest(w, "action must be one of suspend, activate")
+		return
+	}
+	ids := make([]bson.ObjectID, 0, len(body.IDs))
+	for _, s := range body.IDs {
+		if id, err := bson.ObjectIDFromHex(s); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		response.BadRequest(w, "no valid user ids supplied")
+		return
+	}
+	// Suspend must never remove the last admin: exclude admin accounts from a
+	// bulk suspension entirely (they go through the guarded single endpoint).
+	if status == StatusSuspended {
+		users, err := a.repo.FindByIDs(r.Context(), ids)
+		if err != nil {
+			response.InternalError(w)
+			return
+		}
+		ids = ids[:0]
+		for _, u := range users {
+			if u.Role != RoleAdmin {
+				ids = append(ids, u.ID)
+			}
+		}
+	}
+	modified, err := a.repo.BulkUpdateStatus(r.Context(), ids, status)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionStatusChange,
+		TargetType: "user",
+		TargetID:   "bulk",
+		Summary:    map[string]any{"action": body.Action, "count": modified},
+	})
+	response.OK(w, map[string]int64{"modified": modified})
+}
+
+// deleteUser handles DELETE /api/admin/users/{id} — a soft-delete (anonymize).
+// The row is kept so the account's orders and ledger rows still resolve; its PII
+// is scrubbed and it can no longer sign in. The last remaining admin can't be
+// deleted (same guard as demote/suspend).
+func (a *adminHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	current, err := a.repo.FindByID(r.Context(), id)
+	if err != nil {
+		a.writeRepoError(w, err)
+		return
+	}
+	if current.Role == RoleAdmin {
+		if ok := a.requireAnotherAdmin(w, r, "cannot delete the last remaining admin"); !ok {
+			return
+		}
+	}
+	u, err := a.repo.SoftDelete(r.Context(), id)
+	if err != nil {
+		a.writeRepoError(w, err)
+		return
+	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionUserDelete,
+		TargetType: "user",
+		TargetID:   id.Hex(),
+		Summary:    map[string]any{"email": current.Email, "role": string(current.Role)},
 	})
 	response.OK(w, u)
 }

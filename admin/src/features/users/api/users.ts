@@ -1,8 +1,12 @@
 import { apiClient } from '@/lib/api-client'
 import type { ApiResponse, PaginationMeta, UserRole } from '@/types'
 
-/** Account status as stored by the API. */
-export type UserStatus = 'active' | 'suspended'
+/** Account status as stored by the API. `deleted` is a soft-deleted (anonymized)
+ *  account — hidden from the default listing. */
+export type UserStatus = 'active' | 'suspended' | 'deleted'
+
+/** Bulk status action applied to many users at once. */
+export type BulkUserAction = 'suspend' | 'activate'
 
 /** A wallet ledger row, as returned in the user detail payload. */
 export interface WalletTx {
@@ -80,4 +84,16 @@ export function updateUserStatus(id: string, status: UserStatus): Promise<ApiRes
 
 export function adjustWallet(id: string, input: WalletAdjustInput): Promise<ApiResponse<{ walletBalance: number }>> {
   return apiClient.post<{ walletBalance: number }>(`${ADMIN}/${id}/wallet-adjust`, input)
+}
+
+/** Suspend or activate many users in one call. Admin accounts are skipped for
+ *  suspend server-side (the last-admin guard). Returns the modified count. */
+export function bulkUserAction(ids: string[], action: BulkUserAction): Promise<ApiResponse<{ modified: number }>> {
+  return apiClient.post<{ modified: number }>(`${ADMIN}/bulk`, { ids, action })
+}
+
+/** Soft-delete (anonymize) an account. The row is kept so its orders/ledger
+ *  still resolve; the person can no longer sign in. */
+export function deleteUser(id: string): Promise<ApiResponse<AdminUser>> {
+  return apiClient.delete<AdminUser>(`${ADMIN}/${id}`)
 }

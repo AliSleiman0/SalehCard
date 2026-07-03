@@ -13,11 +13,13 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
-import { money } from '@/lib/utils'
+import { money, downloadCsv } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
-import { useResellers, useTiers, useUpdateTier } from '../hooks/useResellers'
+import { useUsers } from '@/features/users/hooks/useUsers'
+import { adaptUser } from '@/features/users/lib/adaptUser'
+import { useResellers, useTiers, useUpdateTier, usePromoteToReseller } from '../hooks/useResellers'
 import { adaptReseller, tierColor } from '../lib/adaptReseller'
-import type { ResellerStatus, TierDef } from '../api/resellers'
+import { listResellers, type ResellerStatus, type TierDef, type AdminReseller } from '../api/resellers'
 
 export default function ResellerListPage() {
   const { t } = useTranslation()
@@ -30,6 +32,8 @@ export default function ResellerListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [page, setPage] = useState(1)
   const [editTier, setEditTier] = useState<TierDef | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   // Adopt the URL's ?q= (e.g. the top-bar global search navigates to /resellers?q=…).
   useEffect(() => {
@@ -63,6 +67,34 @@ export default function ResellerListPage() {
     setPage(1)
   }
 
+  // Filters shared by the list query and the CSV export.
+  const filters = { tier: tier || undefined, status: status || undefined, q: debouncedSearch.trim() }
+
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const all: AdminReseller[] = []
+      let p = 1
+      let pages = 1
+      do {
+        const res = await listResellers({ ...filters, page: p, limit: 100 })
+        all.push(...(res.data ?? []))
+        pages = res.meta?.pages ?? 1
+        p++
+      } while (p <= pages)
+
+      const header = ['ID', 'Email', 'Phone', 'Tier', 'Margin %', 'Sub-balance', 'Orders', 'Volume', 'Status']
+      const csvRows = all.map((raw) => {
+        const r = adaptReseller(raw)
+        return [r.id, r.email, r.phone, r.tier, r.margin, r.balance.toFixed(2), r.orders, r.vol.toFixed(2), r.status]
+      })
+      downloadCsv(`resellers-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="page page-wide">
       <PageHead
@@ -73,10 +105,10 @@ export default function ResellerListPage() {
         <button className="abtn" onClick={() => refetch()}>
           <Icon name="refresh" size={15} /> Refresh
         </button>
-        <button className="abtn" disabled title="Coming soon">
-          <Icon name="download" size={15} /> {t('export')}
+        <button className="abtn" onClick={handleExport} disabled={exporting}>
+          <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
         </button>
-        <button className="abtn primary" disabled title="Promote a user to reseller from the Users page">
+        <button className="abtn primary" onClick={() => setAdding(true)}>
           <Icon name="plus" size={15} /> Add reseller
         </button>
       </PageHead>
@@ -242,7 +274,96 @@ export default function ResellerListPage() {
       </div>
 
       {editTier && <TierEditModal tier={editTier} onClose={() => setEditTier(null)} />}
+      {adding && <AddResellerModal tiers={tiers} onClose={() => setAdding(false)} />}
     </div>
+  )
+}
+
+/** Add reseller — search a user and promote them to the reseller role with a
+ *  starting tier. Reuses the role + tier endpoints (no new backend). */
+function AddResellerModal({ tiers, onClose }: { tiers: TierDef[]; onClose: () => void }) {
+  const { t } = useTranslation()
+  const [q, setQ] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const [selectedId, setSelectedId] = useState('')
+  const [tier, setTier] = useState(tiers[0]?.name ?? '')
+  const [error, setError] = useState('')
+  const promote = usePromoteToReseller()
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(q.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [q])
+
+  // Only non-resellers are candidates for promotion.
+  const { data, isFetching } = useUsers({ q: debounced, limit: 8 })
+  const candidates = (data?.data ?? []).map(adaptUser).filter((u) => u.role !== 'reseller')
+
+  const submit = () => {
+    if (!selectedId) {
+      setError('Select a user to promote.')
+      return
+    }
+    setError('')
+    promote.mutate(
+      { userId: selectedId, tier },
+      { onSuccess: onClose, onError: (e) => setError(e instanceof ApiError ? e.message : 'Promotion failed.') },
+    )
+  }
+
+  return (
+    <Modal onClose={onClose} maxWidth={480}>
+      <div style={{ padding: 22 }}>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>Add reseller</h3>
+        <label className="alabel">Find a user (email or phone)</label>
+        <input className="afield" placeholder="Search users…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div style={{ maxHeight: 220, overflowY: 'auto', marginTop: 10 }}>
+          {isFetching && candidates.length === 0 ? (
+            <div className="faint" style={{ fontSize: 12.5, padding: 8 }}>
+              Searching…
+            </div>
+          ) : candidates.length === 0 ? (
+            <div className="faint" style={{ fontSize: 12.5, padding: 8 }}>
+              No eligible users found.
+            </div>
+          ) : (
+            candidates.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => setSelectedId(u.id)}
+                className={'abtn' + (selectedId === u.id ? ' primary' : '')}
+                style={{ width: '100%', justifyContent: 'flex-start', marginBottom: 6 }}
+              >
+                <Avatar name={u.name} />
+                <span style={{ marginInlineStart: 8 }}>
+                  {u.email || u.phone} <span className="faint">· {u.role}</span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+        <label className="alabel" style={{ marginTop: 14 }}>
+          Starting tier
+        </label>
+        <select className="select" value={tier} onChange={(e) => setTier(e.target.value)} style={{ width: '100%' }}>
+          <option value="">No tier</option>
+          {tiers.map((tn) => (
+            <option key={tn.id} value={tn.name}>
+              {tn.name} ({tn.marginPercent}%)
+            </option>
+          ))}
+        </select>
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button className="abtn" onClick={onClose} disabled={promote.isPending}>
+            {t('cancel')}
+          </button>
+          <button className="abtn primary" onClick={submit} disabled={promote.isPending || !selectedId}>
+            <Icon name="check" size={15} /> Promote to reseller
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

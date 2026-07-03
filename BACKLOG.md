@@ -133,11 +133,20 @@ user-reachable path into `/cart` remains. Cart machinery stays dormant for a
 possible multi-item/bulk future (checkout + order model are single-product
 today — enabling it is a backend feature, not a UI toggle).
 
-### BL-14 Admin "coming soon" set (unchanged, honestly labeled)
-CSV/PDF exports (orders/users/resellers/finance/codes), bulk order actions,
-bulk user email/suspend, delete user, reseller per-product pricing tab,
-add-reseller flow, USDT verification queue tab. Also: `/audit` has no sidebar
-entry (reachable via the avatar menu's "Activity log" — consider a nav item).
+### ✅ BL-14 Admin "coming soon" set
+**Done (2026-07-04).** Shipped: client-side **CSV exports** (orders/users/
+resellers/finance/codes — current-filter, `downloadCsv`); **bulk user
+suspend/activate** (`POST /api/admin/users/bulk`, last-admin guarded) with bulk
+order **export**; **soft-delete user** (`DELETE /api/admin/users/{id}` →
+anonymize: status=deleted, email/phone freed, orders/ledger kept); **reseller
+tier-margin pricing** now enforced at checkout (lowest of retail / tier margin /
+per-variant override — `order/service.go resellerPrice`, see CONVENTIONS.md) with
+an effective-price **pricing tab**; **add-reseller** flow (promote-from-Users
+modal, reuses role+tier endpoints); **USDT verification queue** tab (top-up queue
+filtered to `channel=usdt`); **`/audit` sidebar nav** item.
+Deferred to **BL-15** (money-risk / needs new infra): bulk order **refund**, bulk
+**email** + a `platform/email` provider, per-reseller price table, **PDF** export,
+on-chain USDT `txHash` field, and a toast system.
 
 ### BL-15 Platform stubs (post-launch growth work)
 - `GET/PUT /api/admin/settings` → 501 (store config, gateway keys,

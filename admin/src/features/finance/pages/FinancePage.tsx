@@ -6,20 +6,25 @@ import {
   PageHead,
   Avatar,
   PayChip,
+  Modal,
+  Chip,
+  RoleBadge,
   AreaChart,
   Donut,
   Bars,
   Pagination,
   Tabs,
-  ComingSoonNote,
   LoadingSpinner,
   ErrorState,
   EmptyState,
 } from '@/components'
-import { money } from '@/lib/utils'
+import { money, downloadCsv } from '@/lib/utils'
+import { ApiError } from '@/lib/api-client'
 import { useTransactions, useRevenueSummary } from '../hooks/useFinance'
 import { adaptTx } from '../lib/adaptFinance'
-import type { TxType, LabelValue } from '../api/finance'
+import { listTransactions, type TxType, type LabelValue, type RevenueSummary } from '../api/finance'
+import { useTopUps, useApproveTopUp, useRejectTopUp } from '@/features/topups/hooks/useTopups'
+import type { AdminTopUp, TopUpStatus } from '@/features/topups/api/topups'
 
 type Tab = 'transactions' | 'revenue' | 'usdt'
 type Range = 'daily' | 'weekly' | 'monthly'
@@ -42,6 +47,41 @@ const METHOD_META: Record<string, { label: string; color: string }> = {
 export default function FinancePage() {
   const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('transactions')
+  const [exporting, setExporting] = useState(false)
+
+  // Export the full wallet-ledger feed (all pages — the backend caps limit at
+  // 100, so page to total). CSV mirrors the transactions table.
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const all = []
+      let p = 1
+      let pages = 1
+      do {
+        const res = await listTransactions({ page: p, limit: 100 })
+        all.push(...(res.data ?? []))
+        pages = res.meta?.pages ?? 1
+        p++
+      } while (p <= pages)
+
+      const header = ['Transaction ID', 'User', 'Role', 'Type', 'Amount', 'Balance after', 'Method', 'Ref', 'Date']
+      const csvRows = all.map((tx) => [
+        tx.id,
+        tx.user?.name ?? '',
+        tx.user?.role ?? '',
+        tx.type,
+        tx.amount.toFixed(2),
+        tx.balanceAfter.toFixed(2),
+        tx.method,
+        tx.ref,
+        new Date(tx.createdAt).toISOString(),
+      ])
+      downloadCsv(`transactions-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="page page-wide">
@@ -50,8 +90,8 @@ export default function FinancePage() {
         title="Wallet & financial management"
         sub="Money movement across the platform wallet ledger"
       >
-        <button className="abtn" disabled title="Coming soon">
-          <Icon name="download" size={15} /> {t('export')}
+        <button className="abtn" onClick={handleExport} disabled={exporting}>
+          <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
         </button>
       </PageHead>
 
@@ -67,12 +107,7 @@ export default function FinancePage() {
 
       {tab === 'transactions' && <TransactionsTab />}
       {tab === 'revenue' && <RevenueTab />}
-      {tab === 'usdt' && (
-        <ComingSoonNote
-          mock
-          note="USDT top-ups auto-confirm on a network confirmation today, so there is no pending queue. A manual verification queue will land with the USDT-pending payment flow."
-        />
-      )}
+      {tab === 'usdt' && <UsdtQueueTab />}
     </div>
   )
 }
@@ -230,6 +265,27 @@ function TransactionsTab() {
   )
 }
 
+/** Build a CSV from the revenue summary (KPIs + the three breakdown tables). */
+function exportRevenue(rev: RevenueSummary, range: string): void {
+  const rows: (string | number)[][] = [
+    ['Metric', 'Value'],
+    ['Total revenue', rev.totalRevenue.toFixed(2)],
+    ['This month', rev.monthRevenue.toFixed(2)],
+    ['Refund rate %', (rev.refundRate * 100).toFixed(1)],
+    ['Wallet top-ups', rev.walletTopups.toFixed(2)],
+    [],
+    ['By method', 'Amount'],
+    ...rev.byMethod.map((d) => [d.label, d.value.toFixed(2)]),
+    [],
+    ['By category', 'Amount'],
+    ...rev.byCategory.map((d) => [d.label, d.value.toFixed(2)]),
+    [],
+    ['By currency', 'Amount'],
+    ...rev.byCurrency.map((d) => [d.label, d.value.toFixed(2)]),
+  ]
+  downloadCsv(`revenue-${range}-${new Date().toISOString().slice(0, 10)}.csv`, rows)
+}
+
 /** Convert absolute revenue buckets to display percentages (whole numbers). */
 function toPct(items: LabelValue[]): { label: string; value: number; raw: number }[] {
   const total = items.reduce((s, d) => s + d.value, 0) || 1
@@ -363,16 +419,188 @@ function RevenueTab() {
             )}
           </div>
           <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
-            {/* TODO: implement real CSV/PDF export endpoints. */}
-            <button className="abtn sm" disabled title="Coming soon">
+            <button className="abtn sm" onClick={() => exportRevenue(rev, range)}>
               <Icon name="download" size={14} /> Export CSV
-            </button>
-            <button className="abtn sm" disabled title="Coming soon">
-              <Icon name="file" size={14} /> Export PDF
             </button>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+const USDT_STATUS_CLASS: Record<TopUpStatus, string> = {
+  pending: 'st st-warn',
+  approved: 'st st-ok',
+  rejected: 'st st-danger',
+}
+
+const USDT_FILTERS: [TopUpStatus | '', string][] = [
+  ['pending', 'Pending'],
+  ['approved', 'Approved'],
+  ['rejected', 'Rejected'],
+  ['', 'All'],
+]
+
+/** USDT verification queue — the top-up request queue filtered to the `usdt`
+ *  channel. Reuses the wired approve-and-credit / reject-with-reason endpoints;
+ *  the customer's note carries the on-chain reference. */
+function UsdtQueueTab() {
+  const { t } = useTranslation()
+  const [status, setStatus] = useState<TopUpStatus | ''>('pending')
+  const [page, setPage] = useState(1)
+  const [toReject, setToReject] = useState<AdminTopUp | null>(null)
+
+  const { data, isLoading, isError, refetch } = useTopUps({ page, status: status || undefined, channel: 'usdt' })
+  const rows = data?.data ?? []
+  const meta = data?.meta
+
+  const approveM = useApproveTopUp()
+  const [approveError, setApproveError] = useState('')
+  const approve = (id: string) => {
+    setApproveError('')
+    approveM.mutate(id, { onError: (e) => setApproveError(e instanceof ApiError ? e.message : 'Approval failed.') })
+  }
+
+  return (
+    <div className="acard">
+      <div className="toolbar">
+        <div className="chiprow">
+          {USDT_FILTERS.map(([k, l]) => (
+            <Chip
+              key={k || 'all'}
+              on={status === k}
+              onClick={() => {
+                setStatus(k)
+                setPage(1)
+              }}
+            >
+              {l}
+            </Chip>
+          ))}
+        </div>
+        <button className="abtn" style={{ marginInlineStart: 'auto' }} onClick={() => refetch()}>
+          <Icon name="refresh" size={15} /> Refresh
+        </button>
+      </div>
+
+      {approveError && <div style={{ padding: '10px 18px', color: 'var(--danger)', fontSize: 13 }}>{approveError}</div>}
+
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : isError ? (
+        <ErrorState message="Couldn't load the USDT queue." onRetry={() => refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="No USDT requests"
+          sub="USDT wallet-funding requests appear here for verification once a customer declares an on-chain payment."
+        />
+      ) : (
+        <>
+          <div>
+            {rows.map((r) => (
+              <div key={r.id} style={{ borderBottom: '1px solid var(--border)', padding: '14px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <b style={{ fontSize: 15 }}>{money(r.amount)}</b>
+                  <span className="bdg">{r.channel.toUpperCase()}</span>
+                  <span className="faint" style={{ fontSize: 12.5 }}>
+                    {r.customerEmail || r.customerPhone || r.userId.slice(-8)}
+                  </span>
+                  {r.role && <RoleBadge role={r.role} />}
+                  <span className="faint" style={{ fontSize: 12 }}>
+                    · {new Date(r.createdAt).toLocaleString()}
+                  </span>
+                  <span style={{ marginInlineStart: 'auto' }} className={USDT_STATUS_CLASS[r.status]}>
+                    <i className="d" />
+                    {r.status}
+                  </span>
+                </div>
+                {r.note && (
+                  <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>Tx reference: {r.note}</div>
+                )}
+                {r.status === 'rejected' && r.decisionReason && (
+                  <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>Rejected: {r.decisionReason}</div>
+                )}
+                {r.status !== 'pending' && r.decidedBy && (
+                  <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
+                    Decided by {r.decidedBy}
+                    {r.decidedAt ? ` · ${new Date(r.decidedAt).toLocaleString()}` : ''}
+                  </div>
+                )}
+                {r.status === 'pending' && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button className="abtn xs ok" disabled={approveM.isPending} onClick={() => approve(r.id)}>
+                      <Icon name="check" size={13} /> Verify & credit
+                    </button>
+                    <button className="abtn xs danger" disabled={approveM.isPending} onClick={() => setToReject(r)}>
+                      <Icon name="x" size={13} /> {t('reject')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <Pagination
+            page={meta?.page ?? 1}
+            pages={meta?.pages ?? 1}
+            total={meta?.total ?? rows.length}
+            shown={rows.length}
+            limit={meta?.limit}
+            label="requests"
+            onPage={setPage}
+          />
+        </>
+      )}
+
+      {toReject && <UsdtRejectModal req={toReject} onClose={() => setToReject(null)} />}
+    </div>
+  )
+}
+
+/** Reject a USDT top-up request with a required reason (shown to the customer). */
+function UsdtRejectModal({ req, onClose }: { req: AdminTopUp; onClose: () => void }) {
+  const { t } = useTranslation()
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  const rejectM = useRejectTopUp()
+
+  const apply = () => {
+    if (!reason.trim()) {
+      setError('A rejection reason is required.')
+      return
+    }
+    setError('')
+    rejectM.mutate(
+      { id: req.id, reason: reason.trim() },
+      { onSuccess: onClose, onError: (e) => setError(e instanceof ApiError ? e.message : 'Rejection failed.') },
+    )
+  }
+
+  return (
+    <Modal onClose={onClose} maxWidth={440}>
+      <div style={{ padding: 22 }}>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Reject USDT request</h3>
+        <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 16 }}>
+          Reject the <b>{money(req.amount)}</b> request from <b>{req.customerEmail || 'customer'}</b>. The reason is
+          shown to the customer.
+        </p>
+        <label className="alabel">Reason (required)</label>
+        <input
+          className="afield"
+          placeholder="e.g. no matching on-chain payment found…"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button className="abtn" onClick={onClose} disabled={rejectM.isPending}>
+            {t('cancel')}
+          </button>
+          <button className="abtn danger" onClick={apply} disabled={rejectM.isPending}>
+            <Icon name="x" size={15} /> {t('reject')}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
