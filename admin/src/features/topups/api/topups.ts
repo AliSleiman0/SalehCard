@@ -27,6 +27,7 @@ export interface TopUpListParams {
   page?: number
   limit?: number
   status?: TopUpStatus | ''
+  channel?: string
 }
 
 const ADMIN = '/api/admin/wallet/topups'
@@ -38,6 +39,7 @@ export function listTopUps(
   if (params.page !== undefined) q.set('page', String(params.page))
   if (params.limit !== undefined) q.set('limit', String(params.limit))
   if (params.status) q.set('status', params.status)
+  if (params.channel) q.set('channel', params.channel)
   const qs = q.toString()
   return apiClient.get<AdminTopUp[]>(qs ? `${ADMIN}?${qs}` : ADMIN)
 }

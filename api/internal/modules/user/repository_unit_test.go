@@ -18,7 +18,15 @@ func keyed(d bson.D) map[string]any {
 }
 
 func TestUserFilter_Build_Empty(t *testing.T) {
-	assert.Empty(t, UserFilter{}.build())
+	// An unfiltered listing still hides soft-deleted accounts by default.
+	m := keyed(UserFilter{}.build())
+	assert.Equal(t, bson.D{{Key: "$ne", Value: StatusDeleted}}, m["status"])
+}
+
+func TestUserFilter_Build_DeletedIsExactMatch(t *testing.T) {
+	// Explicitly filtering status=deleted surfaces the soft-deleted accounts.
+	m := keyed(UserFilter{Status: StatusDeleted}.build())
+	assert.Equal(t, StatusDeleted, m["status"])
 }
 
 func TestUserFilter_Build_RoleAndStatus(t *testing.T) {

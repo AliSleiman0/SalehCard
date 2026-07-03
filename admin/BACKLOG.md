@@ -33,12 +33,16 @@ Updated 2026-07-02 as part of the go-to-market hardening pass.
       tabs were removed from the UI).
 - [ ] Granular admin permission model (Super admin / Editor / Viewer) — one
       flat `admin` role today, protected by the last-admin guard.
-- [ ] CSV/PDF exports (orders, users, resellers, finance, codes) — buttons
-      are disabled "coming soon".
-- [ ] Bulk order actions, bulk user email/suspend, user account deletion.
-- [ ] Reseller custom pricing rules tab; add-reseller flow (promote a user
-      to the reseller role from their profile instead).
-- [ ] USDT verification queue tab in Finance.
+- [x] **CSV exports** (orders, users, resellers, finance, codes) — client-side
+      `downloadCsv`, current-filter (BL-14). PDF deferred to BL-15.
+- [x] **Bulk user suspend/activate** + **soft-delete** (anonymize) user (BL-14).
+      Bulk order **export** wired; bulk order **refund** and bulk **email**
+      deferred to BL-15 (money-risk / no email provider yet).
+- [x] **Reseller pricing tab** (effective-price view + per-variant override
+      edit) with **tier margin** enforced at checkout; **add-reseller** flow
+      (promote-from-Users modal) (BL-14). Per-reseller price table deferred.
+- [x] **USDT verification queue** tab in Finance (top-up queue, `channel=usdt`)
+      (BL-14).
 - [ ] Notifications feed (topbar bell removed until one exists) + toast
       system for mutation feedback.
 - [ ] Global top-bar search across entities (routes into Orders today).

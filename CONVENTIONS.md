@@ -58,6 +58,18 @@ write ledger type **`adjustment`** and are intentionally **excluded** from the
 top-up KPIs. Use them to fix mistakes or make back-office ledger corrections, not
 to fund a wallet as a matter of course.
 
+### Reseller Pricing
+Resellers are priced at checkout as the **lowest** of three candidates
+(`order/service.go` `resellerPrice`):
+1. **Retail** — `variant.price`.
+2. **Tier margin** — `retail * (1 - ResellerTier.MarginPercent/100)`, resolved from
+   the buyer's assigned tier via `reseller.MarginForUser`. A blank/unknown tier or a
+   lookup error means no margin (retail), never a failed order.
+3. **Per-variant override** — the optional `variant.resellerPrice` set on the product.
+
+Sale offers do **not** stack on reseller pricing (they apply to retail buyers only).
+`MarginPercent` was display-only before this; it is now enforced at order time.
+
 ## Frontend Conventions
 
 ### Feature Structure

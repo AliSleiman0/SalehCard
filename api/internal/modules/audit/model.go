@@ -25,6 +25,7 @@ type Entry struct {
 const (
 	ActionRoleChange     = "user.role_change"
 	ActionStatusChange   = "user.status_change"
+	ActionUserDelete     = "user.delete"
 	ActionWalletAdjust   = "wallet.adjust"
 	ActionBalanceAdjust  = "reseller.balance_adjust"
 	ActionOrderRefund    = "order.refund"

@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { Icon, PageHead, Art, LoadingSpinner, ErrorState, EmptyState, artForCategory } from '@/components'
 import { useInventory, useUploadCodes, useLookupCode, useSetThreshold, useUploadHistory } from '../hooks/useInventory'
-import { parseCodesFile, type UploadItem } from '../api/codes'
-import { relativeTime } from '@/lib/utils'
-import type { InventoryStats } from '@/types'
+import { parseCodesFile, listCodes, type UploadItem } from '../api/codes'
+import { relativeTime, downloadCsv } from '@/lib/utils'
+import type { InventoryStats, Code } from '@/types'
 
 type Tab = 'stock' | 'upload' | 'config' | 'audit'
 
@@ -72,6 +72,40 @@ function StockTab({ stats, onAdd }: { stats: InventoryStats[]; onAdd: () => void
     return { uploaded, available, delivered, low }
   }, [stats])
   const rows = lowOnly ? stats.filter((s) => s.level === 'lo') : stats
+  const [exportingId, setExportingId] = useState('')
+
+  // Export a single product's code list (all statuses, across all pages — the
+  // backend caps limit at 100, so page to total).
+  const exportCodes = async (productId: string, title: string) => {
+    if (exportingId) return
+    setExportingId(productId)
+    try {
+      const all: Code[] = []
+      let p = 1
+      let pages = 1
+      do {
+        const res = await listCodes(productId, { page: p, limit: 100 })
+        all.push(...(res.data ?? []))
+        pages = res.meta?.pages ?? 1
+        p++
+      } while (p <= pages)
+
+      const header = ['Code', 'PIN', 'Status', 'Order ID', 'Delivered to', 'Delivered at', 'Batch']
+      const csvRows = all.map((c) => [
+        c.code,
+        c.pin ?? '',
+        c.status,
+        c.orderId ?? '',
+        c.deliveredTo ?? '',
+        c.deliveredAt ?? '',
+        c.batch ?? '',
+      ])
+      const safe = title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+      downloadCsv(`codes-${safe}-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
+    } finally {
+      setExportingId('')
+    }
+  }
 
   if (stats.length === 0)
     return <EmptyState icon="layers" title="No code inventory yet" sub="Code-type products will appear here once created." />
@@ -160,6 +194,14 @@ function StockTab({ stats, onAdd }: { stats: InventoryStats[]; onAdd: () => void
                       <div className="row-actions">
                         <button className="abtn xs" onClick={onAdd}>
                           <Icon name="upload" size={13} /> Add
+                        </button>
+                        <button
+                          className="abtn xs"
+                          onClick={() => exportCodes(it.productId, it.title)}
+                          disabled={exportingId === it.productId}
+                          title="Export this product's codes as CSV"
+                        >
+                          <Icon name="download" size={13} /> {exportingId === it.productId ? '…' : 'Export'}
                         </button>
                       </div>
                     </td>

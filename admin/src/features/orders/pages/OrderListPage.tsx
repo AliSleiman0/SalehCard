@@ -18,10 +18,10 @@ import {
 } from '@/components'
 import type { FfKey } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
-import { money } from '@/lib/utils'
+import { money, downloadCsv } from '@/lib/utils'
 import { useOrders } from '../hooks/useOrders'
 import { adaptOrder } from '../lib/adaptOrder'
-import type { OrderStatus, PaymentMethod } from '../api/orders'
+import { listOrders, type OrderStatus, type PaymentMethod, type AdminOrder } from '../api/orders'
 import type { FulfillmentType } from '@/types'
 
 const FF_DOT: Record<FfKey, string> = {
@@ -48,6 +48,7 @@ export default function OrderListPage() {
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [page, setPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
 
   // Adopt the URL's ?q= (e.g. the top-bar global search navigates to /orders?q=…).
   useEffect(() => {
@@ -65,13 +66,15 @@ export default function OrderListPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const { data, isLoading, isError, refetch } = useOrders({
-    page,
-    status: status === 'all' ? '' : status,
-    fulfillmentType: ff === 'all' ? '' : FF_API[ff],
-    paymentMethod: pay === 'all' ? '' : pay,
+  // Filters shared by the list query and the CSV export (page added per call).
+  const filters = {
+    status: status === 'all' ? ('' as const) : status,
+    fulfillmentType: ff === 'all' ? ('' as const) : FF_API[ff],
+    paymentMethod: pay === 'all' ? ('' as const) : pay,
     q: debouncedSearch.trim(),
-  })
+  }
+
+  const { data, isLoading, isError, refetch } = useOrders({ page, ...filters })
 
   const rows = useMemo(() => (data?.data ?? []).map(adaptOrder), [data])
   const meta = data?.meta
@@ -83,6 +86,32 @@ export default function OrderListPage() {
     setPage(1)
   }
 
+  // Export orders matching the current filters (all pages — the backend caps
+  // limit at 100, so page to total). selectedOnly narrows to the checked rows.
+  const handleExport = async (selectedOnly = false) => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const all: AdminOrder[] = []
+      let p = 1
+      let pages = 1
+      do {
+        const res = await listOrders({ ...filters, page: p, limit: 100 })
+        all.push(...(res.data ?? []))
+        pages = res.meta?.pages ?? 1
+        p++
+      } while (p <= pages)
+
+      let view = all.map(adaptOrder)
+      if (selectedOnly) view = view.filter((o) => bulk.sel.includes(o.id))
+      const header = ['Order ID', 'Customer', 'Email', 'Product', 'Qty', 'Amount', 'Currency', 'Payment', 'Status', 'Date']
+      const csvRows = view.map((o) => [o.id, o.customer, o.email, o.product, o.qty, o.amount.toFixed(2), o.cur, o.pay, o.status, o.date])
+      downloadCsv(`orders-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="page page-wide">
       <PageHead
@@ -90,6 +119,9 @@ export default function OrderListPage() {
         title={t('nav_orders')}
         sub={meta ? `${meta.total.toLocaleString()} orders` : ''}
       >
+        <button className="abtn" onClick={() => handleExport(false)} disabled={exporting}>
+          <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
+        </button>
         <button className="abtn" onClick={() => refetch()}>
           <Icon name="refresh" size={15} /> Refresh
         </button>
@@ -147,10 +179,10 @@ export default function OrderListPage() {
               {bulk.sel.length} {t('selected')}
             </span>
             <div className="ba-act">
-              <button className="abtn xs" disabled title="Coming soon">
-                <Icon name="download" size={13} /> {t('export')}
+              <button className="abtn xs" onClick={() => handleExport(true)} disabled={exporting}>
+                <Icon name="download" size={13} /> {exporting ? '…' : t('export')}
               </button>
-              <button className="abtn xs danger" disabled title="Coming soon">
+              <button className="abtn xs danger" disabled title="Bulk refund is deferred (money-mutation) — refund orders individually">
                 <Icon name="refresh" size={13} /> {t('refund')}
               </button>
             </div>

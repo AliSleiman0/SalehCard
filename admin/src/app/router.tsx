@@ -12,8 +12,11 @@ const OrderListPage = lazy(() => import('@/features/orders/pages/OrderListPage')
 const OrderDetailPage = lazy(() => import('@/features/orders/pages/OrderDetailPage'))
 const UserListPage = lazy(() => import('@/features/users/pages/UserListPage'))
 const UserDetailPage = lazy(() => import('@/features/users/pages/UserDetailPage'))
-const ResellerListPage = lazy(() => import('@/features/resellers/pages/ResellerListPage'))
-const ResellerDetailPage = lazy(() => import('@/features/resellers/pages/ResellerDetailPage'))
+// Reseller management is hidden for now (dormant, not deleted). Re-enable these
+// imports + the two routes below, the /resellers nav item, and the "Reseller"
+// role option in UserDetailPage to restore the feature.
+// const ResellerListPage = lazy(() => import('@/features/resellers/pages/ResellerListPage'))
+// const ResellerDetailPage = lazy(() => import('@/features/resellers/pages/ResellerDetailPage'))
 const FinancePage = lazy(() => import('@/features/finance/pages/FinancePage'))
 const TopupsPage = lazy(() => import('@/features/topups/pages/TopupsPage'))
 const PromoListPage = lazy(() => import('@/features/promos/pages/PromoListPage'))
@@ -48,8 +51,9 @@ export default function AppRouter() {
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/users" element={<UserListPage />} />
         <Route path="/users/:id" element={<UserDetailPage />} />
-        <Route path="/resellers" element={<ResellerListPage />} />
-        <Route path="/resellers/:id" element={<ResellerDetailPage />} />
+        {/* Reseller routes hidden for now — see the commented imports above. */}
+        {/* <Route path="/resellers" element={<ResellerListPage />} /> */}
+        {/* <Route path="/resellers/:id" element={<ResellerDetailPage />} /> */}
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/topups" element={<TopupsPage />} />
         <Route path="/promos" element={<PromoListPage />} />

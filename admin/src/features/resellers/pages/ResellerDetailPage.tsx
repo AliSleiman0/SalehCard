@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Icon,
   PageHead,
@@ -11,7 +12,6 @@ import {
   Chip,
   Tabs,
   Segmented,
-  ComingSoonNote,
   LoadingSpinner,
   ErrorState,
   EmptyState,
@@ -20,6 +20,9 @@ import { money, relativeTime } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import { useProducts } from '@/features/products/hooks/useProducts'
+import { updateProduct } from '@/features/products/api/products'
+import type { Product, Variant } from '@/types'
 import {
   useReseller,
   useTiers,
@@ -142,12 +145,7 @@ export default function ResellerDetailPage() {
 
       {tab === 'balance' && <BalanceTab id={view.id} balance={view.balance} transactions={detail.transactions} />}
 
-      {tab === 'pricing' && (
-        <ComingSoonNote
-          mock
-          note="Per-product price overrides will replace the tier's flat margin here. For now, reseller pricing uses the per-variant reseller price set on each product."
-        />
-      )}
+      {tab === 'pricing' && <PricingTab margin={view.margin} />}
 
       {tab === 'orders' && <OrdersTab email={view.email} total={view.orders} />}
     </div>
@@ -317,6 +315,148 @@ function BalanceTab({
           <Icon name="check" size={15} /> Apply
         </button>
       </div>
+    </div>
+  )
+}
+
+/** Effective reseller price = the lowest of retail, the tier-margin price, and
+ *  any explicit per-variant override (mirrors the backend order pricing). */
+function effectivePrice(v: Variant, margin: number): number {
+  let p = v.price
+  if (margin > 0 && margin < 100) p = Math.min(p, v.price * (1 - margin / 100))
+  if (v.resellerPrice != null) p = Math.min(p, v.resellerPrice)
+  return p
+}
+
+/** Pricing rules — a read-mostly effective-price table for this reseller's tier,
+ *  with inline editing of each variant's per-product reseller-price override
+ *  (persisted via the product-update endpoint; no new backend). */
+function PricingTab({ margin }: { margin: number }) {
+  const qc = useQueryClient()
+  const { data, isLoading, isError, refetch } = useProducts({ limit: 100 })
+  const products = data?.data ?? []
+  const [edit, setEdit] = useState<{ variantId: string } | null>(null)
+  const [value, setValue] = useState('')
+  const [error, setError] = useState('')
+
+  const save = useMutation({
+    mutationFn: ({ product, variantId, price }: { product: Product; variantId: string; price?: number }) =>
+      updateProduct(product.id, {
+        variants: product.variants.map((v) => ({
+          denomination: v.denomination,
+          price: v.price,
+          resellerPrice: v.id === variantId ? price : v.resellerPrice,
+        })),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'products'] })
+      setEdit(null)
+      setError('')
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Update failed.'),
+  })
+
+  const startEdit = (v: Variant) => {
+    setEdit({ variantId: v.id })
+    setValue(v.resellerPrice != null ? String(v.resellerPrice) : '')
+    setError('')
+  }
+  const commit = (product: Product, variantId: string) => {
+    const raw = value.trim()
+    const price = raw === '' ? undefined : Number(raw)
+    if (price !== undefined && (!Number.isFinite(price) || price < 0)) {
+      setError('Enter a valid price, or clear it to remove the override.')
+      return
+    }
+    save.mutate({ product, variantId, price })
+  }
+
+  if (isLoading) return <LoadingSpinner />
+  if (isError) return <ErrorState message="Couldn't load products." onRetry={() => refetch()} />
+
+  return (
+    <div className="acard">
+      <div className="panelhead">
+        <Icon name="coins" size={17} />
+        <h3>Effective pricing ({margin}% tier margin)</h3>
+      </div>
+      <div className="ahint" style={{ padding: '0 16px 12px' }}>
+        Resellers pay the lowest of retail, the tier-margin price, and any per-variant override below.
+      </div>
+      {products.length === 0 ? (
+        <EmptyState title="No products yet" />
+      ) : (
+        <div className="tablewrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Variant</th>
+                <th>Retail</th>
+                <th>Tier margin</th>
+                <th>Override</th>
+                <th>Effective</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.flatMap((p) =>
+                p.variants.map((v) => {
+                  const marginPrice = margin > 0 && margin < 100 ? v.price * (1 - margin / 100) : v.price
+                  const editing = edit?.variantId === v.id
+                  return (
+                    <tr key={v.id}>
+                      <td>
+                        <b style={{ fontSize: 12.5 }}>{p.title.en}</b>
+                      </td>
+                      <td className="muted">{v.denomination}</td>
+                      <td className="num">{money(v.price)}</td>
+                      <td className="num muted">{money(marginPrice)}</td>
+                      <td className="num">
+                        {editing ? (
+                          <input
+                            className="afield"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="none"
+                            value={value}
+                            autoFocus
+                            onChange={(e) => setValue(e.target.value)}
+                            style={{ width: 90, padding: '4px 8px' }}
+                          />
+                        ) : v.resellerPrice != null ? (
+                          money(v.resellerPrice)
+                        ) : (
+                          <span className="faint">—</span>
+                        )}
+                      </td>
+                      <td className="num strong">{money(effectivePrice(v, margin))}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        {editing ? (
+                          <div className="row-actions">
+                            <button className="abtn xs primary" disabled={save.isPending} onClick={() => commit(p, v.id)}>
+                              <Icon name="check" size={13} />
+                            </button>
+                            <button className="abtn xs" disabled={save.isPending} onClick={() => setEdit(null)}>
+                              <Icon name="x" size={13} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="iact" onClick={() => startEdit(v)}>
+                            <Icon name="edit" size={15} />
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                }),
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, padding: '10px 16px' }}>{error}</div>}
     </div>
   )
 }

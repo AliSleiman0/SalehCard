@@ -34,6 +34,10 @@ type Repository interface {
 	ListAll(ctx context.Context, f UserFilter, p pagination.Params) ([]*User, int64, error)
 	UpdateRole(ctx context.Context, id bson.ObjectID, role Role) (*User, error)
 	UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error)
+	// BulkUpdateStatus sets status on every user in ids, returning the modified count.
+	BulkUpdateStatus(ctx context.Context, ids []bson.ObjectID, status Status) (int64, error)
+	// SoftDelete anonymizes an account in place (status=deleted, PII unset).
+	SoftDelete(ctx context.Context, id bson.ObjectID) (*User, error)
 	UpdateResellerTier(ctx context.Context, id bson.ObjectID, tier string) (*User, error)
 	// CountActiveAdmins counts non-suspended admin accounts (the last-admin
 	// demotion/suspension guard).
@@ -54,17 +58,21 @@ func (f UserFilter) build() bson.D {
 	if f.Role != "" {
 		filter = append(filter, bson.E{Key: "role", Value: f.Role})
 	}
-	if f.Status != "" {
+	switch f.Status {
+	case StatusActive:
 		// "active" must also match legacy accounts that predate the status field
 		// (no status stored) — treat a missing status as active.
-		if f.Status == StatusActive {
-			filter = append(filter, bson.E{Key: "$or", Value: bson.A{
-				bson.D{{Key: "status", Value: StatusActive}},
-				bson.D{{Key: "status", Value: bson.D{{Key: "$exists", Value: false}}}},
-			}})
-		} else {
-			filter = append(filter, bson.E{Key: "status", Value: f.Status})
-		}
+		filter = append(filter, bson.E{Key: "$or", Value: bson.A{
+			bson.D{{Key: "status", Value: StatusActive}},
+			bson.D{{Key: "status", Value: bson.D{{Key: "$exists", Value: false}}}},
+		}})
+	case "":
+		// Default listing hides soft-deleted accounts (a missing status is a
+		// legacy-active account, which $ne keeps included).
+		filter = append(filter, bson.E{Key: "status", Value: bson.D{{Key: "$ne", Value: StatusDeleted}}})
+	default:
+		// suspended / deleted: exact match.
+		filter = append(filter, bson.E{Key: "status", Value: f.Status})
 	}
 	if f.ResellerTier != "" {
 		filter = append(filter, bson.E{Key: "resellerTier", Value: f.ResellerTier})
@@ -345,6 +353,59 @@ func (r *MongoRepository) UpdateRole(ctx context.Context, id bson.ObjectID, role
 // returning ErrNotFound when no user matches.
 func (r *MongoRepository) UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error) {
 	return r.setFields(ctx, id, bson.D{{Key: "status", Value: status}})
+}
+
+// BulkUpdateStatus sets the status on every user whose id is in ids (a single
+// UpdateMany) and returns the number of documents modified. An empty id list is
+// a no-op returning 0.
+func (r *MongoRepository) BulkUpdateStatus(ctx context.Context, ids []bson.ObjectID, status Status) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	res, err := r.collection.UpdateMany(ctx,
+		bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "status", Value: status},
+			{Key: "updatedAt", Value: time.Now().UTC()},
+		}}},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+// SoftDelete anonymizes a user in place: it marks the account deleted, stamps
+// deletedAt, and unsets the email/phone/credential identifiers (freeing the
+// sparse-unique indexes so the person can re-register) while leaving orders and
+// ledger rows intact. Returns ErrNotFound when no user matches.
+func (r *MongoRepository) SoftDelete(ctx context.Context, id bson.ObjectID) (*User, error) {
+	now := time.Now().UTC()
+	var u User
+	err := r.collection.FindOneAndUpdate(ctx,
+		bson.D{{Key: "_id", Value: id}},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "status", Value: StatusDeleted},
+				{Key: "deletedAt", Value: now},
+				{Key: "updatedAt", Value: now},
+			}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "email", Value: ""},
+				{Key: "phone", Value: ""},
+				{Key: "passwordHash", Value: ""},
+				{Key: "googleId", Value: ""},
+			}},
+		},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&u)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
 }
 
 // CountActiveAdmins counts non-suspended admin accounts. The $ne keeps legacy

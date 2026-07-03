@@ -167,6 +167,30 @@ func (f *fakeUserRepo) UpdateResellerTier(_ context.Context, id bson.ObjectID, t
 	return u, nil
 }
 
+func (f *fakeUserRepo) BulkUpdateStatus(_ context.Context, ids []bson.ObjectID, status Status) (int64, error) {
+	var n int64
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			u.Status = status
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeUserRepo) SoftDelete(_ context.Context, id bson.ObjectID) (*User, error) {
+	u, ok := f.byID[id]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	u.Status = StatusDeleted
+	now := time.Now().UTC()
+	u.DeletedAt = &now
+	u.Email = ""
+	u.Phone = nil
+	return u, nil
+}
+
 // fakeOTPRepo is a single-record-per-phone in-memory OTPRepository.
 type fakeOTPRepo struct {
 	byPhone map[string]*OtpCode

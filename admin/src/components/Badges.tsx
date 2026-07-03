@@ -52,6 +52,7 @@ const STATUS_MAP: Record<string, [string, string]> = {
   failed: ['st-danger', 'Failed'],
   refunded: ['st-danger', 'Refunded'],
   suspended: ['st-danger', 'Suspended'],
+  deleted: ['st-mute', 'Deleted'],
 }
 
 export function StatusBadge({ s }: { s: string }) {

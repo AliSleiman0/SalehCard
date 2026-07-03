@@ -5,8 +5,11 @@ import {
   updateUserRole,
   updateUserStatus,
   adjustWallet,
+  bulkUserAction,
+  deleteUser,
   type UserListParams,
   type UserStatus,
+  type BulkUserAction,
   type WalletAdjustInput,
 } from '../api/users'
 import type { UserRole } from '@/types'
@@ -54,6 +57,25 @@ export function useAdjustWallet(id: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: WalletAdjustInput) => adjustWallet(id, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'user', id] })
+    },
+  })
+}
+
+export function useBulkUserAction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, action }: { ids: string[]; action: BulkUserAction }) => bulkUserAction(ids, action),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  })
+}
+
+export function useDeleteUser(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => deleteUser(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'users'] })
       qc.invalidateQueries({ queryKey: ['admin', 'user', id] })

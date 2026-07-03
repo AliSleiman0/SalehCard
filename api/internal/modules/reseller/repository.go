@@ -21,6 +21,9 @@ type Repository interface {
 	DeleteTier(ctx context.Context, id bson.ObjectID) error
 	// CountByTier returns the number of reseller users per tier name.
 	CountByTier(ctx context.Context) (map[string]int64, error)
+	// MarginForUser resolves a user's reseller-tier margin percent (0 when the
+	// user has no tier or the tier is unknown).
+	MarginForUser(ctx context.Context, userID bson.ObjectID) (float64, error)
 }
 
 // MongoRepository is a MongoDB-backed implementation of Repository.
@@ -140,6 +143,38 @@ func (r *MongoRepository) DeleteTier(ctx context.Context, id bson.ObjectID) erro
 		return apperrors.ErrNotFound
 	}
 	return nil
+}
+
+// MarginForUser resolves the reseller margin percent for a user by looking up
+// their assigned tier. It returns 0 (reseller pays retail — the pre-margin
+// behavior) when the user has no tier, the tier is unknown, or the user is
+// missing, so a stale/blank tier never blocks or mis-prices an order.
+func (r *MongoRepository) MarginForUser(ctx context.Context, userID bson.ObjectID) (float64, error) {
+	var u struct {
+		ResellerTier string `bson:"resellerTier"`
+	}
+	err := r.users.FindOne(ctx,
+		bson.D{{Key: "_id", Value: userID}},
+		options.FindOne().SetProjection(bson.D{{Key: "resellerTier", Value: 1}}),
+	).Decode(&u)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if u.ResellerTier == "" {
+		return 0, nil
+	}
+	var t ResellerTier
+	err = r.tiers.FindOne(ctx, bson.D{{Key: "name", Value: u.ResellerTier}}).Decode(&t)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return t.MarginPercent, nil
 }
 
 // CountByTier aggregates the number of reseller users grouped by their tier name.

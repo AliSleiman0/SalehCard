@@ -22,6 +22,10 @@ type Status string
 const (
 	StatusActive    Status = "active"
 	StatusSuspended Status = "suspended"
+	// StatusDeleted marks a soft-deleted (anonymized) account. The row is kept
+	// so orders and ledger rows keep resolving; the account can no longer sign
+	// in and is hidden from the default admin listing.
+	StatusDeleted Status = "deleted"
 )
 
 // User is the primary account entity. Either Email (email/password signup) or
@@ -49,6 +53,9 @@ type User struct {
 	// token refresh). It powers the "active users" dashboard metric; absent on
 	// accounts that have not signed in since the field was introduced.
 	LastSeen time.Time `bson:"lastSeen,omitempty" json:"lastSeen,omitempty"`
+	// DeletedAt stamps when the account was soft-deleted (anonymized). Nil for
+	// live accounts.
+	DeletedAt *time.Time `bson:"deletedAt,omitempty" json:"deletedAt,omitempty"`
 }
 
 // OtpCode is a pending one-time passcode for a phone number. Only the SHA-256

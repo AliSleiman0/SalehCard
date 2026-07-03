@@ -130,14 +130,18 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
                       onTap: () => context.push('/wallet/topup'),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.send_rounded,
-                      label: l10n.sendMoney,
-                      onTap: () => context.push('/wallet/send'),
-                    ),
-                  ),
+                  // Send money is hidden until a real peer-transfer endpoint
+                  // exists (BL-12) — the stub always failed with "coming soon".
+                  // Re-enable by restoring this _ActionButton; the /wallet/send
+                  // route and SendMoneyScreen are still wired.
+                  // const SizedBox(width: 12),
+                  // Expanded(
+                  //   child: _ActionButton(
+                  //     icon: Icons.send_rounded,
+                  //     label: l10n.sendMoney,
+                  //     onTap: () => context.push('/wallet/send'),
+                  //   ),
+                  // ),
                 ],
               ),
               // Pending top-up requests: explain why the balance hasn't moved.
