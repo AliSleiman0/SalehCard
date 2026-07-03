@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
 
@@ -196,6 +197,35 @@ func (s *CodeService) CountAvailable(ctx context.Context, productID string) (int
 		return 0, err
 	}
 	return counts[StatusAvailable], nil
+}
+
+// Expire marks one available code (looked up by its value) as expired and
+// re-mirrors the product's stock. Only available codes can be expired — a code
+// that is already delivered or expired returns CODE_NOT_AVAILABLE.
+func (s *CodeService) Expire(ctx context.Context, code string) (*Code, error) {
+	existing, err := s.repo.FindByCodeOrSuffix(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status != StatusAvailable {
+		return nil, &apperrors.AppError{
+			Code:    "CODE_NOT_AVAILABLE",
+			Message: "only available (undelivered) codes can be expired",
+			Err:     apperrors.ErrConflict,
+		}
+	}
+	c, err := s.repo.MarkExpired(ctx, existing.ProductID, existing.Code)
+	if err != nil {
+		return nil, err
+	}
+	s.remirror(ctx, c.ProductID)
+	return c, nil
+}
+
+// CodesForOrder returns the delivered codes claimed under an order, used to
+// re-deliver (resend) them to the customer.
+func (s *CodeService) CodesForOrder(ctx context.Context, orderID string) ([]Code, error) {
+	return s.repo.FindByOrder(ctx, orderID)
 }
 
 // remirror recomputes the product's available-code count onto its stock field

@@ -70,6 +70,16 @@ type Config struct {
 	OTPResendInterval time.Duration
 	// OTPMaxAttempts is the number of wrong guesses allowed before a code locks.
 	OTPMaxAttempts int
+
+	// Rate limiting on the public auth endpoints (per-IP fixed window).
+	// RateLimitProvider is "mongo" (default; a TTL-counter collection) or
+	// "noop"/"off" (disabled). The Auth pair caps all auth calls; the tighter OTP
+	// pair caps OTP requests (which cost SMS).
+	RateLimitProvider   string
+	RateLimitAuthMax    int
+	RateLimitAuthWindow time.Duration
+	RateLimitOTPMax     int
+	RateLimitOTPWindow  time.Duration
 }
 
 // Load reads configuration from environment variables, applying defaults where
@@ -114,6 +124,12 @@ func Load() *Config {
 		OTPTTL:             getDuration("OTP_TTL", 5*time.Minute),
 		OTPResendInterval:  getDuration("OTP_RESEND_INTERVAL", 60*time.Second),
 		OTPMaxAttempts:     getInt("OTP_MAX_ATTEMPTS", 5),
+
+		RateLimitProvider:   getEnv("RATE_LIMIT_PROVIDER", "mongo"),
+		RateLimitAuthMax:    getInt("RATE_LIMIT_AUTH_MAX", 30),
+		RateLimitAuthWindow: getDuration("RATE_LIMIT_AUTH_WINDOW", time.Minute),
+		RateLimitOTPMax:     getInt("RATE_LIMIT_OTP_MAX", 5),
+		RateLimitOTPWindow:  getDuration("RATE_LIMIT_OTP_WINDOW", time.Minute),
 	}
 }
 

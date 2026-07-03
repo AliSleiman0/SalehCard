@@ -7,9 +7,30 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/v2/bson"
 
+	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
+
+func TestExpire_RejectsNonAvailableCode(t *testing.T) {
+	// The default fake lookup returns a delivered code — it must not be expirable.
+	svc := NewCodeService(newFakeRepo())
+	_, err := svc.Expire(context.Background(), "X")
+	require.Error(t, err)
+	var appErr *apperrors.AppError
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "CODE_NOT_AVAILABLE", appErr.Code)
+}
+
+func TestExpire_AvailableCodeSucceeds(t *testing.T) {
+	f := newFakeRepo()
+	f.lookup = &Code{Code: "A", ProductID: "p1", Status: StatusAvailable}
+	svc := NewCodeService(f)
+	c, err := svc.Expire(context.Background(), "A")
+	require.NoError(t, err)
+	assert.Equal(t, StatusExpired, c.Status)
+}
 
 // fakeRepo is an in-memory Repository for unit tests.
 type fakeRepo struct {
@@ -18,6 +39,8 @@ type fakeRepo struct {
 	products   []ProductMeta
 	stock      map[string]int
 	batches    []UploadBatch
+	lookup     *Code  // FindByCodeOrSuffix result when set
+	orderCodes []Code // FindByOrder result
 }
 
 func newFakeRepo() *fakeRepo {
@@ -54,7 +77,18 @@ func (f *fakeRepo) CountsByProduct(_ context.Context, productID string) (map[Sta
 }
 
 func (f *fakeRepo) FindByCodeOrSuffix(_ context.Context, _ string) (*Code, error) {
+	if f.lookup != nil {
+		return f.lookup, nil
+	}
 	return &Code{Code: "X", ProductID: "p1", Status: StatusDelivered}, nil
+}
+
+func (f *fakeRepo) MarkExpired(_ context.Context, productID, code string) (*Code, error) {
+	return &Code{ID: bson.NewObjectID(), Code: code, ProductID: productID, Status: StatusExpired}, nil
+}
+
+func (f *fakeRepo) FindByOrder(_ context.Context, _ string) ([]Code, error) {
+	return f.orderCodes, nil
 }
 
 func (f *fakeRepo) CodeProducts(_ context.Context) ([]ProductMeta, error) { return f.products, nil }
