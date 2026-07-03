@@ -14,10 +14,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/payments"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -57,14 +59,15 @@ type walletRefunder interface {
 // group, guarded by AdminOnly): list/detail (enriched with the customer),
 // refund, and manual completion of processing orders. Money/status mutations
 // are recorded via rec; customer-visible outcomes also notify via ntf.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, ntf notification.Notifier) {
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, rec audit.Recorder, ntf notification.Notifier) {
 	repo := NewMongoRepository(db.Collection("orders"))
 	a := &adminHandler{
-		repo:   repo,
-		users:  user.NewMongoRepository(db),
-		wallet: wallet.NewService(db),
-		rec:    rec,
-		ntf:    ntf,
+		repo:     repo,
+		users:    user.NewMongoRepository(db),
+		wallet:   wallet.NewService(db),
+		payments: payments.New(payments.Config{Provider: cfg.PaymentProvider}),
+		rec:      rec,
+		ntf:      ntf,
 	}
 
 	r.Get("/orders", a.list)
@@ -98,11 +101,12 @@ func soldByProductHandler(repo *MongoRepository) http.HandlerFunc {
 }
 
 type adminHandler struct {
-	repo   Repository
-	users  customerLookup
-	wallet walletRefunder
-	rec    audit.Recorder
-	ntf    notification.Notifier
+	repo     Repository
+	users    customerLookup
+	wallet   walletRefunder
+	payments *payments.Registry
+	rec      audit.Recorder
+	ntf      notification.Notifier
 }
 
 // list handles GET /api/admin/orders — paginated, newest first, with optional
@@ -269,20 +273,30 @@ func (a *adminHandler) doRefund(ctx context.Context, id bson.ObjectID, reason st
 		return nil, err
 	}
 
-	// Credit the money back for wallet-paid orders. Card/usdt never charged
-	// anything (mock-approved historically), so there is nothing to reverse.
-	if before.PaymentMethod == PaymentMethodWallet && before.Total > 0 {
-		if _, err := a.wallet.Refund(ctx, before.UserID, before.Total, before.ID.Hex()); err != nil {
+	// Reverse the charge: wallet orders credit the wallet ledger; card/usdt orders
+	// refund the gateway using the stored PaymentRef. A card/usdt order placed
+	// before a gateway existed carries no PaymentRef, so nothing is reversed.
+	if before.Total > 0 {
+		var reverseErr error
+		switch {
+		case before.PaymentMethod == PaymentMethodWallet:
+			_, reverseErr = a.wallet.Refund(ctx, before.UserID, before.Total, before.ID.Hex())
+		case before.PaymentRef != "" && a.payments != nil:
+			if prov, ok := a.payments.For(string(before.PaymentMethod)); ok {
+				reverseErr = prov.RefundPayment(ctx, before.PaymentRef)
+			}
+		}
+		if reverseErr != nil {
 			// Compensation: put the order back in its pre-refund state so the admin
 			// can retry. The wallet service already reversed any partial credit
 			// internally (mandatory ledger).
 			if _, rerr := a.repo.TransitionStatus(ctx, id,
 				[]OrderStatus{OrderStatusRefunded}, before.Status,
-				TimelineEvent{Status: "refund_reverted", Note: "wallet credit failed", At: time.Now().UTC()},
+				TimelineEvent{Status: "refund_reverted", Note: "charge reversal failed", At: time.Now().UTC()},
 				nil,
 			); rerr != nil {
-				slog.Error("order refund: wallet credit failed AND status revert failed — order marked refunded without credit",
-					"order", id.Hex(), "creditError", err, "revertError", rerr)
+				slog.Error("order refund: charge reversal failed AND status revert failed — order marked refunded without credit",
+					"order", id.Hex(), "reverseError", reverseErr, "revertError", rerr)
 			}
 			return nil, errRefundCreditFailed
 		}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -91,6 +92,15 @@ type Config struct {
 	SMTPUsername   string
 	SMTPPassword   string
 	SendGridAPIKey string
+
+	// PaymentProvider selects the checkout payment gateway: "mock" enables the
+	// sandbox card/usdt path; "" / "log" keeps checkout wallet-only (the default).
+	PaymentProvider string
+	// FulfillmentMock registers the reference upstream-fulfillment adapter under
+	// FulfillmentMockID so api-mode orders routed to that provider id complete
+	// (instead of parking). Off by default.
+	FulfillmentMock   bool
+	FulfillmentMockID int
 }
 
 // Load reads configuration from environment variables, applying defaults where
@@ -149,6 +159,23 @@ func Load() *Config {
 		SMTPUsername:   os.Getenv("SMTP_USERNAME"),
 		SMTPPassword:   os.Getenv("SMTP_PASSWORD"),
 		SendGridAPIKey: os.Getenv("SENDGRID_API_KEY"),
+
+		PaymentProvider:   getEnv("PAYMENT_PROVIDER", "log"),
+		FulfillmentMock:   getBool("FULFILLMENT_MOCK", false),
+		FulfillmentMockID: getInt("FULFILLMENT_MOCK_ID", 1),
+	}
+}
+
+// getBool parses a boolean from the environment ("1"/"true"/"yes", case-
+// insensitive), falling back to defaultVal when unset.
+func getBool(key string, defaultVal bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes":
+		return true
+	case "0", "false", "no":
+		return false
+	default:
+		return defaultVal
 	}
 }
 

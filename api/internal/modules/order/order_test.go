@@ -17,6 +17,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/payments"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
@@ -74,6 +75,14 @@ func (f *fakeOrderRepo) Create(_ context.Context, o *Order) error {
 func (f *fakeOrderRepo) UpdateStatus(_ context.Context, id bson.ObjectID, status OrderStatus) error {
 	if o, ok := f.byID[id]; ok {
 		o.Status = status
+		return nil
+	}
+	return apperrors.ErrNotFound
+}
+
+func (f *fakeOrderRepo) SetPaymentRef(_ context.Context, id bson.ObjectID, ref string) error {
+	if o, ok := f.byID[id]; ok {
+		o.PaymentRef = ref
 		return nil
 	}
 	return apperrors.ErrNotFound
@@ -326,7 +335,7 @@ func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc 
 		byID[p.ID.Hex()] = p
 	}
 	prodSvc := &fakeProductSvc{byID: byID}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), &fakeKycGate{approved: true}, nil, notification.Nop{})
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), payments.New(payments.Config{}), &fakeKycGate{approved: true}, nil, notification.Nop{})
 	return svc, repo
 }
 
@@ -433,6 +442,38 @@ func TestPlaceOrder_ResellerPaysLowestOfMarginAndOverride(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 7.0, order.Total) // min(retail 10, margin 8, override 7)
+}
+
+func TestPlaceOrder_CardPaymentViaGateway(t *testing.T) {
+	p := codeProduct(10, nil)
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	walletSvc := &fakeWalletSvc{balance: 0} // wallet not used for a card order
+	svc, _ := newSUT(p, codeSvc, walletSvc)
+	svc.payments = payments.New(payments.Config{Provider: "mock"})
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodCard,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusCompleted, order.Status)
+	assert.NotEmpty(t, order.PaymentRef)    // gateway transaction id stored
+	assert.Equal(t, 0.0, walletSvc.balance) // wallet untouched
+}
+
+func TestPlaceOrder_CardRejectedWhenNoGateway(t *testing.T) {
+	p := codeProduct(10, nil)
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	svc, _ := newSUT(p, codeSvc, &fakeWalletSvc{balance: 0}) // default: empty payments registry
+
+	_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		PaymentMethod: PaymentMethodCard,
+	})
+	require.Error(t, err)
+	var appErr *apperrors.AppError
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "PAYMENT_METHOD_UNAVAILABLE", appErr.Code)
 }
 
 func TestPlaceOrder_ResellerCustomPriceWins(t *testing.T) {
