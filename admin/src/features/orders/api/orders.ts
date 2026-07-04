@@ -18,6 +18,8 @@ export interface AdminOrderItem {
   fulfillmentType: FulfillmentType
   playerId?: string
   recipient?: { name: string; country: string; detail: string }
+  /** Labeled customer inputs captured at checkout (Account ID, Zone ID, Email…). */
+  fields?: { key: string; label: I18nString; value: string }[]
 }
 
 export interface OrderFulfillment {

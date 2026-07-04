@@ -130,6 +130,15 @@ class Order {
   }
 }
 
+/// One labeled customer input on an order line (e.g. Account ID, Zone ID). Only
+/// key + value are sent; the server resolves the display label from the product.
+class PlaceOrderField {
+  const PlaceOrderField({required this.key, required this.value});
+
+  final String key;
+  final String value;
+}
+
 /// A single requested order line (client sends only what it may choose — never
 /// the price or fulfillment type; the server derives those).
 class PlaceOrderLine {
@@ -139,6 +148,7 @@ class PlaceOrderLine {
     required this.qty,
     this.playerId,
     this.recipient,
+    this.fields = const [],
   });
 
   final String productId;
@@ -146,6 +156,10 @@ class PlaceOrderLine {
   final int qty;
   final String? playerId;
   final OrderRecipient? recipient;
+
+  /// Structured per-field inputs for account_credit lines (Account ID, Zone ID,
+  /// Email, …). Empty for code/transfer lines.
+  final List<PlaceOrderField> fields;
 }
 
 /// Payload for placing an order.

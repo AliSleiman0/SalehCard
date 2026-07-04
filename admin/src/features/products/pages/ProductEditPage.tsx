@@ -29,8 +29,11 @@ function toFulfillment(ff: FfKey): FulfillmentType {
 const VERIFY_PROVIDER_ID = 1
 
 // Known ID Game Checker game slugs — a datalist so ops pick a verified slug
-// without typos, while still allowing any slug the provider supports.
-const KNOWN_GAME_SLUGS = ['pubgm-global', 'dfm-garena']
+// without typos, while still allowing any slug the provider supports. Only
+// single-parameter (id-only) games belong here: multi-param games like Mobile
+// Legends (id+zone) / Genshin (id+server) can't be verified by the single-id
+// lookup, so they stay collect-only (no verification).
+const KNOWN_GAME_SLUGS = ['pubgm-global', 'dfm-garena', 'free-fire']
 
 export default function ProductEditPage() {
   const { t } = useTranslation()
@@ -127,10 +130,10 @@ export default function ProductEditPage() {
           price: parseFloat(v.price) || 0,
           ...(v.resellerPrice.trim() ? { resellerPrice: parseFloat(v.resellerPrice) || 0 } : {}),
         })),
-      // Round-trip the full array (labels edited, rest preserved) only when the
-      // product actually has input fields — omitting it leaves stored data
-      // untouched via the backend's nil-guard.
-      ...(inputFields.length ? { inputFields } : {}),
+      // Send the full array whenever the product has fields now or had them
+      // before (so removing them all clears the stored config); omit only when
+      // there were never any, leaving stored data untouched via the nil-guard.
+      ...(inputFields.length || data?.data?.inputFields?.length ? { inputFields } : {}),
       ...(verification ? { verification } : {}),
     }
   }
@@ -349,17 +352,36 @@ export default function ProductEditPage() {
             </div>
           </div>
 
-          {/* Input-field labels (labels-only editor; key/type preserved) */}
-          {inputFields.length > 0 && (
-            <div className="acard">
-              <div className="panelhead">
-                <Icon name="layers" size={17} />
-                <h3>Input field labels</h3>
+          {/* Input fields — define what the customer enters at checkout */}
+          <div className="acard">
+            <div className="panelhead">
+              <Icon name="layers" size={17} />
+              <h3>Input fields</h3>
+              <div className="ph-act">
+                <button
+                  className="abtn xs"
+                  onClick={() =>
+                    setInputFields([
+                      ...inputFields,
+                      { key: '', label: { en: '', ar: '' }, type: 'text', sensitive: false },
+                    ])
+                  }
+                >
+                  <Icon name="plus" size={13} /> Add field
+                </button>
               </div>
-              <div className="ahint" style={{ margin: '0 0 10px' }}>
-                Customer-facing prompts for this product's input fields. Edit the
-                English/Arabic wording only — the field key and type are fixed.
+            </div>
+            <div className="ahint" style={{ margin: '0 0 10px' }}>
+              Fields the customer fills at checkout (e.g. Account ID, Zone ID, Email). Values are
+              attached to the order for fulfillment. Keys must be unique. <b>Sensitive</b> fields
+              are masked and never stored on the order. <code>select</code> options aren't editable
+              here yet — use <code>text</code> for now.
+            </div>
+            {inputFields.length === 0 ? (
+              <div className="ahint" style={{ margin: 0 }}>
+                No input fields — the customer enters nothing at checkout.
               </div>
+            ) : (
               <div className="tablewrap">
                 <table className="tbl">
                   <thead>
@@ -368,46 +390,83 @@ export default function ProductEditPage() {
                       <th>Type</th>
                       <th>Label (EN)</th>
                       <th>Label (AR)</th>
+                      <th>Sensitive</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {inputFields.map((f, i) => (
-                      <tr key={f.key || i}>
-                        <td><span className="muted">{f.key}</span></td>
-                        <td><span className="muted">{f.type}</span></td>
-                        <td>
-                          <input
-                            className="afield"
-                            style={{ padding: '7px 10px', minWidth: 160 }}
-                            value={f.label.en}
-                            dir="ltr"
-                            onChange={(e) => {
-                              const next = [...inputFields]
-                              next[i] = { ...f, label: { ...f.label, en: e.target.value } }
-                              setInputFields(next)
-                            }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="afield"
-                            style={{ padding: '7px 10px', minWidth: 160 }}
-                            value={f.label.ar}
-                            dir="rtl"
-                            onChange={(e) => {
-                              const next = [...inputFields]
-                              next[i] = { ...f, label: { ...f.label, ar: e.target.value } }
-                              setInputFields(next)
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    ))}
+                    {inputFields.map((f, i) => {
+                      const patch = (u: Partial<InputField>) => {
+                        const next = [...inputFields]
+                        next[i] = { ...f, ...u }
+                        setInputFields(next)
+                      }
+                      return (
+                        <tr key={i}>
+                          <td>
+                            <input
+                              className="afield"
+                              style={{ padding: '7px 10px', width: 120 }}
+                              value={f.key}
+                              placeholder="accountId"
+                              dir="ltr"
+                              onChange={(e) => patch({ key: e.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <select
+                              className="select"
+                              value={f.type}
+                              onChange={(e) => patch({ type: e.target.value as InputField['type'] })}
+                            >
+                              {(['text', 'select', 'amount', 'quantity'] as const).map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              className="afield"
+                              style={{ padding: '7px 10px', minWidth: 150 }}
+                              value={f.label.en}
+                              dir="ltr"
+                              onChange={(e) => patch({ label: { ...f.label, en: e.target.value } })}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="afield"
+                              style={{ padding: '7px 10px', minWidth: 150 }}
+                              value={f.label.ar}
+                              dir="rtl"
+                              onChange={(e) => patch({ label: { ...f.label, ar: e.target.value } })}
+                            />
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={!!f.sensitive}
+                              onChange={(e) => patch({ sensitive: e.target.checked })}
+                            />
+                          </td>
+                          <td>
+                            <span
+                              className="iact danger"
+                              onClick={() => setInputFields(inputFields.filter((_, j) => j !== i))}
+                            >
+                              <Icon name="trash" size={15} />
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Fulfillment-specific block */}
           {ff === 'code' && (
