@@ -113,6 +113,43 @@ func TestBuildInputFields_Sensitivity(t *testing.T) {
 	}
 }
 
+func TestBuildInputFields_NormalizesIDLabel(t *testing.T) {
+	en := []legacy.Require{
+		{ID: 1, Name: "field_1", Question: "ايدي", Type: "text"},        // Arabic ID → normalized
+		{ID: 2, Name: "player id", Question: "PLAYER ID", Type: "text"}, // English ID → normalized
+		{ID: 3, Name: "email", Question: "Enter Your Email", Type: "text"},
+		{ID: 4, Name: "email-id", Question: "Please Enter Email ID", Type: "text"}, // ID word, but email → keep
+		{ID: 5, Name: "amount", Question: "Enter Amount", Type: "amount"},
+	}
+	ar := []legacy.Require{
+		{ID: 1, Name: "field_1", Question: "ايدي"},
+		{ID: 2, Name: "player id", Question: "ايدي اللاعب"},
+		{ID: 3, Name: "email", Question: "ادخل البريد"},
+		{ID: 4, Name: "email-id", Question: "الرجاء ادخال ايميلك للتفعيل"},
+		{ID: 5, Name: "amount", Question: "ادخل المبلغ"},
+	}
+	fields, _ := BuildInputFields(en, ar)
+
+	id := func(f schema.InputField) bool {
+		return f.Label.En != nil && *f.Label.En == "ID" && f.Label.Ar != nil && *f.Label.Ar == "ID"
+	}
+	if !id(fields[0]) {
+		t.Fatalf("Arabic ID field not normalized: %+v", fields[0].Label)
+	}
+	if !id(fields[1]) {
+		t.Fatalf("English ID field not normalized: %+v", fields[1].Label)
+	}
+	if id(fields[2]) {
+		t.Fatalf("email field wrongly normalized to ID: %+v", fields[2].Label)
+	}
+	if id(fields[3]) {
+		t.Fatalf("\"Email ID\" wrongly collapsed to ID: %+v", fields[3].Label)
+	}
+	if id(fields[4]) {
+		t.Fatalf("non-text amount field must not be touched: %+v", fields[4].Label)
+	}
+}
+
 func TestBuildInputFields_Constraints(t *testing.T) {
 	reqs := []legacy.Require{
 		{ID: 1, Name: "amount", Question: "Enter Amount", Type: "amount", TypeValue: json.RawMessage(`{"min":"10","max":5000}`)},
