@@ -493,6 +493,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roleLabel => 'Role';
 
   @override
+  String get verificationTitle => 'Verification';
+
+  @override
   String get savedPlayerIds => 'Saved player IDs';
 
   @override
@@ -504,6 +507,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addPlayerId => 'Add';
+
+  @override
+  String get playerIdLabelHint => 'Label (e.g. PUBG main)';
 
   @override
   String get playerIdHint => 'Enter a player ID';

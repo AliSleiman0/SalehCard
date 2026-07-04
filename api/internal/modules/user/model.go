@@ -1,6 +1,7 @@
 package user
 
 import (
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -43,9 +44,9 @@ type User struct {
 	// ResellerTier is the name of the reseller tier (Bronze/Silver/Gold) this
 	// account belongs to. Empty for non-resellers and unassigned resellers.
 	ResellerTier   string        `bson:"resellerTier,omitempty" json:"resellerTier,omitempty"`
-	Locale         string        `bson:"locale"        json:"locale"`
-	SavedPlayerIDs []string      `bson:"savedPlayerIds" json:"savedPlayerIds"`
-	WalletBalance  float64       `bson:"walletBalance" json:"walletBalance"`
+	Locale         string          `bson:"locale"        json:"locale"`
+	SavedPlayerIDs []SavedPlayerID `bson:"savedPlayerIds" json:"savedPlayerIds"`
+	WalletBalance  float64         `bson:"walletBalance" json:"walletBalance"`
 	LoyaltyPoints  int           `bson:"loyaltyPoints" json:"loyaltyPoints"`
 	CreatedAt      time.Time     `bson:"createdAt"     json:"createdAt"`
 	UpdatedAt      time.Time     `bson:"updatedAt"     json:"updatedAt"`
@@ -56,6 +57,44 @@ type User struct {
 	// DeletedAt stamps when the account was soft-deleted (anonymized). Nil for
 	// live accounts.
 	DeletedAt *time.Time `bson:"deletedAt,omitempty" json:"deletedAt,omitempty"`
+}
+
+// SavedPlayerID is a player/account ID the customer has saved for faster
+// checkout, tagged with a human label (e.g. "PUBG main"). Both fields are
+// required when written.
+type SavedPlayerID struct {
+	Label string `bson:"label" json:"label"`
+	Value string `bson:"value" json:"value"`
+}
+
+// UnmarshalBSONValue decodes a saved player ID tolerantly: legacy documents
+// stored the list as bare strings (before labels existed), so a BSON string is
+// accepted and mirrored into both Label and Value. New documents decode from
+// the embedded {label, value} document. Legacy rows are rewritten in the new
+// shape on the user's next profile save.
+func (p *SavedPlayerID) UnmarshalBSONValue(typ byte, data []byte) error {
+	rv := bson.RawValue{Type: bson.Type(typ), Value: data}
+	switch rv.Type {
+	case bson.TypeString:
+		s := rv.StringValue()
+		p.Label, p.Value = s, s
+		return nil
+	case bson.TypeEmbeddedDocument:
+		// Decode into an alias so this method is not called recursively.
+		var doc struct {
+			Label string `bson:"label"`
+			Value string `bson:"value"`
+		}
+		if err := rv.Unmarshal(&doc); err != nil {
+			return err
+		}
+		p.Label, p.Value = doc.Label, doc.Value
+		return nil
+	case bson.TypeNull, bson.TypeUndefined:
+		return nil
+	default:
+		return fmt.Errorf("user: cannot decode BSON %s into SavedPlayerID", rv.Type)
+	}
 }
 
 // OtpCode is a pending one-time passcode for a phone number. Only the SHA-256
@@ -109,8 +148,8 @@ type PhoneLoginInput struct {
 
 // UpdateProfileInput carries the fields a user may change on their own account.
 type UpdateProfileInput struct {
-	Locale         *string  `json:"locale,omitempty"`
-	SavedPlayerIDs []string `json:"savedPlayerIds,omitempty"`
+	Locale         *string         `json:"locale,omitempty"`
+	SavedPlayerIDs []SavedPlayerID `json:"savedPlayerIds,omitempty"`
 }
 
 // RefreshToken is a server-side record of an issued refresh token. Only the

@@ -1004,6 +1004,12 @@ abstract class AppLocalizations {
   /// **'Role'**
   String get roleLabel;
 
+  /// No description provided for @verificationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification'**
+  String get verificationTitle;
+
   /// No description provided for @savedPlayerIds.
   ///
   /// In en, this message translates to:
@@ -1027,6 +1033,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add'**
   String get addPlayerId;
+
+  /// No description provided for @playerIdLabelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Label (e.g. PUBG main)'**
+  String get playerIdLabelHint;
 
   /// No description provided for @playerIdHint.
   ///

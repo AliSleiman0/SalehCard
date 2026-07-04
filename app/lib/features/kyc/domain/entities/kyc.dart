@@ -14,6 +14,14 @@ extension KycDocumentTypeWire on KycDocumentType {
       };
 }
 
+/// Parses the API's `documentType` string into a [KycDocumentType] (defaults to
+/// [KycDocumentType.idCard]).
+KycDocumentType kycDocumentTypeFromWire(String? value) => switch (value) {
+      'passport' => KycDocumentType.passport,
+      'license' => KycDocumentType.license,
+      _ => KycDocumentType.idCard,
+    };
+
 /// Parses the API's `status` string into a [KycStatus] (defaults to unverified).
 KycStatus kycStatusFromWire(String? value) => switch (value) {
       'pending' => KycStatus.pending,
@@ -45,11 +53,40 @@ class KycSubmission {
   final String documentNumber;
 }
 
+/// The stored details of a customer's KYC submission, echoed back by
+/// `GET /kyc/me` so the profile can display what was submitted. Null until the
+/// customer has filed a submission.
+class KycSubmissionDetails {
+  const KycSubmissionDetails({
+    required this.fullName,
+    required this.dateOfBirth,
+    required this.placeOfBirth,
+    required this.placeOfResidence,
+    required this.documentType,
+    required this.documentNumber,
+  });
+
+  final String fullName;
+
+  /// ISO `yyyy-mm-dd`.
+  final String dateOfBirth;
+  final String placeOfBirth;
+  final String placeOfResidence;
+  final KycDocumentType documentType;
+  final String documentNumber;
+}
+
 /// The customer's derived KYC profile. [rejectionReason] is present only when
-/// [status] is [KycStatus.rejected].
+/// [status] is [KycStatus.rejected]; [submission] carries the submitted details
+/// once the customer has filed one (used to display them on the profile).
 class KycProfile {
-  const KycProfile({required this.status, this.rejectionReason});
+  const KycProfile({
+    required this.status,
+    this.rejectionReason,
+    this.submission,
+  });
 
   final KycStatus status;
   final String? rejectionReason;
+  final KycSubmissionDetails? submission;
 }

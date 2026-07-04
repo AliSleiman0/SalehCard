@@ -489,6 +489,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get roleLabel => 'الدور';
 
   @override
+  String get verificationTitle => 'التحقق';
+
+  @override
   String get savedPlayerIds => 'معرّفات اللاعبين المحفوظة';
 
   @override
@@ -500,6 +503,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get addPlayerId => 'إضافة';
+
+  @override
+  String get playerIdLabelHint => 'التسمية (مثال: PUBG الأساسي)';
 
   @override
   String get playerIdHint => 'أدخل معرّف اللاعب';

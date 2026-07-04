@@ -32,6 +32,21 @@ class KycRemoteDataSource {
     return KycProfile(
       status: kycStatusFromWire(json['status'] as String?),
       rejectionReason: (reason != null && reason.isNotEmpty) ? reason : null,
+      submission: _submissionFromJson(json['submission']),
+    );
+  }
+
+  /// Parses the embedded `submission` object the API returns once a submission
+  /// exists (carrying the personal details the customer filed). Null otherwise.
+  KycSubmissionDetails? _submissionFromJson(dynamic raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    return KycSubmissionDetails(
+      fullName: (raw['fullName'] as String?) ?? '',
+      dateOfBirth: (raw['dateOfBirth'] as String?) ?? '',
+      placeOfBirth: (raw['placeOfBirth'] as String?) ?? '',
+      placeOfResidence: (raw['placeOfResidence'] as String?) ?? '',
+      documentType: kycDocumentTypeFromWire(raw['documentType'] as String?),
+      documentNumber: (raw['documentNumber'] as String?) ?? '',
     );
   }
 }

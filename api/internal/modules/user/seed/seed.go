@@ -68,7 +68,7 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 			Role:           a.Role,
 			Status:         a.Status,
 			Locale:         "en",
-			SavedPlayerIDs: []string{},
+			SavedPlayerIDs: []user.SavedPlayerID{},
 			WalletBalance:  a.Balance,
 			LoyaltyPoints:  a.Loyalty,
 			CreatedAt:      created,

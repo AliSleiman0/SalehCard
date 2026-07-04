@@ -17,7 +17,7 @@ UserDto _$UserDtoFromJson(Map<String, dynamic> json) => UserDto(
   loyaltyPoints: (json['loyaltyPoints'] as num?)?.toInt() ?? 0,
   savedPlayerIds:
       (json['savedPlayerIds'] as List<dynamic>?)
-          ?.map((e) => e as String)
+          ?.map((e) => SavedPlayerIdDto.fromJson(e as Map<String, dynamic>))
           .toList() ??
       const [],
 );

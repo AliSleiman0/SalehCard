@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/failure.dart';
 import '../../../core/network/providers.dart';
+import '../../auth/domain/entities/saved_player_id.dart';
 import '../../auth/domain/entities/user.dart';
 import '../../auth/presentation/controllers/auth_controller.dart';
 import '../data/datasources/profile_remote_data_source.dart';
@@ -50,7 +51,7 @@ class ProfileController extends Notifier<ProfileEditState> {
   /// Persists [savedPlayerIds] via `PATCH /users/me`. Returns `true` on success
   /// (and invalidates [profileProvider] + syncs the auth session user so
   /// Home/Wallet stay consistent), or `false` on failure (surfaced via [state]).
-  Future<bool> save(List<String> savedPlayerIds) async {
+  Future<bool> save(List<SavedPlayerId> savedPlayerIds) async {
     if (state.submitting) return false;
     state = const ProfileEditState(submitting: true);
     final result = await ref

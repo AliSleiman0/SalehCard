@@ -414,11 +414,40 @@ func TestUpdateProfile(t *testing.T) {
 	tr := "tr"
 	updated, err := svc.UpdateProfile(context.Background(), reg.User.ID, UpdateProfileInput{
 		Locale:         &tr,
-		SavedPlayerIDs: []string{"player-1"},
+		SavedPlayerIDs: []SavedPlayerID{{Label: " PUBG main ", Value: " player-1 "}},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "tr", updated.Locale)
-	assert.Equal(t, []string{"player-1"}, updated.SavedPlayerIDs)
+	// Label and value are trimmed on save.
+	assert.Equal(t, []SavedPlayerID{{Label: "PUBG main", Value: "player-1"}}, updated.SavedPlayerIDs)
+
+	// A saved player ID missing a label (or value) is rejected.
+	_, err = svc.UpdateProfile(context.Background(), reg.User.ID, UpdateProfileInput{
+		SavedPlayerIDs: []SavedPlayerID{{Label: "", Value: "player-2"}},
+	})
+	assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+}
+
+// TestSavedPlayerIDLegacyDecode verifies the tolerant BSON decoder: documents
+// written before labels existed stored the list as bare strings, and must still
+// decode (mirrored into both Label and Value) alongside the new document shape.
+func TestSavedPlayerIDLegacyDecode(t *testing.T) {
+	// A mixed array: one legacy string entry, one new {label, value} document.
+	doc := bson.D{{Key: "savedPlayerIds", Value: bson.A{
+		"legacy-123",
+		bson.D{{Key: "label", Value: "PUBG main"}, {Key: "value", Value: "999"}},
+	}}}
+	raw, err := bson.Marshal(doc)
+	require.NoError(t, err)
+
+	var out struct {
+		SavedPlayerIDs []SavedPlayerID `bson:"savedPlayerIds"`
+	}
+	require.NoError(t, bson.Unmarshal(raw, &out))
+	assert.Equal(t, []SavedPlayerID{
+		{Label: "legacy-123", Value: "legacy-123"},
+		{Label: "PUBG main", Value: "999"},
+	}, out.SavedPlayerIDs)
 }
 
 // otpServiceWith builds a service with explicit OTP fakes for OTP-flow tests.
