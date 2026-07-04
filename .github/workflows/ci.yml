@@ -1,16 +1,14 @@
 name: CI
 
-# Build / lint / test gates. Runs on PRs and on pushes to non-main branches.
-# Deploys live in deploy.yml (push to main only). CI never touches production.
+# Build / lint / test gates. Runs only on push/merge to main.
+# Deploys live in deploy.yml (also push to main). CI never touches production.
 on:
-  pull_request:
   push:
-    branches-ignore:
+    branches:
       - main
 
 permissions:
   contents: read
-  pull-requests: read   # dorny/paths-filter reads changed files via the API on pull_request events
 
 concurrency:
   group: ci-${{ github.ref }}
