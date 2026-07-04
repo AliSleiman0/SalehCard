@@ -51,6 +51,14 @@ export interface InputField {
   constraints?: { min?: number; max?: number; options?: string[] }
 }
 
+// Purchase-time account-ID verification (check_name). `app` is the provider's
+// game slug (e.g. "pubgm-global"); `provider` is the numeric verification-provider
+// id. Mirrors the Go `Verification`. Absent = the product needs no verification.
+export interface Verification {
+  provider: number
+  app: string
+}
+
 export interface Product {
   id: string
   title: I18nString
@@ -63,6 +71,7 @@ export interface Product {
   available: boolean
   ratings: RatingsSummary
   inputFields?: InputField[]
+  verification?: Verification
   createdAt: string
   updatedAt: string
 }

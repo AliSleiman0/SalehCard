@@ -23,6 +23,15 @@ function toFulfillment(ff: FfKey): FulfillmentType {
   return ff === 'credit' ? 'account_credit' : ff === 'transfer' ? 'transfer' : 'code'
 }
 
+// The verification-provider id stored on a product. One provider today (RapidAPI
+// ID Game Checker); the active adapter is chosen globally by the API's
+// IDCHECK_PROVIDER, so this is just the stored label.
+const VERIFY_PROVIDER_ID = 1
+
+// Known ID Game Checker game slugs — a datalist so ops pick a verified slug
+// without typos, while still allowing any slug the provider supports.
+const KNOWN_GAME_SLUGS = ['pubgm-global', 'dfm-garena']
+
 export default function ProductEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -48,6 +57,9 @@ export default function ProductEditPage() {
   // Input-field specs are edited labels-only; everything else is preserved as
   // loaded so a save never mangles legacy fulfillment config.
   const [inputFields, setInputFields] = useState<InputField[]>([])
+  // Purchase-time ID verification (check_name): toggle + provider game slug.
+  const [verifyEnabled, setVerifyEnabled] = useState(false)
+  const [verifyApp, setVerifyApp] = useState('')
 
   // Populate from the loaded product when editing.
   useEffect(() => {
@@ -69,6 +81,8 @@ export default function ProductEditPage() {
         : [{ denomination: '', price: '', resellerPrice: '' }]
     )
     setInputFields(p.inputFields ?? [])
+    setVerifyEnabled(!!p.verification)
+    setVerifyApp(p.verification?.app ?? '')
   }, [data])
 
   // Default a brand-new product to the first real category once the list loads.
@@ -87,26 +101,39 @@ export default function ProductEditPage() {
   const pending = create.isPending || update.isPending
   const error = create.error || update.error
 
-  const buildInput = () => ({
-    title,
-    description,
-    category,
-    images: data?.data?.images ?? [],
-    fulfillmentType: toFulfillment(ff),
-    available: active,
-    stock,
-    variants: variants
-      .filter((v) => v.denomination.trim() && v.price.trim())
-      .map((v) => ({
-        denomination: v.denomination,
-        price: parseFloat(v.price) || 0,
-        ...(v.resellerPrice.trim() ? { resellerPrice: parseFloat(v.resellerPrice) || 0 } : {}),
-      })),
-    // Round-trip the full array (labels edited, rest preserved) only when the
-    // product actually has input fields — omitting it leaves stored data
-    // untouched via the backend's nil-guard.
-    ...(inputFields.length ? { inputFields } : {}),
-  })
+  const buildInput = () => {
+    // Verification: send the config when enabled with a slug; send the clear
+    // sentinel ({provider:0, app:''}) when disabling a product that had it; omit
+    // otherwise so the backend's nil-guard leaves stored data untouched.
+    const hadVerification = !!data?.data?.verification
+    const verification =
+      verifyEnabled && verifyApp.trim()
+        ? { provider: VERIFY_PROVIDER_ID, app: verifyApp.trim() }
+        : hadVerification
+          ? { provider: 0, app: '' }
+          : undefined
+    return {
+      title,
+      description,
+      category,
+      images: data?.data?.images ?? [],
+      fulfillmentType: toFulfillment(ff),
+      available: active,
+      stock,
+      variants: variants
+        .filter((v) => v.denomination.trim() && v.price.trim())
+        .map((v) => ({
+          denomination: v.denomination,
+          price: parseFloat(v.price) || 0,
+          ...(v.resellerPrice.trim() ? { resellerPrice: parseFloat(v.resellerPrice) || 0 } : {}),
+        })),
+      // Round-trip the full array (labels edited, rest preserved) only when the
+      // product actually has input fields — omitting it leaves stored data
+      // untouched via the backend's nil-guard.
+      ...(inputFields.length ? { inputFields } : {}),
+      ...(verification ? { verification } : {}),
+    }
+  }
 
   const onSave = () => {
     const input = buildInput()
@@ -437,6 +464,48 @@ export default function ProductEditPage() {
               </div>
             </div>
           )}
+
+          {/* Purchase-time ID verification (check_name) */}
+          <div className="acard pad">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Icon name="shield" size={17} />
+                <h3 style={{ fontSize: 15, fontWeight: 800 }}>Purchase-time ID verification</h3>
+              </div>
+              <Toggle on={verifyEnabled} onClick={() => setVerifyEnabled(!verifyEnabled)} />
+            </div>
+            <div className="ahint" style={{ marginTop: 0 }}>
+              When on, customers enter their game ID on the product page and must see the resolved
+              nickname before they can buy — catching wrong IDs before payment. Best for
+              account-credit top-ups (PUBG, Delta Force, …).
+            </div>
+            {verifyEnabled && (
+              <div style={{ marginTop: 14 }}>
+                <label className="alabel">Game (provider slug)</label>
+                <input
+                  className="afield"
+                  list="game-slugs"
+                  value={verifyApp}
+                  onChange={(e) => setVerifyApp(e.target.value)}
+                  placeholder="e.g. pubgm-global"
+                />
+                <datalist id="game-slugs">
+                  {KNOWN_GAME_SLUGS.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+                <div className="ahint">
+                  Must exactly match the ID Game Checker slug for this game (e.g. <b>pubgm-global</b>,{' '}
+                  <b>dfm-garena</b>). Add a text input field for the player ID too, so it shows at checkout.
+                </div>
+                {!verifyApp.trim() && (
+                  <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>
+                    Enter a game slug, or turn verification off.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* SIDE */}

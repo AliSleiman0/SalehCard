@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { ApiResponse, PaginationMeta, Product, FulfillmentType, InputField } from '@/types'
+import type { ApiResponse, PaginationMeta, Product, FulfillmentType, InputField, Verification } from '@/types'
 
 export interface ProductListParams {
   page?: number
@@ -21,6 +21,9 @@ export interface ProductInput {
   stock: number
   available: boolean
   inputFields?: InputField[]
+  // Purchase-time ID verification. A non-empty `app` enables it; `{provider:0,
+  // app:''}` clears it (disable). Omitted = leave unchanged.
+  verification?: Verification
 }
 
 const ADMIN = '/api/admin/products'

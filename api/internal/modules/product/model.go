@@ -262,6 +262,10 @@ type UpdateProductInput struct {
 	Available           *bool            `json:"available,omitempty"`
 	Ratings             *RatingsSummary  `json:"ratings,omitempty"`
 	InputFields         []InputField     `json:"inputFields,omitempty"`
+	// Verification configures the check_name ID-verification hook. A non-nil value
+	// with a non-empty App sets it; a non-nil value with an empty App clears it
+	// (disables verification). Nil leaves it unchanged.
+	Verification *Verification `json:"verification,omitempty"`
 }
 
 // ListFilter holds the optional query filters for listing products.
