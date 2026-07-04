@@ -8,13 +8,14 @@ import (
 )
 
 // RegisterRoutes wires up the product module and mounts all routes onto r.
-func RegisterRoutes(r chi.Router, db *mongo.Database) {
+// offers may be nil (disables live-offer price enrichment on catalog reads).
+func RegisterRoutes(r chi.Router, db *mongo.Database, offers OfferLookup) {
 	repo := NewMongoRepository(db)
 
 	// Best-effort index creation at startup; log or handle errors in production.
 	_ = EnsureIndexes(context.Background(), db)
 
-	svc := NewProductService(repo)
+	svc := NewProductService(repo, WithOffers(offers))
 	h := NewHandler(svc)
 
 	// Read-only catalog. Mutations live exclusively under /api/admin/products

@@ -46,5 +46,53 @@ void main() {
       expect(product.available, isFalse);
       expect(product.stock, 0);
     });
+
+    test('parses live-offer enrichment (variant offerPrice + product offer)', () {
+      final dto = ProductDto.fromJson(<String, dynamic>{
+        'id': 'p3',
+        'variants': [
+          {'id': 'v1', 'denomination': 'USD 10', 'price': 10, 'offerPrice': 7},
+          {'id': 'v2', 'denomination': 'USD 20', 'price': 20, 'offerPrice': 14},
+        ],
+        'available': true,
+        'offer': {
+          'discountType': 'percent',
+          'discountValue': 30,
+          'originalFromPrice': 10,
+          'offerFromPrice': 7,
+        },
+      });
+
+      final product = dto.toEntity();
+
+      expect(product.hasOffer, isTrue);
+      expect(product.offer!.discountLabel, '-30%');
+      expect(product.offerFromPrice, 7.0);
+      expect(product.fromPrice, 10.0);
+      // per-variant discounted prices flow through
+      expect(product.variants.first.offerPrice, 7.0);
+      expect(product.variants.first.effectivePrice, 7.0);
+      expect(product.variants.first.hasOffer, isTrue);
+      expect(product.variants[1].offerPrice, 14.0);
+    });
+
+    test('no offer block leaves product/variants at base price', () {
+      final dto = ProductDto.fromJson(<String, dynamic>{
+        'id': 'p4',
+        'variants': [
+          {'id': 'v1', 'denomination': 'USD 5', 'price': 5},
+        ],
+        'available': true,
+      });
+
+      final product = dto.toEntity();
+
+      expect(product.hasOffer, isFalse);
+      expect(product.offer, isNull);
+      expect(product.offerFromPrice, isNull);
+      expect(product.variants.first.offerPrice, isNull);
+      expect(product.variants.first.effectivePrice, 5.0);
+      expect(product.variants.first.hasOffer, isFalse);
+    });
   });
 }

@@ -59,6 +59,21 @@ type Variant struct {
 	Denomination  string        `bson:"denomination"            json:"denomination"`
 	Price         float64       `bson:"price"                   json:"price"`
 	ResellerPrice *float64      `bson:"resellerPrice,omitempty" json:"resellerPrice,omitempty"`
+	// OfferPrice is the discounted unit price when a live offer applies. It is
+	// transient (never persisted) and only set on catalog reads. A pointer, not
+	// a bare float, so a legitimate 0 sale price still serializes.
+	OfferPrice *float64 `bson:"-" json:"offerPrice,omitempty"`
+}
+
+// OfferInfo is the product-level live-offer summary attached to catalog reads.
+// It is transient (never persisted). Field names match the GET /api/v1/offers
+// payload so clients can reuse one parser shape.
+type OfferInfo struct {
+	DiscountType      string     `json:"discountType"`
+	DiscountValue     float64    `json:"discountValue"`
+	OriginalFromPrice float64    `json:"originalFromPrice"`
+	OfferFromPrice    float64    `json:"offerFromPrice"`
+	EndsAt            *time.Time `json:"endsAt,omitempty"`
 }
 
 // RatingsSummary holds the aggregated rating data for a product.
@@ -182,6 +197,9 @@ type Product struct {
 	Ratings   RatingsSummary `bson:"ratings"   json:"ratings"`
 	CreatedAt time.Time      `bson:"createdAt" json:"createdAt"`
 	UpdatedAt time.Time      `bson:"updatedAt" json:"updatedAt"`
+	// Offer is the live sale on this product, if any. Transient (never persisted);
+	// set only on catalog reads by the product service's offer enrichment.
+	Offer *OfferInfo `bson:"-" json:"offer,omitempty"`
 }
 
 // UpsertProductInput is the loader-only input for the catalog migration

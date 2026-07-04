@@ -7,6 +7,7 @@ import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/discount_price.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/money_row.dart';
 import '../../../../core/widgets/product_chip.dart';
@@ -186,11 +187,18 @@ class _CartRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _MiniStepper(qty: item.qty, onInc: onInc, onDec: onDec),
-                    Text(formatUsd(item.lineTotal),
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: colors.text)),
+                    if (item.hasOffer)
+                      StruckPriceRow(
+                        original: item.originalLineTotal,
+                        offer: item.lineTotal,
+                        offerSize: 16,
+                      )
+                    else
+                      Text(formatUsd(item.lineTotal),
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: colors.text)),
                   ],
                 ),
               ],

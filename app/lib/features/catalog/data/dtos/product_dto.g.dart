@@ -10,6 +10,7 @@ VariantDto _$VariantDtoFromJson(Map<String, dynamic> json) => VariantDto(
   id: json['id'] as String,
   denomination: json['denomination'] as String? ?? '',
   price: (json['price'] as num?)?.toDouble() ?? 0,
+  offerPrice: (json['offerPrice'] as num?)?.toDouble(),
 );
 
 Map<String, dynamic> _$VariantDtoToJson(VariantDto instance) =>
@@ -17,6 +18,27 @@ Map<String, dynamic> _$VariantDtoToJson(VariantDto instance) =>
       'id': instance.id,
       'denomination': instance.denomination,
       'price': instance.price,
+      'offerPrice': instance.offerPrice,
+    };
+
+ProductOfferDto _$ProductOfferDtoFromJson(Map<String, dynamic> json) =>
+    ProductOfferDto(
+      discountType: json['discountType'] as String? ?? 'percent',
+      discountValue: (json['discountValue'] as num?)?.toDouble() ?? 0,
+      originalFromPrice: (json['originalFromPrice'] as num?)?.toDouble() ?? 0,
+      offerFromPrice: (json['offerFromPrice'] as num?)?.toDouble() ?? 0,
+      endsAt: json['endsAt'] == null
+          ? null
+          : DateTime.parse(json['endsAt'] as String),
+    );
+
+Map<String, dynamic> _$ProductOfferDtoToJson(ProductOfferDto instance) =>
+    <String, dynamic>{
+      'discountType': instance.discountType,
+      'discountValue': instance.discountValue,
+      'originalFromPrice': instance.originalFromPrice,
+      'offerFromPrice': instance.offerFromPrice,
+      'endsAt': instance.endsAt?.toIso8601String(),
     };
 
 RatingsDto _$RatingsDtoFromJson(Map<String, dynamic> json) => RatingsDto(
@@ -84,6 +106,9 @@ ProductDto _$ProductDtoFromJson(Map<String, dynamic> json) => ProductDto(
   ratings: json['ratings'] == null
       ? null
       : RatingsDto.fromJson(json['ratings'] as Map<String, dynamic>),
+  offer: json['offer'] == null
+      ? null
+      : ProductOfferDto.fromJson(json['offer'] as Map<String, dynamic>),
 );
 
 Map<String, dynamic> _$ProductDtoToJson(ProductDto instance) =>
@@ -98,4 +123,5 @@ Map<String, dynamic> _$ProductDtoToJson(ProductDto instance) =>
       'fulfillmentType': instance.fulfillmentType,
       'inputFields': instance.inputFields?.map((e) => e.toJson()).toList(),
       'ratings': instance.ratings?.toJson(),
+      'offer': instance.offer?.toJson(),
     };

@@ -8,6 +8,7 @@ import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
+import '../../../../core/widgets/discount_price.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../cart/domain/entities/cart_item.dart';
 import '../../../cart/presentation/controllers/cart_controller.dart';
@@ -88,7 +89,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     final hasVariants = variants.isNotEmpty;
     final index = _variantIndex.clamp(0, hasVariants ? variants.length - 1 : 0);
     final selected = hasVariants ? variants[index] : null;
-    final unitPrice = selected?.price ?? product.fromPrice ?? 0;
+    final unitPrice =
+        selected?.effectivePrice ?? product.offerFromPrice ?? product.fromPrice ?? 0;
     final total = unitPrice * _qty;
     final tint = ProductChip.tintFor(product.id.hashCode.abs());
     final title = product.title.resolve(localeCode);
@@ -139,26 +141,47 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ],
               if (product.fromPrice != null) ...[
                 const SizedBox(height: 12),
-                Text.rich(
-                  TextSpan(
-                    text: '${l10n.fromLabel} ',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: colors.textDim,
-                    ),
+                if (product.hasOffer)
+                  Row(
                     children: [
-                      TextSpan(
-                        text: formatUsd(product.fromPrice!),
+                      Text(
+                        '${l10n.fromLabel} ',
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: colors.text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: colors.textDim,
                         ),
                       ),
+                      StruckPriceRow(
+                        original: product.fromPrice!,
+                        offer: product.offerFromPrice ?? product.fromPrice!,
+                        offerSize: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      DiscountBadge(label: product.offer!.discountLabel),
                     ],
+                  )
+                else
+                  Text.rich(
+                    TextSpan(
+                      text: '${l10n.fromLabel} ',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: colors.textDim,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: formatUsd(product.fromPrice!),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: colors.text,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
               if (hasVariants) ...[
                 const SizedBox(height: 22),
@@ -274,7 +297,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             title: product.title,
             category: product.category,
             variantLabel: variant.denomination,
-            price: variant.price,
+            price: variant.effectivePrice,
+            originalPrice: variant.hasOffer ? variant.price : null,
             qty: _qty,
             fulfillmentType: product.fulfillmentType,
             playerId: playerId,
@@ -434,16 +458,44 @@ class _DenomChips extends StatelessWidget {
                   width: i == selectedIndex ? 2 : 1,
                 ),
               ),
-              child: Text(
-                formatUsd(variants[i].price),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: i == selectedIndex ? AppTokens.cta : colors.textDim,
-                ),
-              ),
+              child: _chipPrice(variants[i], i == selectedIndex, colors),
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _chipPrice(Variant v, bool selected, AppColors colors) {
+    final priceColor = selected ? AppTokens.cta : colors.textDim;
+    if (!v.hasOffer) {
+      return Text(
+        formatUsd(v.price),
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+          color: priceColor,
+        ),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          formatUsd(v.price),
+          style: TextStyle(
+            fontSize: 11,
+            color: colors.textFaint,
+            decoration: TextDecoration.lineThrough,
+          ),
+        ),
+        Text(
+          formatUsd(v.offerPrice!),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: priceColor,
+          ),
+        ),
       ],
     );
   }

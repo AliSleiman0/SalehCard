@@ -3,13 +3,16 @@ package product_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -182,6 +185,115 @@ func TestProductService_List(t *testing.T) {
 			assert.Equal(t, tc.wantTotal, total)
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Offer-enrichment tests
+// ---------------------------------------------------------------------------
+
+// fakeOfferLookup implements product.OfferLookup for enrichment tests.
+type fakeOfferLookup struct {
+	discounts map[string]product.Discount
+	err       error
+}
+
+func (f *fakeOfferLookup) LiveDiscountsFor(_ context.Context, _ []string, _ time.Time) (map[string]product.Discount, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.discounts, nil
+}
+
+func productWithVariants(id bson.ObjectID, prices ...float64) product.Product {
+	vs := make([]product.Variant, len(prices))
+	for i, p := range prices {
+		vs[i] = product.Variant{ID: bson.NewObjectID(), Price: p}
+	}
+	return product.Product{ID: id, Variants: vs}
+}
+
+func TestProductService_FindByID_AppliesLiveOffer(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 10, 20)}}
+	offers := &fakeOfferLookup{discounts: map[string]product.Discount{
+		id.Hex(): {Type: "percent", Value: 30},
+	}}
+	svc := product.NewProductService(repo, product.WithOffers(offers))
+
+	p, err := svc.FindByID(context.Background(), id.Hex())
+	require.NoError(t, err)
+
+	require.NotNil(t, p.Offer)
+	assert.Equal(t, "percent", p.Offer.DiscountType)
+	assert.Equal(t, 30.0, p.Offer.DiscountValue)
+	assert.Equal(t, 10.0, p.Offer.OriginalFromPrice) // lowest variant price
+	assert.Equal(t, 7.0, p.Offer.OfferFromPrice)     // 30% off 10
+
+	require.NotNil(t, p.Variants[0].OfferPrice)
+	assert.Equal(t, 7.0, *p.Variants[0].OfferPrice)
+	require.NotNil(t, p.Variants[1].OfferPrice)
+	assert.Equal(t, 14.0, *p.Variants[1].OfferPrice) // 30% off 20
+}
+
+func TestProductService_FindByID_NoOffer(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 10)}}
+	offers := &fakeOfferLookup{discounts: map[string]product.Discount{}} // no live offer
+	svc := product.NewProductService(repo, product.WithOffers(offers))
+
+	p, err := svc.FindByID(context.Background(), id.Hex())
+	require.NoError(t, err)
+	assert.Nil(t, p.Offer)
+	assert.Nil(t, p.Variants[0].OfferPrice)
+}
+
+func TestProductService_FindByID_FixedDiscountClampsToZero(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 5)}}
+	offers := &fakeOfferLookup{discounts: map[string]product.Discount{
+		id.Hex(): {Type: "fixed", Value: 8}, // more than the price
+	}}
+	svc := product.NewProductService(repo, product.WithOffers(offers))
+
+	p, err := svc.FindByID(context.Background(), id.Hex())
+	require.NoError(t, err)
+	require.NotNil(t, p.Variants[0].OfferPrice)
+	assert.Equal(t, 0.0, *p.Variants[0].OfferPrice) // clamped, and still serialized (pointer)
+	require.NotNil(t, p.Offer)
+	assert.Equal(t, 0.0, p.Offer.OfferFromPrice)
+}
+
+func TestProductService_List_EnrichesEach(t *testing.T) {
+	id1, id2 := bson.NewObjectID(), bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{
+		productWithVariants(id1, 10),
+		productWithVariants(id2, 50),
+	}}
+	offers := &fakeOfferLookup{discounts: map[string]product.Discount{
+		id1.Hex(): {Type: "percent", Value: 50}, // only the first has an offer
+	}}
+	svc := product.NewProductService(repo, product.WithOffers(offers))
+
+	ps, _, err := svc.FindAll(context.Background(), product.ListFilter{}, pagination.Params{Page: 1, Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, ps, 2)
+
+	require.NotNil(t, ps[0].Offer)
+	assert.Equal(t, 5.0, *ps[0].Variants[0].OfferPrice)
+	assert.Nil(t, ps[1].Offer) // second product untouched
+	assert.Nil(t, ps[1].Variants[0].OfferPrice)
+}
+
+func TestProductService_FindByID_OfferLookupErrorDegradesGracefully(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 10)}}
+	offers := &fakeOfferLookup{err: errors.New("offer store down")}
+	svc := product.NewProductService(repo, product.WithOffers(offers))
+
+	p, err := svc.FindByID(context.Background(), id.Hex())
+	require.NoError(t, err) // lookup failure does not surface to the caller
+	assert.Nil(t, p.Offer)  // just no enrichment
+	assert.Nil(t, p.Variants[0].OfferPrice)
 }
 
 // ---------------------------------------------------------------------------
