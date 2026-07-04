@@ -37,6 +37,20 @@ export interface RatingsSummary {
   count: number
 }
 
+export type InputFieldType = 'text' | 'amount' | 'quantity' | 'select'
+
+// Customer-input field spec on a product. The label is 2-locale (en/ar) — this
+// mirrors the Go `InputField`/`I18nLabel`. Admins edit only the labels; the rest
+// (key/type/constraints/legacyName/sensitive) is preserved verbatim.
+export interface InputField {
+  key: string
+  label: { en: string; ar: string }
+  legacyName?: string
+  type: InputFieldType
+  sensitive?: boolean
+  constraints?: { min?: number; max?: number; options?: string[] }
+}
+
 export interface Product {
   id: string
   title: I18nString
@@ -48,6 +62,7 @@ export interface Product {
   stock: number
   available: boolean
   ratings: RatingsSummary
+  inputFields?: InputField[]
   createdAt: string
   updatedAt: string
 }

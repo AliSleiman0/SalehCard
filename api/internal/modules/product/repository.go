@@ -479,6 +479,9 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	if in.Ratings != nil {
 		set = append(set, bson.E{Key: "ratings", Value: *in.Ratings})
 	}
+	if in.InputFields != nil {
+		set = append(set, bson.E{Key: "inputFields", Value: in.InputFields})
+	}
 
 	after := options.After
 	opts := options.FindOneAndUpdate().SetReturnDocument(after)

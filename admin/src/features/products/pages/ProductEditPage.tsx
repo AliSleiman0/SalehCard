@@ -5,7 +5,7 @@ import { Icon, PageHead, Toggle, StatusBadge, LoadingSpinner, ErrorState, ffKey,
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useProduct, useCreateProduct, useUpdateProduct } from '../hooks/useProducts'
-import type { FulfillmentType, Locale } from '@/types'
+import type { FulfillmentType, Locale, InputField } from '@/types'
 
 interface VariantRow {
   denomination: string
@@ -45,6 +45,9 @@ export default function ProductEditPage() {
   const [variants, setVariants] = useState<VariantRow[]>([
     { denomination: '', price: '', resellerPrice: '' },
   ])
+  // Input-field specs are edited labels-only; everything else is preserved as
+  // loaded so a save never mangles legacy fulfillment config.
+  const [inputFields, setInputFields] = useState<InputField[]>([])
 
   // Populate from the loaded product when editing.
   useEffect(() => {
@@ -65,6 +68,7 @@ export default function ProductEditPage() {
           }))
         : [{ denomination: '', price: '', resellerPrice: '' }]
     )
+    setInputFields(p.inputFields ?? [])
   }, [data])
 
   // Default a brand-new product to the first real category once the list loads.
@@ -98,6 +102,10 @@ export default function ProductEditPage() {
         price: parseFloat(v.price) || 0,
         ...(v.resellerPrice.trim() ? { resellerPrice: parseFloat(v.resellerPrice) || 0 } : {}),
       })),
+    // Round-trip the full array (labels edited, rest preserved) only when the
+    // product actually has input fields — omitting it leaves stored data
+    // untouched via the backend's nil-guard.
+    ...(inputFields.length ? { inputFields } : {}),
   })
 
   const onSave = () => {
@@ -313,6 +321,66 @@ export default function ProductEditPage() {
               </table>
             </div>
           </div>
+
+          {/* Input-field labels (labels-only editor; key/type preserved) */}
+          {inputFields.length > 0 && (
+            <div className="acard">
+              <div className="panelhead">
+                <Icon name="layers" size={17} />
+                <h3>Input field labels</h3>
+              </div>
+              <div className="ahint" style={{ margin: '0 0 10px' }}>
+                Customer-facing prompts for this product's input fields. Edit the
+                English/Arabic wording only — the field key and type are fixed.
+              </div>
+              <div className="tablewrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Key</th>
+                      <th>Type</th>
+                      <th>Label (EN)</th>
+                      <th>Label (AR)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inputFields.map((f, i) => (
+                      <tr key={f.key || i}>
+                        <td><span className="muted">{f.key}</span></td>
+                        <td><span className="muted">{f.type}</span></td>
+                        <td>
+                          <input
+                            className="afield"
+                            style={{ padding: '7px 10px', minWidth: 160 }}
+                            value={f.label.en}
+                            dir="ltr"
+                            onChange={(e) => {
+                              const next = [...inputFields]
+                              next[i] = { ...f, label: { ...f.label, en: e.target.value } }
+                              setInputFields(next)
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="afield"
+                            style={{ padding: '7px 10px', minWidth: 160 }}
+                            value={f.label.ar}
+                            dir="rtl"
+                            onChange={(e) => {
+                              const next = [...inputFields]
+                              next[i] = { ...f, label: { ...f.label, ar: e.target.value } }
+                              setInputFields(next)
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Fulfillment-specific block */}
           {ff === 'code' && (
