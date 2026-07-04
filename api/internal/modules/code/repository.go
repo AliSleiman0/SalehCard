@@ -24,6 +24,14 @@ type Repository interface {
 	BulkInsert(ctx context.Context, productID string, items []UploadItem, batch string) (inserted, duplicates int, err error)
 	ListByProduct(ctx context.Context, productID string, status Status, p pagination.Params) ([]Code, int64, error)
 	CountsByProduct(ctx context.Context, productID string) (map[Status]int, error)
+	// CountsByAllProducts returns per-product status→count maps for every product
+	// in a single aggregation over the codes collection (productId → status →
+	// count). Backs the bulk inventory rollup.
+	CountsByAllProducts(ctx context.Context) (map[string]map[Status]int, error)
+	// AllThresholds returns every configured low-stock threshold keyed by product
+	// id, in a single query. Products without a row are simply absent (callers
+	// default them).
+	AllThresholds(ctx context.Context) (map[string]int, error)
 	FindByCodeOrSuffix(ctx context.Context, value string) (*Code, error)
 	CodeProducts(ctx context.Context) ([]ProductMeta, error)
 	ProductMeta(ctx context.Context, productID string) (*ProductMeta, error)
@@ -190,6 +198,69 @@ func (r *MongoRepository) CountsByProduct(ctx context.Context, productID string)
 		{{Key: "$group", Value: bson.D{{Key: "_id", Value: "$status"}, {Key: "n", Value: bson.D{{Key: "$sum", Value: 1}}}}}},
 	}
 	return r.aggregateCounts(ctx, pipeline)
+}
+
+// CountsByAllProducts groups the entire codes collection by (productId, status)
+// in one aggregation, returning a nested productId → status → count map. This
+// replaces per-product count queries in the bulk inventory rollup; the
+// (productId, status) index covers the group.
+func (r *MongoRepository) CountsByAllProducts(ctx context.Context) (map[string]map[Status]int, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: bson.D{
+				{Key: "productId", Value: "$productId"},
+				{Key: "status", Value: "$status"},
+			}},
+			{Key: "n", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+	cur, err := r.codes.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var rows []struct {
+		ID struct {
+			ProductID string `bson:"productId"`
+			Status    Status `bson:"status"`
+		} `bson:"_id"`
+		N int `bson:"n"`
+	}
+	if err := cur.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]map[Status]int, len(rows))
+	for _, row := range rows {
+		m := out[row.ID.ProductID]
+		if m == nil {
+			m = map[Status]int{}
+			out[row.ID.ProductID] = m
+		}
+		m[row.ID.Status] = row.N
+	}
+	return out, nil
+}
+
+// AllThresholds loads every per-product threshold in one Find, keyed by product
+// id. Products without a stored threshold are absent (callers default them).
+func (r *MongoRepository) AllThresholds(ctx context.Context) (map[string]int, error) {
+	cur, err := r.thresholds.Find(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var rows []struct {
+		ProductID string `bson:"productId"`
+		Threshold int    `bson:"threshold"`
+	}
+	if err := cur.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]int, len(rows))
+	for _, row := range rows {
+		out[row.ProductID] = row.Threshold
+	}
+	return out, nil
 }
 
 // aggregateCounts runs a status-grouping pipeline and returns a status→count map.

@@ -112,20 +112,27 @@ func (s *CodeService) SetThreshold(ctx context.Context, productID string, thresh
 	return &stats, nil
 }
 
-// Inventory returns code stats for every code-type product.
+// Inventory returns code stats for every code-type product. It reads in bulk —
+// the product list, all per-(product,status) counts, and all thresholds in three
+// queries total — then merges in memory, so its cost is independent of the
+// product count (previously a 1+2N sequential fan-out that dominated the admin
+// dashboard latency).
 func (s *CodeService) Inventory(ctx context.Context) ([]InventoryStats, error) {
 	products, err := s.repo.CodeProducts(ctx)
 	if err != nil {
 		return nil, err
 	}
+	counts, err := s.repo.CountsByAllProducts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	thresholds, err := s.repo.AllThresholds(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]InventoryStats, 0, len(products))
 	for _, p := range products {
-		threshold, _ := s.repo.GetThreshold(ctx, p.ID)
-		stats, err := s.statsFor(ctx, p, threshold)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, stats)
+		out = append(out, buildStats(p, counts[p.ID], thresholds[p.ID]))
 	}
 	return out, nil
 }
@@ -236,12 +243,20 @@ func (s *CodeService) remirror(ctx context.Context, productID string) {
 	}
 }
 
-// statsFor builds the InventoryStats for one product given its threshold.
+// statsFor builds the InventoryStats for one product, querying its counts. Used
+// by the single-product SetThreshold path; the bulk Inventory path uses
+// buildStats directly with pre-fetched counts.
 func (s *CodeService) statsFor(ctx context.Context, meta ProductMeta, threshold int) (InventoryStats, error) {
 	counts, err := s.repo.CountsByProduct(ctx, meta.ID)
 	if err != nil {
 		return InventoryStats{}, err
 	}
+	return buildStats(meta, counts, threshold), nil
+}
+
+// buildStats assembles the InventoryStats for one product from its status→count
+// map and threshold (defaulting a non-positive threshold). Pure — no I/O.
+func buildStats(meta ProductMeta, counts map[Status]int, threshold int) InventoryStats {
 	available := counts[StatusAvailable]
 	delivered := counts[StatusDelivered]
 	expired := counts[StatusExpired]
@@ -259,7 +274,7 @@ func (s *CodeService) statsFor(ctx context.Context, meta ProductMeta, threshold 
 		Expired:   expired,
 		Threshold: threshold,
 		Level:     computeLevel(available, threshold),
-	}, nil
+	}
 }
 
 func maxInt(a, b int) int {

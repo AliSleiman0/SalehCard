@@ -76,6 +76,14 @@ func (f *fakeRepo) CountsByProduct(_ context.Context, productID string) (map[Sta
 	return f.counts[productID], nil
 }
 
+func (f *fakeRepo) CountsByAllProducts(_ context.Context) (map[string]map[Status]int, error) {
+	return f.counts, nil
+}
+
+func (f *fakeRepo) AllThresholds(_ context.Context) (map[string]int, error) {
+	return f.thresholds, nil
+}
+
 func (f *fakeRepo) FindByCodeOrSuffix(_ context.Context, _ string) (*Code, error) {
 	if f.lookup != nil {
 		return f.lookup, nil

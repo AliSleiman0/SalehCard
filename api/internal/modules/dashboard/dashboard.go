@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/kyc"
@@ -79,73 +80,89 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 	r.Get("/dashboard/fulfillment-breakdown", h.GetFulfillmentBreakdown)
 }
 
-// GetStats handles GET /api/admin/dashboard/stats.
+// GetStats handles GET /api/admin/dashboard/stats. The figures come from ~10
+// independent reads with no data dependencies between them, so they run
+// concurrently via errgroup — the response latency is the slowest single query,
+// not their sum (the whole panel used to run serially against a remote DB).
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	totalProducts, err := h.products.CountDocuments(ctx, bson.D{})
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
-
-	inv, err := h.codes.Inventory(ctx)
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
-	var available, delivered, lowStock int
-	for _, s := range inv {
-		available += s.Available
-		delivered += s.Delivered
-		if s.Available < s.Threshold {
-			lowStock++
-		}
-	}
-
 	now := time.Now().UTC()
-	ordersToday, revenueToday, err := h.orders.DayStats(ctx, now)
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
-	ordersYday, revenueYday, err := h.orders.DayStats(ctx, now.AddDate(0, 0, -1))
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
-	pendingTransfers, err := h.orders.CountPendingTransfers(ctx)
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
+	g, ctx := errgroup.WithContext(r.Context())
 
-	revenueSpark, ordersSpark, err := h.orders.KpiSparkSeries(ctx)
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
+	var (
+		totalProducts             int64
+		available, delivered      int
+		lowStock                  int
+		ordersToday, ordersYday   int
+		revenueToday, revenueYday float64
+		pendingTransfers          int64
+		revenueSpark              []float64
+		ordersSpark               []int
+		activeUsers               int64
+		walletTopups              float64
+		pendingTopups, pendingKyc int64
+	)
 
-	activeUsers, err := h.users.CountActiveSince(ctx, now.Add(-24*time.Hour))
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
+	g.Go(func() error {
+		var err error
+		totalProducts, err = h.products.CountDocuments(ctx, bson.D{})
+		return err
+	})
+	g.Go(func() error {
+		inv, err := h.codes.Inventory(ctx)
+		if err != nil {
+			return err
+		}
+		for _, s := range inv {
+			available += s.Available
+			delivered += s.Delivered
+			if s.Available < s.Threshold {
+				lowStock++
+			}
+		}
+		return nil
+	})
+	g.Go(func() error {
+		var err error
+		ordersToday, revenueToday, err = h.orders.DayStats(ctx, now)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		ordersYday, revenueYday, err = h.orders.DayStats(ctx, now.AddDate(0, 0, -1))
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		pendingTransfers, err = h.orders.CountPendingTransfers(ctx)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		revenueSpark, ordersSpark, err = h.orders.KpiSparkSeries(ctx)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		activeUsers, err = h.users.CountActiveSince(ctx, now.Add(-24*time.Hour))
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		walletTopups, err = h.wallet.TopUpsForDay(ctx, now)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		pendingTopups, err = h.topups.CountPending(ctx)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		pendingKyc, err = h.kyc.CountPending(ctx)
+		return err
+	})
 
-	walletTopups, err := h.wallet.TopUpsForDay(ctx, now)
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
-
-	pendingTopups, err := h.topups.CountPending(ctx)
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
-
-	pendingKyc, err := h.kyc.CountPending(ctx)
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		response.InternalError(w)
 		return
 	}
