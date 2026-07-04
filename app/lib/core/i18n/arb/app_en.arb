@@ -182,6 +182,7 @@
   "profileTitle": "Profile",
   "accountInfo": "Account info",
   "roleLabel": "Role",
+  "loyaltyPoints": "Loyalty points",
   "verificationTitle": "Verification",
   "savedPlayerIds": "Saved player IDs",
   "savedPlayerIdsEmptyTitle": "No saved player IDs",

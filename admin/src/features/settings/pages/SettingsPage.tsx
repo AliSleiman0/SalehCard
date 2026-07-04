@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [earnRate, setEarnRate] = useState('5')
   const [loyaltyError, setLoyaltyError] = useState<string | null>(null)
   const [loyaltySaved, setLoyaltySaved] = useState(false)
+  // Powers the "$50 order earns N points" example in the guide; 0 hides it.
+  const exampleRate = Number(earnRate)
 
   useEffect(() => {
     const s = settingsRes?.data
@@ -64,10 +66,61 @@ export default function SettingsPage() {
           <h3>Loyalty program</h3>
         </div>
         <div className="pad">
-          <p className="muted" style={{ fontSize: 12.5, marginTop: 0, marginBottom: 16 }}>
-            Customers earn <b>1 point per ${earnRate || '…'}</b> spent on a completed order
-            (points = order total ÷ rate, rounded down). Changes apply to future orders only.
-          </p>
+          <div
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: '12px 14px',
+              marginBottom: 18,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 8,
+                fontWeight: 700,
+                fontSize: 13,
+              }}
+            >
+              <Icon name="alert" size={15} /> How points work
+            </div>
+            <ul
+              style={{
+                margin: 0,
+                paddingInlineStart: 18,
+                color: 'var(--text-dim)',
+                fontSize: 12.5,
+                lineHeight: 1.7,
+              }}
+            >
+              <li>
+                Customers earn <b>1 point per ${earnRate || '…'}</b> spent — points ={' '}
+                <b>order total ÷ rate, rounded down</b>
+                {exampleRate > 0 && (
+                  <>
+                    {' '}
+                    (e.g. a $50 order earns <b>{Math.floor(50 / exampleRate)}</b> points)
+                  </>
+                )}
+                .
+              </li>
+              <li>
+                Points are granted only when an order <b>completes</b> — instantly for code /
+                inventory deliveries, and when you <b>manually complete</b> a top-up or transfer
+                order. Pending, failed, or refunded orders earn nothing.
+              </li>
+              <li>
+                Rate changes apply to <b>future orders only</b>; past orders keep the points they
+                already earned.
+              </li>
+              <li>
+                Turning the program <b>off</b> stops new earning — customers keep the points they
+                already have.
+              </li>
+            </ul>
+          </div>
           <div className="g2">
             <div>
               <label className="alabel">Status</label>

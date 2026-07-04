@@ -493,6 +493,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roleLabel => 'Role';
 
   @override
+  String get loyaltyPoints => 'Loyalty points';
+
+  @override
   String get verificationTitle => 'Verification';
 
   @override

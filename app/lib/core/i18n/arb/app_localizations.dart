@@ -1004,6 +1004,12 @@ abstract class AppLocalizations {
   /// **'Role'**
   String get roleLabel;
 
+  /// No description provided for @loyaltyPoints.
+  ///
+  /// In en, this message translates to:
+  /// **'Loyalty points'**
+  String get loyaltyPoints;
+
   /// No description provided for @verificationTitle.
   ///
   /// In en, this message translates to:
