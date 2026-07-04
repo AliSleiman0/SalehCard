@@ -85,6 +85,7 @@
   "exp_all_categories": "All categories",
   "exp_from": "From",
   "exp_to": "To",
+  "exp_export": "Export",
   "exp_load_error": "Couldn't load expenses.",
   "exp_load_one_error": "Couldn't load this expense.",
   "exp_empty": "No expenses found",

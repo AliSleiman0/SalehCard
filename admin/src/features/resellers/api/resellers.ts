@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { ApiResponse, PaginationMeta } from '@/types'
+import type { ApiResponse, PaginationMeta, SavedPlayerId } from '@/types'
 import type { WalletTx } from '@/features/users/api/users'
 
 /** Account status as stored by the API (resellers are users with role=reseller). */
@@ -23,7 +23,7 @@ export interface AdminReseller {
   margin: number
   walletBalance: number
   loyaltyPoints: number
-  savedPlayerIds: string[]
+  savedPlayerIds: SavedPlayerId[]
   createdAt: string
   updatedAt: string
   orders: number

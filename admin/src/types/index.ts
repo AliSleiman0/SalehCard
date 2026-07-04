@@ -88,6 +88,15 @@ export interface CodeUploadResult {
   invalid: number
 }
 
+// ---- Saved player IDs (match the Go user module's SavedPlayerID) ----
+// Each saved game/account ID is a labelled pair. Legacy docs that stored a bare
+// string are normalised to `{ label, value }` (label == value) by the API's
+// tolerant BSON decode, so the client always receives objects.
+export interface SavedPlayerId {
+  label: string
+  value: string
+}
+
 // ---- Admin identity ----
 export type UserRole = 'customer' | 'reseller' | 'admin'
 

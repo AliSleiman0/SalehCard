@@ -47,14 +47,23 @@ class KycStatusScreen extends ConsumerWidget {
             ),
           ),
         ),
-        data: (profile) => ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-          children: [
-            _StatusCard(
-              status: profile.status,
-              rejectionReason: profile.rejectionReason,
-            )
-          ],
+        data: (profile) => RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(kycProfileProvider);
+            await ref.read(kycProfileProvider.future);
+          },
+          child: ListView(
+            // Always scrollable so the single status card can still be pulled
+            // down to re-check the verification status.
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+            children: [
+              _StatusCard(
+                status: profile.status,
+                rejectionReason: profile.rejectionReason,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -74,33 +83,33 @@ class _StatusCard extends StatelessWidget {
 
     final (icon, badgeLabel, badgeColor, title, body) = switch (status) {
       KycStatus.unverified => (
-          Icons.verified_user_outlined,
-          l10n.kycBadgeUnverified,
-          StatusBadge.neutral,
-          l10n.kycUnverifiedTitle,
-          l10n.kycUnverifiedBody,
-        ),
+        Icons.verified_user_outlined,
+        l10n.kycBadgeUnverified,
+        StatusBadge.neutral,
+        l10n.kycUnverifiedTitle,
+        l10n.kycUnverifiedBody,
+      ),
       KycStatus.pending => (
-          Icons.hourglass_top_rounded,
-          l10n.kycBadgePending,
-          StatusBadge.warning,
-          l10n.kycPendingTitle,
-          l10n.kycPendingBody,
-        ),
+        Icons.hourglass_top_rounded,
+        l10n.kycBadgePending,
+        StatusBadge.warning,
+        l10n.kycPendingTitle,
+        l10n.kycPendingBody,
+      ),
       KycStatus.verified => (
-          Icons.verified_rounded,
-          l10n.kycBadgeVerified,
-          StatusBadge.success,
-          l10n.kycVerifiedTitle,
-          l10n.kycVerifiedBody,
-        ),
+        Icons.verified_rounded,
+        l10n.kycBadgeVerified,
+        StatusBadge.success,
+        l10n.kycVerifiedTitle,
+        l10n.kycVerifiedBody,
+      ),
       KycStatus.rejected => (
-          Icons.gpp_bad_rounded,
-          l10n.kycBadgeRejected,
-          StatusBadge.danger,
-          l10n.kycRejectedTitle,
-          l10n.kycRejectedBody,
-        ),
+        Icons.gpp_bad_rounded,
+        l10n.kycBadgeRejected,
+        StatusBadge.danger,
+        l10n.kycRejectedTitle,
+        l10n.kycRejectedBody,
+      ),
     };
 
     return Container(
@@ -132,16 +141,20 @@ class _StatusCard extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-                fontSize: 19, fontWeight: FontWeight.w800, color: colors.text),
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: colors.text,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             body,
             style: TextStyle(
-                fontSize: 14.5,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
-                color: colors.textDim),
+              fontSize: 14.5,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+              color: colors.textDim,
+            ),
           ),
           if (status == KycStatus.rejected &&
               rejectionReason != null &&
@@ -154,15 +167,17 @@ class _StatusCard extends StatelessWidget {
                 color: AppTokens.danger.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(AppTokens.rMd),
                 border: Border.all(
-                    color: AppTokens.danger.withValues(alpha: 0.35)),
+                  color: AppTokens.danger.withValues(alpha: 0.35),
+                ),
               ),
               child: Text(
                 rejectionReason!,
                 style: TextStyle(
-                    fontSize: 13.5,
-                    height: 1.4,
-                    fontWeight: FontWeight.w600,
-                    color: colors.text),
+                  fontSize: 13.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: colors.text,
+                ),
               ),
             ),
           ],
@@ -178,12 +193,16 @@ class _StatusCard extends StatelessWidget {
                 shape: const StadiumBorder(),
                 elevation: 8,
                 shadowColor: AppTokens.cta.withValues(alpha: 0.3),
-                textStyle:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-              child: Text(status == KycStatus.rejected
-                  ? l10n.kycResubmitCta
-                  : l10n.kycVerifyNowCta),
+              child: Text(
+                status == KycStatus.rejected
+                    ? l10n.kycResubmitCta
+                    : l10n.kycVerifyNowCta,
+              ),
             ),
           ],
         ],

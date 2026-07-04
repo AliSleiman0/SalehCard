@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { ApiResponse, PaginationMeta, UserRole } from '@/types'
+import type { ApiResponse, PaginationMeta, SavedPlayerId, UserRole } from '@/types'
 
 /** Account status as stored by the API. `deleted` is a soft-deleted (anonymized)
  *  account — hidden from the default listing. */
@@ -28,7 +28,7 @@ export interface AdminUser {
   role: UserRole
   status: UserStatus
   locale: string
-  savedPlayerIds: string[]
+  savedPlayerIds: SavedPlayerId[]
   walletBalance: number
   loyaltyPoints: number
   createdAt: string

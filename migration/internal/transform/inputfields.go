@@ -14,6 +14,24 @@ import (
 // be flagged sensitive (spec §3.2 / §4.1).
 var reSensitive = regexp.MustCompile(`(?i)password|wallet|iban|address|كلمة السر|كلمة المرور|محفظة|ايبان|آيبان|رمز المحفظة|عنوان الحساب|عنوان المحفظة`)
 
+// reIDLabel matches an account/player "ID" signal — the English word "id"
+// (PLAYER ID, zone id, enter id, …) or the Arabic ايدي / أيدي / معرف.
+var reIDLabel = regexp.MustCompile(`(?i)\bid\b|ايدي|أيدي|معرف`)
+
+// reNotIDLabel matches fields that are clearly NOT an ID (email/username/phone/
+// password/serial/…). It guards reIDLabel so an "Email ID" field stays an email
+// and is never collapsed to the generic ID label.
+var reNotIDLabel = regexp.MustCompile(`(?i)email|e-mail|بريد|ايميل|ايمل|username|user name|اسم المستخدم|password|كلمة السر|كلمة المرور|phone|mobile|هاتف|serial|token|iban|wallet|محفظة|barcode|بار كود|صندوق|اسم الشركة|اسم الدولة|الرابط`)
+
+// isIDLabel reports whether a text field's legacy label (ar + en name/question)
+// denotes an account/player ID that should be normalized to a clean, bilingual
+// {ar:"ID", en:"ID"} label — killing the messy legacy Arabic strings the app
+// otherwise shows verbatim. Requires an ID signal and no competing-field signal.
+func isIDLabel(en, ar legacy.Require) bool {
+	text := en.Name + " " + en.Question + " " + ar.Name + " " + ar.Question
+	return reIDLabel.MatchString(text) && !reNotIDLabel.MatchString(text)
+}
+
 // legacyTypeToTarget maps a legacy requires[].type to the target inputField type.
 func legacyTypeToTarget(t string) string {
 	switch t {
@@ -55,11 +73,20 @@ func BuildInputFields(enReqs, arReqs []legacy.Require) ([]schema.InputField, boo
 			anySensitive = true
 		}
 
+		targetType := legacyTypeToTarget(en.Type)
+		label := label2(en.Question, firstNonEmpty(ar.Question, en.Question))
+		// Normalize account/player ID fields to a clean bilingual "ID" — the
+		// legacy source ships inconsistent Arabic labels (ايدي, ادخل الايدي, …)
+		// in both locales, which the app renders verbatim even in English.
+		if targetType == "text" && isIDLabel(en, ar) {
+			label = label2("ID", "ID")
+		}
+
 		fields = append(fields, schema.InputField{
 			Key:         key,
-			Label:       label2(en.Question, firstNonEmpty(ar.Question, en.Question)),
+			Label:       label,
 			LegacyName:  en.Name,
-			Type:        legacyTypeToTarget(en.Type),
+			Type:        targetType,
 			Constraints: parseConstraints(en),
 			Sensitive:   sensitive,
 		})
