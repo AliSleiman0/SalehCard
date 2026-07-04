@@ -10,6 +10,7 @@ import '../../../../core/network/idempotency.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
+import '../../../../core/widgets/discount_price.dart';
 import '../../../../core/widgets/money_row.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
@@ -447,6 +448,8 @@ class _OrderSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final savings = items.fold<double>(
+        0, (s, it) => s + (it.originalLineTotal - it.lineTotal));
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -489,16 +492,42 @@ class _OrderSummary extends StatelessWidget {
                           color: colors.text),
                     ),
                   ),
-                  Text(formatUsd(item.lineTotal),
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: colors.text)),
+                  if (item.hasOffer)
+                    StruckPriceRow(
+                      original: item.originalLineTotal,
+                      offer: item.lineTotal,
+                      originalSize: 11,
+                      offerSize: 14,
+                    )
+                  else
+                    Text(formatUsd(item.lineTotal),
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: colors.text)),
                 ],
               ),
             ),
           Divider(height: 1, color: colors.border),
           const SizedBox(height: 8),
+          if (savings > 0) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(l10n.discountLabel,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textDim)),
+                Text('-${formatUsd(savings)}',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppTokens.brand2)),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
           MoneyRow(label: l10n.totalLabel, value: subtotal, emphasized: true),
         ],
       ),

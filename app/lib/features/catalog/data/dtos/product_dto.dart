@@ -11,19 +11,57 @@ class VariantDto {
     required this.id,
     this.denomination = '',
     this.price = 0,
+    this.offerPrice,
   });
 
   final String id;
   final String denomination;
   final double price;
 
+  /// Discounted unit price when a live offer applies (transient, catalog-only).
+  final double? offerPrice;
+
   factory VariantDto.fromJson(Map<String, dynamic> json) =>
       _$VariantDtoFromJson(json);
 
   Map<String, dynamic> toJson() => _$VariantDtoToJson(this);
 
-  Variant toEntity() =>
-      Variant(id: id, denomination: denomination, price: price);
+  Variant toEntity() => Variant(
+        id: id,
+        denomination: denomination,
+        price: price,
+        offerPrice: offerPrice,
+      );
+}
+
+@JsonSerializable()
+class ProductOfferDto {
+  const ProductOfferDto({
+    this.discountType = 'percent',
+    this.discountValue = 0,
+    this.originalFromPrice = 0,
+    this.offerFromPrice = 0,
+    this.endsAt,
+  });
+
+  final String discountType;
+  final double discountValue;
+  final double originalFromPrice;
+  final double offerFromPrice;
+  final DateTime? endsAt;
+
+  factory ProductOfferDto.fromJson(Map<String, dynamic> json) =>
+      _$ProductOfferDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ProductOfferDtoToJson(this);
+
+  ProductOffer toEntity() => ProductOffer(
+        discountType: discountType,
+        discountValue: discountValue,
+        originalFromPrice: originalFromPrice,
+        offerFromPrice: offerFromPrice,
+        endsAt: endsAt,
+      );
 }
 
 @JsonSerializable()
@@ -99,6 +137,7 @@ class ProductDto {
     this.fulfillmentType,
     this.inputFields,
     this.ratings,
+    this.offer,
   });
 
   final String id;
@@ -111,6 +150,7 @@ class ProductDto {
   final String? fulfillmentType;
   final List<InputFieldDto>? inputFields;
   final RatingsDto? ratings;
+  final ProductOfferDto? offer;
 
   factory ProductDto.fromJson(Map<String, dynamic> json) =>
       _$ProductDtoFromJson(json);
@@ -131,5 +171,6 @@ class ProductDto {
             (inputFields ?? const []).map((f) => f.toEntity()).toList(),
         rating: ratings?.average,
         ratingCount: ratings?.count ?? 0,
+        offer: offer?.toEntity(),
       );
 }

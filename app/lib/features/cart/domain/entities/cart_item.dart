@@ -25,6 +25,7 @@ class CartItem {
     required this.price,
     required this.qty,
     required this.fulfillmentType, // code | account_credit | transfer
+    this.originalPrice,
     this.playerId,
     this.recipient,
   });
@@ -34,9 +35,16 @@ class CartItem {
   final I18nString title;
   final String category;
   final String variantLabel;
+
+  /// Unit price actually charged — the discounted price when on sale. Drives
+  /// [lineTotal] and the checkout subtotal (matches what the server charges).
   final double price;
   final int qty;
   final String fulfillmentType;
+
+  /// Pre-discount unit price, kept for the struck-through display. Null (or equal
+  /// to [price]) means no offer applies.
+  final double? originalPrice;
   final String? playerId;
   final Recipient? recipient;
 
@@ -44,6 +52,12 @@ class CartItem {
   String get key => '$productId|$variantId';
 
   double get lineTotal => price * qty;
+
+  /// Whether this line carries a live discount below its base price.
+  bool get hasOffer => originalPrice != null && originalPrice! > price;
+
+  /// Pre-discount line total, for the struck-through display.
+  double get originalLineTotal => (originalPrice ?? price) * qty;
 
   CartItem copyWith({int? qty, String? playerId, Recipient? recipient}) {
     return CartItem(
@@ -55,6 +69,7 @@ class CartItem {
       price: price,
       qty: qty ?? this.qty,
       fulfillmentType: fulfillmentType,
+      originalPrice: originalPrice,
       playerId: playerId ?? this.playerId,
       recipient: recipient ?? this.recipient,
     );
