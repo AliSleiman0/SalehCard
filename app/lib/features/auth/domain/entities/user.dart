@@ -1,3 +1,5 @@
+import 'saved_player_id.dart';
+
 /// Authenticated user (domain entity).
 class User {
   const User({
@@ -28,5 +30,5 @@ class User {
 
   /// Player / account IDs the customer has saved for faster checkout. Persisted
   /// via `PATCH /users/me` (one of the only two editable profile fields).
-  final List<String> savedPlayerIds;
+  final List<SavedPlayerId> savedPlayerIds;
 }

@@ -1,6 +1,7 @@
 import 'package:json_annotation/json_annotation.dart';
 
 import '../../domain/entities/user.dart';
+import 'saved_player_id_dto.dart';
 
 part 'user_dto.g.dart';
 
@@ -27,7 +28,7 @@ class UserDto {
   final double walletBalance;
   final int loyaltyPoints;
 
-  final List<String> savedPlayerIds;
+  final List<SavedPlayerIdDto> savedPlayerIds;
 
   factory UserDto.fromJson(Map<String, dynamic> json) =>
       _$UserDtoFromJson(json);
@@ -43,6 +44,6 @@ class UserDto {
         locale: locale,
         walletBalance: walletBalance,
         loyaltyPoints: loyaltyPoints,
-        savedPlayerIds: savedPlayerIds,
+        savedPlayerIds: savedPlayerIds.map((e) => e.toEntity()).toList(),
       );
 }

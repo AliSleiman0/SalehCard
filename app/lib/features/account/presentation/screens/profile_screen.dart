@@ -1,23 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/status_badge.dart';
+import '../../../auth/domain/entities/saved_player_id.dart';
 import '../../../auth/domain/entities/user.dart';
+import '../../../kyc/domain/entities/kyc.dart';
+import '../../../kyc/presentation/providers.dart';
 import '../providers.dart';
 
 /// Profile screen (`/profile`). Watches [profileProvider] (`GET /users/me`).
 ///
 /// Two states toggled by the AppBar action:
-///  - **view**: read-only account header (avatar + name + email), info rows, and
-///    the saved player IDs as plain rows (or an [EmptyState] when none).
-///  - **editing**: add a player ID (field + button) and remove existing ones
-///    (chips with a delete affordance), then a sticky "Save changes" CTA that
-///    `PATCH`es `savedPlayerIds`. Name/email are read-only here (name is set at
-///    signup).
+///  - **view**: read-only account header (neutral avatar + name/email), account
+///    info rows, a verification (KYC) summary, and the saved player IDs as
+///    labeled rows (or an [EmptyState] when none).
+///  - **editing**: add a labeled player ID (label + value fields + button) and
+///    remove existing ones (chips with a delete affordance), then a sticky "Save
+///    changes" CTA that `PATCH`es `savedPlayerIds`. Name/email/role are read-only
+///    here (name is set at signup); Role is hidden from customers.
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -26,45 +32,52 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  final _inputController = TextEditingController();
+  final _labelController = TextEditingController();
+  final _valueController = TextEditingController();
   bool _editing = false;
 
   /// Working copy of the saved IDs while editing (seeded on enter-edit).
-  List<String> _draftIds = const [];
+  List<SavedPlayerId> _draftIds = const [];
 
   @override
   void dispose() {
-    _inputController.dispose();
+    _labelController.dispose();
+    _valueController.dispose();
     super.dispose();
   }
 
   void _enterEdit(User user) {
     setState(() {
       _editing = true;
-      _draftIds = List<String>.from(user.savedPlayerIds);
+      _draftIds = List<SavedPlayerId>.from(user.savedPlayerIds);
     });
     ref.read(profileControllerProvider.notifier).reset();
   }
 
   void _cancelEdit() {
-    _inputController.clear();
+    _labelController.clear();
+    _valueController.clear();
     setState(() => _editing = false);
     ref.read(profileControllerProvider.notifier).reset();
   }
 
   void _addId() {
-    final value = _inputController.text.trim();
-    if (value.isEmpty || _draftIds.contains(value)) {
-      _inputController.clear();
+    final label = _labelController.text.trim();
+    final value = _valueController.text.trim();
+    // Both fields are required; a duplicate value is silently ignored.
+    if (label.isEmpty ||
+        value.isEmpty ||
+        _draftIds.any((e) => e.value == value)) {
       return;
     }
     setState(() {
-      _draftIds = [..._draftIds, value];
-      _inputController.clear();
+      _draftIds = [..._draftIds, SavedPlayerId(label: label, value: value)];
+      _labelController.clear();
+      _valueController.clear();
     });
   }
 
-  void _removeId(String id) {
+  void _removeId(SavedPlayerId id) {
     setState(() => _draftIds = _draftIds.where((e) => e != id).toList());
   }
 
@@ -154,16 +167,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       if (user.email.isNotEmpty)
                         _InfoRow(label: l10n.emailLabel, value: user.email),
                       if (user.phone != null && user.phone!.isNotEmpty)
-                        _InfoRow(label: l10n.mobileNumberLabel, value: user.phone!),
-                      _InfoRow(label: l10n.roleLabel, value: user.role),
+                        _InfoRow(
+                            label: l10n.mobileNumberLabel, value: user.phone!),
+                      // Role is an internal concept — hidden from customers,
+                      // shown only to resellers/admins who log into the app.
+                      if (user.role != 'customer')
+                        _InfoRow(label: l10n.roleLabel, value: user.role),
                     ],
                   ),
                   const SizedBox(height: 24),
+                  // Verification (KYC) summary. Rendered from its own provider so
+                  // a KYC fetch error/loading never breaks the profile page.
+                  ..._verificationSection(l10n),
                   _SectionLabel(l10n.savedPlayerIds),
                   const SizedBox(height: 10),
                   if (_editing)
                     _PlayerIdEditor(
-                      controller: _inputController,
+                      labelController: _labelController,
+                      valueController: _valueController,
                       ids: _draftIds,
                       onAdd: _addId,
                       onRemove: _removeId,
@@ -184,8 +205,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       rows: [
                         for (final id in user.savedPlayerIds)
                           _InfoRow(
-                            label: '',
-                            value: id,
+                            label: id.label,
+                            value: id.value,
                             leading: Icons.badge_outlined,
                           ),
                       ],
@@ -205,6 +226,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
+
+  /// The verification section (label + card). Empty while the KYC status is
+  /// erroring so the profile still renders; a small spinner while loading.
+  List<Widget> _verificationSection(AppLocalizations l10n) {
+    return ref.watch(kycProfileProvider).when(
+          data: (profile) => [
+            _SectionLabel(l10n.verificationTitle),
+            const SizedBox(height: 10),
+            _VerificationCard(
+              profile: profile,
+              onOpen: () => context.push('/kyc'),
+            ),
+            const SizedBox(height: 24),
+          ],
+          loading: () => [
+            _SectionLabel(l10n.verificationTitle),
+            const SizedBox(height: 10),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: AppSpinner(size: 22, stroke: 2.5)),
+            ),
+            const SizedBox(height: 24),
+          ],
+          error: (_, _) => const [],
+        );
+  }
 }
 
 class _AccountHeader extends StatelessWidget {
@@ -213,17 +260,17 @@ class _AccountHeader extends StatelessWidget {
   final String name;
   final String email;
 
-  String get _initials {
-    final source = name.trim().isNotEmpty ? name.trim() : email.trim();
-    if (source.isEmpty) return '?';
-    return source.substring(0, 1).toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final primary = name.trim().isNotEmpty ? name.trim() : email;
-    final hasSecondary = name.trim().isNotEmpty && email.isNotEmpty;
+    final l10n = AppLocalizations.of(context);
+    // Fall back to a friendly placeholder when the account has no name/email
+    // (phone-only signups).
+    final hasName = name.trim().isNotEmpty;
+    final primary = hasName
+        ? name.trim()
+        : (email.isNotEmpty ? email : l10n.profileTitle);
+    final hasSecondary = hasName && email.isNotEmpty;
     return Row(
       children: [
         Container(
@@ -234,11 +281,7 @@ class _AccountHeader extends StatelessWidget {
             gradient: AppTokens.brandGradient,
             shape: BoxShape.circle,
           ),
-          child: Text(
-            _initials,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
-          ),
+          child: const Icon(Icons.person_rounded, color: Colors.white, size: 34),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -265,6 +308,92 @@ class _AccountHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Verification (KYC) summary card: a status badge, a tap target into the full
+/// `/kyc` flow, and — once a submission exists — the submitted details.
+class _VerificationCard extends StatelessWidget {
+  const _VerificationCard({required this.profile, required this.onOpen});
+
+  final KycProfile profile;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = context.colors;
+
+    final (badgeLabel, badgeColor) = switch (profile.status) {
+      KycStatus.unverified => (l10n.kycBadgeUnverified, StatusBadge.neutral),
+      KycStatus.pending => (l10n.kycBadgePending, StatusBadge.warning),
+      KycStatus.verified => (l10n.kycBadgeVerified, StatusBadge.success),
+      KycStatus.rejected => (l10n.kycBadgeRejected, StatusBadge.danger),
+    };
+
+    final s = profile.submission;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: onOpen,
+            borderRadius: BorderRadius.circular(AppTokens.rMd),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  StatusBadge(label: badgeLabel, color: badgeColor),
+                  const Spacer(),
+                  if (profile.status == KycStatus.unverified ||
+                      profile.status == KycStatus.rejected)
+                    Text(
+                      l10n.kycVerifyNowCta,
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppTokens.brand1),
+                    ),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 20, color: colors.textFaint),
+                ],
+              ),
+            ),
+          ),
+          if (s != null) ...[
+            Divider(height: 1, color: colors.border),
+            _InfoRow(label: l10n.kycFullNameLabel, value: s.fullName),
+            Divider(height: 1, color: colors.border),
+            _InfoRow(label: l10n.kycDobLabel, value: s.dateOfBirth),
+            Divider(height: 1, color: colors.border),
+            _InfoRow(label: l10n.kycPlaceOfBirthLabel, value: s.placeOfBirth),
+            Divider(height: 1, color: colors.border),
+            _InfoRow(
+                label: l10n.kycPlaceOfResidenceLabel,
+                value: s.placeOfResidence),
+            Divider(height: 1, color: colors.border),
+            _InfoRow(
+                label: l10n.kycDocTypeLabel,
+                value: _docLabel(l10n, s.documentType)),
+            Divider(height: 1, color: colors.border),
+            _InfoRow(
+                label: l10n.kycDocNumberLabel, value: s.documentNumber),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _docLabel(AppLocalizations l10n, KycDocumentType t) => switch (t) {
+        KycDocumentType.passport => l10n.kycDocPassport,
+        KycDocumentType.idCard => l10n.kycDocIdCard,
+        KycDocumentType.license => l10n.kycDocLicense,
+      };
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -356,66 +485,65 @@ class _InfoRow extends StatelessWidget {
 
 class _PlayerIdEditor extends StatelessWidget {
   const _PlayerIdEditor({
-    required this.controller,
+    required this.labelController,
+    required this.valueController,
     required this.ids,
     required this.onAdd,
     required this.onRemove,
   });
 
-  final TextEditingController controller;
-  final List<String> ids;
+  final TextEditingController labelController;
+  final TextEditingController valueController;
+  final List<SavedPlayerId> ids;
   final VoidCallback onAdd;
-  final ValueChanged<String> onRemove;
+  final ValueChanged<SavedPlayerId> onRemove;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppTokens.rMd),
-      borderSide: BorderSide(color: colors.border),
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _EditorField(
+          controller: labelController,
+          hint: l10n.playerIdLabelHint,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
-              child: TextField(
-                controller: controller,
-                onSubmitted: (_) => onAdd(),
+              child: _EditorField(
+                controller: valueController,
+                hint: l10n.playerIdHint,
                 textInputAction: TextInputAction.done,
-                style: TextStyle(fontSize: 15, color: colors.text),
-                cursorColor: AppTokens.brand1,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: colors.surface,
-                  hintText: l10n.playerIdHint,
-                  hintStyle: TextStyle(color: colors.textFaint),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  border: border,
-                  enabledBorder: border,
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppTokens.rMd),
-                    borderSide:
-                        const BorderSide(color: AppTokens.brand1, width: 1.6),
-                  ),
-                ),
+                onSubmitted: (_) => onAdd(),
               ),
             ),
             const SizedBox(width: 10),
-            FilledButton(
-              onPressed: onAdd,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTokens.cta,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(72, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppTokens.rMd),
-                ),
-              ),
-              child: Text(l10n.addPlayerId),
+            // Add is enabled only when both the label and value are non-empty.
+            AnimatedBuilder(
+              animation: Listenable.merge([labelController, valueController]),
+              builder: (context, _) {
+                final enabled = labelController.text.trim().isNotEmpty &&
+                    valueController.text.trim().isNotEmpty;
+                return FilledButton(
+                  onPressed: enabled ? onAdd : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTokens.cta,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        AppTokens.cta.withValues(alpha: 0.5),
+                    disabledForegroundColor: Colors.white,
+                    minimumSize: const Size(72, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTokens.rMd),
+                    ),
+                  ),
+                  child: Text(l10n.addPlayerId),
+                );
+              },
             ),
           ],
         ),
@@ -427,7 +555,7 @@ class _PlayerIdEditor extends StatelessWidget {
             children: [
               for (final id in ids)
                 Chip(
-                  label: Text(id),
+                  label: Text('${id.label}  ·  ${id.value}'),
                   labelStyle: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
@@ -441,6 +569,51 @@ class _PlayerIdEditor extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// A single outlined text field styled to match the profile editor.
+class _EditorField extends StatelessWidget {
+  const _EditorField({
+    required this.controller,
+    required this.hint,
+    required this.textInputAction,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final TextInputAction textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppTokens.rMd),
+      borderSide: BorderSide(color: colors.border),
+    );
+    return TextField(
+      controller: controller,
+      onSubmitted: onSubmitted,
+      textInputAction: textInputAction,
+      style: TextStyle(fontSize: 15, color: colors.text),
+      cursorColor: AppTokens.brand1,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: colors.surface,
+        hintText: hint,
+        hintStyle: TextStyle(color: colors.textFaint),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppTokens.rMd),
+          borderSide: const BorderSide(color: AppTokens.brand1, width: 1.6),
+        ),
+      ),
     );
   }
 }

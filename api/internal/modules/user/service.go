@@ -115,7 +115,7 @@ func (s *UserService) Register(ctx context.Context, input RegisterInput) (*AuthR
 		PasswordHash:   &hashed,
 		Role:           RoleCustomer,
 		Locale:         locale,
-		SavedPlayerIDs: []string{},
+		SavedPlayerIDs: []SavedPlayerID{},
 	}
 	if err := s.repo.Create(ctx, user); err != nil {
 		return nil, err // ErrConflict on duplicate email
@@ -247,7 +247,7 @@ func (s *UserService) VerifyOTP(ctx context.Context, input VerifyOTPInput) (*Aut
 			Phone:          &phone,
 			Role:           RoleCustomer,
 			Locale:         "en",
-			SavedPlayerIDs: []string{},
+			SavedPlayerIDs: []SavedPlayerID{},
 		}
 		if err := s.repo.Create(ctx, user); err != nil {
 			return nil, err
@@ -342,7 +342,16 @@ func (s *UserService) UpdateProfile(ctx context.Context, id bson.ObjectID, input
 		user.Locale = *input.Locale
 	}
 	if input.SavedPlayerIDs != nil {
-		user.SavedPlayerIDs = input.SavedPlayerIDs
+		cleaned := make([]SavedPlayerID, 0, len(input.SavedPlayerIDs))
+		for _, p := range input.SavedPlayerIDs {
+			label := strings.TrimSpace(p.Label)
+			value := strings.TrimSpace(p.Value)
+			if label == "" || value == "" {
+				return nil, &apperrors.AppError{Code: "INVALID_PLAYER_ID", Message: "each saved player ID needs a label and a value", Err: apperrors.ErrBadRequest}
+			}
+			cleaned = append(cleaned, SavedPlayerID{Label: label, Value: value})
+		}
+		user.SavedPlayerIDs = cleaned
 	}
 	if err := s.repo.Update(ctx, user); err != nil {
 		return nil, err

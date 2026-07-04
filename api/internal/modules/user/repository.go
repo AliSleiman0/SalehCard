@@ -252,7 +252,7 @@ func (r *MongoRepository) Create(ctx context.Context, user *User) error {
 		user.Status = StatusActive
 	}
 	if user.SavedPlayerIDs == nil {
-		user.SavedPlayerIDs = []string{}
+		user.SavedPlayerIDs = []SavedPlayerID{}
 	}
 
 	if _, err := r.collection.InsertOne(ctx, user); err != nil {
