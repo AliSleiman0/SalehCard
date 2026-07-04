@@ -230,6 +230,9 @@ func (f *fakeCodeSvc) SetThreshold(context.Context, string, int) (*code.Inventor
 }
 func (f *fakeCodeSvc) Inventory(context.Context) ([]code.InventoryStats, error) { return nil, nil }
 func (f *fakeCodeSvc) LowStock(context.Context) ([]code.InventoryStats, error)  { return nil, nil }
+func (f *fakeCodeSvc) InventoryPaged(context.Context, pagination.Params, bool) ([]code.InventoryStats, code.InventoryTotals, int64, error) {
+	return nil, code.InventoryTotals{}, 0, nil
+}
 
 // fakeWalletSvc tracks a single balance and records debit/refund calls.
 type fakeWalletSvc struct {

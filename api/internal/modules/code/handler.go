@@ -23,14 +23,29 @@ func NewHandler(svc Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-// Inventory handles GET /api/admin/inventory.
+// Inventory handles GET /api/admin/inventory. Without a "page" query param it
+// returns the full listing (used by the thresholds editor and the upload product
+// picker). With "page" it returns one page plus meta (pagination + global KPI
+// totals); "low=true" restricts the page to low-stock products.
 func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
-	stats, err := h.svc.Inventory(r.Context())
+	if !r.URL.Query().Has("page") {
+		stats, err := h.svc.Inventory(r.Context())
+		if err != nil {
+			response.InternalError(w)
+			return
+		}
+		response.OK(w, stats)
+		return
+	}
+
+	p := pagination.ParseParams(r)
+	lowOnly := r.URL.Query().Get("low") == "true"
+	rows, totals, total, err := h.svc.InventoryPaged(r.Context(), p, lowOnly)
 	if err != nil {
 		response.InternalError(w)
 		return
 	}
-	response.OK(w, stats)
+	response.OKWithMeta(w, rows, InventoryMeta{Meta: pagination.CalcMeta(p, total), Totals: totals})
 }
 
 // Upload handles POST /api/admin/products/{id}/codes.
