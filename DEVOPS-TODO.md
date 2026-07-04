@@ -77,3 +77,62 @@ app ships manually. Before launch decide + set up:
 Deploy runs annotate: *"Node.js 20 is deprecated… actions/checkout@v4,
 dorny/paths-filter@v3"*. Bump to checkout@v5 / paths-filter current when
 convenient. Cosmetic for now — runners force Node 24 and the workflows pass.
+
+---
+
+# BL-15 (shipped 2026-07-04, PRs #30/#34/#32/#33) — new ops items
+
+All BL-15 config defaults are **launch-safe** (nothing *must* be set), but two
+behaviors change on this deploy — read items 8 and 11 first.
+
+## 8. ⚠️ Rate limiting is ON by default in prod (BL-15 P1)
+
+`RATE_LIMIT_PROVIDER` defaults to **`mongo`**, so per-IP auth rate limiting is
+**active immediately** after this deploy: 30 auth requests/min/IP and 5 OTP
+requests/min/IP (the OTP cap protects Monty SMS spend). Returns `429
+RATE_LIMITED`. A new `rate_counters` collection (TTL-indexed) is auto-created.
+
+- **Verify the client IP resolves correctly.** The limiter keys on
+  `middleware.RealIP` (X-Forwarded-For). If App Service / a CDN fronts the API
+  and the true client IP is **not** propagated, all traffic can share one IP and
+  hit a **global** throttle. Confirm real client IPs in Log Stream, or the app
+  will appear to rate-limit everyone at once.
+- **Tune / disable** via app settings: `RATE_LIMIT_AUTH_MAX`,
+  `RATE_LIMIT_AUTH_WINDOW`, `RATE_LIMIT_OTP_MAX`, `RATE_LIMIT_OTP_WINDOW`; set
+  `RATE_LIMIT_PROVIDER=noop` to turn it off.
+
+## 9. Bulk-SMS — sends real, paid SMS in prod on deploy (BL-15 DevOps)
+
+⚠️ The admin **bulk-SMS** broadcast (Users → select → SMS) reuses the **live Monty
+provider** already configured for OTP, so unlike the old bulk-email (which was
+`log`-only in prod), it **sends real, billed SMS the moment this ships**. Lebanon
+SMS is charged per 160-char segment.
+
+Guardrails (all on by default, no config needed):
+- **`BULK_SMS_MAX`** — hard cap on recipients per send (default **200**); over it →
+  `400 BULK_SMS_LIMIT`. Tune via an app setting (portal) if a larger blast is needed.
+- Admin **confirm dialog** shows the recipient count before firing.
+- **160-char** single-segment cap (enforced client + server).
+
+The old `EMAIL_*` settings (`EMAIL_PROVIDER` / `SMTP_*` / `SENDGRID_*` / `EMAIL_FROM`)
+are now **unused** — the `platform/email` package is dormant (kept for a future
+"email me my receipt" need). Leave them unset.
+
+## 10. Payment gateway + fulfillment frameworks — keep OFF in prod (BL-15 P4)
+
+Both ship as hexagonal frameworks with a mock/reference adapter; the real
+integrations are not built yet, so **leave the prod defaults as-is**:
+- `PAYMENT_PROVIDER` defaults to `log` → checkout stays **wallet-only** (correct
+  for launch). Only `mock` enables the sandbox card/usdt path — **do not set in
+  prod**. A real gateway = a new adapter file + `PAYMENT_PROVIDER=<name>` + keys.
+- `FULFILLMENT_MOCK` defaults **off** → api-mode orders keep parking for manual
+  completion. Only `1` (with `FULFILLMENT_MOCK_ID`) enables the reference adapter.
+- New additive `Order.paymentRef` field — no migration needed.
+
+## 11. Confirm new Cosmos collections/indexes came up (BL-15)
+
+`EnsureIndexes` auto-creates on this deploy: `app_settings` (settings), 
+`reseller_prices` (unique `{userId, variantId}`), `rate_counters` (TTL on
+`expiresAt`), and a new `codes.orderId` index. Check App Service Log Stream at
+startup for any `EnsureIndexes` slog warnings (Cosmos vCore TTL support — same
+caveat as item 5). All are additive; no data migration.

@@ -26,7 +26,7 @@ const (
 	ActionRoleChange     = "user.role_change"
 	ActionStatusChange   = "user.status_change"
 	ActionUserDelete     = "user.delete"
-	ActionUserBulkEmail  = "user.bulk_email"
+	ActionUserBulkSMS    = "user.bulk_sms"
 	ActionWalletAdjust   = "wallet.adjust"
 	ActionBalanceAdjust  = "reseller.balance_adjust"
 	ActionOrderRefund    = "order.refund"

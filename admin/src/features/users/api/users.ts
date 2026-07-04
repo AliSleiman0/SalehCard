@@ -98,8 +98,9 @@ export function deleteUser(id: string): Promise<ApiResponse<AdminUser>> {
   return apiClient.delete<AdminUser>(`${ADMIN}/${id}`)
 }
 
-/** Send a plain-text email to many users at once. Users without an email are
- *  skipped server-side; the result reports how many were queued. */
-export function bulkEmailUsers(ids: string[], subject: string, body: string): Promise<ApiResponse<{ queued: number }>> {
-  return apiClient.post<{ queued: number }>(`${ADMIN}/bulk-email`, { ids, subject, body })
+/** Send a single-segment SMS to many users at once. Users without a phone number
+ *  are skipped server-side; the result reports how many were queued. The backend
+ *  hard-caps the recipient count (BULK_SMS_LIMIT) — these are real, paid messages. */
+export function bulkSmsUsers(ids: string[], message: string): Promise<ApiResponse<{ queued: number }>> {
+  return apiClient.post<{ queued: number }>(`${ADMIN}/bulk-sms`, { ids, message })
 }

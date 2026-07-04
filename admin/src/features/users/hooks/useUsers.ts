@@ -7,7 +7,7 @@ import {
   adjustWallet,
   bulkUserAction,
   deleteUser,
-  bulkEmailUsers,
+  bulkSmsUsers,
   type UserListParams,
   type UserStatus,
   type BulkUserAction,
@@ -73,10 +73,9 @@ export function useBulkUserAction() {
   })
 }
 
-export function useBulkEmail() {
+export function useBulkSms() {
   return useMutation({
-    mutationFn: ({ ids, subject, body }: { ids: string[]; subject: string; body: string }) =>
-      bulkEmailUsers(ids, subject, body),
+    mutationFn: ({ ids, message }: { ids: string[]; message: string }) => bulkSmsUsers(ids, message),
   })
 }
 
