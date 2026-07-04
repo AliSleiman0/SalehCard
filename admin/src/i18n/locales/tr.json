@@ -85,6 +85,7 @@
   "exp_all_categories": "Tüm kategoriler",
   "exp_from": "Başlangıç",
   "exp_to": "Bitiş",
+  "exp_export": "Dışa aktar",
   "exp_load_error": "Giderler yüklenemedi.",
   "exp_load_one_error": "Bu gider yüklenemedi.",
   "exp_empty": "Gider bulunamadı",
