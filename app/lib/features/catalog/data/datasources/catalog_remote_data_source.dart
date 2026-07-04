@@ -11,10 +11,17 @@ class CatalogRemoteDataSource {
   Future<List<ProductDto>> getProducts({
     int page = 1,
     int limit = 20,
+    String? category,
+    String? rootDomain,
   }) async {
     final response = await _dio.get<dynamic>(
       '/products',
-      queryParameters: {'page': page, 'limit': limit},
+      queryParameters: {
+        'page': page,
+        'limit': limit,
+        if (category != null && category.isNotEmpty) 'category': category,
+        if (rootDomain != null && rootDomain.isNotEmpty) 'rootDomain': rootDomain,
+      },
     );
     final data = unwrap(response) as List<dynamic>;
     return data

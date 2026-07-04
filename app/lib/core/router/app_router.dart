@@ -9,6 +9,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/cart/presentation/screens/cart_screen.dart';
 import '../../features/browse/presentation/screens/categories_screen.dart';
+import '../../features/browse/presentation/screens/category_products_screen.dart';
 import '../../features/browse/presentation/screens/notifications_screen.dart';
 import '../../features/browse/presentation/screens/search_screen.dart';
 import '../../features/catalog/presentation/screens/product_detail_screen.dart';
@@ -103,6 +104,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/search',
         builder: (context, state) => SearchScreen(
           prefill: state.extra is String ? state.extra as String : null,
+        ),
+      ),
+      GoRoute(
+        path: '/category/:domain',
+        builder: (context, state) => CategoryProductsScreen(
+          domain: state.pathParameters['domain']!,
+          title: state.extra is String ? state.extra as String : null,
         ),
       ),
       GoRoute(
