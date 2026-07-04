@@ -36,3 +36,13 @@ final productDetailProvider =
   final result = await ref.watch(getProductUseCaseProvider).call(id);
   return result.match((failure) => throw failure, (product) => product);
 });
+
+/// Products in a single top-level domain (e.g. `games`), keyed by rootDomain.
+/// Backs the Category products screen reached by tapping a Browse tile — the
+/// backend filters via `GET /products?rootDomain=<domain>`.
+final productsByDomainProvider =
+    FutureProvider.family.autoDispose<List<Product>, String>((ref, domain) async {
+  final result =
+      await ref.watch(getProductsUseCaseProvider).call(rootDomain: domain);
+  return result.match((failure) => throw failure, (products) => products);
+});

@@ -14,9 +14,16 @@ class CatalogRepositoryImpl implements CatalogRepository {
   Future<Either<Failure, List<Product>>> getProducts({
     int page = 1,
     int limit = 20,
+    String? category,
+    String? rootDomain,
   }) async {
     try {
-      final dtos = await _remote.getProducts(page: page, limit: limit);
+      final dtos = await _remote.getProducts(
+        page: page,
+        limit: limit,
+        category: category,
+        rootDomain: rootDomain,
+      );
       return Right(dtos.map((d) => d.toEntity()).toList());
     } catch (error) {
       return Left(mapError(error));

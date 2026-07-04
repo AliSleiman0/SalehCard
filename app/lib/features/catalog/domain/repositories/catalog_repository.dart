@@ -7,6 +7,8 @@ abstract interface class CatalogRepository {
   Future<Either<Failure, List<Product>>> getProducts({
     int page,
     int limit,
+    String? category,
+    String? rootDomain,
   });
 
   Future<Either<Failure, Product>> getProduct(String id);

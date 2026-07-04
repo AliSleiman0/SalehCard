@@ -14,8 +14,9 @@ import '../providers.dart';
 
 /// Browse landing: a tappable search box (pushes `/search`), a notifications
 /// bell (pushes `/notifications`), and a 2-column grid of root-domain category
-/// tiles. Tapping a tile pushes `/search` prefilled with the category name.
-/// Watches [categoriesProvider] (`GET /categories?depth=0&withCounts=true`).
+/// tiles. Tapping a tile pushes `/category/<rootDomain>` — the Category products
+/// screen listing that domain's catalog. Watches [categoriesProvider]
+/// (`GET /categories?depth=0&withCounts=true`).
 class CategoriesScreen extends ConsumerWidget {
   const CategoriesScreen({super.key});
 
@@ -82,8 +83,13 @@ class CategoriesScreen extends ConsumerWidget {
                         categories[i].productCount ?? 0,
                       ),
                       onTap: () {
-                        final name = categories[i].name.resolve(localeCode);
-                        context.push('/search', extra: name);
+                        final c = categories[i];
+                        final domain = c.rootDomain != null &&
+                                c.rootDomain!.isNotEmpty
+                            ? c.rootDomain!
+                            : c.slug;
+                        context.push('/category/$domain',
+                            extra: c.name.resolve(localeCode));
                       },
                     ),
                 ],

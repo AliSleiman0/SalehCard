@@ -12,7 +12,14 @@ class GetProducts {
   Future<Either<Failure, List<Product>>> call({
     int page = 1,
     int limit = 20,
+    String? category,
+    String? rootDomain,
   }) {
-    return _repository.getProducts(page: page, limit: limit);
+    return _repository.getProducts(
+      page: page,
+      limit: limit,
+      category: category,
+      rootDomain: rootDomain,
+    );
   }
 }
