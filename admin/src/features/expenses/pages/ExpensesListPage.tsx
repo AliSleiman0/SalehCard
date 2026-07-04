@@ -12,7 +12,8 @@ import {
 } from '@/components'
 import { useExpenses, useExpenseSummary, useDeleteExpense } from '../hooks/useExpenses'
 import { adaptExpense, amountLabel, type ExpenseView } from '../lib/adaptExpense'
-import type { ExpenseCategory } from '../api/expenses'
+import { listExpenses, type AdminExpense, type ExpenseCategory } from '../api/expenses'
+import { downloadCsv } from '@/lib/utils'
 
 const CATEGORIES: ExpenseCategory[] = [
   'salary',
@@ -41,6 +42,7 @@ export default function ExpensesListPage() {
   const [to, setTo] = useState('')
   const [page, setPage] = useState(1)
   const [toDelete, setToDelete] = useState<ExpenseView | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   // Resolve a category to its display label (custom text for "other").
   const catLabel = (c: ExpenseCategory, other?: string) =>
@@ -74,6 +76,33 @@ export default function ExpensesListPage() {
   }, [summary.data])
 
   const resetPage = () => setPage(1)
+
+  // Export the full filtered result set as a CSV (opens in Excel). The backend
+  // caps limit at 100, so page through to the total (cf. InventoryPage.exportCodes).
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const all: AdminExpense[] = []
+      let p = 1
+      let pages = 1
+      do {
+        const res = await listExpenses({ page: p, limit: 100, ...filters })
+        all.push(...(res.data ?? []))
+        pages = res.meta?.pages ?? 1
+        p++
+      } while (p <= pages)
+
+      const header = [t('exp_date'), t('exp_category'), t('exp_note'), t('exp_amount'), 'Currency']
+      const csvRows = all.map((e) => {
+        const v = adaptExpense(e)
+        return [v.dateLabel, catLabel(v.category, v.categoryOther), v.note || '', v.raw.amount, v.raw.currency]
+      })
+      downloadCsv(`expenses-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="page page-wide">
@@ -126,26 +155,38 @@ export default function ExpensesListPage() {
               </option>
             ))}
           </select>
-          <input
-            className="afield"
-            type="date"
-            value={from}
-            onChange={(e) => {
-              setFrom(e.target.value)
-              resetPage()
-            }}
-            aria-label={t('exp_from')}
-          />
-          <input
-            className="afield"
-            type="date"
-            value={to}
-            onChange={(e) => {
-              setTo(e.target.value)
-              resetPage()
-            }}
-            aria-label={t('exp_to')}
-          />
+          <label className="tb-field">
+            <span>{t('exp_from')}</span>
+            <input
+              className="tb-date"
+              type="date"
+              value={from}
+              onChange={(e) => {
+                setFrom(e.target.value)
+                resetPage()
+              }}
+            />
+          </label>
+          <label className="tb-field">
+            <span>{t('exp_to')}</span>
+            <input
+              className="tb-date"
+              type="date"
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value)
+                resetPage()
+              }}
+            />
+          </label>
+          <div className="tb-spacer" />
+          <button
+            className="abtn"
+            onClick={handleExport}
+            disabled={exporting || rows.length === 0}
+          >
+            <Icon name="download" size={15} /> {t('exp_export')}
+          </button>
         </div>
 
         {isLoading ? (
