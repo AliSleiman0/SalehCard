@@ -226,8 +226,12 @@ export default function UserDetailPage() {
           {detail.savedPlayerIds.length === 0 ? (
             <EmptyState title="No saved game IDs" />
           ) : (
-            detail.savedPlayerIds.map((pid) => (
-              <div className="acard pad" key={pid} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            detail.savedPlayerIds.map((pid, i) => (
+              <div
+                className="acard pad"
+                key={`${pid.label} ${pid.value} ${i}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+              >
                 <div
                   style={{
                     width: 38,
@@ -243,10 +247,10 @@ export default function UserDetailPage() {
                 </div>
                 <div>
                   <div className="mono" style={{ fontWeight: 800, fontSize: 14 }}>
-                    {pid}
+                    {pid.value}
                   </div>
                   <div className="faint" style={{ fontSize: 12.5 }}>
-                    Saved player ID
+                    {pid.label}
                   </div>
                 </div>
               </div>
