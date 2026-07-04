@@ -338,8 +338,22 @@ func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc 
 		byID[p.ID.Hex()] = p
 	}
 	prodSvc := &fakeProductSvc{byID: byID}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), payments.New(payments.Config{}), &fakeKycGate{approved: true}, nil, notification.Nop{})
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), payments.New(payments.Config{}), &fakeKycGate{approved: true}, nil, notification.Nop{}, &fakeAwarder{})
 	return svc, repo
+}
+
+// fakeAwarder records loyalty-award calls so completion tests can assert points
+// are minted with the final order total.
+type fakeAwarder struct {
+	calls     int
+	lastUser  bson.ObjectID
+	lastTotal float64
+}
+
+func (f *fakeAwarder) Award(_ context.Context, userID bson.ObjectID, orderTotal float64) {
+	f.calls++
+	f.lastUser = userID
+	f.lastTotal = orderTotal
 }
 
 // fakeMargins returns a fixed reseller-tier margin percent for every user, plus
@@ -402,6 +416,25 @@ func TestPlaceOrder_CodeFulfillment_Success(t *testing.T) {
 	assert.NotEmpty(t, order.Fulfillment.DeliveredCode)
 	assert.Equal(t, 80.0, walletSvc.balance) // 100 - 20
 	assert.Equal(t, 3, codeSvc.available[p.ID.Hex()])
+}
+
+func TestPlaceOrder_AwardsLoyaltyOnCompletion(t *testing.T) {
+	p := codeProduct(10, nil)
+	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+	svc, _ := newSUT(p, codeSvc, &fakeWalletSvc{balance: 100})
+	userID := bson.NewObjectID()
+
+	order, err := svc.PlaceOrder(context.Background(), userID, false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(p, 2)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, order.Status)
+
+	aw := svc.loyalty.(*fakeAwarder)
+	assert.Equal(t, 1, aw.calls) // awarded exactly once, on completion
+	assert.Equal(t, userID, aw.lastUser)
+	assert.Equal(t, order.Total, aw.lastTotal) // minted off the final, re-priced total (20.0)
 }
 
 func TestPlaceOrder_UsesResellerPriceWhenReseller(t *testing.T) {

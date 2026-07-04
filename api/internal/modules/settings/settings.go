@@ -78,6 +78,10 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "lowStockThreshold must be zero or greater")
 		return
 	}
+	if in.LoyaltyEarnUsdPerPoint != nil && *in.LoyaltyEarnUsdPerPoint <= 0 {
+		response.BadRequest(w, "loyaltyEarnUsdPerPoint must be greater than zero")
+		return
+	}
 
 	actor := ""
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {

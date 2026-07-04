@@ -18,18 +18,25 @@ type Settings struct {
 	DefaultCurrency   string    `bson:"defaultCurrency"    json:"defaultCurrency"` // USD / TRY
 	LowStockThreshold int       `bson:"lowStockThreshold"  json:"lowStockThreshold"`
 	MaintenanceMode   bool      `bson:"maintenanceMode"    json:"maintenanceMode"`
-	UpdatedAt         time.Time `bson:"updatedAt"          json:"updatedAt"`
-	UpdatedBy         string    `bson:"updatedBy,omitempty" json:"updatedBy,omitempty"`
+	// Loyalty program. LoyaltyEnabled gates whether completed orders earn points;
+	// LoyaltyEarnUsdPerPoint is the spend (in order-total dollars) that mints one
+	// point, i.e. points = floor(orderTotal / LoyaltyEarnUsdPerPoint).
+	LoyaltyEnabled         bool      `bson:"loyaltyEnabled"          json:"loyaltyEnabled"`
+	LoyaltyEarnUsdPerPoint float64   `bson:"loyaltyEarnUsdPerPoint"  json:"loyaltyEarnUsdPerPoint"`
+	UpdatedAt              time.Time `bson:"updatedAt"          json:"updatedAt"`
+	UpdatedBy              string    `bson:"updatedBy,omitempty" json:"updatedBy,omitempty"`
 }
 
 // defaults returns the baseline settings used when no document has been saved.
 func defaults() *Settings {
 	return &Settings{
-		ID:                settingsID,
-		StoreName:         "SalehCard",
-		DefaultLanguage:   "en",
-		DefaultCurrency:   "USD",
-		LowStockThreshold: 50,
+		ID:                     settingsID,
+		StoreName:              "SalehCard",
+		DefaultLanguage:        "en",
+		DefaultCurrency:        "USD",
+		LowStockThreshold:      50,
+		LoyaltyEnabled:         true,
+		LoyaltyEarnUsdPerPoint: 5.0,
 	}
 }
 
@@ -43,6 +50,9 @@ type UpdateInput struct {
 	DefaultCurrency   *string `json:"defaultCurrency"`
 	LowStockThreshold *int    `json:"lowStockThreshold"`
 	MaintenanceMode   *bool   `json:"maintenanceMode"`
+
+	LoyaltyEnabled         *bool    `json:"loyaltyEnabled"`
+	LoyaltyEarnUsdPerPoint *float64 `json:"loyaltyEarnUsdPerPoint"`
 }
 
 // Integration reports whether an external provider is configured, without ever

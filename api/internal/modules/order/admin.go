@@ -16,6 +16,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/loyalty"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
@@ -68,6 +69,7 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, r
 		payments: payments.New(payments.Config{Provider: cfg.PaymentProvider}),
 		rec:      rec,
 		ntf:      ntf,
+		loyalty:  loyalty.NewAwarder(db),
 	}
 
 	r.Get("/orders", a.list)
@@ -107,6 +109,7 @@ type adminHandler struct {
 	payments *payments.Registry
 	rec      audit.Recorder
 	ntf      notification.Notifier
+	loyalty  loyaltyAwarder
 }
 
 // list handles GET /api/admin/orders — paginated, newest first, with optional
@@ -379,6 +382,9 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	a.ntf.Notify(r.Context(), before.UserID, orderCompletedNote(id.Hex(), before.Total, before.Currency))
+	if a.loyalty != nil {
+		a.loyalty.Award(r.Context(), before.UserID, before.Total)
+	}
 	a.respondFresh(w, r, id)
 }
 
