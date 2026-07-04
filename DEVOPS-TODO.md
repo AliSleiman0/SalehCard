@@ -101,15 +101,22 @@ RATE_LIMITED`. A new `rate_counters` collection (TTL-indexed) is auto-created.
   `RATE_LIMIT_AUTH_WINDOW`, `RATE_LIMIT_OTP_MAX`, `RATE_LIMIT_OTP_WINDOW`; set
   `RATE_LIMIT_PROVIDER=noop` to turn it off.
 
-## 9. Email provider — bulk email logs only until configured (BL-15 P3)
+## 9. Bulk-SMS — sends real, paid SMS in prod on deploy (BL-15 DevOps)
 
-`EMAIL_PROVIDER` defaults to **`log`**: the admin bulk-email action records an
-audit row and logs each recipient but **sends nothing**. To actually send, add
-app settings (portal, same screen as items 1–2):
-- SMTP: `EMAIL_PROVIDER=smtp` + `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` /
-  `SMTP_PASSWORD` + `EMAIL_FROM`.
-- SendGrid: `EMAIL_PROVIDER=sendgrid` + `SENDGRID_API_KEY` + `EMAIL_FROM`.
-Misconfig fails open to the log sender (the API still boots).
+⚠️ The admin **bulk-SMS** broadcast (Users → select → SMS) reuses the **live Monty
+provider** already configured for OTP, so unlike the old bulk-email (which was
+`log`-only in prod), it **sends real, billed SMS the moment this ships**. Lebanon
+SMS is charged per 160-char segment.
+
+Guardrails (all on by default, no config needed):
+- **`BULK_SMS_MAX`** — hard cap on recipients per send (default **200**); over it →
+  `400 BULK_SMS_LIMIT`. Tune via an app setting (portal) if a larger blast is needed.
+- Admin **confirm dialog** shows the recipient count before firing.
+- **160-char** single-segment cap (enforced client + server).
+
+The old `EMAIL_*` settings (`EMAIL_PROVIDER` / `SMTP_*` / `SENDGRID_*` / `EMAIL_FROM`)
+are now **unused** — the `platform/email` package is dormant (kept for a future
+"email me my receipt" need). Leave them unset.
 
 ## 10. Payment gateway + fulfillment frameworks — keep OFF in prod (BL-15 P4)
 

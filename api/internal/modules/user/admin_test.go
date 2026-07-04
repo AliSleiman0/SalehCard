@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -165,6 +166,125 @@ func TestWalletAdjustLedgerFailureReverts(t *testing.T) {
 	}
 	if len(rec.entries) != 0 {
 		t.Fatalf("failed adjustment must not be audited, got %d entries", len(rec.entries))
+	}
+}
+
+// fakeSMSSender records every send under a mutex; the bulk-SMS fan-out runs in a
+// detached goroutine, so tests wait on recorded() rather than reading immediately.
+type fakeSMSSender struct {
+	mu   sync.Mutex
+	sent []string
+}
+
+func (f *fakeSMSSender) Send(_ context.Context, phone, _ string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, phone)
+	return nil
+}
+
+func (f *fakeSMSSender) recorded() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.sent)
+}
+
+// waitForSends polls until the fake has recorded want sends or a short deadline
+// elapses (the fan-out goroutine sends serially, off the request path).
+func waitForSends(t *testing.T, s *fakeSMSSender, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.recorded() >= want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := s.recorded(); got != want {
+		t.Fatalf("bulk-sms sends = %d, want %d", got, want)
+	}
+}
+
+func strptr(s string) *string { return &s }
+
+func TestBulkSMSSkipsPhonelessAndDeleted(t *testing.T) {
+	valid1 := &User{ID: bson.NewObjectID(), Status: StatusActive, Phone: strptr("+96170000001")}
+	valid2 := &User{ID: bson.NewObjectID(), Status: StatusActive, Phone: strptr("+96170000002")}
+	noPhone := &User{ID: bson.NewObjectID(), Status: StatusActive, Phone: nil}
+	deleted := &User{ID: bson.NewObjectID(), Status: StatusDeleted, Phone: strptr("+96170000003")}
+	a, _, _, rec := newAdminFixture(valid1, valid2, noPhone, deleted)
+	sender := &fakeSMSSender{}
+	a.smsSender, a.maxBulkSMS = sender, 200
+
+	ids := []string{valid1.ID.Hex(), valid2.ID.Hex(), noPhone.ID.Hex(), deleted.ID.Hex()}
+	body, _ := json.Marshal(map[string]any{"ids": ids, "message": "Hello from SalehCard"})
+	rr := doJSON(t, http.MethodPost, "/users/bulk-sms", string(body),
+		func(r chi.Router) { r.Post("/users/bulk-sms", a.bulkSMS) })
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("bulk-sms: got status %d, want 200 (body %s)", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Queued int `json:"queued"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Data.Queued != 2 {
+		t.Fatalf("queued = %d, want 2 (phone-less and deleted skipped)", resp.Data.Queued)
+	}
+	waitForSends(t, sender, 2)
+	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionUserBulkSMS {
+		t.Fatalf("expected one user.bulk_sms audit entry, got %+v", rec.entries)
+	}
+}
+
+func TestBulkSMSRejectsOverCap(t *testing.T) {
+	u1 := &User{ID: bson.NewObjectID(), Status: StatusActive, Phone: strptr("+96170000001")}
+	u2 := &User{ID: bson.NewObjectID(), Status: StatusActive, Phone: strptr("+96170000002")}
+	a, _, _, rec := newAdminFixture(u1, u2)
+	sender := &fakeSMSSender{}
+	a.smsSender, a.maxBulkSMS = sender, 1
+
+	body, _ := json.Marshal(map[string]any{"ids": []string{u1.ID.Hex(), u2.ID.Hex()}, "message": "hi"})
+	rr := doJSON(t, http.MethodPost, "/users/bulk-sms", string(body),
+		func(r chi.Router) { r.Post("/users/bulk-sms", a.bulkSMS) })
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("over-cap: got status %d, want 400", rr.Code)
+	}
+	var resp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Error.Code != "BULK_SMS_LIMIT" {
+		t.Fatalf("error code = %q, want BULK_SMS_LIMIT", resp.Error.Code)
+	}
+	if sender.recorded() != 0 {
+		t.Fatalf("over-cap send must not dispatch any SMS, got %d", sender.recorded())
+	}
+	if len(rec.entries) != 0 {
+		t.Fatalf("rejected send must not be audited, got %d entries", len(rec.entries))
+	}
+}
+
+func TestBulkSMSRejectsLongMessage(t *testing.T) {
+	u := &User{ID: bson.NewObjectID(), Status: StatusActive, Phone: strptr("+96170000001")}
+	a, _, _, _ := newAdminFixture(u)
+	a.smsSender, a.maxBulkSMS = &fakeSMSSender{}, 200
+
+	body, _ := json.Marshal(map[string]any{"ids": []string{u.ID.Hex()}, "message": strings.Repeat("x", 161)})
+	rr := doJSON(t, http.MethodPost, "/users/bulk-sms", string(body),
+		func(r chi.Router) { r.Post("/users/bulk-sms", a.bulkSMS) })
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("161-char message: got status %d, want 400", rr.Code)
 	}
 }
 

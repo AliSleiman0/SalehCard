@@ -93,6 +93,11 @@ type Config struct {
 	SMTPPassword   string
 	SendGridAPIKey string
 
+	// BulkSMSMax hard-caps the recipients an admin bulk-SMS send may target in one
+	// request (the send goes over the live Monty provider — real, paid SMS — so
+	// this is a spend guardrail). Exceeding it returns 400 BULK_SMS_LIMIT.
+	BulkSMSMax int
+
 	// PaymentProvider selects the checkout payment gateway: "mock" enables the
 	// sandbox card/usdt path; "" / "log" keeps checkout wallet-only (the default).
 	PaymentProvider string
@@ -159,6 +164,8 @@ func Load() *Config {
 		SMTPUsername:   os.Getenv("SMTP_USERNAME"),
 		SMTPPassword:   os.Getenv("SMTP_PASSWORD"),
 		SendGridAPIKey: os.Getenv("SENDGRID_API_KEY"),
+
+		BulkSMSMax: getInt("BULK_SMS_MAX", 200),
 
 		PaymentProvider:   getEnv("PAYMENT_PROVIDER", "log"),
 		FulfillmentMock:   getBool("FULFILLMENT_MOCK", false),

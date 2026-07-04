@@ -31,8 +31,8 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
-	"github.com/AliSleiman0/salehcard/api/internal/platform/email"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -107,22 +107,30 @@ func (s *Server) Routes() {
 	}
 	ntf := notification.NewNotifier(s.db, sender)
 
-	// Outbound email (bulk admin messaging). Built once here (shared) and injected
+	// Outbound SMS for admin bulk messaging. Built here (a second, admin-scoped
+	// construction alongside the OTP sender in user.RegisterRoutes) and injected
 	// into the admin user routes; falls open to the dev log sender on misconfig.
-	mailer, err := email.New(email.Config{
-		Provider: s.cfg.EmailProvider,
-		SMTP: email.SMTPConfig{
-			Host:     s.cfg.SMTPHost,
-			Port:     s.cfg.SMTPPort,
-			Username: s.cfg.SMTPUsername,
-			Password: s.cfg.SMTPPassword,
-			From:     s.cfg.EmailFrom,
+	// NOTE: in prod this is the live Monty provider — bulk-SMS sends real, paid
+	// messages. The recipient cap (BulkSMSMax) + the admin confirm dialog guard it.
+	smsSender, err := sms.New(sms.Config{
+		Provider: s.cfg.SMSProvider,
+		Monty: sms.MontyConfig{
+			BaseURL:     s.cfg.MontyBaseURL,
+			Username:    s.cfg.MontyUsername,
+			APIID:       s.cfg.MontyAPIID,
+			AccessToken: s.cfg.MontyAccessToken,
+			SenderID:    s.cfg.MontySenderID,
+			Campaign:    s.cfg.MontyCampaign,
 		},
-		SendGrid: email.SendGridConfig{APIKey: s.cfg.SendGridAPIKey, From: s.cfg.EmailFrom},
+		Twilio: sms.TwilioConfig{
+			AccountSID: s.cfg.TwilioAccountSID,
+			AuthToken:  s.cfg.TwilioAuthToken,
+			From:       s.cfg.TwilioFrom,
+		},
 	})
 	if err != nil {
-		slog.Warn("server: email provider misconfigured — falling back to log sender", "provider", s.cfg.EmailProvider, "error", err)
-		mailer = email.LogSender{}
+		slog.Warn("server: SMS provider misconfigured — falling back to log sender", "provider", s.cfg.SMSProvider, "error", err)
+		smsSender = sms.LogSender{}
 	}
 
 	// Customer orders + wallet + promo validation + review submission +
@@ -147,7 +155,7 @@ func (s *Server) Routes() {
 		dashboard.RegisterAdminRoutes(r, s.db)
 		finance.RegisterAdminRoutes(r, s.db)
 		order.RegisterAdminRoutes(r, s.db, s.cfg, rec, ntf)
-		user.RegisterAdminRoutes(r, s.db, rec, mailer)
+		user.RegisterAdminRoutes(r, s.db, rec, smsSender, s.cfg.BulkSMSMax)
 		reseller.RegisterAdminRoutes(r, s.db, rec)
 		promo.RegisterAdminRoutes(r, s.db)
 		offer.RegisterAdminRoutes(r, s.db)

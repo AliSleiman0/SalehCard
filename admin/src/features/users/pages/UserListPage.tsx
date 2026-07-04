@@ -19,7 +19,7 @@ import { useBulk } from '@/hooks/useBulk'
 import { money, downloadCsv } from '@/lib/utils'
 import { toast } from '@/stores/toast'
 import { ApiError } from '@/lib/api-client'
-import { useUsers, useBulkUserAction, useBulkEmail } from '../hooks/useUsers'
+import { useUsers, useBulkUserAction, useBulkSms } from '../hooks/useUsers'
 import { adaptUser } from '../lib/adaptUser'
 import { listUsers, type UserStatus, type BulkUserAction, type AdminUser } from '../api/users'
 import type { UserRole } from '@/types'
@@ -42,7 +42,7 @@ export default function UserListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [page, setPage] = useState(1)
   const [exporting, setExporting] = useState(false)
-  const [emailIds, setEmailIds] = useState<string[] | null>(null)
+  const [smsIds, setSmsIds] = useState<string[] | null>(null)
 
   // Adopt the URL's ?q= (e.g. the top-bar global search navigates to /users?q=…).
   useEffect(() => {
@@ -167,8 +167,8 @@ export default function UserListPage() {
               <button className="abtn xs danger" onClick={() => runBulk('suspend')} disabled={bulkAction.isPending}>
                 <Icon name="x" size={13} /> {t('suspend')}
               </button>
-              <button className="abtn xs" onClick={() => setEmailIds(bulk.sel)}>
-                <Icon name="send" size={13} /> Email
+              <button className="abtn xs" onClick={() => setSmsIds(bulk.sel)}>
+                <Icon name="send" size={13} /> SMS
               </button>
             </div>
           </div>
@@ -251,12 +251,12 @@ export default function UserListPage() {
         )}
       </div>
 
-      {emailIds && (
-        <BulkEmailModal
-          ids={emailIds}
-          onClose={() => setEmailIds(null)}
+      {smsIds && (
+        <BulkSMSModal
+          ids={smsIds}
+          onClose={() => setSmsIds(null)}
           onSent={() => {
-            setEmailIds(null)
+            setSmsIds(null)
             bulk.clear()
           }}
         />
@@ -265,26 +265,28 @@ export default function UserListPage() {
   )
 }
 
-/** Compose + send a plain-text email to the selected users. Recipients without
- *  an email are skipped server-side; the toast reports how many were queued. */
-function BulkEmailModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => void; onSent: () => void }) {
+/** Compose + send a single-segment (160-char) SMS to the selected users.
+ *  Recipients without a phone number are skipped server-side; the toast reports
+ *  how many were queued. A confirm dialog guards the send — these are real,
+ *  paid messages, and the backend caps the batch size. */
+function BulkSMSModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => void; onSent: () => void }) {
   const { t } = useTranslation()
-  const [subject, setSubject] = useState('')
-  const [body, setBody] = useState('')
+  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const send = useBulkEmail()
+  const send = useBulkSms()
 
   const submit = () => {
-    if (!subject.trim() || !body.trim()) {
-      setError('Subject and message are required.')
+    if (!message.trim()) {
+      setError('Message is required.')
       return
     }
+    if (!window.confirm(`Send SMS to ${ids.length} user(s)? This sends real messages.`)) return
     setError('')
     send.mutate(
-      { ids, subject: subject.trim(), body: body.trim() },
+      { ids, message: message.trim() },
       {
         onSuccess: (res) => {
-          toast.success(`Email queued to ${res.data?.queued ?? 0} recipient(s).`)
+          toast.success(`SMS queued to ${res.data?.queued ?? 0} recipient(s).`)
           onSent()
         },
         onError: (e) => setError(e instanceof ApiError ? e.message : 'Send failed.'),
@@ -295,21 +297,21 @@ function BulkEmailModal({ ids, onClose, onSent }: { ids: string[]; onClose: () =
   return (
     <Modal onClose={onClose} maxWidth={520}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Email {ids.length} user(s)</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>SMS {ids.length} user(s)</h3>
         <p style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Users without an email address are skipped automatically.
+          Users without a phone number are skipped automatically.
         </p>
-        <label className="alabel">Subject</label>
-        <input className="afield" value={subject} onChange={(e) => setSubject(e.target.value)} />
-        <label className="alabel" style={{ marginTop: 14 }}>
-          Message
-        </label>
+        <label className="alabel">Message</label>
         <textarea
           className="afield"
           style={{ minHeight: 120 }}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
+          maxLength={160}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
         />
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, textAlign: 'right' }}>
+          {message.length} / 160
+        </div>
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
           <button className="abtn" onClick={onClose} disabled={send.isPending}>
