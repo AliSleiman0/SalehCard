@@ -100,10 +100,10 @@ export default function UserListPage() {
         p++
       } while (p <= pages)
 
-      const header = ['ID', 'Email', 'Phone', 'Role', 'Status', 'Wallet', 'Orders', 'Total spent', 'Joined']
+      const header = ['ID', 'Email', 'Phone', 'Role', 'Status', 'Wallet', 'Orders', 'Total spent', 'Points', 'Joined']
       const csvRows = all.map((u) => {
         const v = adaptUser(u)
-        return [v.id, v.email, v.phone, v.role, v.status, v.balance.toFixed(2), v.orders, v.spent.toFixed(2), v.joined]
+        return [v.id, v.email, v.phone, v.role, v.status, v.balance.toFixed(2), v.orders, v.spent.toFixed(2), v.loyalty, v.joined]
       })
       downloadCsv(`users-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...csvRows])
     } finally {
@@ -194,6 +194,7 @@ export default function UserListPage() {
                     <th>Wallet</th>
                     <th>Orders</th>
                     <th>Total spent</th>
+                    <th>Points</th>
                     <th>Joined</th>
                     <th>{t('status')}</th>
                     <th></th>
@@ -220,6 +221,7 @@ export default function UserListPage() {
                       <td className="num strong">{money(u.balance, u.cur)}</td>
                       <td className="num muted">{u.orders}</td>
                       <td className="num">{money(u.spent, u.cur)}</td>
+                      <td className="num muted">{u.loyalty.toLocaleString()}</td>
                       <td className="muted" style={{ fontSize: 12.5 }}>
                         {u.joined}
                       </td>

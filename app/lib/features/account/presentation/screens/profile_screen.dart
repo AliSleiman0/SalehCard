@@ -173,6 +173,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       // shown only to resellers/admins who log into the app.
                       if (user.role != 'customer')
                         _InfoRow(label: l10n.roleLabel, value: user.role),
+                      _InfoRow(
+                        label: l10n.loyaltyPoints,
+                        value: user.loyaltyPoints.toString(),
+                        leading: Icons.star_rounded,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),

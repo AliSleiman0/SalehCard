@@ -489,6 +489,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get roleLabel => 'الدور';
 
   @override
+  String get loyaltyPoints => 'نقاط الولاء';
+
+  @override
   String get verificationTitle => 'التحقق';
 
   @override

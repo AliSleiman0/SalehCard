@@ -10,6 +10,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/kyc"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/loyalty"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
@@ -48,8 +49,9 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	pay := payments.New(payments.Config{Provider: cfg.PaymentProvider})
 	kycGate := kyc.NewGate(db)
 	margins := reseller.NewMongoRepository(db)
+	points := loyalty.NewAwarder(db)
 
-	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, kycGate, margins, ntf)
+	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, kycGate, margins, ntf, points)
 	h := NewHandler(svc)
 
 	r.Route("/api/v1/orders", func(r chi.Router) {
