@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { ApiResponse, PaginationMeta, Product, FulfillmentType } from '@/types'
+import type { ApiResponse, PaginationMeta, Product, FulfillmentType, InputField } from '@/types'
 
 export interface ProductListParams {
   page?: number
@@ -20,6 +20,7 @@ export interface ProductInput {
   fulfillmentType: FulfillmentType
   stock: number
   available: boolean
+  inputFields?: InputField[]
 }
 
 const ADMIN = '/api/admin/products'

@@ -243,6 +243,7 @@ type UpdateProductInput struct {
 	Stock               *int             `json:"stock,omitempty"`
 	Available           *bool            `json:"available,omitempty"`
 	Ratings             *RatingsSummary  `json:"ratings,omitempty"`
+	InputFields         []InputField     `json:"inputFields,omitempty"`
 }
 
 // ListFilter holds the optional query filters for listing products.

@@ -21,8 +21,9 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockRepo struct {
-	products []product.Product
-	err      error
+	products   []product.Product
+	err        error
+	lastUpdate product.UpdateProductInput
 }
 
 func (m *mockRepo) FindAll(_ context.Context, _ product.ListFilter, _ pagination.Params) ([]product.Product, int64, error) {
@@ -53,7 +54,8 @@ func (m *mockRepo) Create(_ context.Context, in product.CreateProductInput) (*pr
 	return &p, nil
 }
 
-func (m *mockRepo) Update(_ context.Context, _ string, _ product.UpdateProductInput) (*product.Product, error) {
+func (m *mockRepo) Update(_ context.Context, _ string, in product.UpdateProductInput) (*product.Product, error) {
+	m.lastUpdate = in
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -110,6 +112,29 @@ func TestProductService_Get_NotFound(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, apperrors.ErrNotFound)
+}
+
+func TestProductService_Update_PassesInputFields(t *testing.T) {
+	repo := &mockRepo{products: []product.Product{{Title: product.I18nString{En: "P"}}}}
+	svc := product.NewProductService(repo)
+
+	in := product.UpdateProductInput{
+		InputFields: []product.InputField{{
+			Key:        "field_1",
+			Label:      product.I18nLabel{En: "Account ID", Ar: "ايدي"},
+			LegacyName: "ايدي الحساب",
+			Type:       product.InputFieldText,
+		}},
+	}
+
+	_, err := svc.Update(context.Background(), "6a3f04c4ea6747f81d0baf8a", in)
+
+	require.NoError(t, err)
+	require.Len(t, repo.lastUpdate.InputFields, 1)
+	got := repo.lastUpdate.InputFields[0]
+	assert.Equal(t, "field_1", got.Key)
+	assert.Equal(t, "Account ID", got.Label.En)
+	assert.Equal(t, "ايدي الحساب", got.LegacyName)
 }
 
 func TestProductService_List(t *testing.T) {
