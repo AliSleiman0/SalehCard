@@ -33,4 +33,41 @@ class CatalogRemoteDataSource {
     final response = await _dio.get<dynamic>('/products/$id');
     return ProductDto.fromJson(unwrap(response) as Map<String, dynamic>);
   }
+
+  /// Resolves a game player ID to its account nickname via the product's
+  /// configured verification provider. The backend always returns 200 for the
+  /// business outcomes below; only genuine transport failures throw.
+  Future<VerifyAccountResult> verifyAccount(
+    String productId,
+    String playerId,
+  ) async {
+    final response = await _dio.post<dynamic>(
+      '/products/$productId/verify-account',
+      data: {'playerId': playerId},
+    );
+    final data = unwrap(response) as Map<String, dynamic>;
+    return VerifyAccountResult(
+      found: data['found'] == true,
+      username: (data['username'] as String?) ?? '',
+      banned: data['banned'] == true,
+      reason: (data['reason'] as String?) ?? '',
+    );
+  }
+}
+
+/// Outcome of a verify-account call. [found] is false both for a positively-
+/// unknown id ([reason] == "id_not_found") and when the upstream check is
+/// unavailable ([reason] == "unavailable").
+class VerifyAccountResult {
+  const VerifyAccountResult({
+    required this.found,
+    this.username = '',
+    this.banned = false,
+    this.reason = '',
+  });
+
+  final bool found;
+  final String username;
+  final bool banned;
+  final String reason;
 }

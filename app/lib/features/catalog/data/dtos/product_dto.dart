@@ -124,6 +124,21 @@ class InputFieldDto {
       );
 }
 
+@JsonSerializable()
+class VerificationDto {
+  const VerificationDto({this.provider = 0, this.app = ''});
+
+  final int provider;
+  final String app;
+
+  factory VerificationDto.fromJson(Map<String, dynamic> json) =>
+      _$VerificationDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$VerificationDtoToJson(this);
+
+  Verification toEntity() => Verification(provider: provider, app: app);
+}
+
 @JsonSerializable(explicitToJson: true)
 class ProductDto {
   const ProductDto({
@@ -136,6 +151,7 @@ class ProductDto {
     this.available,
     this.fulfillmentType,
     this.inputFields,
+    this.verification,
     this.ratings,
     this.offer,
   });
@@ -149,6 +165,7 @@ class ProductDto {
   final bool? available;
   final String? fulfillmentType;
   final List<InputFieldDto>? inputFields;
+  final VerificationDto? verification;
   final RatingsDto? ratings;
   final ProductOfferDto? offer;
 
@@ -169,6 +186,7 @@ class ProductDto {
         fulfillmentType: fulfillmentType ?? 'code',
         inputFields:
             (inputFields ?? const []).map((f) => f.toEntity()).toList(),
+        verification: verification?.toEntity(),
         rating: ratings?.average,
         ratingCount: ratings?.count ?? 0,
         offer: offer?.toEntity(),
