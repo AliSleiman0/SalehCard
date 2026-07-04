@@ -2,6 +2,7 @@ package code
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -15,6 +16,11 @@ type Service interface {
 	Lookup(ctx context.Context, value string) (*CodeAudit, error)
 	SetThreshold(ctx context.Context, productID string, threshold int) (*InventoryStats, error)
 	Inventory(ctx context.Context) ([]InventoryStats, error)
+	// InventoryPaged returns one page of the inventory listing (sorted by title),
+	// the global totals across every code-type product (for the KPI cards), and
+	// the filtered total count for pagination. lowOnly restricts the returned rows
+	// to low-stock products without affecting the global totals.
+	InventoryPaged(ctx context.Context, p pagination.Params, lowOnly bool) (rows []InventoryStats, totals InventoryTotals, total int64, err error)
 	LowStock(ctx context.Context) ([]InventoryStats, error)
 	// ClaimForOrder claims qty available codes for a product against an order,
 	// re-mirroring product stock. On any shortfall it releases what it claimed
@@ -135,6 +141,52 @@ func (s *CodeService) Inventory(ctx context.Context) ([]InventoryStats, error) {
 		out = append(out, buildStats(p, counts[p.ID], thresholds[p.ID]))
 	}
 	return out, nil
+}
+
+// InventoryPaged returns one page of the inventory listing. It builds the full
+// stats set once (via Inventory), computes the global KPI totals over it, then
+// sorts by title (so skip/limit paging is deterministic), optionally filters to
+// low-stock rows, and slices the requested page.
+func (s *CodeService) InventoryPaged(ctx context.Context, p pagination.Params, lowOnly bool) ([]InventoryStats, InventoryTotals, int64, error) {
+	all, err := s.Inventory(ctx)
+	if err != nil {
+		return nil, InventoryTotals{}, 0, err
+	}
+
+	// Global totals across every product — unaffected by the page or low-only view.
+	var totals InventoryTotals
+	for _, st := range all {
+		totals.Uploaded += st.Uploaded
+		totals.Available += st.Available
+		totals.Delivered += st.Delivered
+		if st.Level == LevelLo {
+			totals.LowStock++
+		}
+	}
+
+	// Stable, deterministic order for paging (natural product order is not).
+	sort.SliceStable(all, func(i, j int) bool { return all[i].Title < all[j].Title })
+
+	rows := all
+	if lowOnly {
+		rows = make([]InventoryStats, 0, len(all))
+		for _, st := range all {
+			if st.Level == LevelLo {
+				rows = append(rows, st)
+			}
+		}
+	}
+
+	total := int64(len(rows))
+	skip := int(pagination.Skip(p))
+	if skip >= len(rows) {
+		return []InventoryStats{}, totals, total, nil
+	}
+	end := skip + p.Limit
+	if end > len(rows) {
+		end = len(rows)
+	}
+	return rows[skip:end], totals, total, nil
 }
 
 // LowStock returns the subset of inventory whose available count is below the

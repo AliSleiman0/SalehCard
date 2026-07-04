@@ -1,8 +1,15 @@
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
-import { Icon, PageHead, Art, LoadingSpinner, ErrorState, EmptyState, artForCategory } from '@/components'
-import { useInventory, useUploadCodes, useLookupCode, useSetThreshold, useUploadHistory } from '../hooks/useInventory'
+import { Icon, PageHead, Art, LoadingSpinner, ErrorState, EmptyState, Pagination, artForCategory } from '@/components'
+import {
+  useInventory,
+  useInventoryPage,
+  useUploadCodes,
+  useLookupCode,
+  useSetThreshold,
+  useUploadHistory,
+} from '../hooks/useInventory'
 import { parseCodesFile, listCodes, type UploadItem } from '../api/codes'
 import { relativeTime, downloadCsv } from '@/lib/utils'
 import type { InventoryStats, Code } from '@/types'
@@ -15,7 +22,11 @@ export default function InventoryPage() {
   const uploadFor = params.get('upload') ?? undefined
   const [tab, setTab] = useState<Tab>(uploadFor ? 'upload' : 'stock')
 
-  const { data, isLoading, isError, refetch } = useInventory()
+  // The Code-stock table paginates from the backend (see StockTab). The upload
+  // picker and thresholds editor need every product, so they fetch the full list
+  // — gated to those tabs so the stock view doesn't also download everything.
+  const needsFullList = tab === 'upload' || tab === 'config'
+  const { data, isLoading, isError, refetch } = useInventory(needsFullList)
   const stats: InventoryStats[] = data?.data ?? []
 
   return (
@@ -45,34 +56,41 @@ export default function InventoryPage() {
         ))}
       </div>
 
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : isError ? (
-        <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
-      ) : (
-        <>
-          {tab === 'stock' && <StockTab stats={stats} onAdd={() => setTab('upload')} />}
-          {tab === 'upload' && <UploadTab stats={stats} defaultProduct={uploadFor} />}
-          {tab === 'config' && <ConfigTab stats={stats} />}
-          {tab === 'audit' && <AuditTab />}
-        </>
-      )}
+      {tab === 'stock' && <StockTab onAdd={() => setTab('upload')} />}
+      {tab === 'audit' && <AuditTab />}
+      {needsFullList &&
+        (isLoading ? (
+          <LoadingSpinner />
+        ) : isError ? (
+          <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
+        ) : (
+          <>
+            {tab === 'upload' && <UploadTab stats={stats} defaultProduct={uploadFor} />}
+            {tab === 'config' && <ConfigTab stats={stats} />}
+          </>
+        ))}
     </div>
   )
 }
 
-function StockTab({ stats, onAdd }: { stats: InventoryStats[]; onAdd: () => void }) {
+const PAGE_SIZE = 20
+
+function StockTab({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation()
   const [lowOnly, setLowOnly] = useState(false)
-  const totals = useMemo(() => {
-    const uploaded = stats.reduce((a, s) => a + s.uploaded, 0)
-    const available = stats.reduce((a, s) => a + s.available, 0)
-    const delivered = stats.reduce((a, s) => a + s.delivered, 0)
-    const low = stats.filter((s) => s.level === 'lo').length
-    return { uploaded, available, delivered, low }
-  }, [stats])
-  const rows = lowOnly ? stats.filter((s) => s.level === 'lo') : stats
+  const [page, setPage] = useState(1)
+  // Backend-paginated: one page of rows + global KPI totals in meta.totals.
+  const { data, isLoading, isError, refetch } = useInventoryPage({ page, limit: PAGE_SIZE, low: lowOnly })
+  const rows = data?.data ?? []
+  const meta = data?.meta
+  const totals = meta?.totals
   const [exportingId, setExportingId] = useState('')
+
+  // Switch the low-only view and jump back to the first page.
+  const setView = (low: boolean) => {
+    setLowOnly(low)
+    setPage(1)
+  }
 
   // Export a single product's code list (all statuses, across all pages — the
   // backend caps limit at 100, so page to total).
@@ -107,7 +125,9 @@ function StockTab({ stats, onAdd }: { stats: InventoryStats[]; onAdd: () => void
     }
   }
 
-  if (stats.length === 0)
+  if (isLoading) return <LoadingSpinner />
+  if (isError) return <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
+  if (!lowOnly && (meta?.total ?? 0) === 0)
     return <EmptyState icon="layers" title="No code inventory yet" sub="Code-type products will appear here once created." />
 
   return (
@@ -115,10 +135,10 @@ function StockTab({ stats, onAdd }: { stats: InventoryStats[]; onAdd: () => void
       <div className="kpigrid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
         {(
           [
-            ['Total codes', totals.uploaded.toLocaleString(), 'box', 'var(--grad)'],
-            ['Available', totals.available.toLocaleString(), 'checkc', 'linear-gradient(135deg,#2fd47a,#22e3c8)'],
-            ['Delivered', totals.delivered.toLocaleString(), 'send', 'linear-gradient(135deg,#3b5bff,#8a3bff)'],
-            ['Low-stock products', String(totals.low), 'alert', 'rgba(255,77,109,.2)'],
+            ['Total codes', (totals?.uploaded ?? 0).toLocaleString(), 'box', 'var(--grad)'],
+            ['Available', (totals?.available ?? 0).toLocaleString(), 'checkc', 'linear-gradient(135deg,#2fd47a,#22e3c8)'],
+            ['Delivered', (totals?.delivered ?? 0).toLocaleString(), 'send', 'linear-gradient(135deg,#3b5bff,#8a3bff)'],
+            ['Low-stock products', String(totals?.lowStock ?? 0), 'alert', 'rgba(255,77,109,.2)'],
           ] as [string, string, 'box' | 'checkc' | 'send' | 'alert', string][]
         ).map(([l, v, ic, bg]) => (
           <div className="kpi" key={l}>
@@ -138,10 +158,10 @@ function StockTab({ stats, onAdd }: { stats: InventoryStats[]; onAdd: () => void
           <h3>Code inventory by product</h3>
           <div className="ph-act">
             <div className="aseg">
-              <button className={!lowOnly ? 'on' : ''} onClick={() => setLowOnly(false)}>
+              <button className={!lowOnly ? 'on' : ''} onClick={() => setView(false)}>
                 {t('all')}
               </button>
-              <button className={lowOnly ? 'on' : ''} onClick={() => setLowOnly(true)}>
+              <button className={lowOnly ? 'on' : ''} onClick={() => setView(true)}>
                 Low only
               </button>
             </div>
@@ -211,6 +231,20 @@ function StockTab({ stats, onAdd }: { stats: InventoryStats[]; onAdd: () => void
             </tbody>
           </table>
         </div>
+        {rows.length === 0 && (
+          <div className="lsrow faint" style={{ fontSize: 12.5, justifyContent: 'center' }}>
+            No low-stock products.
+          </div>
+        )}
+        <Pagination
+          page={meta?.page ?? 1}
+          pages={meta?.pages ?? 1}
+          total={meta?.total ?? rows.length}
+          shown={rows.length}
+          limit={meta?.limit}
+          label="products"
+          onPage={setPage}
+        />
       </div>
     </div>
   )

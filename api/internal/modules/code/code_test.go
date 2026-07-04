@@ -201,6 +201,53 @@ func TestInventoryAndLowStock(t *testing.T) {
 	assert.Equal(t, 100, low[0].Uploaded) // 5 available + 95 delivered
 }
 
+func TestInventoryPaged(t *testing.T) {
+	repo := newFakeRepo()
+	repo.products = []ProductMeta{
+		{ID: "p1", Title: "Alpha"},   // low: 5 < 40% of 100
+		{ID: "p2", Title: "Bravo"},   // healthy: 200 >= 100
+		{ID: "p3", Title: "Charlie"}, // low: 0 available
+	}
+	repo.counts["p1"] = map[Status]int{StatusAvailable: 5, StatusDelivered: 95}
+	repo.counts["p2"] = map[Status]int{StatusAvailable: 200, StatusDelivered: 10}
+	repo.counts["p3"] = map[Status]int{}
+	for _, id := range []string{"p1", "p2", "p3"} {
+		repo.thresholds[id] = 100
+	}
+	svc := NewCodeService(repo)
+	ctx := context.Background()
+
+	// Page 1 of 2 (title-sorted): totals are global regardless of the page.
+	rows, totals, total, err := svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 2}, false)
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, total)
+	require.Len(t, rows, 2)
+	assert.Equal(t, "Alpha", rows[0].Title)
+	assert.Equal(t, "Bravo", rows[1].Title)
+	assert.Equal(t, InventoryTotals{Uploaded: 310, Available: 205, Delivered: 105, LowStock: 2}, totals)
+
+	// Page 2 returns the tail.
+	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 2, Limit: 2}, false)
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "Charlie", rows[0].Title)
+
+	// lowOnly filters the rows/count but leaves the global totals intact.
+	rows, totals, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, true)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, total)
+	require.Len(t, rows, 2)
+	assert.Equal(t, "Alpha", rows[0].Title)
+	assert.Equal(t, "Charlie", rows[1].Title)
+	assert.Equal(t, 2, totals.LowStock)
+
+	// Out-of-range page yields an empty slice, not an error.
+	rows, _, _, err = svc.InventoryPaged(ctx, pagination.Params{Page: 9, Limit: 2}, false)
+	require.NoError(t, err)
+	assert.Empty(t, rows)
+}
+
 func TestSetThreshold(t *testing.T) {
 	repo := newFakeRepo()
 	repo.counts["p1"] = map[Status]int{StatusAvailable: 10}

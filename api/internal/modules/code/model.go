@@ -3,6 +3,7 @@ package code
 import (
 	"time"
 
+	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -94,6 +95,23 @@ type InventoryStats struct {
 	Expired   int        `json:"expired"`
 	Threshold int        `json:"threshold"`
 	Level     StockLevel `json:"level"`
+}
+
+// InventoryTotals are the global KPI figures for the inventory screen, summed
+// across every code-type product (independent of the current page or low-only
+// view) so the KPI cards stay accurate while the table is paginated.
+type InventoryTotals struct {
+	Uploaded  int `json:"uploaded"`
+	Available int `json:"available"`
+	Delivered int `json:"delivered"`
+	LowStock  int `json:"lowStock"`
+}
+
+// InventoryMeta is the response meta for the paginated inventory listing: the
+// standard pagination envelope plus the global totals for the KPI cards.
+type InventoryMeta struct {
+	pagination.Meta
+	Totals InventoryTotals `json:"totals"`
 }
 
 // CodeAudit is the lookup response: a code plus its owning product summary.

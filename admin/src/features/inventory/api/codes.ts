@@ -19,9 +19,34 @@ export interface UploadBatchView {
   createdAt: string
 }
 
-/** Per-product code stats across all code-type products. */
-export function listInventory(): Promise<ApiResponse<InventoryStats[]>> {
-  return apiClient.get<InventoryStats[]>('/api/admin/inventory')
+/** Global KPI totals returned alongside a paginated inventory page. */
+export interface InventoryTotals {
+  uploaded: number
+  available: number
+  delivered: number
+  lowStock: number
+}
+
+/** Meta for the paginated inventory listing: pagination + global KPI totals. */
+export type InventoryMeta = PaginationMeta & { totals: InventoryTotals }
+
+/**
+ * Per-product code stats. Called without params it returns the full list (used
+ * by the thresholds editor and the upload product picker). With `page` it hits
+ * the backend-paginated endpoint, returning one page plus `meta` (pagination +
+ * global totals); `low` restricts the page to low-stock products.
+ */
+export function listInventory(
+  params: { page?: number; limit?: number; low?: boolean } = {}
+): Promise<ApiResponse<InventoryStats[]> & { meta?: InventoryMeta }> {
+  const q = new URLSearchParams()
+  if (params.page !== undefined) q.set('page', String(params.page))
+  if (params.limit !== undefined) q.set('limit', String(params.limit))
+  if (params.low) q.set('low', 'true')
+  const qs = q.toString()
+  return apiClient.get<InventoryStats[]>(`/api/admin/inventory${qs ? `?${qs}` : ''}`) as Promise<
+    ApiResponse<InventoryStats[]> & { meta?: InventoryMeta }
+  >
 }
 
 /** Recent upload batches (newest first). */
