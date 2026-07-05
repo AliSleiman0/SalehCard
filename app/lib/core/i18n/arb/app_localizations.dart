@@ -410,18 +410,6 @@ abstract class AppLocalizations {
   /// **'Total Balance'**
   String get totalBalance;
 
-  /// No description provided for @requestPhysicalCard.
-  ///
-  /// In en, this message translates to:
-  /// **'Request Physical Card'**
-  String get requestPhysicalCard;
-
-  /// No description provided for @cardInfo.
-  ///
-  /// In en, this message translates to:
-  /// **'Card info'**
-  String get cardInfo;
-
   /// No description provided for @addMoney.
   ///
   /// In en, this message translates to:
@@ -563,7 +551,7 @@ abstract class AppLocalizations {
   /// No description provided for @cartItemsCount.
   ///
   /// In en, this message translates to:
-  /// **'· {count} items'**
+  /// **'· {count, plural, =1{1 item} other{{count} items}}'**
   String cartItemsCount(int count);
 
   /// No description provided for @cartEmptyTitle.
@@ -1405,24 +1393,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Document number'**
   String get kycDocNumberLabel;
-
-  /// No description provided for @kycUploadLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Document photo'**
-  String get kycUploadLabel;
-
-  /// No description provided for @kycUploadHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Tap to upload a photo of your document'**
-  String get kycUploadHint;
-
-  /// No description provided for @kycUploadSelected.
-  ///
-  /// In en, this message translates to:
-  /// **'document.jpg'**
-  String get kycUploadSelected;
 
   /// No description provided for @kycSubmitCta.
   ///

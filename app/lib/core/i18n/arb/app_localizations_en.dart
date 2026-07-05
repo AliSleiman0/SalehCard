@@ -172,12 +172,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get totalBalance => 'Total Balance';
 
   @override
-  String get requestPhysicalCard => 'Request Physical Card';
-
-  @override
-  String get cardInfo => 'Card info';
-
-  @override
   String get addMoney => 'Add Money';
 
   @override
@@ -254,7 +248,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String cartItemsCount(int count) {
-    return '· $count items';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items',
+      one: '1 item',
+    );
+    return '· $_temp0';
   }
 
   @override
@@ -718,15 +718,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kycDocNumberLabel => 'Document number';
-
-  @override
-  String get kycUploadLabel => 'Document photo';
-
-  @override
-  String get kycUploadHint => 'Tap to upload a photo of your document';
-
-  @override
-  String get kycUploadSelected => 'document.jpg';
 
   @override
   String get kycSubmitCta => 'Submit';

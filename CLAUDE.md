@@ -129,6 +129,27 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   the double-refund lock; **delivered codes are never re-pooled on refund**).
   **Payments are wallet-only** — card/usdt are rejected (`PAYMENT_METHOD_UNAVAILABLE`)
   until a real gateway exists; only the wallet ledger moves real balance.
+- **Per-product input fields** (`Product.InputFields` — key/label/type/sensitive): the fields a
+  customer enters at checkout for non-`code` products (Account ID, Zone ID, Email, Server…). Admins
+  define them in the product editor (add/remove, editable key + type + label). Captured values are
+  stored **structured + labeled** on the order — `OrderItem.Fields []{key,label,value}`, labels
+  resolved server-side from the product spec, `Sensitive` fields never persisted (spec §3.2) — so the
+  operator fulfilling an `account_credit`/manual order sees them; `playerId` snapshots the first field
+  (feeds `Fulfillment.CreditedToID`).
+- **Game-ID verification** (`internal/platform/idcheck`, ports & adapters like `sms`): a `Verifier`
+  port with `rapidapi` (RapidAPI "ID Game Checker") + `stub` adapters, selected by **`IDCHECK_PROVIDER`**
+  (default `stub`; prod needs **`RAPIDAPI_KEY`**, server-side only — never in the app/admin bundle). A
+  product opts in via `Product.Verification{provider, app}` (the `check_name` hook; `app` = the game
+  slug — `pubgm-global` / `dfm-garena` / `free-fire`). The app calls **`POST
+  /api/v1/products/{id}/verify-account`** `{playerId}` (AuthRequired + per-IP rate-limited — each call
+  is billed) → resolved nickname; the product page shows it and unlocks Buy Now only on a hit.
+  **Fail-open**: a positively-bad ID blocks, but a timeout/outage returns `unavailable` so a
+  third-party hiccup never halts the sale; the playerId is never logged. Only single-ID games verify —
+  multi-param games (Mobile Legends id+zone, Genshin id+server) are collect-only.
+- **Product reviews** (`internal/modules/review`): a logged-in customer posts one editable 1–5★
+  rating + text per product — `POST /api/v1/reviews`, `GET /api/v1/reviews/mine`, public list at
+  `GET /api/v1/products/{id}/reviews`; the app has a star-input + write-review sheet. Admins moderate
+  under `/api/admin/reviews` (decisions audited).
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -273,8 +274,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   ),
                   _QtyStepper(
                     qty: _qty,
-                    onDec: () => setState(() => _qty = (_qty - 1).clamp(1, 99)),
-                    onInc: () => setState(() => _qty = (_qty + 1).clamp(1, 99)),
+                    onChanged: (v) => setState(() => _qty = v),
                   ),
                 ],
               ),
@@ -725,16 +725,81 @@ class _DenomChips extends StatelessWidget {
   }
 }
 
-class _QtyStepper extends StatelessWidget {
+/// Quantity control with a minus/plus button around an **editable** number
+/// field. Typed values are constrained to digits and clamped to
+/// [_qtyMin].._qtyMax (empty is tolerated while typing, then normalized to
+/// [_qtyMin] on blur/submit).
+class _QtyStepper extends StatefulWidget {
   const _QtyStepper({
     required this.qty,
-    required this.onDec,
-    required this.onInc,
+    required this.onChanged,
   });
 
   final int qty;
-  final VoidCallback onDec;
-  final VoidCallback onInc;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_QtyStepper> createState() => _QtyStepperState();
+}
+
+const int _qtyMin = 1;
+const int _qtyMax = 1000;
+
+class _QtyStepperState extends State<_QtyStepper> {
+  late final TextEditingController _controller;
+  late final FocusNode _focus;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.qty}');
+    _focus = FocusNode()..addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant _QtyStepper old) {
+    super.didUpdateWidget(old);
+    // Reflect external changes (e.g. the +/- buttons) into the text field,
+    // but don't fight the user mid-edit.
+    if (widget.qty != old.qty && '${widget.qty}' != _controller.text) {
+      _controller.text = '${widget.qty}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChange);
+    _focus.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focus.hasFocus) _normalize();
+  }
+
+  void _emit(int value) => widget.onChanged(value.clamp(_qtyMin, _qtyMax));
+
+  void _onTextChanged(String raw) {
+    if (raw.isEmpty) return; // allow clearing while typing
+    final parsed = int.tryParse(raw);
+    if (parsed == null) return;
+    final clamped = parsed.clamp(_qtyMin, _qtyMax);
+    if ('$clamped' != raw) {
+      _controller.value = TextEditingValue(
+        text: '$clamped',
+        selection: TextSelection.collapsed(offset: '$clamped'.length),
+      );
+    }
+    widget.onChanged(clamped);
+  }
+
+  void _normalize() {
+    final clamped =
+        (int.tryParse(_controller.text) ?? _qtyMin).clamp(_qtyMin, _qtyMax);
+    if ('$clamped' != _controller.text) _controller.text = '$clamped';
+    widget.onChanged(clamped);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -754,19 +819,36 @@ class _QtyStepper extends StatelessWidget {
     );
     return Row(
       children: [
-        btn(Icons.remove_rounded, onDec),
+        btn(Icons.remove_rounded, () => _emit(widget.qty - 1)),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Text(
-            '$qty',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: colors.text,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: SizedBox(
+            width: 48,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focus,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(4),
+              ],
+              onChanged: _onTextChanged,
+              onSubmitted: (_) => _normalize(),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 6),
+              ),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: colors.text,
+              ),
             ),
           ),
         ),
-        btn(Icons.add_rounded, onInc),
+        btn(Icons.add_rounded, () => _emit(widget.qty + 1)),
       ],
     );
   }

@@ -27,7 +27,7 @@
   "createPasswordTitle": "أنشئ كلمة المرور",
   "createPasswordSubtitle": "اختر كلمة مرور قوية لتأمين حسابك.",
   "verifyTitle": "تأكيد رقمك",
-  "otpSubtitle": "أدخل الرمز المكوّن من 6 أرقام المرسل إلى {phone}.",
+  "otpSubtitle": "أدخل الرمز المكوّن من ٦ أرقام المرسل إلى {phone}.",
   "@otpSubtitle": {
     "placeholders": {
       "phone": { "type": "String" }
@@ -57,14 +57,12 @@
 
   "invalidPhone": "يرجى إدخال رقم هاتف صحيح.",
   "passwordRequired": "يرجى إدخال كلمة المرور.",
-  "passwordTooShort": "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.",
+  "passwordTooShort": "يجب أن تتكون كلمة المرور من ٨ أحرف على الأقل.",
   "passwordMismatch": "كلمتا المرور غير متطابقتين.",
-  "otpIncomplete": "أدخل الرمز المكوّن من 6 أرقام.",
+  "otpIncomplete": "أدخل الرمز المكوّن من ٦ أرقام.",
 
   "searchHint": "ابحث",
   "totalBalance": "الرصيد الإجمالي",
-  "requestPhysicalCard": "اطلب بطاقة فعلية",
-  "cardInfo": "معلومات البطاقة",
   "addMoney": "إضافة رصيد",
   "promoTitle": "تسليم فوري",
   "promoSubtitle": "تُسلَّم أكواد بطاقات الهدايا فوراً بعد الدفع.",
@@ -78,7 +76,7 @@
   "loadFailed": "تعذّر تحميل المنتجات.",
 
   "fromLabel": "يبدأ من",
-  "chooseAmount": "اختر الفئة",
+  "chooseAmount": "اختر المبلغ",
   "quantityLabel": "الكمية",
   "requiredBadge": "مطلوب",
   "ratingsCount": "({count} تقييم)",
@@ -92,11 +90,11 @@
   "creditAfterProcessing": "يُضاف الرصيد إلى هذا الحساب بعد معالجة طلبك.",
   "addToCart": "أضف للسلة",
   "buyNow": "اشترِ الآن",
-  "notifyMe": "تنبيهي",
+  "notifyMe": "أبلغني",
   "totalLabel": "الإجمالي",
 
   "cartTitle": "سلة المشتريات",
-  "cartItemsCount": "· {count} عناصر",
+  "cartItemsCount": "· {count, plural, =1{عنصر واحد} =2{عنصران} few{{count} عناصر} many{{count} عنصراً} other{{count} عنصر}}",
   "@cartItemsCount": {
     "placeholders": { "count": { "type": "int" } }
   },
@@ -266,9 +264,6 @@
   "kycDocIdCard": "بطاقة هوية",
   "kycDocLicense": "رخصة قيادة",
   "kycDocNumberLabel": "رقم المستند",
-  "kycUploadLabel": "صورة المستند",
-  "kycUploadHint": "اضغط لرفع صورة من مستندك",
-  "kycUploadSelected": "document.jpg",
   "kycSubmitCta": "إرسال",
   "kycFieldRequired": "هذا الحقل مطلوب.",
   "kycSubmittedSnack": "تم إرسال طلب التحقق — سنراجعه قريباً.",

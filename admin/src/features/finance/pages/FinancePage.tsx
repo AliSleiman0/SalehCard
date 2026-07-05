@@ -114,6 +114,7 @@ export default function FinancePage() {
 
 /** The wallet-ledger feed: filter by type/method, search by user, paginate. */
 function TransactionsTab() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const [type, setType] = useState<'' | TxType>('')
   const [method, setMethod] = useState('')
@@ -256,7 +257,7 @@ function TransactionsTab() {
             total={meta?.total ?? rows.length}
             shown={rows.length}
             limit={meta?.limit}
-            label="transactions"
+            label={t('pg_transactions')}
             onPage={setPage}
           />
         </>
@@ -557,7 +558,7 @@ function UsdtQueueTab() {
             total={meta?.total ?? rows.length}
             shown={rows.length}
             limit={meta?.limit}
-            label="requests"
+            label={t('pg_requests')}
             onPage={setPage}
           />
         </>

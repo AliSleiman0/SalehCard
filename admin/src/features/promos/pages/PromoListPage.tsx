@@ -197,7 +197,7 @@ export default function PromoListPage() {
               total={meta?.total ?? rows.length}
               shown={rows.length}
               limit={meta?.limit}
-              label="promos"
+              label={t('pg_promos')}
               onPage={setPage}
             />
           </>

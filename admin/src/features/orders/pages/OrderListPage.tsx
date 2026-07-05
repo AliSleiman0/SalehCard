@@ -304,7 +304,7 @@ export default function OrderListPage() {
               total={meta?.total ?? rows.length}
               shown={rows.length}
               limit={meta?.limit}
-              label="orders"
+              label={t('pg_orders')}
               onPage={setPage}
             />
           </>

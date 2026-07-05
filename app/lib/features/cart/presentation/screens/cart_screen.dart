@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -73,12 +74,9 @@ class CartScreen extends ConsumerWidget {
                           child: _CartRow(
                             item: item,
                             localeCode: localeCode,
-                            onInc: () => ref
+                            onSetQty: (v) => ref
                                 .read(cartControllerProvider.notifier)
-                                .setQty(item.key, item.qty + 1),
-                            onDec: () => ref
-                                .read(cartControllerProvider.notifier)
-                                .setQty(item.key, item.qty - 1),
+                                .setQty(item.key, v),
                             onRemove: () => ref
                                 .read(cartControllerProvider.notifier)
                                 .remove(item.key),
@@ -102,15 +100,13 @@ class _CartRow extends StatelessWidget {
   const _CartRow({
     required this.item,
     required this.localeCode,
-    required this.onInc,
-    required this.onDec,
+    required this.onSetQty,
     required this.onRemove,
   });
 
   final CartItem item;
   final String localeCode;
-  final VoidCallback onInc;
-  final VoidCallback onDec;
+  final ValueChanged<int> onSetQty;
   final VoidCallback onRemove;
 
   @override
@@ -186,7 +182,7 @@ class _CartRow extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _MiniStepper(qty: item.qty, onInc: onInc, onDec: onDec),
+                    _MiniStepper(qty: item.qty, onChanged: onSetQty),
                     if (item.hasOffer)
                       StruckPriceRow(
                         original: item.originalLineTotal,
@@ -210,16 +206,79 @@ class _CartRow extends StatelessWidget {
   }
 }
 
-class _MiniStepper extends StatelessWidget {
+/// Compact quantity control with an **editable** number field between the
+/// minus/plus buttons. Typed values are digits-only and clamped to
+/// [_qtyMin].._qtyMax; an empty field is normalized to [_qtyMin] on blur/submit.
+/// Use the row's X button to remove a line — the minus button stops at [_qtyMin].
+class _MiniStepper extends StatefulWidget {
   const _MiniStepper({
     required this.qty,
-    required this.onInc,
-    required this.onDec,
+    required this.onChanged,
   });
 
   final int qty;
-  final VoidCallback onInc;
-  final VoidCallback onDec;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_MiniStepper> createState() => _MiniStepperState();
+}
+
+const int _qtyMin = 1;
+const int _qtyMax = 1000;
+
+class _MiniStepperState extends State<_MiniStepper> {
+  late final TextEditingController _controller;
+  late final FocusNode _focus;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.qty}');
+    _focus = FocusNode()..addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MiniStepper old) {
+    super.didUpdateWidget(old);
+    if (widget.qty != old.qty && '${widget.qty}' != _controller.text) {
+      _controller.text = '${widget.qty}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChange);
+    _focus.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focus.hasFocus) _normalize();
+  }
+
+  void _emit(int value) => widget.onChanged(value.clamp(_qtyMin, _qtyMax));
+
+  void _onTextChanged(String raw) {
+    if (raw.isEmpty) return; // allow clearing while typing
+    final parsed = int.tryParse(raw);
+    if (parsed == null) return;
+    final clamped = parsed.clamp(_qtyMin, _qtyMax);
+    if ('$clamped' != raw) {
+      _controller.value = TextEditingValue(
+        text: '$clamped',
+        selection: TextSelection.collapsed(offset: '$clamped'.length),
+      );
+    }
+    widget.onChanged(clamped);
+  }
+
+  void _normalize() {
+    final clamped =
+        (int.tryParse(_controller.text) ?? _qtyMin).clamp(_qtyMin, _qtyMax);
+    if ('$clamped' != _controller.text) _controller.text = '$clamped';
+    widget.onChanged(clamped);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -239,16 +298,35 @@ class _MiniStepper extends StatelessWidget {
         );
     return Row(
       children: [
-        btn(Icons.remove_rounded, onDec),
+        btn(Icons.remove_rounded, () => _emit(widget.qty - 1)),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 11),
-          child: Text('$qty',
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: SizedBox(
+            width: 40,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focus,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(4),
+              ],
+              onChanged: _onTextChanged,
+              onSubmitted: (_) => _normalize(),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 5),
+              ),
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
-                  color: colors.text)),
+                  color: colors.text),
+            ),
+          ),
         ),
-        btn(Icons.add_rounded, onInc),
+        btn(Icons.add_rounded, () => _emit(widget.qty + 1)),
       ],
     );
   }

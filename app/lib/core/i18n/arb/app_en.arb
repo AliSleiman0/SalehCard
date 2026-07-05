@@ -63,8 +63,6 @@
 
   "searchHint": "Search",
   "totalBalance": "Total Balance",
-  "requestPhysicalCard": "Request Physical Card",
-  "cardInfo": "Card info",
   "addMoney": "Add Money",
   "promoTitle": "Instant digital delivery",
   "promoSubtitle": "Gift card codes delivered instantly after checkout.",
@@ -96,7 +94,7 @@
   "totalLabel": "Total",
 
   "cartTitle": "Your cart",
-  "cartItemsCount": "· {count} items",
+  "cartItemsCount": "· {count, plural, =1{1 item} other{{count} items}}",
   "@cartItemsCount": {
     "placeholders": { "count": { "type": "int" } }
   },
@@ -266,9 +264,6 @@
   "kycDocIdCard": "ID card",
   "kycDocLicense": "Driver's license",
   "kycDocNumberLabel": "Document number",
-  "kycUploadLabel": "Document photo",
-  "kycUploadHint": "Tap to upload a photo of your document",
-  "kycUploadSelected": "document.jpg",
   "kycSubmitCta": "Submit",
   "kycFieldRequired": "This field is required.",
   "kycSubmittedSnack": "Verification submitted — we'll review it shortly.",

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Icon } from './Icon'
 import { cn } from '@/lib/utils'
 
@@ -41,7 +42,7 @@ export function Pagination({
   pages = 1,
   total = 0,
   shown,
-  label = 'results',
+  label,
   limit,
   onPage,
 }: {
@@ -49,7 +50,7 @@ export function Pagination({
   pages?: number
   total?: number
   shown?: number
-  label?: string
+  label?: React.ReactNode
   /** Page size — used to compute the "Showing X–Y" range on pages after the
    *  first. Falls back to the shown count (correct only on page 1). */
   limit?: number
@@ -57,6 +58,7 @@ export function Pagination({
    *  tracking page internally (so the caller can refetch). */
   onPage?: (page: number) => void
 }) {
+  const { t } = useTranslation()
   const [internal, setInternal] = useState(page)
   const p = onPage ? page : internal
   const go = (n: number) => {
@@ -70,7 +72,8 @@ export function Pagination({
   return (
     <div className="pagination">
       <span>
-        Showing <b>{from}–{to}</b> of <b className="num">{total.toLocaleString()}</b> {label}
+        {t('showing')} <b>{from}–{to}</b> {t('of')} <b className="num">{total.toLocaleString()}</b>{' '}
+        {label ?? t('results')}
       </span>
       <div className="sp" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <div className="pg" onClick={() => go(p - 1)}>
