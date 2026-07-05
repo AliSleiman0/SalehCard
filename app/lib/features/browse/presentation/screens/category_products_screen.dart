@@ -88,7 +88,7 @@ class _ProductRow extends StatelessWidget {
     final colors = context.colors;
     final price = product.fromPrice;
     final name = product.title.resolve(localeCode);
-    final image = product.images.isNotEmpty ? product.images.first : null;
+    final image = product.thumbUrl;
     return InkWell(
       onTap: () => context.push('/product/${product.id}'),
       child: Padding(

@@ -31,6 +31,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -78,6 +79,13 @@ func (s *Server) Routes() {
 	s.router.Use(c.Handler)
 
 	s.router.Get("/health", s.handleHealth)
+
+	// Serve the local blob adapter's files directly — only relevant in dev
+	// (STORAGE_PROVIDER=local, the default); prod serves uploads from Azure Blob.
+	if s.cfg.StorageProvider == "" || s.cfg.StorageProvider == "local" {
+		fs := http.FileServer(http.Dir(s.cfg.UploadsDir))
+		s.router.Handle("/uploads/*", http.StripPrefix("/uploads/", fs))
+	}
 
 	// Customer-facing routes (read-only product catalog stays separate). The
 	// catalog is enriched with live-offer sale prices via a read-only offer repo
@@ -145,6 +153,24 @@ func (s *Server) Routes() {
 	kyc.RegisterRoutes(s.router, s.db, s.cfg)
 	notification.RegisterRoutes(s.router, s.db, s.cfg)
 
+	// Product image uploads (admin console editor). Falls open to the dev local
+	// adapter on Azure misconfig, mirroring the sms/push fallback.
+	store, err := blob.New(blob.Config{
+		Provider: s.cfg.StorageProvider,
+		Azure: blob.AzureConfig{
+			ConnectionString: s.cfg.AzureStorageConnectionString,
+			Container:        s.cfg.AzureStorageContainer,
+		},
+		Local: blob.LocalConfig{
+			Dir:        s.cfg.UploadsDir,
+			PublicBase: s.cfg.PublicBaseURL,
+		},
+	})
+	if err != nil {
+		slog.Warn("server: storage provider misconfigured — falling back to local adapter", "provider", s.cfg.StorageProvider, "error", err)
+		store, _ = blob.New(blob.Config{Local: blob.LocalConfig{Dir: s.cfg.UploadsDir, PublicBase: s.cfg.PublicBaseURL}})
+	}
+
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role
 	// (AdminOnly bypasses only in development when no JWT secret is configured).
 	// Mutating admin actions are recorded to the audit log via rec; customer-
@@ -153,7 +179,7 @@ func (s *Server) Routes() {
 	s.router.Route("/api/admin", func(r chi.Router) {
 		r.Use(auth.AdminOnly(s.cfg.JWTSecret, s.cfg.Env == "development"))
 
-		product.RegisterAdminRoutes(r, s.db, rec)
+		product.RegisterAdminRoutes(r, s.db, rec, store)
 		code.RegisterAdminRoutes(r, s.db, rec, ntf)
 		dashboard.RegisterAdminRoutes(r, s.db)
 		finance.RegisterAdminRoutes(r, s.db)

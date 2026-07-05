@@ -110,6 +110,16 @@ type Config struct {
 	RateLimitVerifyMax    int
 	RateLimitVerifyWindow time.Duration
 
+	// Storage (product image uploads). StorageProvider selects the active blob
+	// adapter: "azure" or "local" (default — dev works with zero Azure config).
+	StorageProvider              string
+	AzureStorageConnectionString string
+	AzureStorageContainer        string
+	// UploadsDir is where the local adapter writes files (dev only).
+	UploadsDir string
+	// PublicBaseURL prefixes URLs the local adapter returns (dev only).
+	PublicBaseURL string
+
 	// PaymentProvider selects the checkout payment gateway: "mock" enables the
 	// sandbox card/usdt path; "" / "log" keeps checkout wallet-only (the default).
 	PaymentProvider string
@@ -183,6 +193,12 @@ func Load() *Config {
 		RapidAPIKey:           os.Getenv("RAPIDAPI_KEY"),
 		RateLimitVerifyMax:    getInt("RATE_LIMIT_VERIFY_MAX", 20),
 		RateLimitVerifyWindow: getDuration("RATE_LIMIT_VERIFY_WINDOW", time.Minute),
+
+		StorageProvider:              getEnv("STORAGE_PROVIDER", "local"),
+		AzureStorageConnectionString: os.Getenv("AZURE_STORAGE_CONNECTION_STRING"),
+		AzureStorageContainer:        getEnv("AZURE_STORAGE_CONTAINER", "product-images"),
+		UploadsDir:                   getEnv("UPLOADS_DIR", "./uploads"),
+		PublicBaseURL:                getEnv("PUBLIC_BASE_URL", "http://localhost:8090"),
 
 		PaymentProvider:   getEnv("PAYMENT_PROVIDER", "log"),
 		FulfillmentMock:   getBool("FULFILLMENT_MOCK", false),

@@ -165,6 +165,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               _Banner(
                 tint: tint,
                 initials: ProductChip.initialsFor(title),
+                imageUrl: product.imageUrl,
                 outOfStock: !inStock,
                 outOfStockLabel: l10n.outOfStock,
               ),
@@ -389,12 +390,28 @@ class _Banner extends StatelessWidget {
     required this.initials,
     required this.outOfStock,
     required this.outOfStockLabel,
+    this.imageUrl,
   });
 
   final Color tint;
   final String initials;
+
+  /// Full-size display image URL, or null. Falls back to the tinted initials
+  /// when null or on a load error.
+  final String? imageUrl;
+
   final bool outOfStock;
   final String outOfStockLabel;
+
+  Widget _initials() => Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 58,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1,
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -407,15 +424,15 @@ class _Banner extends StatelessWidget {
             width: double.infinity,
             color: tint,
             alignment: Alignment.center,
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 58,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1,
-              ),
-            ),
+            child: imageUrl != null
+                ? Image.network(
+                    imageUrl!,
+                    height: 158,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _initials(),
+                  )
+                : _initials(),
           ),
           if (outOfStock)
             Positioned.fill(

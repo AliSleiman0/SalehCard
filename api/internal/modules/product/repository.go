@@ -317,6 +317,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		Description:         in.Description,
 		Category:            in.Category,
 		Images:              in.Images,
+		Thumbnail:           in.Thumbnail,
 		Variants:            variants,
 		FulfillmentType:     in.FulfillmentType,
 		FulfillmentMode:     mode,
@@ -416,6 +417,7 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		{Key: "rootDomain", Value: lit(in.RootDomain)},
 		{Key: "legacyCategoryId", Value: lit(in.LegacyCategoryID)},
 		{Key: "images", Value: lit(in.Images)},
+		{Key: "thumbnail", Value: lit(in.Thumbnail)},
 		{Key: "description", Value: lit(in.Description)},
 		{Key: "descriptionHadMarkup", Value: lit(in.DescriptionHadMarkup)},
 		{Key: "fulfillmentType", Value: lit(in.FulfillmentType)},
@@ -461,6 +463,9 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	}
 	if in.Images != nil {
 		set = append(set, bson.E{Key: "images", Value: in.Images})
+	}
+	if in.Thumbnail != nil {
+		set = append(set, bson.E{Key: "thumbnail", Value: *in.Thumbnail})
 	}
 	if in.Variants != nil {
 		// Generate IDs for any variant added through the admin editor (which

@@ -16,6 +16,7 @@ export interface ProductInput {
   description: { en: string; ar: string; tr: string }
   category: string
   images: string[]
+  thumbnail?: string
   variants: { denomination: string; price: number; resellerPrice?: number }[]
   fulfillmentType: FulfillmentType
   stock: number
@@ -57,6 +58,19 @@ export function updateProduct(id: string, input: Partial<ProductInput>): Promise
 
 export function deleteProduct(id: string): Promise<ApiResponse<unknown>> {
   return apiClient.delete(`${ADMIN}/${id}`)
+}
+
+export interface UploadImageResult {
+  imageUrl: string
+  thumbnailUrl: string
+}
+
+// Product-agnostic: uploads first, then the returned URLs go into the normal
+// create/update ProductInput (there's no product id yet on create).
+export function uploadProductImage(file: File): Promise<ApiResponse<UploadImageResult>> {
+  const form = new FormData()
+  form.set('image', file)
+  return apiClient.upload<UploadImageResult>(`${ADMIN}/images`, form)
 }
 
 export type BulkAction = 'activate' | 'deactivate' | 'delete'

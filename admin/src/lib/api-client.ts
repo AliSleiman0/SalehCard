@@ -28,14 +28,21 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResponse<T>> {
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  isFormData = false,
+): Promise<ApiResponse<T>> {
   const url = `${BASE()}${path}`
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  // Skip the JSON Content-Type for FormData — the browser sets the multipart
+  // boundary itself; setting it manually breaks the boundary.
+  const headers: Record<string, string> = isFormData ? {} : { 'Content-Type': 'application/json' }
   if (_accessToken) headers['Authorization'] = `Bearer ${_accessToken}`
 
   const init: RequestInit = { method, headers, credentials: 'include' }
-  if (body !== undefined) init.body = JSON.stringify(body)
+  if (body !== undefined) init.body = isFormData ? (body as FormData) : JSON.stringify(body)
 
   let response: Response
   try {
@@ -85,5 +92,8 @@ export const apiClient = {
   },
   delete<T>(path: string): Promise<ApiResponse<T>> {
     return request<T>('DELETE', path)
+  },
+  upload<T>(path: string, formData: FormData): Promise<ApiResponse<T>> {
+    return request<T>('POST', path, formData, true)
   },
 }

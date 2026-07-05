@@ -101,6 +101,7 @@ class Product {
     required this.variants,
     required this.stock,
     required this.available,
+    this.thumbnail,
     this.fulfillmentType = 'code',
     this.inputFields = const [],
     this.verification,
@@ -113,9 +114,22 @@ class Product {
   final I18nString title;
   final String category;
   final List<String> images;
+
+  /// 256px compressed preview URL, or null. Lists/chips prefer it via
+  /// [thumbUrl]; the full display image is [imageUrl].
+  final String? thumbnail;
+
   final List<Variant> variants;
   final int stock;
   final bool available;
+
+  /// Full-size display image URL (the 1024px image), or null when the product
+  /// has no image.
+  String? get imageUrl => images.isNotEmpty ? images.first : null;
+
+  /// Small preview URL for lists/chips: the thumbnail when present, else the
+  /// full display image.
+  String? get thumbUrl => thumbnail ?? imageUrl;
 
   /// Live sale on this product, or null when there is no active offer.
   final ProductOffer? offer;

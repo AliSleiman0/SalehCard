@@ -146,6 +146,7 @@ class ProductDto {
     this.title,
     this.category,
     this.images,
+    this.thumbnail,
     this.variants,
     this.stock,
     this.available,
@@ -160,6 +161,7 @@ class ProductDto {
   final Map<String, dynamic>? title;
   final String? category;
   final List<String>? images;
+  final String? thumbnail;
   final List<VariantDto>? variants;
   final int? stock;
   final bool? available;
@@ -179,6 +181,7 @@ class ProductDto {
         title: I18nString.fromJson(title),
         category: category ?? '',
         images: images ?? const [],
+        thumbnail: thumbnail,
         variants:
             (variants ?? const []).map((v) => v.toEntity()).toList(),
         stock: stock ?? 0,

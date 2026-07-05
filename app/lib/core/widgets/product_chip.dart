@@ -12,12 +12,18 @@ class ProductChip extends StatelessWidget {
     required this.name,
     required this.tint,
     required this.onTap,
+    this.imageUrl,
     this.outOfStock = false,
     this.outOfStockLabel = '',
   });
 
   final String name;
   final Color tint;
+
+  /// Product image URL (thumbnail). When non-null it fills the tile; a load
+  /// error falls back to the tinted initials.
+  final String? imageUrl;
+
   final bool outOfStock;
   final String outOfStockLabel;
   final VoidCallback onTap;
@@ -46,6 +52,15 @@ class ProductChip extends StatelessWidget {
     return raw.toUpperCase();
   }
 
+  Widget _initials() => Text(
+        ProductChip.initialsFor(name),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 18,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -63,19 +78,21 @@ class ProductChip extends StatelessWidget {
                   Container(
                     width: 60,
                     height: 60,
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       color: tint,
                       borderRadius: BorderRadius.circular(AppTokens.rMd),
                     ),
                     alignment: Alignment.center,
-                    child: Text(
-                      ProductChip.initialsFor(name),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                      ),
-                    ),
+                    child: imageUrl != null
+                        ? Image.network(
+                            imageUrl!,
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => _initials(),
+                          )
+                        : _initials(),
                   ),
                   if (outOfStock)
                     Container(
