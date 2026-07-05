@@ -167,7 +167,15 @@ class _Cell extends StatelessWidget {
           counterText: '',
           isDense: true,
           filled: false,
+          // Null out every state border so the app-wide inputDecorationTheme
+          // (which defines enabledBorder/focusedBorder) can't paint a second
+          // rounded outline inside the _Cell container. border: none alone does
+          // not override those state borders.
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          focusedErrorBorder: InputBorder.none,
           contentPadding: EdgeInsets.zero,
         ),
       ),

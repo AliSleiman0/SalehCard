@@ -78,10 +78,27 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "lowStockThreshold must be zero or greater")
 		return
 	}
+	if in.LoyaltyEarnUsdPerPoint != nil && *in.LoyaltyEarnUsdPerPoint <= 0 {
+		response.BadRequest(w, "loyaltyEarnUsdPerPoint must be greater than zero")
+		return
+	}
 
 	actor := ""
+	var actorPhone string
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
 		actor = auth.ActorLabel(claims)
+		actorPhone = claims.Phone
+	}
+
+	// Self-lockout guardrail: don't let an admin turn on SMS 2FA unless their own
+	// account has a phone on file, or enabling it would immediately lock them out
+	// (admin logins fail closed when 2FA is on and the admin has no phone). The
+	// phone comes from the JWT, so an admin who just had a phone added must re-login
+	// for the claim to be present before they can enable this.
+	if in.AdminSmsTwoFactorEnabled != nil && *in.AdminSmsTwoFactorEnabled && actorPhone == "" {
+		response.Error(w, http.StatusBadRequest, "ADMIN_2FA_NO_PHONE",
+			"set a phone number on your admin account (and re-login) before enabling SMS two-factor authentication")
+		return
 	}
 
 	s, err := a.repo.Update(r.Context(), in, actor)

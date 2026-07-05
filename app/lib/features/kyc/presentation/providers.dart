@@ -28,8 +28,13 @@ final submitKycUseCaseProvider = Provider<SubmitKyc>(
 );
 
 /// The customer's KYC profile (status + optional rejection reason). Throws the
-/// [Failure] so the UI renders it via the AsyncValue error state. autoDispose so
-/// it re-reads `GET /kyc/me` each time the status screen is shown.
+/// [Failure] so the UI renders it via the AsyncValue error state.
+///
+/// autoDispose, but the [KycBanner] on the always-alive Home tab keeps it
+/// subscribed, so it does NOT re-fetch on its own. It is refreshed explicitly on:
+/// form submit (below), the status-screen retry/pull-to-refresh, and Home's
+/// resume/pull-to-refresh — the last two let an admin approval land without an
+/// app restart.
 final kycProfileProvider = FutureProvider.autoDispose<KycProfile>((ref) async {
   final result = await ref.watch(getKycStatusUseCaseProvider).call();
   return result.match((failure) => throw failure, (profile) => profile);

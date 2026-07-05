@@ -28,6 +28,7 @@ type Repository interface {
 	Create(ctx context.Context, review *Review) error
 	Delete(ctx context.Context, id bson.ObjectID) error
 	FindByID(ctx context.Context, id bson.ObjectID) (*Review, error)
+	FindByUserAndProduct(ctx context.Context, userID, productID bson.ObjectID) (*Review, error)
 	List(ctx context.Context, f ReviewFilter, p pagination.Params) ([]ReviewRow, int64, error)
 	UpdateStatus(ctx context.Context, id bson.ObjectID, status string) (*Review, error)
 	RecomputeProductRating(ctx context.Context, productID bson.ObjectID) error
@@ -79,12 +80,17 @@ func NewMongoRepository(reviews, products *mongo.Collection) *MongoRepository {
 
 // EnsureIndexes creates the supporting indexes on the reviews collection:
 // by product (the recompute aggregation + storefront read), by status (the
-// moderation queue filter), and by createdAt (the newest-first feed).
+// moderation queue filter), by createdAt (the newest-first feed), and a unique
+// (userId, productId) pair that enforces one review per user per product.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	_, err := db.Collection("reviews").Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "productId", Value: 1}}},
 		{Keys: bson.D{{Key: "status", Value: 1}}},
 		{Keys: bson.D{{Key: "createdAt", Value: -1}}},
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "productId", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
 	})
 	return err
 }
@@ -100,8 +106,33 @@ func (r *MongoRepository) Create(ctx context.Context, review *Review) error {
 	if review.Status == "" {
 		review.Status = StatusPending
 	}
-	_, err := r.collection.InsertOne(ctx, review)
-	return err
+	if _, err := r.collection.InsertOne(ctx, review); err != nil {
+		// A duplicate (userId, productId) means the user already reviewed this
+		// product — surface it as a conflict for the handler to map to 409.
+		if mongo.IsDuplicateKeyError(err) {
+			return apperrors.ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+// FindByUserAndProduct returns the caller's review for a product (regardless of
+// moderation status), ErrNotFound when they haven't reviewed it. Backs the
+// duplicate guard on create and the "have I reviewed this?" CTA check.
+func (r *MongoRepository) FindByUserAndProduct(ctx context.Context, userID, productID bson.ObjectID) (*Review, error) {
+	var rv Review
+	err := r.collection.FindOne(ctx, bson.D{
+		{Key: "userId", Value: userID},
+		{Key: "productId", Value: productID},
+	}).Decode(&rv)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &rv, nil
 }
 
 // Delete removes a review by ObjectID, ErrNotFound when absent.

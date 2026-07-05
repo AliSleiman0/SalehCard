@@ -45,6 +45,14 @@ type resellerPricing interface {
 	PricesForUser(ctx context.Context, userID bson.ObjectID) (map[string]float64, error)
 }
 
+// loyaltyAwarder is the slice of the loyalty module the order service needs to
+// mint points when an order completes. It is best-effort (returns nothing; logs
+// and swallows its own failures) so it can never fail a completed order — kept
+// narrow for testability.
+type loyaltyAwarder interface {
+	Award(ctx context.Context, userID bson.ObjectID, orderTotal float64)
+}
+
 // Service defines the business-logic operations for the order domain.
 type Service interface {
 	PlaceOrder(ctx context.Context, userID bson.ObjectID, isReseller bool, idempotencyKey string, input PlaceOrderInput) (*Order, error)
@@ -68,14 +76,15 @@ type OrderService struct {
 	kyc       kycChecker
 	margins   resellerPricing
 	ntf       notification.Notifier
+	loyalty   loyaltyAwarder
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
 // inventory, wallet, promo, offers, upstream-provider registry, KYC gate,
 // reseller-margin lookup, and notifier it depends on. A nil margins port
 // disables tier-margin pricing (resellers fall back to per-variant overrides).
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, pay *payments.Registry, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, payments: pay, kyc: kycGate, margins: margins, ntf: ntf}
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, pay *payments.Registry, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier, loyalty loyaltyAwarder) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, payments: pay, kyc: kycGate, margins: margins, ntf: ntf, loyalty: loyalty}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -364,6 +373,9 @@ func (s *OrderService) fulfillInventory(ctx context.Context, userID bson.ObjectI
 		return nil, err
 	}
 	s.ntf.Notify(ctx, userID, orderCompletedNote(order.ID.Hex(), order.Total, order.Currency))
+	if s.loyalty != nil {
+		s.loyalty.Award(ctx, userID, order.Total)
+	}
 	return s.repo.FindByID(ctx, order.ID)
 }
 
@@ -452,6 +464,9 @@ func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, ord
 			return nil, uerr
 		}
 		s.ntf.Notify(ctx, userID, orderCompletedNote(order.ID.Hex(), order.Total, order.Currency))
+		if s.loyalty != nil {
+			s.loyalty.Award(ctx, userID, order.Total)
+		}
 		return s.repo.FindByID(ctx, order.ID)
 	}
 }

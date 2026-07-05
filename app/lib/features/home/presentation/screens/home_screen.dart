@@ -14,6 +14,7 @@ import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../catalog/domain/entities/product.dart';
 import '../../../catalog/presentation/providers.dart';
+import '../../../kyc/presentation/providers.dart';
 import '../../../kyc/presentation/widgets/kyc_banner.dart';
 import '../../../wallet/presentation/providers.dart';
 
@@ -27,7 +28,41 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Re-fetch KYC status and the wallet balance when the app returns to the
+  /// foreground. The KYC banner lives on this always-alive tab, so without this
+  /// an admin-approved verification would stay "in verification" until a full
+  /// restart. No poll timer — a resume/pull refresh is enough for KYC.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(kycProfileProvider);
+      ref.invalidate(walletProvider);
+    }
+  }
+
+  /// Pull-to-refresh: invalidate the landing's data providers, then await the
+  /// KYC refetch so the pull spinner holds until fresh status is in.
+  Future<void> _pullRefresh() async {
+    ref.invalidate(kycProfileProvider);
+    ref.invalidate(walletProvider);
+    ref.invalidate(catalogProductsProvider);
+    await ref.read(kycProfileProvider.future);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -53,59 +88,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           children: [
             const _HomeAppBar(),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
-                children: [
-                  const KycBanner(),
-                  _SearchBar(
-                    hint: l10n.searchHint,
-                    onTap: () => context.push('/search'),
-                  ),
-                  const SizedBox(height: 16),
-                  _WalletCard(
-                    balanceText: formatUsd(balance),
-                    onTap: () => context.push('/wallet'),
-                    l10n: l10n,
-                  ),
-                  const SizedBox(height: 14),
-                  _AddMoneyButton(
-                    label: l10n.addMoney,
-                    onTap: () => context.push('/wallet/topup'),
-                  ),
-                  const SizedBox(height: 16),
-                  _PromoCard(
-                    title: l10n.promoTitle,
-                    subtitle: l10n.promoSubtitle,
-                  ),
-                  const SizedBox(height: 8),
-                  productsAsync.when(
-                    loading: () => const Padding(
-                      padding: EdgeInsets.only(top: 40),
-                      child: LoadingView(),
+              child: RefreshIndicator(
+                onRefresh: _pullRefresh,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+                  children: [
+                    const KycBanner(),
+                    _SearchBar(
+                      hint: l10n.searchHint,
+                      onTap: () => context.push('/search'),
                     ),
-                    error: (_, _) => Padding(
-                      padding: const EdgeInsets.only(top: 32),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Text(
-                              l10n.loadFailed,
-                              style: TextStyle(color: colors.textDim),
-                            ),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                              onPressed: () =>
-                                  ref.invalidate(catalogProductsProvider),
-                              child: Text(l10n.retry),
-                            ),
-                          ],
+                    const SizedBox(height: 16),
+                    _WalletCard(
+                      balanceText: formatUsd(balance),
+                      onTap: () => context.push('/wallet'),
+                      l10n: l10n,
+                    ),
+                    const SizedBox(height: 14),
+                    _AddMoneyButton(
+                      label: l10n.addMoney,
+                      onTap: () => context.push('/wallet/topup'),
+                    ),
+                    const SizedBox(height: 16),
+                    _PromoCard(
+                      title: l10n.promoTitle,
+                      subtitle: l10n.promoSubtitle,
+                    ),
+                    const SizedBox(height: 8),
+                    productsAsync.when(
+                      loading: () => const Padding(
+                        padding: EdgeInsets.only(top: 40),
+                        child: LoadingView(),
+                      ),
+                      error: (_, _) => Padding(
+                        padding: const EdgeInsets.only(top: 32),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Text(
+                                l10n.loadFailed,
+                                style: TextStyle(color: colors.textDim),
+                              ),
+                              const SizedBox(height: 12),
+                              FilledButton(
+                                onPressed: () =>
+                                    ref.invalidate(catalogProductsProvider),
+                                child: Text(l10n.retry),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                      data: (products) =>
+                          _catalog(context, products, localeCode, l10n),
                     ),
-                    data: (products) =>
-                        _catalog(context, products, localeCode, l10n),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],

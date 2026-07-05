@@ -171,6 +171,13 @@ type AuthResult struct {
 	User         *User
 	AccessToken  string
 	RefreshToken string
+	// TwoFactorRequired is set on an admin login that needs an SMS second factor.
+	// When true, AccessToken/RefreshToken are empty and the caller must complete
+	// the challenge via POST /auth/2fa/verify using PendingToken. PhoneHint is a
+	// masked phone (e.g. "•••778") for display.
+	TwoFactorRequired bool
+	PendingToken      string
+	PhoneHint         string
 }
 
 // AuthResponse is the public JSON body returned by register/login/refresh.
@@ -178,9 +185,28 @@ type AuthResult struct {
 // cannot rely on the httpOnly refresh cookie; browser clients receive it solely
 // via that cookie and the field is omitted.
 type AuthResponse struct {
-	AccessToken  string `json:"accessToken"`
+	AccessToken  string `json:"accessToken,omitempty"`
 	RefreshToken string `json:"refreshToken,omitempty"`
-	User         *User  `json:"user"`
+	User         *User  `json:"user,omitempty"`
+	// Two-factor challenge (admin login): when TwoFactorRequired is true the tokens
+	// above are absent and the client must post the SMS code to /auth/2fa/verify
+	// with PendingToken. PhoneHint is a masked phone number for display.
+	TwoFactorRequired bool   `json:"twoFactorRequired,omitempty"`
+	PendingToken      string `json:"pendingToken,omitempty"`
+	PhoneHint         string `json:"phoneHint,omitempty"`
+}
+
+// VerifyTwoFactorInput is the body of POST /auth/2fa/verify: the pending-challenge
+// token returned by the login response plus the SMS code the admin received.
+type VerifyTwoFactorInput struct {
+	PendingToken string `json:"pendingToken"`
+	Code         string `json:"code"`
+}
+
+// ResendTwoFactorInput is the body of POST /auth/2fa/resend: the pending-challenge
+// token identifying the in-progress admin login.
+type ResendTwoFactorInput struct {
+	PendingToken string `json:"pendingToken"`
 }
 
 // RefreshInput is the optional JSON body accepted by POST /auth/refresh. Native

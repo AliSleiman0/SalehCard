@@ -113,6 +113,39 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 	h.writeAuth(w, r, res)
 }
 
+// VerifyTwoFactor handles POST /api/v1/auth/2fa/verify, completing an admin login
+// by validating the pending challenge token + SMS code and issuing the session.
+func (h *Handler) VerifyTwoFactor(w http.ResponseWriter, r *http.Request) {
+	var in VerifyTwoFactorInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	res, err := h.service.VerifyAdmin2FA(r.Context(), in)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	h.writeAuth(w, r, res)
+}
+
+// ResendTwoFactor handles POST /api/v1/auth/2fa/resend, re-sending the SMS code
+// for an in-progress admin login. It returns a fresh challenge (new pending
+// token + masked phone), not a session.
+func (h *Handler) ResendTwoFactor(w http.ResponseWriter, r *http.Request) {
+	var in ResendTwoFactorInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	res, err := h.service.ResendAdmin2FA(r.Context(), in)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	h.writeAuth(w, r, res)
+}
+
 // Refresh handles POST /api/v1/auth/refresh, rotating the refresh token. Native
 // clients present the token in the JSON body; browser clients omit it and the
 // token is read from the httpOnly cookie.
@@ -193,6 +226,16 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 // For native clients (X-Client: mobile) the refresh token is also returned in the
 // body, since they cannot read the httpOnly cookie.
 func (h *Handler) writeAuth(w http.ResponseWriter, r *http.Request, res *AuthResult) {
+	if res.TwoFactorRequired {
+		// Second factor pending: no session yet, so issue no refresh cookie/tokens —
+		// only the challenge the client completes via /auth/2fa/verify.
+		response.OK(w, AuthResponse{
+			TwoFactorRequired: true,
+			PendingToken:      res.PendingToken,
+			PhoneHint:         res.PhoneHint,
+		})
+		return
+	}
 	h.setRefreshCookie(w, res.RefreshToken)
 	body := AuthResponse{AccessToken: res.AccessToken, User: res.User}
 	if isMobile(r) {

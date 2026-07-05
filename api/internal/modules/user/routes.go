@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/ratelimit"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
@@ -57,7 +58,9 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 		MaxAttempts:    cfg.OTPMaxAttempts,
 	}
 
-	svc := NewUserService(repo, refreshRepo, otpRepo, sender, otpCfg, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	// WithSettings enables the admin SMS-2FA gate (reads the app_settings singleton
+	// at login time); without it admin login stays password-only.
+	svc := NewUserService(repo, refreshRepo, otpRepo, sender, otpCfg, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL, WithSettings(settings.NewMongoRepository(db)))
 	h := NewHandler(svc, cfg.CookieSecure)
 
 	// Per-IP rate limiting on the public auth endpoints (RealIP upstream gives the
@@ -81,6 +84,8 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 		r.Post("/login-phone", h.LoginPhone)
 		r.With(otpLimit).Post("/otp/request", h.RequestOTP)
 		r.Post("/otp/verify", h.VerifyOTP)
+		r.Post("/2fa/verify", h.VerifyTwoFactor)
+		r.With(otpLimit).Post("/2fa/resend", h.ResendTwoFactor)
 		r.Post("/refresh", h.Refresh)
 		r.Post("/logout", h.Logout)
 	})

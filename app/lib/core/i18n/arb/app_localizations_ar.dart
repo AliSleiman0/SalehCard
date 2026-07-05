@@ -489,6 +489,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get roleLabel => 'الدور';
 
   @override
+  String get loyaltyPoints => 'نقاط الولاء';
+
+  @override
   String get verificationTitle => 'التحقق';
 
   @override
@@ -717,4 +720,28 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kycSubmittedSnack => 'تم إرسال طلب التحقق — سنراجعه قريباً.';
+
+  @override
+  String get writeReview => 'اكتب مراجعة';
+
+  @override
+  String get reviewSheetTitle => 'قيّم هذا المنتج';
+
+  @override
+  String get reviewTapToRate => 'اضغط على نجمة للتقييم';
+
+  @override
+  String get reviewNoteOptionalHint => 'أخبرنا ما الذي حدث (اختياري)';
+
+  @override
+  String get reviewSubmit => 'إرسال المراجعة';
+
+  @override
+  String get reviewSubmittedPending => 'شكراً! مراجعتك قيد المراجعة والموافقة.';
+
+  @override
+  String get reviewAlreadyReviewed => 'لقد قمت بمراجعة هذا المنتج بالفعل.';
+
+  @override
+  String get reviewYouReviewed => 'لقد قمت بمراجعة هذا المنتج';
 }

@@ -61,6 +61,14 @@ cd web && pnpm build && pnpm lint && pnpm test     # 2 pre-existing react-refres
 ```
 
 Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@salehcard.local`.
+These are **local/dev only** — they live in your local Mongo and do **not** exist in prod.
+
+> **Prod admin console** is a separate Azure Static Web App
+> (`https://purple-bay-0d1a52d03.7.azurestaticapps.net`) backed by prod Cosmos, so the
+> `.local` seed accounts fail there. Prod admin login is a **different** account
+> (`admin@salehcard.com`, promoted from a real sign-up during deploy). Its password is in
+> the gitignored **`DEPLOY-CREDS.local.md`** — never hardcode it here. (That file flags the
+> password as chat-exposed → change it after login; see its rotation checklist.)
 
 > **Environment notes carried from the previous machine** (verify on a new box):
 > pnpm was installed at `~/.local/bin` (not on PATH by default) — `export PATH="$HOME/.local/bin:$PATH"`.
@@ -90,11 +98,28 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
   (find-or-create by phone, optional password-set) + `/auth/login-phone`, alongside email/password.
   Users carry a sparse-unique `phone`; codes live in `otp_codes`. The mobile login offers
   **code or password**. Native clients send `X-Client: mobile` to get the refresh token in-body.
+- **Admin SMS 2FA** (`internal/modules/user`): a **setting-gated** second factor for admin logins.
+  When the `app_settings` flag **`adminSmsTwoFactorEnabled`** is on (toggled from the admin console
+  Settings → Security; **off by default** so the phoneless dev seed admin still logs in),
+  `Login`/`LoginByPhone` divert admins (only `role==admin`; customers/mobile untouched) into
+  `begin2FAChallenge` instead of `issueTokens`: it stores an OTP in `otp_codes`, sends it via the
+  same `sms.Sender`, and returns a **pending challenge** (a short-lived `Issue2FAToken` JWT +
+  masked `phoneHint`, no tokens/cookie). The client completes it at **`POST /auth/2fa/verify`**
+  `{pendingToken, code}` (→ tokens), or **`/auth/2fa/resend`** (throttled). **Fails closed**: an
+  admin with no phone gets `403 ADMIN_2FA_NO_PHONE`; the Settings toggle likewise refuses to enable
+  2FA unless the acting admin's JWT carries a phone (so re-login after setting a phone). In prod
+  this sends **real, billed Monty SMS**. Prod admin `admin@salehcard.com` phone set to `+961 78991778`.
 - **SMS provider layer** (`internal/platform/sms`, ports & adapters): a `Sender` port with
   `monty` / `twilio` / `log` adapters, selected by **`SMS_PROVIDER`** (default `log` → codes are
   logged, not sent — add a provider = new adapter file + one case in `New`). Prod uses **Monty**
   (Lebanon; sender `Arya`). Monty **IP-allowlists the caller**, so prod egresses via a NAT Gateway
-  (one fixed IP) — see `HANDOFF-OTP-DEPLOY.md`.
+  (one fixed IP) — see `HANDOFF-OTP-DEPLOY.md`. The **admin bulk-SMS broadcast** (Users → select →
+  SMS, `POST /api/admin/users/bulk-sms`) reuses this same `Sender`, so in prod it sends **real,
+  billed SMS on the live Monty provider** (not `log` like dev). Guardrails: `BULK_SMS_MAX` caps
+  recipients (default **200** → `400 BULK_SMS_LIMIT`), a **160-char single-segment** limit (client +
+  server), and an admin confirm dialog. Phoneless / `StatusDeleted` users are skipped; the send is a
+  detached serial fan-out; audited as `user.bulk_sms`. The old `platform/email` package is now
+  **dormant** (kept for future receipts; all `EMAIL_*`/`SMTP_*`/`SENDGRID_*` settings are unused).
 - **Orders / payment / fulfillment** (implemented): server **re-prices from the catalog**
   (never trusts client price/fulfillment); `Idempotency-Key` header dedupes via a
   partial-unique index; order-first → atomic code claim → `completed`, with compensation
@@ -114,7 +139,7 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
   compensation) or reject at `/api/admin/wallet/topups`. There is NO instant top-up.
 - **Admin audit log** (`audit` module, `admin_audit_log`): role/status changes, wallet &
   reseller adjustments, product deletes, order refunds/completions, KYC/review/top-up
-  decisions are recorded (actor from JWT) and browsable at `/audit` + `GET
+  decisions, bulk-SMS broadcasts are recorded (actor from JWT) and browsable at `/audit` + `GET
   /api/admin/audit-log`. Guardrails: last-admin demote/suspend → `409 LAST_ADMIN`;
   admin money adjustments reverse the balance if the ledger insert fails.
 - **CORS gotcha**: any custom request header must be in the server's CORS `AllowedHeaders`
@@ -126,8 +151,10 @@ Seeded accounts (password `password123`): `customer@salehcard.local`, `admin@sal
 - **Frontend data**: catalog + orders + wallet are wired to the API via React-Query hooks
   + `adapt*` mappers (`features/*/lib/adapt*.ts`). **The `/admin` console is fully
   API-wired** (no mock data file; the old `admin/src/lib/mock/demo.ts` is deleted) —
-  see `admin/BACKLOG.md` for the honest wired-vs-missing split (the settings module
-  backend is still a 501 stub; only its admin-accounts list is real). `/web` still has
+  see `admin/BACKLOG.md` for the honest wired-vs-missing split. **The settings module
+  backend is real** (GET/PUT `/api/admin/settings` over the `app_settings` singleton —
+  store config, loyalty, admin SMS-2FA); the Settings page also lists admins from
+  `/api/admin/users?role=admin`. `/web` still has
   `web/src/lib/mock/demo.ts` remnants behind `// TODO` markers.
 - **Customer routes guarded** by `RequireAuth` in `web/src/app/router.tsx`: `/dashboard`,
   `/wallet`, `/orders`, `/orders/:id`, `/checkout`, `/order-success/:id`.

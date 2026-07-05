@@ -48,6 +48,39 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, rv)
 }
 
+// mineResponse reports whether the caller has already reviewed a product, and
+// the moderation status of that review when they have.
+type mineResponse struct {
+	Reviewed bool   `json:"reviewed"`
+	Status   string `json:"status,omitempty"`
+}
+
+// Mine handles GET /api/v1/reviews/mine?productId=<id> — reports whether the
+// authenticated caller has already reviewed a product (and its moderation
+// status), so the client can hide the "write a review" CTA.
+func (h *Handler) Mine(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		response.Unauthorized(w, "authentication required")
+		return
+	}
+	productID, err := bson.ObjectIDFromHex(r.URL.Query().Get("productId"))
+	if err != nil {
+		response.BadRequest(w, "productId is required")
+		return
+	}
+	rv, err := h.service.Mine(r.Context(), userID, productID)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			response.OK(w, mineResponse{Reviewed: false})
+			return
+		}
+		response.InternalError(w)
+		return
+	}
+	response.OK(w, mineResponse{Reviewed: true, Status: rv.Status})
+}
+
 // ListForProduct handles GET /api/v1/products/{id}/reviews — public, returning
 // the approved reviews for a product, newest-first and paginated. A malformed
 // id yields 404; a product with no approved reviews yields an empty list (200).
@@ -72,6 +105,8 @@ func writeReviewError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, apperrors.ErrNotFound):
 		response.NotFound(w)
+	case errors.Is(err, apperrors.ErrConflict):
+		response.Error(w, http.StatusConflict, "ALREADY_REVIEWED", "you have already reviewed this product")
 	case errors.Is(err, apperrors.ErrBadRequest):
 		msg := err.Error()
 		var appErr *apperrors.AppError

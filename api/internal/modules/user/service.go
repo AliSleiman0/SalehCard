@@ -7,11 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -55,10 +57,18 @@ type Service interface {
 	LoginByPhone(ctx context.Context, input PhoneLoginInput) (*AuthResult, error)
 	RequestOTP(ctx context.Context, input RequestOTPInput) error
 	VerifyOTP(ctx context.Context, input VerifyOTPInput) (*AuthResult, error)
+	VerifyAdmin2FA(ctx context.Context, input VerifyTwoFactorInput) (*AuthResult, error)
+	ResendAdmin2FA(ctx context.Context, input ResendTwoFactorInput) (*AuthResult, error)
 	Refresh(ctx context.Context, rawToken string) (*AuthResult, error)
 	Logout(ctx context.Context, rawToken string) error
 	GetProfile(ctx context.Context, id bson.ObjectID) (*User, error)
 	UpdateProfile(ctx context.Context, id bson.ObjectID, input UpdateProfileInput) (*User, error)
+}
+
+// settingsSource reads the app-settings singleton (kept narrow so the service can
+// be unit-tested without Mongo). Mirrors loyalty.configSource.
+type settingsSource interface {
+	Get(ctx context.Context) (*settings.Settings, error)
 }
 
 // UserService is the concrete implementation of Service.
@@ -71,11 +81,24 @@ type UserService struct {
 	secret     string
 	accessTTL  time.Duration
 	refreshTTL time.Duration
+	// settings, when set (via WithSettings), enables admin SMS 2FA by letting the
+	// service read the AdminSmsTwoFactorEnabled flag at login time. Nil => 2FA off.
+	settings settingsSource
+}
+
+// UserServiceOption configures optional UserService dependencies.
+type UserServiceOption func(*UserService)
+
+// WithSettings gives the service a read handle on the app-settings singleton,
+// enabling the admin SMS-2FA gate. Without it, admin 2FA is treated as disabled
+// (so existing call sites and tests keep their password-only behavior).
+func WithSettings(src settingsSource) UserServiceOption {
+	return func(s *UserService) { s.settings = src }
 }
 
 // NewUserService constructs a UserService with its dependencies and token config.
-func NewUserService(repo Repository, refresh RefreshRepository, otp OTPRepository, sender sms.Sender, otpCfg OTPConfig, secret string, accessTTL, refreshTTL time.Duration) *UserService {
-	return &UserService{
+func NewUserService(repo Repository, refresh RefreshRepository, otp OTPRepository, sender sms.Sender, otpCfg OTPConfig, secret string, accessTTL, refreshTTL time.Duration, opts ...UserServiceOption) *UserService {
+	s := &UserService{
 		repo:       repo,
 		refresh:    refresh,
 		otp:        otp,
@@ -85,6 +108,10 @@ func NewUserService(repo Repository, refresh RefreshRepository, otp OTPRepositor
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Register validates input, hashes the password, creates a customer account, and
@@ -143,7 +170,7 @@ func (s *UserService) Login(ctx context.Context, input LoginInput) (*AuthResult,
 	if isSuspended(user) {
 		return nil, ErrAccountSuspended
 	}
-	return s.issueTokens(ctx, user)
+	return s.completeLogin(ctx, user)
 }
 
 // LoginByPhone verifies a phone+password pair and issues a token pair. Like
@@ -170,7 +197,7 @@ func (s *UserService) LoginByPhone(ctx context.Context, input PhoneLoginInput) (
 	if isSuspended(user) {
 		return nil, ErrAccountSuspended
 	}
-	return s.issueTokens(ctx, user)
+	return s.completeLogin(ctx, user)
 }
 
 // RequestOTP generates a one-time code for a phone number, stores its hash, and
@@ -215,26 +242,9 @@ func (s *UserService) VerifyOTP(ctx context.Context, input VerifyOTPInput) (*Aut
 		return nil, err
 	}
 
-	rec, err := s.otp.FindByPhone(ctx, phone)
-	if err != nil {
-		if err == apperrors.ErrNotFound {
-			return nil, &apperrors.AppError{Code: "OTP_INVALID", Message: "invalid or expired code", Err: apperrors.ErrUnauthorized}
-		}
+	if err := s.verifyOTPCode(ctx, phone, input.Code); err != nil {
 		return nil, err
 	}
-	if rec.ConsumedAt != nil || time.Now().After(rec.ExpiresAt) {
-		return nil, &apperrors.AppError{Code: "OTP_EXPIRED", Message: "this code has expired, request a new one", Err: apperrors.ErrUnauthorized}
-	}
-	if rec.Attempts >= s.otpCfg.MaxAttempts {
-		return nil, &apperrors.AppError{Code: "OTP_LOCKED", Message: "too many attempts, request a new code", Err: apperrors.ErrUnauthorized}
-	}
-	if hashToken(strings.TrimSpace(input.Code)) != rec.CodeHash {
-		_ = s.otp.IncrementAttempts(ctx, phone)
-		return nil, &apperrors.AppError{Code: "OTP_INVALID", Message: "invalid or expired code", Err: apperrors.ErrUnauthorized}
-	}
-
-	// Code is good — consume it so it can't be replayed.
-	_ = s.otp.DeleteByPhone(ctx, phone)
 
 	user, err := s.repo.FindByPhone(ctx, phone)
 	if err != nil {
@@ -396,6 +406,174 @@ func (s *UserService) issueTokens(ctx context.Context, user *User) (*AuthResult,
 	user.LastSeen = now
 
 	return &AuthResult{User: user, AccessToken: access, RefreshToken: raw}, nil
+}
+
+// ErrAdmin2FANoPhone is returned when admin SMS 2FA is enabled but the admin has
+// no phone on file, so no second-factor code can be delivered. It wraps
+// ErrForbidden (403): the login fails closed rather than silently bypassing 2FA.
+var ErrAdmin2FANoPhone = &apperrors.AppError{
+	Code:    "ADMIN_2FA_NO_PHONE",
+	Message: "two-factor authentication is enabled but no phone number is set on this admin account",
+	Err:     apperrors.ErrForbidden,
+}
+
+// completeLogin issues tokens for a password-verified user, first diverting
+// admins to an SMS second factor when admin 2FA is enabled. Only the interactive
+// password logins (Login/LoginByPhone) route through here; Register, VerifyOTP,
+// and Refresh issue tokens directly.
+func (s *UserService) completeLogin(ctx context.Context, user *User) (*AuthResult, error) {
+	if user.Role == RoleAdmin && s.admin2FAEnabled(ctx) {
+		return s.begin2FAChallenge(ctx, user)
+	}
+	return s.issueTokens(ctx, user)
+}
+
+// admin2FAEnabled reports whether admin logins currently require an SMS second
+// factor. It fails safe (disabled) when no settings source is wired or the read
+// errors, so a settings outage can neither lock admins out nor silently break
+// login — the same best-effort posture as loyalty's settings read.
+func (s *UserService) admin2FAEnabled(ctx context.Context) bool {
+	if s.settings == nil {
+		return false
+	}
+	cfg, err := s.settings.Get(ctx)
+	if err != nil {
+		slog.Warn("user: could not read settings for admin 2FA; treating as disabled", "err", err)
+		return false
+	}
+	return cfg.AdminSmsTwoFactorEnabled
+}
+
+// begin2FAChallenge sends an SMS one-time code to the admin's phone and returns a
+// pending challenge (no tokens). The real session is issued later by
+// VerifyAdmin2FA once the code is confirmed. Fails closed if the admin has no phone.
+func (s *UserService) begin2FAChallenge(ctx context.Context, user *User) (*AuthResult, error) {
+	if user.Phone == nil || *user.Phone == "" {
+		return nil, ErrAdmin2FANoPhone
+	}
+	phone := *user.Phone
+
+	code, err := randomNumericCode(s.otpCfg.Length)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	if err := s.otp.Upsert(ctx, &OtpCode{
+		Phone:     phone,
+		CodeHash:  hashToken(code),
+		ExpiresAt: now.Add(s.otpCfg.TTL),
+		CreatedAt: now,
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.sender.Send(ctx, phone, fmt.Sprintf("Your SalehCard admin verification code is %s", code)); err != nil {
+		return nil, err
+	}
+
+	pending, err := auth.Issue2FAToken(s.secret, user.ID.Hex(), s.otpCfg.TTL)
+	if err != nil {
+		return nil, err
+	}
+	return &AuthResult{TwoFactorRequired: true, PendingToken: pending, PhoneHint: maskPhone(phone)}, nil
+}
+
+// VerifyAdmin2FA completes an admin login: it validates the pending challenge
+// token and the SMS code, then issues the real token pair.
+func (s *UserService) VerifyAdmin2FA(ctx context.Context, input VerifyTwoFactorInput) (*AuthResult, error) {
+	user, err := s.userFromPendingToken(ctx, input.PendingToken)
+	if err != nil {
+		return nil, err
+	}
+	if user.Phone == nil {
+		return nil, ErrAdmin2FANoPhone
+	}
+	if err := s.verifyOTPCode(ctx, *user.Phone, input.Code); err != nil {
+		return nil, err
+	}
+	return s.issueTokens(ctx, user)
+}
+
+// ResendAdmin2FA re-sends the SMS code for an in-progress admin 2FA challenge,
+// honoring the per-number resend interval. It returns a fresh challenge (new
+// pending token + masked phone).
+func (s *UserService) ResendAdmin2FA(ctx context.Context, input ResendTwoFactorInput) (*AuthResult, error) {
+	user, err := s.userFromPendingToken(ctx, input.PendingToken)
+	if err != nil {
+		return nil, err
+	}
+	if user.Phone == nil {
+		return nil, ErrAdmin2FANoPhone
+	}
+	if existing, err := s.otp.FindByPhone(ctx, *user.Phone); err == nil {
+		if time.Since(existing.CreatedAt) < s.otpCfg.ResendInterval {
+			return nil, &apperrors.AppError{Code: "OTP_THROTTLED", Message: "please wait before requesting another code", Err: apperrors.ErrBadRequest}
+		}
+	}
+	return s.begin2FAChallenge(ctx, user)
+}
+
+// userFromPendingToken validates a pending-2FA challenge token and loads the bound
+// admin account, re-checking role and suspension. An invalid/expired token maps to
+// OTP_EXPIRED so the client restarts the login.
+func (s *UserService) userFromPendingToken(ctx context.Context, pendingToken string) (*User, error) {
+	userID, err := auth.Verify2FAToken(s.secret, pendingToken)
+	if err != nil {
+		return nil, &apperrors.AppError{Code: "OTP_EXPIRED", Message: "this login attempt has expired, sign in again", Err: apperrors.ErrUnauthorized}
+	}
+	id, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, apperrors.ErrUnauthorized
+	}
+	user, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		if err == apperrors.ErrNotFound {
+			return nil, apperrors.ErrUnauthorized
+		}
+		return nil, err
+	}
+	if user.Role != RoleAdmin {
+		return nil, apperrors.ErrUnauthorized
+	}
+	if isSuspended(user) {
+		return nil, ErrAccountSuspended
+	}
+	return user, nil
+}
+
+// verifyOTPCode runs the shared one-time-code validation ladder for a phone:
+// existence, expiry/consumed, attempt cap, and hash match. On success it consumes
+// the code (delete) so it can't be replayed; on a wrong guess it increments the
+// attempt counter. It neither creates users nor issues tokens.
+func (s *UserService) verifyOTPCode(ctx context.Context, phone, code string) error {
+	rec, err := s.otp.FindByPhone(ctx, phone)
+	if err != nil {
+		if err == apperrors.ErrNotFound {
+			return &apperrors.AppError{Code: "OTP_INVALID", Message: "invalid or expired code", Err: apperrors.ErrUnauthorized}
+		}
+		return err
+	}
+	if rec.ConsumedAt != nil || time.Now().After(rec.ExpiresAt) {
+		return &apperrors.AppError{Code: "OTP_EXPIRED", Message: "this code has expired, request a new one", Err: apperrors.ErrUnauthorized}
+	}
+	if rec.Attempts >= s.otpCfg.MaxAttempts {
+		return &apperrors.AppError{Code: "OTP_LOCKED", Message: "too many attempts, request a new code", Err: apperrors.ErrUnauthorized}
+	}
+	if hashToken(strings.TrimSpace(code)) != rec.CodeHash {
+		_ = s.otp.IncrementAttempts(ctx, phone)
+		return &apperrors.AppError{Code: "OTP_INVALID", Message: "invalid or expired code", Err: apperrors.ErrUnauthorized}
+	}
+	// Code is good — consume it so it can't be replayed.
+	_ = s.otp.DeleteByPhone(ctx, phone)
+	return nil
+}
+
+// maskPhone hides all but the last 3 digits of a phone for display in the 2FA
+// challenge, e.g. "+96178991778" -> "•••778".
+func maskPhone(phone string) string {
+	if len(phone) <= 3 {
+		return "•••"
+	}
+	return "•••" + phone[len(phone)-3:]
 }
 
 // normalizePhone converts a user-entered number to E.164. It accepts an existing

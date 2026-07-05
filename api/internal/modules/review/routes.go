@@ -24,6 +24,8 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	r.Route("/api/v1/reviews", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
 		r.Post("/", h.Create)
+		// Whether the caller has already reviewed a product (drives the app CTA).
+		r.Get("/mine", h.Mine)
 	})
 
 	// Public: the storefront product page reads a product's approved reviews.

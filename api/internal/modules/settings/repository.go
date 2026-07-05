@@ -70,6 +70,15 @@ func (r *MongoRepository) Update(ctx context.Context, in UpdateInput, actor stri
 	if in.MaintenanceMode != nil {
 		cur.MaintenanceMode = *in.MaintenanceMode
 	}
+	if in.LoyaltyEnabled != nil {
+		cur.LoyaltyEnabled = *in.LoyaltyEnabled
+	}
+	if in.LoyaltyEarnUsdPerPoint != nil {
+		cur.LoyaltyEarnUsdPerPoint = *in.LoyaltyEarnUsdPerPoint
+	}
+	if in.AdminSmsTwoFactorEnabled != nil {
+		cur.AdminSmsTwoFactorEnabled = *in.AdminSmsTwoFactorEnabled
+	}
 	cur.ID = settingsID
 	cur.UpdatedAt = time.Now().UTC()
 	cur.UpdatedBy = actor
