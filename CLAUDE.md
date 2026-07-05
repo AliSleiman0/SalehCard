@@ -150,6 +150,19 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   rating + text per product — `POST /api/v1/reviews`, `GET /api/v1/reviews/mine`, public list at
   `GET /api/v1/products/{id}/reviews`; the app has a star-input + write-review sheet. Admins moderate
   under `/api/admin/reviews` (decisions audited).
+- **Product image uploads** (`internal/platform/blob`, ports & adapters like `sms`): a `Storage`
+  port with `azure` (Azure Blob, connection-string auth, public-read container) + `local` (dev —
+  writes to `UPLOADS_DIR`, served by the API at `/uploads/*`) adapters, selected by
+  **`STORAGE_PROVIDER`** (default `local` → dev needs zero Azure config). The admin editor uploads
+  to the product-agnostic **`POST /api/admin/products/images`** (multipart, admin-only, 10 MB cap),
+  which validates by **content sniffing** (not filename) and re-encodes via `platform/imaging`
+  (pure-Go stdlib + `x/image`) into a **1024px display JPEG + 256px thumbnail** (q80, alpha
+  composited onto white), returning `{imageUrl, thumbnailUrl}`. Those go into the normal
+  create/update `ProductInput`: `images[0]` = display URL (backward-compatible — Flutter reads
+  `images.first`), new **`Product.Thumbnail`** = the 256px URL (lists/chips prefer it). Falls open to
+  `local` on Azure misconfig; audited as `product.image_upload`. Prod needs an Azure Storage account +
+  public `product-images` container (see DEVOPS-TODO.md §13). Old blobs are **not deleted on replace**
+  in v1 (orphans are pennies).
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout

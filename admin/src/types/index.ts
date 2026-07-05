@@ -65,6 +65,7 @@ export interface Product {
   description: I18nString
   category: string
   images: string[]
+  thumbnail?: string
   variants: Variant[]
   fulfillmentType: FulfillmentType
   stock: number

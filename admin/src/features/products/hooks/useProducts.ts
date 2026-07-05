@@ -6,6 +6,7 @@ import {
   updateProduct,
   deleteProduct,
   bulkProductAction,
+  uploadProductImage,
   type ProductListParams,
   type ProductInput,
   type BulkAction,
@@ -51,6 +52,12 @@ export function useDeleteProduct() {
   return useMutation({
     mutationFn: (id: string) => deleteProduct(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'products'] }),
+  })
+}
+
+export function useUploadProductImage() {
+  return useMutation({
+    mutationFn: (file: File) => uploadProductImage(file),
   })
 }
 

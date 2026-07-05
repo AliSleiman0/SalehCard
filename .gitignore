@@ -15,6 +15,7 @@ build/
 # Go
 /api/server
 /api/bin/
+/api/uploads/
 *.out
 
 # Logs

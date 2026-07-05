@@ -167,10 +167,14 @@ type Product struct {
 	// RootDomain is the top-level domain (games, app_topups, …) the product's
 	// category resolves to — denormalized at load time so the storefront can
 	// browse a whole domain with one indexed filter. Empty for non-migration products.
-	RootDomain string    `bson:"rootDomain,omitempty" json:"rootDomain,omitempty"`
-	Category   string    `bson:"category" json:"category"`
-	Images     []string  `bson:"images"   json:"images"`
-	Variants   []Variant `bson:"variants" json:"variants"`
+	RootDomain string   `bson:"rootDomain,omitempty" json:"rootDomain,omitempty"`
+	Category   string   `bson:"category" json:"category"`
+	Images     []string `bson:"images"   json:"images"`
+	// Thumbnail is the 256px compressed preview URL (see platform/imaging);
+	// lists/chips prefer it, falling back to Images[0]. Images[0] stays the
+	// 1024px display URL for backward compatibility (Flutter reads images.first).
+	Thumbnail string    `bson:"thumbnail,omitempty" json:"thumbnail"`
+	Variants  []Variant `bson:"variants" json:"variants"`
 	// Migration: descriptive content (HTML stripped at import).
 	Description          I18nString      `bson:"description,omitempty"           json:"description,omitempty"`
 	DescriptionHadMarkup bool            `bson:"descriptionHadMarkup,omitempty" json:"descriptionHadMarkup,omitempty"`
@@ -216,6 +220,7 @@ type UpsertProductInput struct {
 	DescriptionHadMarkup   bool
 	Category               string
 	Images                 []string
+	Thumbnail              string
 	Variants               []Variant
 	FulfillmentType        FulfillmentType
 	FulfillmentMode        FulfillmentMode
@@ -238,6 +243,7 @@ type CreateProductInput struct {
 	Description         I18nString      `json:"description"`
 	Category            string          `json:"category"`
 	Images              []string        `json:"images"`
+	Thumbnail           string          `json:"thumbnail,omitempty"`
 	Variants            []Variant       `json:"variants"`
 	FulfillmentType     FulfillmentType `json:"fulfillmentType"`
 	FulfillmentMode     FulfillmentMode `json:"fulfillmentMode,omitempty"`
@@ -254,6 +260,7 @@ type UpdateProductInput struct {
 	Description         *I18nString      `json:"description,omitempty"`
 	Category            *string          `json:"category,omitempty"`
 	Images              []string         `json:"images,omitempty"`
+	Thumbnail           *string          `json:"thumbnail,omitempty"`
 	Variants            []Variant        `json:"variants,omitempty"`
 	FulfillmentType     *FulfillmentType `json:"fulfillmentType,omitempty"`
 	FulfillmentMode     *FulfillmentMode `json:"fulfillmentMode,omitempty"`

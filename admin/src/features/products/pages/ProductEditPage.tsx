@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, Toggle, StatusBadge, LoadingSpinner, ErrorState, ffKey, type FfKey } from '@/components'
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
-import { useProduct, useCreateProduct, useUpdateProduct } from '../hooks/useProducts'
+import { useProduct, useCreateProduct, useUpdateProduct, useUploadProductImage } from '../hooks/useProducts'
 import type { FulfillmentType, Locale, InputField } from '@/types'
+
+const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp'
 
 interface VariantRow {
   denomination: string
@@ -43,6 +46,7 @@ export default function ProductEditPage() {
   const { data, isLoading, isError, refetch } = useProduct(id)
   const create = useCreateProduct()
   const update = useUpdateProduct(id ?? '')
+  const uploadImage = useUploadProductImage()
 
   const { data: catsRes } = useProductCategories()
   const cats = useMemo(() => catsRes?.data ?? [], [catsRes])
@@ -63,6 +67,10 @@ export default function ProductEditPage() {
   // Purchase-time ID verification (check_name): toggle + provider game slug.
   const [verifyEnabled, setVerifyEnabled] = useState(false)
   const [verifyApp, setVerifyApp] = useState('')
+  const [images, setImages] = useState<string[]>([])
+  const [thumbnail, setThumbnail] = useState('')
+  const [imageError, setImageError] = useState('')
+  const imageFileRef = useRef<HTMLInputElement>(null)
 
   // Populate from the loaded product when editing.
   useEffect(() => {
@@ -86,6 +94,8 @@ export default function ProductEditPage() {
     setInputFields(p.inputFields ?? [])
     setVerifyEnabled(!!p.verification)
     setVerifyApp(p.verification?.app ?? '')
+    setImages(p.images ?? [])
+    setThumbnail(p.thumbnail ?? '')
   }, [data])
 
   // Default a brand-new product to the first real category once the list loads.
@@ -101,7 +111,7 @@ export default function ProductEditPage() {
     return values
   }, [cats, category])
 
-  const pending = create.isPending || update.isPending
+  const pending = create.isPending || update.isPending || uploadImage.isPending
   const error = create.error || update.error
 
   const buildInput = () => {
@@ -119,7 +129,8 @@ export default function ProductEditPage() {
       title,
       description,
       category,
-      images: data?.data?.images ?? [],
+      images,
+      thumbnail,
       fulfillmentType: toFulfillment(ff),
       available: active,
       stock,
@@ -136,6 +147,32 @@ export default function ProductEditPage() {
       ...(inputFields.length || data?.data?.inputFields?.length ? { inputFields } : {}),
       ...(verification ? { verification } : {}),
     }
+  }
+
+  const onImageFile = (file: File) => {
+    setImageError('')
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageError('Image must be 10 MB or smaller.')
+      return
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setImageError('Image must be JPEG, PNG, or WebP.')
+      return
+    }
+    uploadImage.mutate(file, {
+      onSuccess: (res) => {
+        if (!res.data) return
+        setImages([res.data.imageUrl])
+        setThumbnail(res.data.thumbnailUrl)
+      },
+      onError: (err) => setImageError((err as Error).message),
+    })
+  }
+
+  const onRemoveImage = () => {
+    setImages([])
+    setThumbnail('')
+    setImageError('')
   }
 
   const onSave = () => {
@@ -578,6 +615,62 @@ export default function ProductEditPage() {
             <div className="ahint">
               {active ? 'Visible in the storefront and purchasable.' : 'Hidden from customers until published.'}
             </div>
+          </div>
+
+          <div className="acard pad">
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Image</h3>
+            <input
+              ref={imageFileRef}
+              type="file"
+              accept={IMAGE_ACCEPT}
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) onImageFile(file)
+              }}
+            />
+            {(() => {
+              const preview = thumbnail || images[0]
+              if (preview) {
+                return (
+                  <>
+                    <img
+                      src={preview}
+                      alt=""
+                      className="imgslot"
+                      style={{ width: '100%', height: 140, objectFit: 'cover' }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <button
+                        className="abtn sm"
+                        disabled={uploadImage.isPending}
+                        onClick={() => imageFileRef.current?.click()}
+                      >
+                        <Icon name="upload" size={13} /> Replace
+                      </button>
+                      <button className="abtn sm danger" disabled={uploadImage.isPending} onClick={onRemoveImage}>
+                        <Icon name="x" size={13} /> Remove
+                      </button>
+                    </div>
+                  </>
+                )
+              }
+              return (
+                <button
+                  className="abtn sm"
+                  style={{ width: '100%', height: 140 }}
+                  disabled={uploadImage.isPending}
+                  onClick={() => imageFileRef.current?.click()}
+                >
+                  <Icon name="upload" size={13} /> {uploadImage.isPending ? 'Uploading…' : 'Choose image'}
+                </button>
+              )
+            })()}
+            <div className="ahint">JPEG, PNG, or WebP · max 10 MB · compressed to 1024px + 256px thumbnail.</div>
+            {imageError && (
+              <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{imageError}</div>
+            )}
           </div>
 
           {ff === 'code' && (

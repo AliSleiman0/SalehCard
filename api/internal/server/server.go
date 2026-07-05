@@ -31,6 +31,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -78,6 +79,34 @@ func (s *Server) Routes() {
 	s.router.Use(c.Handler)
 
 	s.router.Get("/health", s.handleHealth)
+
+	// Product image storage for the admin editor (POST /api/admin/products/images).
+	// Falls open to the dev local adapter on Azure misconfig, mirroring the
+	// sms/push fallback — constructed directly (NewLocal is infallible) so a
+	// failed Azure setup logs a warning instead of leaving a nil store.
+	store, err := blob.New(blob.Config{
+		Provider: s.cfg.StorageProvider,
+		Azure: blob.AzureConfig{
+			ConnectionString: s.cfg.AzureStorageConnectionString,
+			Container:        s.cfg.AzureStorageContainer,
+		},
+		Local: blob.LocalConfig{
+			Dir:        s.cfg.UploadsDir,
+			PublicBase: s.cfg.PublicBaseURL,
+		},
+	})
+	if err != nil {
+		slog.Warn("server: storage provider misconfigured — falling back to local adapter", "provider", s.cfg.StorageProvider, "error", err)
+		store = blob.NewLocal(blob.LocalConfig{Dir: s.cfg.UploadsDir, PublicBase: s.cfg.PublicBaseURL})
+	}
+
+	// Serve the local adapter's files directly. Gate on the CONSTRUCTED adapter,
+	// not the config: a fallback-to-local (Azure misconfig) still needs its
+	// /uploads mount, and a real Azure adapter must not expose local disk.
+	if _, ok := store.(*blob.LocalStorage); ok {
+		fs := http.FileServer(http.Dir(s.cfg.UploadsDir))
+		s.router.Handle("/uploads/*", http.StripPrefix("/uploads/", fs))
+	}
 
 	// Customer-facing routes (read-only product catalog stays separate). The
 	// catalog is enriched with live-offer sale prices via a read-only offer repo
@@ -153,7 +182,7 @@ func (s *Server) Routes() {
 	s.router.Route("/api/admin", func(r chi.Router) {
 		r.Use(auth.AdminOnly(s.cfg.JWTSecret, s.cfg.Env == "development"))
 
-		product.RegisterAdminRoutes(r, s.db, rec)
+		product.RegisterAdminRoutes(r, s.db, rec, store)
 		code.RegisterAdminRoutes(r, s.db, rec, ntf)
 		dashboard.RegisterAdminRoutes(r, s.db)
 		finance.RegisterAdminRoutes(r, s.db)

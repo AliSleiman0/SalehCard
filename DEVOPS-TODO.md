@@ -152,3 +152,33 @@ dependency as OTP/bulk-SMS — see `HANDOFF-OTP-DEPLOY.md`). Rollout:
   on unless the acting admin's JWT carries a phone (re-login after setting one).
 - `app_settings` already exists (settings singleton); this is an additive boolean,
   no migration.
+
+## 13. Product image storage — provision Azure Blob (product images feature)
+
+Product image uploads (admin editor → Go API compresses to a 1024px display JPEG
++ 256px thumbnail → blob storage) ship with a **hexagonal `platform/blob` port**:
+`STORAGE_PROVIDER` selects `local` (dev default — writes to `UPLOADS_DIR`, served
+by the API at `/uploads/*`) or `azure`. **Prod must use `azure`** (a Container App
+has ephemeral local disk). One-time setup in **Azure Cloud Shell** (local `az` is
+broken by the proxy TLS MITM — see CLAUDE.md):
+
+```bash
+az storage account create -n salehcardassets -g salehcard-prod -l <region> \
+  --sku Standard_LRS --allow-blob-public-access true
+az storage container create --account-name salehcardassets -n product-images \
+  --public-access blob
+az storage account show-connection-string -n salehcardassets -g salehcard-prod
+# then set on the API Container App / App Service:
+#   STORAGE_PROVIDER=azure
+#   AZURE_STORAGE_CONNECTION_STRING=<value from show-connection-string>
+#   AZURE_STORAGE_CONTAINER=product-images   (default; can omit)
+```
+
+- The container is **public-read** (`--public-access blob`) so the app/admin can
+  render image URLs directly (no SAS). Only the API (admin-only endpoint) writes.
+- Record the connection string in the gitignored **`DEPLOY-CREDS.local.md`**.
+- The adapter **falls open to `local`** on misconfig (logs a warning) — so a
+  missing/blank connection string won't crash boot, it just won't persist to Azure.
+  Verify the startup log shows no `storage provider misconfigured` warning.
+- **Future work:** swap connection-string auth → managed identity; optional
+  best-effort old-blob delete on replace (v1 leaves orphans — pennies).

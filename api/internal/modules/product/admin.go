@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -17,13 +18,15 @@ import (
 
 // RegisterAdminRoutes mounts the admin product CRUD onto r. The caller is
 // responsible for applying the AdminOnly middleware to r (the /api/admin group).
-// Destructive actions are recorded via rec.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
+// Destructive actions are recorded via rec. store persists uploaded product
+// images (POST /products/images).
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, store blob.Storage) {
 	repo := NewMongoRepository(db)
 	_ = EnsureIndexes(context.Background(), db)
 	svc := NewProductService(repo)
 	h := NewHandler(svc)
 	h.rec = rec
+	h.store = store
 
 	// Flat registration (not a sub-router) so the code module can mount its own
 	// /products/{id}/codes routes on the same /api/admin router without a Mount
@@ -32,6 +35,7 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	r.Get("/products/categories", categoryFacetsHandler(repo))
 	r.Post("/products", h.Create)
 	r.Post("/products/bulk", h.Bulk)
+	r.Post("/products/images", h.UploadImage)
 	r.Get("/products/{id}", h.GetByID)
 	r.Put("/products/{id}", h.Update)
 	r.Delete("/products/{id}", h.Delete)

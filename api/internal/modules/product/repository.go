@@ -317,6 +317,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		Description:         in.Description,
 		Category:            in.Category,
 		Images:              in.Images,
+		Thumbnail:           in.Thumbnail,
 		Variants:            variants,
 		FulfillmentType:     in.FulfillmentType,
 		FulfillmentMode:     mode,
@@ -434,6 +435,10 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		// Insert-only (admin/operational): preserved on re-import via $ifNull.
 		{Key: "createdAt", Value: ifNull("createdAt", now)},
 		{Key: "legacyId", Value: ifNull("legacyId", in.LegacyID)},
+		// thumbnail is admin-owned (uploaded via the product editor; the loader
+		// never has one). Insert-only so a catalog re-import never wipes an
+		// admin-uploaded thumbnail. First insert seeds in.Thumbnail (usually "").
+		{Key: "thumbnail", Value: ifNull("thumbnail", in.Thumbnail)},
 		{Key: "stock", Value: ifNull("stock", 0)},
 		{Key: "ratings", Value: ifNull("ratings", RatingsSummary{})},
 		{Key: "available", Value: ifNull("available", in.Available)},
@@ -461,6 +466,9 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	}
 	if in.Images != nil {
 		set = append(set, bson.E{Key: "images", Value: in.Images})
+	}
+	if in.Thumbnail != nil {
+		set = append(set, bson.E{Key: "thumbnail", Value: *in.Thumbnail})
 	}
 	if in.Variants != nil {
 		// Generate IDs for any variant added through the admin editor (which

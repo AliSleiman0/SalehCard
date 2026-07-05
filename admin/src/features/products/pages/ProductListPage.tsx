@@ -35,6 +35,23 @@ const FF_DOT: Record<FfKey, string> = {
 
 type StatusFilter = 'all' | 'active' | 'draft' | 'out'
 
+// Prefers the compressed thumbnail, falling back to the display image, then to
+// the gradient placeholder — both up front (no thumbnail/image) and on a
+// broken URL (onError).
+export function ProductThumb({ p }: { p: Product }) {
+  const [failed, setFailed] = useState(false)
+  const src = p.thumbnail || p.images[0]
+  if (!src || failed) return <Art art={artForCategory(p.category)} size={36} />
+  return (
+    <img
+      src={src}
+      alt=""
+      onError={() => setFailed(true)}
+      style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+    />
+  )
+}
+
 function toFulfillment(ff: FfKey): FulfillmentType {
   return ff === 'credit' ? 'account_credit' : ff === 'transfer' ? 'transfer' : 'code'
 }
@@ -275,7 +292,7 @@ export default function ProductListPage() {
                     </td>
                     <td>
                       <div className="cellprod">
-                        <Art art={artForCategory(p.category)} size={36} />
+                        <ProductThumb p={p} />
                         <div className="pn">
                           <b>{p.title.en}</b>
                           <span className="mono">{p.id.slice(-8)}</span>
