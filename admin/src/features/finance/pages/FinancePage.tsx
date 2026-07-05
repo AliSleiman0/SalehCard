@@ -114,6 +114,7 @@ export default function FinancePage() {
 
 /** The wallet-ledger feed: filter by type/method, search by user, paginate. */
 function TransactionsTab() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const [type, setType] = useState<'' | TxType>('')
   const [method, setMethod] = useState('')
