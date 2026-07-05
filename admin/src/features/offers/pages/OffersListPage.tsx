@@ -137,7 +137,7 @@ export default function OffersListPage() {
               total={meta?.total ?? rows.length}
               shown={rows.length}
               limit={meta?.limit}
-              label="offers"
+              label={t('pg_offers')}
               onPage={setPage}
             />
           </>

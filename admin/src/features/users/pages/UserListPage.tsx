@@ -246,7 +246,7 @@ export default function UserListPage() {
               total={meta?.total ?? rows.length}
               shown={rows.length}
               limit={meta?.limit}
-              label="users"
+              label={t('pg_users')}
               onPage={setPage}
             />
           </>

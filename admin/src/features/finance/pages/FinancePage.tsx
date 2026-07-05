@@ -256,7 +256,7 @@ function TransactionsTab() {
             total={meta?.total ?? rows.length}
             shown={rows.length}
             limit={meta?.limit}
-            label="transactions"
+            label={t('pg_transactions')}
             onPage={setPage}
           />
         </>
@@ -557,7 +557,7 @@ function UsdtQueueTab() {
             total={meta?.total ?? rows.length}
             shown={rows.length}
             limit={meta?.limit}
-            label="requests"
+            label={t('pg_requests')}
             onPage={setPage}
           />
         </>

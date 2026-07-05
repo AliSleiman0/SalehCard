@@ -320,7 +320,7 @@ export default function ProductListPage() {
           total={meta?.total ?? rows.length}
           shown={rows.length}
           limit={meta?.limit}
-          label="products"
+          label={t('pg_products')}
           onPage={setPage}
         />
       </div>

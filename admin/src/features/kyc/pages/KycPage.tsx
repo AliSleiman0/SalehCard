@@ -164,7 +164,7 @@ export default function KycPage() {
               total={meta?.total ?? rows.length}
               shown={rows.length}
               limit={meta?.limit}
-              label="submissions"
+              label={t('pg_submissions')}
               onPage={setPage}
             />
           </>

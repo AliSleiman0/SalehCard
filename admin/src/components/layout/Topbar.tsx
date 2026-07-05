@@ -119,12 +119,12 @@ export function Topbar() {
           </div>
           {menu === 'admin' && (
             <div className="menu" style={{ minWidth: 200 }}>
-              <div className="menu-label">Signed in as</div>
+              <div className="menu-label">{t('signed_in_as')}</div>
               <div style={{ padding: '4px 10px 10px', fontSize: 13 }}>
                 <div style={{ fontWeight: 800 }}>{user?.email ?? '—'}</div>
               </div>
               <button onClick={() => navigate('/settings')}>
-                <Icon name="settings" size={16} /> Account settings
+                <Icon name="settings" size={16} /> {t('account_settings')}
               </button>
               <button
                 onClick={() => {
@@ -132,7 +132,7 @@ export function Topbar() {
                   navigate('/audit')
                 }}
               >
-                <Icon name="shield" size={16} /> Activity log
+                <Icon name="shield" size={16} /> {t('nav_audit')}
               </button>
               <button
                 style={{ color: 'var(--danger)' }}

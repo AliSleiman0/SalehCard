@@ -77,7 +77,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String otpSubtitle(String phone) {
-    return 'أدخل الرمز المكوّن من 6 أرقام المرسل إلى $phone.';
+    return 'أدخل الرمز المكوّن من ٦ أرقام المرسل إلى $phone.';
   }
 
   @override
@@ -142,25 +142,19 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get passwordTooShort =>
-      'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.';
+      'يجب أن تتكون كلمة المرور من ٨ أحرف على الأقل.';
 
   @override
   String get passwordMismatch => 'كلمتا المرور غير متطابقتين.';
 
   @override
-  String get otpIncomplete => 'أدخل الرمز المكوّن من 6 أرقام.';
+  String get otpIncomplete => 'أدخل الرمز المكوّن من ٦ أرقام.';
 
   @override
   String get searchHint => 'ابحث';
 
   @override
   String get totalBalance => 'الرصيد الإجمالي';
-
-  @override
-  String get requestPhysicalCard => 'اطلب بطاقة فعلية';
-
-  @override
-  String get cardInfo => 'معلومات البطاقة';
 
   @override
   String get addMoney => 'إضافة رصيد';
@@ -199,7 +193,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get fromLabel => 'يبدأ من';
 
   @override
-  String get chooseAmount => 'اختر الفئة';
+  String get chooseAmount => 'اختر المبلغ';
 
   @override
   String get quantityLabel => 'الكمية';
@@ -228,7 +222,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get buyNow => 'اشترِ الآن';
 
   @override
-  String get notifyMe => 'تنبيهي';
+  String get notifyMe => 'أبلغني';
 
   @override
   String get totalLabel => 'الإجمالي';
@@ -238,7 +232,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String cartItemsCount(int count) {
-    return '· $count عناصر';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عنصر',
+      many: '$count عنصراً',
+      few: '$count عناصر',
+      two: 'عنصران',
+      one: 'عنصر واحد',
+    );
+    return '· $_temp0';
   }
 
   @override
@@ -702,15 +705,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kycDocNumberLabel => 'رقم المستند';
-
-  @override
-  String get kycUploadLabel => 'صورة المستند';
-
-  @override
-  String get kycUploadHint => 'اضغط لرفع صورة من مستندك';
-
-  @override
-  String get kycUploadSelected => 'document.jpg';
 
   @override
   String get kycSubmitCta => 'إرسال';

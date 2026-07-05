@@ -186,7 +186,7 @@ export default function ReviewsPage() {
               total={meta?.total ?? rows.length}
               shown={rows.length}
               limit={meta?.limit}
-              label="reviews"
+              label={t('pg_reviews')}
               onPage={setPage}
             />
           </>

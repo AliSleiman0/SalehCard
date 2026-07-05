@@ -266,7 +266,7 @@ export default function ResellerListPage() {
               total={meta?.total ?? rows.length}
               shown={rows.length}
               limit={meta?.limit}
-              label="resellers"
+              label={t('pg_resellers')}
               onPage={setPage}
             />
           </>

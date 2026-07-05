@@ -47,7 +47,7 @@ export default function ResellerDetailPage() {
   if (isError || !detail || !view) {
     return (
       <div className="page">
-        <ErrorState message="Couldn't load this reseller." onRetry={() => refetch()} />
+        <ErrorState message={t('rd_load_error')} onRetry={() => refetch()} />
       </div>
     )
   }
@@ -63,11 +63,11 @@ export default function ResellerDetailPage() {
             {view.name}{' '}
             {view.tier ? (
               <span className="pill-role" style={{ background: tc + '22', color: tc, border: '1px solid ' + tc + '55' }}>
-                {view.tier} agent
+                {view.tier} {t('rd_agent')}
               </span>
             ) : (
               <span className="faint" style={{ fontSize: 13 }}>
-                no tier
+                {t('rd_no_tier')}
               </span>
             )}
           </span>
@@ -78,17 +78,17 @@ export default function ResellerDetailPage() {
           <Icon name="chevleft" size={15} /> {t('back')}
         </button>
         <button className="abtn primary" onClick={() => setTab('balance')}>
-          <Icon name="coins" size={15} /> Adjust sub-balance
+          <Icon name="coins" size={15} /> {t('rd_adjust_balance')}
         </button>
       </PageHead>
 
       <div className="g3" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 18 }}>
         {(
           [
-            ['Sub-balance', money(view.balance, view.cur), 'wallet'],
-            ['Tier margin', view.margin + '%', 'activity'],
-            ['Total orders', view.orders.toLocaleString(), 'bag'],
-            ['Lifetime volume', money(view.vol, view.cur), 'coins'],
+            [t('rd_kpi_subbalance'), money(view.balance, view.cur), 'wallet'],
+            [t('col_tier_margin'), view.margin + '%', 'activity'],
+            [t('rd_kpi_total_orders'), view.orders.toLocaleString(), 'bag'],
+            [t('rd_kpi_lifetime_volume'), money(view.vol, view.cur), 'coins'],
           ] as [string, string, 'wallet' | 'activity' | 'bag' | 'coins'][]
         ).map(([l, v, ic]) => (
           <div className="kpi" key={l}>
@@ -109,27 +109,27 @@ export default function ResellerDetailPage() {
         value={tab}
         onChange={setTab}
         items={[
-          { k: 'overview', label: 'Overview' },
-          { k: 'balance', label: 'Sub-balance' },
-          { k: 'pricing', label: 'Pricing rules' },
-          { k: 'orders', label: 'Order history' },
+          { k: 'overview', label: t('grp_overview') },
+          { k: 'balance', label: t('rd_kpi_subbalance') },
+          { k: 'pricing', label: t('rd_tab_pricing') },
+          { k: 'orders', label: t('rd_tab_orders') },
         ]}
       />
 
       {tab === 'overview' && (
         <div className="formgrid">
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Profile</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('rd_profile')}</h3>
             <div className="deflist">
               {(
                 [
-                  ['Display name', view.name],
-                  ['Email', view.email || '—'],
-                  ['Phone', view.phone || '—'],
-                  ['Reseller ID', view.id],
-                  ['Status', <StatusBadge key="s" s={view.status} />],
-                  ['Currency', view.cur],
-                  ['Member since', view.joined],
+                  [t('rd_display_name'), view.name],
+                  [t('login_email'), view.email || '—'],
+                  [t('rd_phone'), view.phone || '—'],
+                  [t('rd_reseller_id'), view.id],
+                  [t('status'), <StatusBadge key="s" s={view.status} />],
+                  [t('exp_currency'), view.cur],
+                  [t('rd_member_since'), view.joined],
                 ] as [string, React.ReactNode][]
               ).map(([k, v]) => (
                 <div className="defrow" key={k}>
@@ -165,7 +165,7 @@ function TierTab({ id, tier, margin }: { id: string; tier: string; margin: numbe
 
   return (
     <div className="acard pad">
-      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Tier assignment</h3>
+      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('rd_tier_assignment')}</h3>
       <div className="g3">
         {tiers.map((tn) => (
           <Chip
@@ -178,7 +178,7 @@ function TierTab({ id, tier, margin }: { id: string; tier: string; margin: numbe
           </Chip>
         ))}
       </div>
-      <div className="ahint">Tier sets the default discount ({margin}%) and balance limit.</div>
+      <div className="ahint">{t('rd_tier_hint', { margin })}</div>
       <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
         <button
           className="abtn primary"
@@ -187,7 +187,7 @@ function TierTab({ id, tier, margin }: { id: string; tier: string; margin: numbe
         >
           <Icon name="check" size={15} /> {t('save')}
         </button>
-        {update.isError && <span style={{ color: 'var(--danger)', fontSize: 12.5 }}>Couldn't update tier.</span>}
+        {update.isError && <span style={{ color: 'var(--danger)', fontSize: 12.5 }}>{t('rd_tier_update_error')}</span>}
       </div>
     </div>
   )
@@ -203,6 +203,7 @@ function BalanceTab({
   balance: number
   transactions: { id: string; type: string; amount: number; method: string; createdAt: string }[]
 }) {
+  const { t } = useTranslation()
   const [dir, setDir] = useState<'topup' | 'deduct'>('topup')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
@@ -212,11 +213,11 @@ function BalanceTab({
   const apply = () => {
     const amt = Number(amount)
     if (!Number.isFinite(amt) || amt <= 0) {
-      setError('Enter an amount greater than zero.')
+      setError(t('rd_err_amount_positive'))
       return
     }
     if (!reason.trim()) {
-      setError('A note is required.')
+      setError(t('rd_err_note_required'))
       return
     }
     setError('')
@@ -227,7 +228,7 @@ function BalanceTab({
           setAmount('')
           setReason('')
         },
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Adjustment failed.'),
+        onError: (e) => setError(e instanceof ApiError ? e.message : t('rd_adjust_failed')),
       },
     )
   }
@@ -237,20 +238,20 @@ function BalanceTab({
       <div className="acard">
         <div className="panelhead">
           <Icon name="wallet" size={17} />
-          <h3>Sub-balance transactions</h3>
+          <h3>{t('rd_subbalance_transactions')}</h3>
         </div>
         {transactions.length === 0 ? (
-          <EmptyState title="No sub-balance activity yet" />
+          <EmptyState title={t('rd_no_subbalance_activity')} />
         ) : (
           <div className="tablewrap">
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Transaction</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                  <th>Method</th>
-                  <th>Date</th>
+                  <th>{t('col_transaction')}</th>
+                  <th>{t('col_type')}</th>
+                  <th>{t('col_amount')}</th>
+                  <th>{t('col_method')}</th>
+                  <th>{t('col_date')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -276,21 +277,21 @@ function BalanceTab({
         )}
       </div>
       <div className="acard pad">
-        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Adjust sub-balance</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>{t('rd_adjust_balance')}</h3>
         <div className="faint" style={{ fontSize: 12.5, marginBottom: 14 }}>
-          Current {money(balance)}
+          {t('rd_current', { amount: money(balance) })}
         </div>
         <Segmented<'topup' | 'deduct'>
           block
           value={dir}
           onChange={setDir}
           items={[
-            { k: 'topup', label: 'Top up (+)' },
-            { k: 'deduct', label: 'Deduct (−)' },
+            { k: 'topup', label: t('rd_topup_plus') },
+            { k: 'deduct', label: t('rd_deduct_minus') },
           ]}
         />
         <label className="alabel" style={{ marginTop: 14 }}>
-          Amount (USD)
+          {t('rd_amount_usd')}
         </label>
         <input
           className="afield"
@@ -302,17 +303,17 @@ function BalanceTab({
           onChange={(e) => setAmount(e.target.value)}
         />
         <label className="alabel" style={{ marginTop: 12 }}>
-          Note (required)
+          {t('rd_note_required_label')}
         </label>
         <input
           className="afield"
-          placeholder="Reference / reason"
+          placeholder={t('rd_ph_reason')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <button className="abtn primary" style={{ marginTop: 16, width: '100%' }} onClick={apply} disabled={adjust.isPending}>
-          <Icon name="check" size={15} /> Apply
+          <Icon name="check" size={15} /> {t('apply')}
         </button>
       </div>
     </div>
@@ -332,6 +333,7 @@ function effectivePrice(v: Variant, margin: number): number {
  *  with inline editing of each variant's per-product reseller-price override
  *  (persisted via the product-update endpoint; no new backend). */
 function PricingTab({ margin }: { margin: number }) {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const { data, isLoading, isError, refetch } = useProducts({ limit: 100 })
   const products = data?.data ?? []
@@ -353,7 +355,7 @@ function PricingTab({ margin }: { margin: number }) {
       setEdit(null)
       setError('')
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Update failed.'),
+    onError: (e) => setError(e instanceof ApiError ? e.message : t('rd_update_failed')),
   })
 
   const startEdit = (v: Variant) => {
@@ -365,37 +367,37 @@ function PricingTab({ margin }: { margin: number }) {
     const raw = value.trim()
     const price = raw === '' ? undefined : Number(raw)
     if (price !== undefined && (!Number.isFinite(price) || price < 0)) {
-      setError('Enter a valid price, or clear it to remove the override.')
+      setError(t('rd_err_valid_price'))
       return
     }
     save.mutate({ product, variantId, price })
   }
 
   if (isLoading) return <LoadingSpinner />
-  if (isError) return <ErrorState message="Couldn't load products." onRetry={() => refetch()} />
+  if (isError) return <ErrorState message={t('rd_load_products_error')} onRetry={() => refetch()} />
 
   return (
     <div className="acard">
       <div className="panelhead">
         <Icon name="coins" size={17} />
-        <h3>Effective pricing ({margin}% tier margin)</h3>
+        <h3>{t('rd_effective_pricing', { margin })}</h3>
       </div>
       <div className="ahint" style={{ padding: '0 16px 12px' }}>
-        Resellers pay the lowest of retail, the tier-margin price, and any per-variant override below.
+        {t('rd_pricing_hint')}
       </div>
       {products.length === 0 ? (
-        <EmptyState title="No products yet" />
+        <EmptyState title={t('rd_no_products')} />
       ) : (
         <div className="tablewrap">
           <table className="tbl">
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Variant</th>
-                <th>Retail</th>
-                <th>Tier margin</th>
-                <th>Override</th>
-                <th>Effective</th>
+                <th>{t('col_product')}</th>
+                <th>{t('col_variant')}</th>
+                <th>{t('col_retail')}</th>
+                <th>{t('col_tier_margin')}</th>
+                <th>{t('col_override')}</th>
+                <th>{t('col_effective')}</th>
                 <th></th>
               </tr>
             </thead>
@@ -419,7 +421,7 @@ function PricingTab({ margin }: { margin: number }) {
                             type="number"
                             min="0"
                             step="0.01"
-                            placeholder="none"
+                            placeholder={t('rd_ph_none')}
                             value={value}
                             autoFocus
                             onChange={(e) => setValue(e.target.value)}
@@ -463,6 +465,7 @@ function PricingTab({ margin }: { margin: number }) {
 
 /** Order history — reuses the wired admin orders endpoint, searched by email. */
 function OrdersTab({ email, total }: { email: string; total: number }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { data, isLoading, isError } = useOrders({ q: email, limit: 6 })
   const rows = (data?.data ?? []).map(adaptOrder)
@@ -471,28 +474,28 @@ function OrdersTab({ email, total }: { email: string; total: number }) {
     <div className="acard">
       <div className="panelhead">
         <Icon name="bag" size={17} />
-        <h3>Order history</h3>
+        <h3>{t('rd_tab_orders')}</h3>
         <span className="faint" style={{ fontSize: 12.5, marginInlineStart: 6 }}>
-          {total} completed
+          {t('rd_completed_count', { total })}
         </span>
       </div>
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Couldn't load orders." />
+        <ErrorState message={t('rd_load_orders_error')} />
       ) : rows.length === 0 ? (
-        <EmptyState title="No orders yet" />
+        <EmptyState title={t('rd_no_orders')} />
       ) : (
         <div className="tablewrap">
           <table className="tbl">
             <thead>
               <tr>
-                <th>Order</th>
-                <th>Product</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Date</th>
+                <th>{t('col_order')}</th>
+                <th>{t('col_product')}</th>
+                <th>{t('col_type')}</th>
+                <th>{t('col_amount')}</th>
+                <th>{t('status')}</th>
+                <th>{t('col_date')}</th>
               </tr>
             </thead>
             <tbody>

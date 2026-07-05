@@ -132,7 +132,7 @@ export default function AuditLogPage() {
               total={meta?.total ?? rows.length}
               shown={rows.length}
               limit={meta?.limit}
-              label="actions"
+              label={t('pg_actions')}
               onPage={setPage}
             />
           </>
