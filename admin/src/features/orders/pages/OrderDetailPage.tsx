@@ -91,6 +91,16 @@ export default function OrderDetailPage() {
                       Qty {it.qty} · {o.currency}
                       {it.denomination ? ` · ${it.denomination}` : ''}
                     </div>
+                    {it.fields && it.fields.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 6 }}>
+                        {it.fields.map((f) => (
+                          <span key={f.key} style={{ fontSize: 12.5 }}>
+                            <span className="faint">{f.label?.en || f.key}: </span>
+                            <b style={{ fontWeight: 700 }}>{f.value}</b>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="num strong" style={{ fontSize: 16 }}>
                     {money(it.price * it.qty, v.cur)}

@@ -81,6 +81,16 @@ class InputField {
   final bool sensitive;
 }
 
+/// Purchase-time account-ID verification config (check_name). [app] is the
+/// provider's game slug (e.g. `pubgm-global`); [provider] is the numeric
+/// verification-provider id. Present only on products that require verification.
+class Verification {
+  const Verification({required this.provider, required this.app});
+
+  final int provider;
+  final String app;
+}
+
 /// Catalog product (domain entity).
 class Product {
   const Product({
@@ -93,6 +103,7 @@ class Product {
     required this.available,
     this.fulfillmentType = 'code',
     this.inputFields = const [],
+    this.verification,
     this.rating,
     this.ratingCount = 0,
     this.offer,
@@ -118,6 +129,13 @@ class Product {
 
   /// Dynamic per-product fields to collect at checkout (empty for most cards).
   final List<InputField> inputFields;
+
+  /// Set when this product requires purchase-time ID verification; null
+  /// otherwise.
+  final Verification? verification;
+
+  /// Whether the customer must verify a game ID (see nickname) before buying.
+  bool get requiresIdVerification => verification != null;
 
   final double? rating;
   final int ratingCount;

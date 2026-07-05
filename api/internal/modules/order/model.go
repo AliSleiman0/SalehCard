@@ -34,6 +34,24 @@ type RecipientInput struct {
 	Detail  string `bson:"detail"  json:"detail"`
 }
 
+// OrderField is one customer-provided input captured at checkout (e.g. Account
+// ID, Zone ID, Email), snapshotted with its localized label so the operator who
+// fulfills the order sees labeled values. Label is resolved server-side from the
+// product's InputFields spec — never trusted from the client. Sensitive fields
+// (spec §3.2) are not persisted here.
+type OrderField struct {
+	Key   string            `bson:"key"   json:"key"`
+	Label product.I18nLabel `bson:"label" json:"label"`
+	Value string            `bson:"value" json:"value"`
+}
+
+// OrderFieldInput is one field the client submits for a line: just key + value.
+// The label is looked up server-side from the product spec.
+type OrderFieldInput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 // OrderItem represents a single line within an order. Price and FulfillmentType
 // are server-derived (never trusted from the client); PlayerID/Recipient carry
 // the fulfillment target for account_credit / transfer lines. Title, Denomination
@@ -54,6 +72,9 @@ type OrderItem struct {
 	FulfillmentProvider *int            `bson:"fulfillmentProvider,omitempty" json:"fulfillmentProvider,omitempty"`
 	PlayerID            string          `bson:"playerId,omitempty"            json:"playerId,omitempty"`
 	Recipient           *RecipientInput `bson:"recipient,omitempty"           json:"recipient,omitempty"`
+	// Fields are the labeled customer inputs for this line (Account ID, Zone ID,
+	// Email, …), shown to the operator who fulfills the order.
+	Fields []OrderField `bson:"fields,omitempty" json:"fields,omitempty"`
 }
 
 // TimelineEvent records a status transition on a fulfillment.
@@ -96,11 +117,12 @@ type Order struct {
 // is allowed to choose — product, variant, quantity, and the fulfillment target
 // — never the price or fulfillment type (the server derives those).
 type PlaceOrderItemInput struct {
-	ProductID string          `json:"productId"`
-	VariantID string          `json:"variantId"`
-	Qty       int             `json:"qty"`
-	PlayerID  string          `json:"playerId,omitempty"`
-	Recipient *RecipientInput `json:"recipient,omitempty"`
+	ProductID string            `json:"productId"`
+	VariantID string            `json:"variantId"`
+	Qty       int               `json:"qty"`
+	PlayerID  string            `json:"playerId,omitempty"`
+	Recipient *RecipientInput   `json:"recipient,omitempty"`
+	Fields    []OrderFieldInput `json:"fields,omitempty"`
 }
 
 // PlaceOrderInput carries the data needed to create a new order.

@@ -495,6 +495,14 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	if in.InputFields != nil {
 		set = append(set, bson.E{Key: "inputFields", Value: in.InputFields})
 	}
+	if in.Verification != nil {
+		// An empty App means "disable verification" → clear the stored config.
+		if in.Verification.App == "" {
+			set = append(set, bson.E{Key: "verification", Value: nil})
+		} else {
+			set = append(set, bson.E{Key: "verification", Value: in.Verification})
+		}
+	}
 
 	after := options.After
 	opts := options.FindOneAndUpdate().SetReturnDocument(after)

@@ -51,6 +51,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productDetailUnavailable => 'هذا المنتج غير متاح حالياً.';
 
   @override
+  String get verifyChecking => 'جارٍ التحقق من المعرّف…';
+
+  @override
+  String get verifyFound => 'الحساب';
+
+  @override
+  String get verifyNotFound =>
+      'تعذّر العثور على هذا المعرّف. يرجى التحقق والمحاولة مرة أخرى.';
+
+  @override
+  String get verifyUnavailable => 'تعذّر التحقق الآن — يمكنك المتابعة.';
+
+  @override
   String get languageToggle => 'English';
 
   @override

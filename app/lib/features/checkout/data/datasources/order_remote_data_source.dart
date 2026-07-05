@@ -52,6 +52,10 @@ class OrderRemoteDataSource {
                 'country': line.recipient!.country,
                 'detail': line.recipient!.detail,
               },
+            if (line.fields.isNotEmpty)
+              'fields': [
+                for (final f in line.fields) {'key': f.key, 'value': f.value},
+              ],
           },
       ],
       'currency': input.currency,

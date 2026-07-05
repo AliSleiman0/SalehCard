@@ -182,6 +182,30 @@ abstract class AppLocalizations {
   /// **'This product is currently unavailable.'**
   String get productDetailUnavailable;
 
+  /// No description provided for @verifyChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking ID…'**
+  String get verifyChecking;
+
+  /// No description provided for @verifyFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get verifyFound;
+
+  /// No description provided for @verifyNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t find that ID. Please check and try again.'**
+  String get verifyNotFound;
+
+  /// No description provided for @verifyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t verify right now — you can still continue.'**
+  String get verifyUnavailable;
+
   /// No description provided for @languageToggle.
   ///
   /// In en, this message translates to:

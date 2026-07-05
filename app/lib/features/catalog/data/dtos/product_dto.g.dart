@@ -89,6 +89,15 @@ Map<String, dynamic> _$InputFieldDtoToJson(InputFieldDto instance) =>
       'sensitive': instance.sensitive,
     };
 
+VerificationDto _$VerificationDtoFromJson(Map<String, dynamic> json) =>
+    VerificationDto(
+      provider: (json['provider'] as num?)?.toInt() ?? 0,
+      app: json['app'] as String? ?? '',
+    );
+
+Map<String, dynamic> _$VerificationDtoToJson(VerificationDto instance) =>
+    <String, dynamic>{'provider': instance.provider, 'app': instance.app};
+
 ProductDto _$ProductDtoFromJson(Map<String, dynamic> json) => ProductDto(
   id: json['id'] as String,
   title: json['title'] as Map<String, dynamic>?,
@@ -103,6 +112,9 @@ ProductDto _$ProductDtoFromJson(Map<String, dynamic> json) => ProductDto(
   inputFields: (json['inputFields'] as List<dynamic>?)
       ?.map((e) => InputFieldDto.fromJson(e as Map<String, dynamic>))
       .toList(),
+  verification: json['verification'] == null
+      ? null
+      : VerificationDto.fromJson(json['verification'] as Map<String, dynamic>),
   ratings: json['ratings'] == null
       ? null
       : RatingsDto.fromJson(json['ratings'] as Map<String, dynamic>),
@@ -122,6 +134,7 @@ Map<String, dynamic> _$ProductDtoToJson(ProductDto instance) =>
       'available': instance.available,
       'fulfillmentType': instance.fulfillmentType,
       'inputFields': instance.inputFields?.map((e) => e.toJson()).toList(),
+      'verification': instance.verification?.toJson(),
       'ratings': instance.ratings?.toJson(),
       'offer': instance.offer?.toJson(),
     };

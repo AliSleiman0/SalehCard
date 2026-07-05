@@ -14,6 +14,10 @@
   "emptyCatalog": "لا توجد منتجات متاحة.",
   "offersEmpty": "لا توجد عروض حالياً. تحقق لاحقاً.",
   "productDetailUnavailable": "هذا المنتج غير متاح حالياً.",
+  "verifyChecking": "جارٍ التحقق من المعرّف…",
+  "verifyFound": "الحساب",
+  "verifyNotFound": "تعذّر العثور على هذا المعرّف. يرجى التحقق والمحاولة مرة أخرى.",
+  "verifyUnavailable": "تعذّر التحقق الآن — يمكنك المتابعة.",
   "languageToggle": "English",
 
   "welcomeBackTitle": "مرحباً بعودتك",

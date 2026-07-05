@@ -98,6 +98,18 @@ type Config struct {
 	// this is a spend guardrail). Exceeding it returns 400 BULK_SMS_LIMIT.
 	BulkSMSMax int
 
+	// IDCheckProvider selects the game-account ID-verification adapter: "rapidapi"
+	// (RapidAPI ID Game Checker) or "stub" (dev — returns a placeholder username).
+	// Default "stub".
+	IDCheckProvider string
+	// RapidAPIKey authenticates the RapidAPI ID Game Checker adapter. Required when
+	// IDCheckProvider is "rapidapi"; server-side only — never shipped to clients.
+	RapidAPIKey string
+	// Rate limiting on the ID-verification endpoint (per-IP fixed window). Each call
+	// hits a paid upstream API, so it is capped independently of the auth limiter.
+	RateLimitVerifyMax    int
+	RateLimitVerifyWindow time.Duration
+
 	// PaymentProvider selects the checkout payment gateway: "mock" enables the
 	// sandbox card/usdt path; "" / "log" keeps checkout wallet-only (the default).
 	PaymentProvider string
@@ -166,6 +178,11 @@ func Load() *Config {
 		SendGridAPIKey: os.Getenv("SENDGRID_API_KEY"),
 
 		BulkSMSMax: getInt("BULK_SMS_MAX", 200),
+
+		IDCheckProvider:       getEnv("IDCHECK_PROVIDER", "stub"),
+		RapidAPIKey:           os.Getenv("RAPIDAPI_KEY"),
+		RateLimitVerifyMax:    getInt("RATE_LIMIT_VERIFY_MAX", 20),
+		RateLimitVerifyWindow: getDuration("RATE_LIMIT_VERIFY_WINDOW", time.Minute),
 
 		PaymentProvider:   getEnv("PAYMENT_PROVIDER", "log"),
 		FulfillmentMock:   getBool("FULFILLMENT_MOCK", false),

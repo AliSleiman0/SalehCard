@@ -83,7 +83,7 @@ func (s *Server) Routes() {
 	// catalog is enriched with live-offer sale prices via a read-only offer repo
 	// (EnsureIndexes runs in offer.RegisterRoutes, so this second repo skips it).
 	offerCat := offerCatalog{repo: offer.NewMongoRepository(s.db.Collection("offers"))}
-	product.RegisterRoutes(s.router, s.db, offerCat)
+	product.RegisterRoutes(s.router, s.db, s.cfg, offerCat)
 
 	// Read-only category taxonomy (storefront browses by root domain).
 	category.RegisterRoutes(s.router, s.db)
