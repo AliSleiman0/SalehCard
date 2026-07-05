@@ -345,74 +345,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 //     re-import never clobbers admin-managed stock or a hand-toggled
 //     availability. available is derived from status only on first insert.
 func (r *MongoRepository) Upsert(ctx context.Context, in UpsertProductInput) (*Product, error) {
-	now := time.Now().UTC()
-
-	mode := in.FulfillmentMode
-	if mode == "" {
-		mode = DeriveMode(in.FulfillmentType)
-	}
-
-	label := "Default"
-	var price float64
-	if len(in.Variants) > 0 {
-		label = in.Variants[0].Denomination
-		price = in.Variants[0].Price
-	}
-	newVariantID := bson.NewObjectID()
-
-	// Single synthetic variant: on re-import keep the existing element (its _id
-	// and any resellerPrice) and overlay the refreshed price/denomination; on
-	// first insert build a new one.
-	variantExpr := bson.D{{Key: "$cond", Value: bson.D{
-		{Key: "if", Value: bson.D{{Key: "$gt", Value: bson.A{
-			bson.D{{Key: "$size", Value: bson.D{{Key: "$ifNull", Value: bson.A{"$variants", bson.A{}}}}}}, 0,
-		}}}},
-		{Key: "then", Value: bson.A{bson.D{{Key: "$mergeObjects", Value: bson.A{
-			bson.D{{Key: "$arrayElemAt", Value: bson.A{"$variants", 0}}},
-			bson.D{{Key: "price", Value: price}, {Key: "denomination", Value: label}},
-		}}}}},
-		{Key: "else", Value: bson.A{bson.D{
-			{Key: "_id", Value: newVariantID},
-			{Key: "denomination", Value: label},
-			{Key: "price", Value: price},
-		}}},
-	}}}
-
-	ifNull := func(field string, fallback any) bson.D {
-		return bson.D{{Key: "$ifNull", Value: bson.A{"$" + field, fallback}}}
-	}
-
-	set := bson.D{
-		// Catalog-owned: refreshed every run.
-		{Key: "updatedAt", Value: now},
-		{Key: "title", Value: in.Title},
-		{Key: "category", Value: in.Category},
-		{Key: "categorySlug", Value: in.CategorySlug},
-		{Key: "rootDomain", Value: in.RootDomain},
-		{Key: "legacyCategoryId", Value: in.LegacyCategoryID},
-		{Key: "images", Value: in.Images},
-		{Key: "description", Value: in.Description},
-		{Key: "descriptionHadMarkup", Value: in.DescriptionHadMarkup},
-		{Key: "fulfillmentType", Value: in.FulfillmentType},
-		{Key: "fulfillmentMode", Value: mode},
-		{Key: "fulfillmentProvider", Value: in.FulfillmentProvider},
-		{Key: "fulfillmentConfidence", Value: in.FulfillmentConfidence},
-		{Key: "fulfillmentCancellable", Value: in.FulfillmentCancellable},
-		{Key: "pricing", Value: in.Pricing},
-		{Key: "amountConstraints", Value: in.AmountConstraints},
-		{Key: "inputFields", Value: in.InputFields},
-		{Key: "verification", Value: in.Verification},
-		{Key: "status", Value: in.Status},
-		{Key: "sortOrder", Value: in.SortOrder},
-		{Key: "flags", Value: in.Flags},
-		{Key: "variants", Value: variantExpr},
-		// Insert-only (admin/operational): preserved on re-import via $ifNull.
-		{Key: "createdAt", Value: ifNull("createdAt", now)},
-		{Key: "legacyId", Value: ifNull("legacyId", in.LegacyID)},
-		{Key: "stock", Value: ifNull("stock", 0)},
-		{Key: "ratings", Value: ifNull("ratings", RatingsSummary{})},
-		{Key: "available", Value: ifNull("available", in.Available)},
-	}
+	set := buildUpsertSet(in, time.Now().UTC(), bson.NewObjectID())
 
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
 	var updated Product
@@ -425,6 +358,86 @@ func (r *MongoRepository) Upsert(ctx context.Context, in UpsertProductInput) (*P
 		return nil, err
 	}
 	return &updated, nil
+}
+
+// buildUpsertSet builds the aggregation-pipeline $set stage for a catalog upsert.
+//
+// Because a pipeline $set evaluates every value as an EXPRESSION, any plain
+// string that begins with "$" (e.g. a product titled "$ 15 Roblox USA") would be
+// misread as a field-path reference and resolve to missing — silently blanking
+// the field. Plain data values are therefore wrapped in $literal so they store
+// verbatim. Only `variants` (a real $cond) and the $ifNull insert-only fields are
+// genuine expressions and must stay unwrapped.
+func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.ObjectID) bson.D {
+	mode := in.FulfillmentMode
+	if mode == "" {
+		mode = DeriveMode(in.FulfillmentType)
+	}
+
+	label := "Default"
+	var price float64
+	if len(in.Variants) > 0 {
+		label = in.Variants[0].Denomination
+		price = in.Variants[0].Price
+	}
+
+	lit := func(v any) bson.D { return bson.D{{Key: "$literal", Value: v}} }
+
+	// Single synthetic variant: on re-import keep the existing element (its _id
+	// and any resellerPrice) and overlay the refreshed price/denomination; on
+	// first insert build a new one. The denomination is $literal-wrapped for the
+	// same "$"-prefix reason as the top-level fields.
+	variantExpr := bson.D{{Key: "$cond", Value: bson.D{
+		{Key: "if", Value: bson.D{{Key: "$gt", Value: bson.A{
+			bson.D{{Key: "$size", Value: bson.D{{Key: "$ifNull", Value: bson.A{"$variants", bson.A{}}}}}}, 0,
+		}}}},
+		{Key: "then", Value: bson.A{bson.D{{Key: "$mergeObjects", Value: bson.A{
+			bson.D{{Key: "$arrayElemAt", Value: bson.A{"$variants", 0}}},
+			bson.D{{Key: "price", Value: price}, {Key: "denomination", Value: lit(label)}},
+		}}}}},
+		{Key: "else", Value: bson.A{bson.D{
+			{Key: "_id", Value: newVariantID},
+			{Key: "denomination", Value: lit(label)},
+			{Key: "price", Value: price},
+		}}},
+	}}}
+
+	ifNull := func(field string, fallback any) bson.D {
+		return bson.D{{Key: "$ifNull", Value: bson.A{"$" + field, fallback}}}
+	}
+
+	return bson.D{
+		// Catalog-owned: refreshed every run. $literal-wrapped so "$"-prefixed
+		// values (titles, denominations, …) are stored, not evaluated as paths.
+		{Key: "updatedAt", Value: lit(now)},
+		{Key: "title", Value: lit(in.Title)},
+		{Key: "category", Value: lit(in.Category)},
+		{Key: "categorySlug", Value: lit(in.CategorySlug)},
+		{Key: "rootDomain", Value: lit(in.RootDomain)},
+		{Key: "legacyCategoryId", Value: lit(in.LegacyCategoryID)},
+		{Key: "images", Value: lit(in.Images)},
+		{Key: "description", Value: lit(in.Description)},
+		{Key: "descriptionHadMarkup", Value: lit(in.DescriptionHadMarkup)},
+		{Key: "fulfillmentType", Value: lit(in.FulfillmentType)},
+		{Key: "fulfillmentMode", Value: lit(mode)},
+		{Key: "fulfillmentProvider", Value: lit(in.FulfillmentProvider)},
+		{Key: "fulfillmentConfidence", Value: lit(in.FulfillmentConfidence)},
+		{Key: "fulfillmentCancellable", Value: lit(in.FulfillmentCancellable)},
+		{Key: "pricing", Value: lit(in.Pricing)},
+		{Key: "amountConstraints", Value: lit(in.AmountConstraints)},
+		{Key: "inputFields", Value: lit(in.InputFields)},
+		{Key: "verification", Value: lit(in.Verification)},
+		{Key: "status", Value: lit(in.Status)},
+		{Key: "sortOrder", Value: lit(in.SortOrder)},
+		{Key: "flags", Value: lit(in.Flags)},
+		{Key: "variants", Value: variantExpr},
+		// Insert-only (admin/operational): preserved on re-import via $ifNull.
+		{Key: "createdAt", Value: ifNull("createdAt", now)},
+		{Key: "legacyId", Value: ifNull("legacyId", in.LegacyID)},
+		{Key: "stock", Value: ifNull("stock", 0)},
+		{Key: "ratings", Value: ifNull("ratings", RatingsSummary{})},
+		{Key: "available", Value: ifNull("available", in.Available)},
+	}
 }
 
 // Update applies a partial update to the product identified by id.

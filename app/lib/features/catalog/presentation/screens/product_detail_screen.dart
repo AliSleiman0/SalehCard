@@ -15,6 +15,8 @@ import '../../../../core/widgets/product_chip.dart';
 import '../../../cart/domain/entities/cart_item.dart';
 import '../../../cart/presentation/controllers/cart_controller.dart';
 import '../../../checkout/presentation/widgets/dynamic_input_field.dart';
+import '../../../reviews/presentation/providers.dart';
+import '../../../reviews/presentation/widgets/write_review_sheet.dart';
 import '../../domain/entities/product.dart';
 import '../providers.dart';
 import '../verify_state.dart';
@@ -194,6 +196,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   colors: colors,
                 ),
               ],
+              const SizedBox(height: 14),
+              _ReviewCta(productId: product.id, l10n: l10n, colors: colors),
               if (product.fromPrice != null) ...[
                 const SizedBox(height: 12),
                 if (product.hasOffer)
@@ -579,6 +583,65 @@ class _RatingRow extends StatelessWidget {
           style: TextStyle(fontSize: 13, color: colors.textFaint),
         ),
       ],
+    );
+  }
+}
+
+/// The "Write a review" entry point under the product title. Once the user has
+/// reviewed this product (from `/reviews/mine`), it flips to a static
+/// "you reviewed this" note. Everyone reaching this screen is authenticated
+/// (the router redirects logged-out users to /login), so no sign-in gating.
+class _ReviewCta extends ConsumerWidget {
+  const _ReviewCta({
+    required this.productId,
+    required this.l10n,
+    required this.colors,
+  });
+
+  final String productId;
+  final AppLocalizations l10n;
+  final AppColors colors;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reviewed =
+        ref.watch(myReviewProvider(productId)).asData?.value.reviewed ?? false;
+
+    if (reviewed) {
+      return Row(
+        children: [
+          const Icon(
+            Icons.check_circle_rounded,
+            size: 18,
+            color: AppTokens.brand2,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            l10n.reviewYouReviewed,
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: colors.textDim,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: OutlinedButton.icon(
+        onPressed: () => showWriteReviewSheet(context, productId),
+        icon: const Icon(Icons.rate_review_outlined, size: 18),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colors.text,
+          side: BorderSide(color: colors.borderStrong),
+          shape: const StadiumBorder(),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+        ),
+        label: Text(l10n.writeReview),
+      ),
     );
   }
 }

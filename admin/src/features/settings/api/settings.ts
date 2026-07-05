@@ -20,6 +20,8 @@ export interface AdminSettings {
   loyaltyEnabled: boolean
   /** Spend (order-total dollars) that mints one point: points = floor(total / rate). */
   loyaltyEarnUsdPerPoint: number
+  /** Require an SMS second factor for admin logins (off by default). */
+  adminSmsTwoFactorEnabled: boolean
   updatedAt: string
   updatedBy?: string
   integrations?: Record<string, Integration>
@@ -36,6 +38,7 @@ export interface SettingsInput {
   maintenanceMode?: boolean
   loyaltyEnabled?: boolean
   loyaltyEarnUsdPerPoint?: number
+  adminSmsTwoFactorEnabled?: boolean
 }
 
 const ADMIN = '/api/admin/settings'

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Icon, PageHead, Avatar, StatusBadge } from '@/components'
+import { Icon, PageHead, Avatar, StatusBadge, Toggle } from '@/components'
 import { useUsers } from '@/features/users/hooks/useUsers'
 import { adaptUser } from '@/features/users/lib/adaptUser'
 import { lastActive } from '@/lib/utils'
@@ -27,12 +27,36 @@ export default function SettingsPage() {
   // Powers the "$50 order earns N points" example in the guide; 0 hides it.
   const exampleRate = Number(earnRate)
 
+  // --- Security: admin SMS 2FA ---------------------------------------------
+  const [twoFAEnabled, setTwoFAEnabled] = useState(false)
+  const [twoFAError, setTwoFAError] = useState<string | null>(null)
+
   useEffect(() => {
     const s = settingsRes?.data
     if (!s) return
     setLoyaltyEnabled(s.loyaltyEnabled)
     setEarnRate(String(s.loyaltyEarnUsdPerPoint))
+    setTwoFAEnabled(s.adminSmsTwoFactorEnabled)
   }, [settingsRes])
+
+  // Toggle admin SMS-2FA. Saves immediately (optimistic); on error — e.g. the
+  // backend refuses to enable it because the acting admin has no phone
+  // (ADMIN_2FA_NO_PHONE) — it reverts and surfaces the message.
+  function toggle2FA() {
+    if (update.isPending) return
+    const next = !twoFAEnabled
+    setTwoFAError(null)
+    setTwoFAEnabled(next)
+    update.mutate(
+      { adminSmsTwoFactorEnabled: next },
+      {
+        onError: (e) => {
+          setTwoFAEnabled(!next)
+          setTwoFAError(e instanceof ApiError ? e.message : 'Could not update the two-factor setting.')
+        },
+      },
+    )
+  }
 
   function saveLoyalty() {
     setLoyaltyError(null)
@@ -159,6 +183,40 @@ export default function SettingsPage() {
               <span className="muted" style={{ fontSize: 12.5 }}>Saved.</span>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="acard" style={{ marginBottom: 18 }}>
+        <div className="panelhead">
+          <Icon name="shield" size={17} />
+          <h3>Security</h3>
+        </div>
+        <div className="pad">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>
+                Admin two-factor authentication (SMS)
+              </div>
+              <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, maxWidth: 520 }}>
+                When on, every admin login requires a one-time code sent by SMS after the password.
+                Requires a phone number on your own admin account, and an admin without a phone will
+                be blocked from signing in — set phones before enabling.
+              </div>
+            </div>
+            <Toggle on={twoFAEnabled} onClick={toggle2FA} />
+          </div>
+          {twoFAError && (
+            <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 12 }}>
+              {twoFAError}
+            </div>
+          )}
         </div>
       </div>
 

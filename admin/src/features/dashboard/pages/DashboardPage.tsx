@@ -4,19 +4,11 @@ import { useNavigate } from 'react-router-dom'
 import { Icon, PageHead, Spark, AreaChart, Donut, Avatar, FfBadge, StatusBadge, Art, artForCategory } from '@/components'
 import type { DonutDatum } from '@/components'
 import { money, downloadCsv, formatLongDate } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth'
 import { useDashboardStats, useLowStock, useRevenueChart, useFulfillmentBreakdown, useHealth } from '../hooks/useDashboard'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 
 type Range = 'daily' | 'weekly' | 'monthly'
-
-// Time-of-day greeting for the dashboard header.
-function greeting(h: number): string {
-  if (h < 12) return 'Good morning'
-  if (h < 18) return 'Good afternoon'
-  return 'Good evening'
-}
 
 // Donut colors keyed by fulfillment slice key — the design-system tokens (same
 // source as FfBadge / OrderListPage's FF_DOT), so the palette tracks the theme.
@@ -78,7 +70,6 @@ function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkC
 export default function DashboardPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const user = useAuthStore((st) => st.user)
   const [range, setRange] = useState<Range>('daily')
   const { data: statsRes } = useDashboardStats()
   const { data: lowRes } = useLowStock()
@@ -131,10 +122,9 @@ export default function DashboardPage() {
   return (
     <div className="page page-wide">
       <PageHead
-        crumbs={[t('nav_dashboard')]}
-        title={`${greeting(new Date().getHours())}, ${user?.name ?? 'Admin'}`}
-        sub={`Here's what's happening across SalehCard today — ${formatLongDate()}.`}
-      >
+        // crumbs={[t('nav_dashboard')]}
+        // title={`${greeting(new Date().getHours())}, ${user?.name ?? 'Admin'}`}
+        sub={`Here's what's happening across SalehCard today — ${formatLongDate()}.`} title={undefined}      >
         <button className="abtn" onClick={handleExport}>
           <Icon name="download" size={15} /> {t('export')}
         </button>

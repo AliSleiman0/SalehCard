@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
@@ -33,6 +34,15 @@ class OrderDetailScreen extends ConsumerWidget {
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.topbar,
+        // Explicit back affordance: this route is reached both via push (from the
+        // orders list — pops cleanly) and via go (from order-success — an empty
+        // stack, nothing to pop), so fall back to the orders list when we can't
+        // pop, otherwise the user is stranded here.
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/orders'),
+        ),
         title: orderAsync.maybeWhen(
           data: (o) => Text('${l10n.orderLabel} #${o.reference}'),
           orElse: () => Text(l10n.orderLabel),

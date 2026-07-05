@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ const maxBodyLen = 2000
 type Service interface {
 	Create(ctx context.Context, userID bson.ObjectID, input CreateReviewInput) (*Review, error)
 	ListApproved(ctx context.Context, productID bson.ObjectID, p pagination.Params) ([]ReviewRow, int64, error)
+	Mine(ctx context.Context, userID, productID bson.ObjectID) (*Review, error)
 }
 
 // ReviewService is the concrete implementation of Service.
@@ -41,12 +43,21 @@ func (s *ReviewService) Create(ctx context.Context, userID bson.ObjectID, input 
 	if input.Rating < 1 || input.Rating > 5 {
 		return nil, badRequest("rating must be between 1 and 5")
 	}
+	// The written note is optional. The mobile client only collects it for low
+	// (1–2 star) ratings, and even then it may be left blank, so an empty body is
+	// valid for any rating — we only enforce the length cap.
 	body := strings.TrimSpace(input.Body)
-	if body == "" {
-		return nil, badRequest("body is required")
-	}
 	if len(body) > maxBodyLen {
 		return nil, badRequest("body is too long")
+	}
+
+	// One review per user per product. The unique index is the race-safe backstop
+	// (repo.Create maps its violation to ErrConflict); this pre-check yields the
+	// clean "already reviewed" error on the common path.
+	if _, err := s.repo.FindByUserAndProduct(ctx, userID, input.ProductID); err == nil {
+		return nil, apperrors.ErrConflict
+	} else if !errors.Is(err, apperrors.ErrNotFound) {
+		return nil, err
 	}
 
 	rv := &Review{
@@ -69,6 +80,13 @@ func (s *ReviewService) Create(ctx context.Context, userID bson.ObjectID, input 
 // pending/rejected ones stay hidden.
 func (s *ReviewService) ListApproved(ctx context.Context, productID bson.ObjectID, p pagination.Params) ([]ReviewRow, int64, error) {
 	return s.repo.List(ctx, ReviewFilter{Status: StatusApproved, ProductID: &productID}, p)
+}
+
+// Mine returns the caller's own review for a product (regardless of moderation
+// status), or ErrNotFound when they haven't reviewed it. Drives the mobile
+// client's "already reviewed" CTA state.
+func (s *ReviewService) Mine(ctx context.Context, userID, productID bson.ObjectID) (*Review, error) {
+	return s.repo.FindByUserAndProduct(ctx, userID, productID)
 }
 
 // badRequest builds a 400-classified validation error.

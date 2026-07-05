@@ -23,8 +23,13 @@ type Settings struct {
 	// point, i.e. points = floor(orderTotal / LoyaltyEarnUsdPerPoint).
 	LoyaltyEnabled         bool      `bson:"loyaltyEnabled"          json:"loyaltyEnabled"`
 	LoyaltyEarnUsdPerPoint float64   `bson:"loyaltyEarnUsdPerPoint"  json:"loyaltyEarnUsdPerPoint"`
-	UpdatedAt              time.Time `bson:"updatedAt"          json:"updatedAt"`
-	UpdatedBy              string    `bson:"updatedBy,omitempty" json:"updatedBy,omitempty"`
+	// AdminSmsTwoFactorEnabled gates whether admin logins require a second factor
+	// (an SMS one-time code) after the password. Off by default so the phoneless
+	// dev seed admin is unaffected; enabling it fails admin logins closed when an
+	// admin has no phone on file.
+	AdminSmsTwoFactorEnabled bool      `bson:"adminSmsTwoFactorEnabled" json:"adminSmsTwoFactorEnabled"`
+	UpdatedAt                time.Time `bson:"updatedAt"          json:"updatedAt"`
+	UpdatedBy                string    `bson:"updatedBy,omitempty" json:"updatedBy,omitempty"`
 }
 
 // defaults returns the baseline settings used when no document has been saved.
@@ -53,6 +58,8 @@ type UpdateInput struct {
 
 	LoyaltyEnabled         *bool    `json:"loyaltyEnabled"`
 	LoyaltyEarnUsdPerPoint *float64 `json:"loyaltyEarnUsdPerPoint"`
+
+	AdminSmsTwoFactorEnabled *bool `json:"adminSmsTwoFactorEnabled"`
 }
 
 // Integration reports whether an external provider is configured, without ever

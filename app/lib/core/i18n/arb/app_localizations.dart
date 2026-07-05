@@ -1441,6 +1441,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Verification submitted — we\'ll review it shortly.'**
   String get kycSubmittedSnack;
+
+  /// No description provided for @writeReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a review'**
+  String get writeReview;
+
+  /// No description provided for @reviewSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rate this product'**
+  String get reviewSheetTitle;
+
+  /// No description provided for @reviewTapToRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a star to rate'**
+  String get reviewTapToRate;
+
+  /// No description provided for @reviewNoteOptionalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us what went wrong (optional)'**
+  String get reviewNoteOptionalHint;
+
+  /// No description provided for @reviewSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit review'**
+  String get reviewSubmit;
+
+  /// No description provided for @reviewSubmittedPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Thanks! Your review is pending approval.'**
+  String get reviewSubmittedPending;
+
+  /// No description provided for @reviewAlreadyReviewed.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve already reviewed this product.'**
+  String get reviewAlreadyReviewed;
+
+  /// No description provided for @reviewYouReviewed.
+  ///
+  /// In en, this message translates to:
+  /// **'You reviewed this product'**
+  String get reviewYouReviewed;
 }
 
 class _AppLocalizationsDelegate

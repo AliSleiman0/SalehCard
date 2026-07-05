@@ -87,6 +87,13 @@ func AuthRequired(secret string) func(http.Handler) http.Handler {
 				response.Unauthorized(w, "invalid or expired token")
 				return
 			}
+			// Reject tokens without a user id (e.g. a pending 2FA challenge token
+			// replayed here — it carries no user_id claim) so they can't act as a
+			// bearer credential.
+			if claims.UserID == "" {
+				response.Unauthorized(w, "invalid or expired token")
+				return
+			}
 
 			ctx := context.WithValue(r.Context(), claimsKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -98,6 +105,13 @@ func AuthRequired(secret string) func(http.Handler) http.Handler {
 func ClaimsFromContext(ctx context.Context) (*Claims, bool) {
 	c, ok := ctx.Value(claimsKey).(*Claims)
 	return c, ok
+}
+
+// ContextWithClaims returns a copy of ctx carrying c under the same key the auth
+// middleware uses, so handler tests can exercise claims-dependent logic without
+// wiring up the full middleware chain.
+func ContextWithClaims(ctx context.Context, c *Claims) context.Context {
+	return context.WithValue(ctx, claimsKey, c)
 }
 
 // UserIDFromContext returns the authenticated user's ObjectID from the Claims

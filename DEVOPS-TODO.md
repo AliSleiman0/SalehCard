@@ -136,3 +136,19 @@ integrations are not built yet, so **leave the prod defaults as-is**:
 `expiresAt`), and a new `codes.orderId` index. Check App Service Log Stream at
 startup for any `EnsureIndexes` slog warnings (Cosmos vCore TTL support — same
 caveat as item 5). All are additive; no data migration.
+
+## 12. Admin SMS 2FA rollout (setting-gated)
+
+The admin second factor reuses the OTP + Monty SMS path, so **prod sends real,
+billed SMS** on the live Monty provider (dev with `SMS_PROVIDER=log` only logs).
+Egress must stay on the NAT-gateway fixed IP allowlisted by Monty (same
+dependency as OTP/bulk-SMS — see `HANDOFF-OTP-DEPLOY.md`). Rollout:
+- Ship via PR → merge to `main` (auto-deploys). No new env var — the on/off flag
+  is the `app_settings.adminSmsTwoFactorEnabled` boolean, toggled from the admin
+  console (Settings → Security), **off by default**.
+- Before enabling: confirm the prod admin (`admin@salehcard.com`) has a phone
+  (`+961 78991778`). Enabling **fails closed** — any admin without a phone is
+  blocked from login (`ADMIN_2FA_NO_PHONE`), and the toggle itself refuses to turn
+  on unless the acting admin's JWT carries a phone (re-login after setting one).
+- `app_settings` already exists (settings singleton); this is an additive boolean,
+  no migration.

@@ -99,3 +99,23 @@ With real FCM (after `DEVOPS-TODO.md` item 1, on a device/emulator with Play ser
    UNREGISTERED and deletes the old token row.
 8. Known v1 limitation to confirm acceptable: FCM tray text is the English
    server fallback (in-app inbox is localized).
+
+## Admin SMS 2FA (setting-gated second factor)
+
+Backend + admin console shipped; deferred manual/e2e checks:
+
+Dev (API :8090, `SMS_PROVIDER=log` → the code prints to the API log):
+1. Seed admin (no phone) logs in as before — 2FA is off by default.
+2. Settings → Security → toggle **Admin SMS 2FA** on. With no phone on the acting
+   admin it must be **refused** with the `ADMIN_2FA_NO_PHONE` message and the toggle
+   reverts (nothing persisted). Set a phone (and re-login) to enable.
+3. Admin with a phone, 2FA on: log out → log in → login response is a **challenge**
+   (no token yet), a code appears in the API log; enter it → signed in. Wrong code →
+   error + attempt count; wait >5 min → `OTP_EXPIRED`; **Resend** within 60 s →
+   throttled, after 60 s → new code. **Back** returns to the password form.
+4. A **customer** login (2FA on) still signs in directly — no challenge.
+5. Toggle off → admin login is password-only again.
+
+Prod (real, billed Monty SMS — see `DEVOPS-TODO.md`):
+6. Confirm `admin@salehcard.com` phone is `+961 78991778`, enable the toggle, then
+   log out/in → a real SMS arrives; enter it → signed in.

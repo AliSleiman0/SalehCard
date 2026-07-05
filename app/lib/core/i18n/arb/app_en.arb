@@ -271,5 +271,13 @@
   "kycUploadSelected": "document.jpg",
   "kycSubmitCta": "Submit",
   "kycFieldRequired": "This field is required.",
-  "kycSubmittedSnack": "Verification submitted — we'll review it shortly."
+  "kycSubmittedSnack": "Verification submitted — we'll review it shortly.",
+  "writeReview": "Write a review",
+  "reviewSheetTitle": "Rate this product",
+  "reviewTapToRate": "Tap a star to rate",
+  "reviewNoteOptionalHint": "Tell us what went wrong (optional)",
+  "reviewSubmit": "Submit review",
+  "reviewSubmittedPending": "Thanks! Your review is pending approval.",
+  "reviewAlreadyReviewed": "You've already reviewed this product.",
+  "reviewYouReviewed": "You reviewed this product"
 }

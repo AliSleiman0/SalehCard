@@ -271,5 +271,13 @@
   "kycUploadSelected": "document.jpg",
   "kycSubmitCta": "إرسال",
   "kycFieldRequired": "هذا الحقل مطلوب.",
-  "kycSubmittedSnack": "تم إرسال طلب التحقق — سنراجعه قريباً."
+  "kycSubmittedSnack": "تم إرسال طلب التحقق — سنراجعه قريباً.",
+  "writeReview": "اكتب مراجعة",
+  "reviewSheetTitle": "قيّم هذا المنتج",
+  "reviewTapToRate": "اضغط على نجمة للتقييم",
+  "reviewNoteOptionalHint": "أخبرنا ما الذي حدث (اختياري)",
+  "reviewSubmit": "إرسال المراجعة",
+  "reviewSubmittedPending": "شكراً! مراجعتك قيد المراجعة والموافقة.",
+  "reviewAlreadyReviewed": "لقد قمت بمراجعة هذا المنتج بالفعل.",
+  "reviewYouReviewed": "لقد قمت بمراجعة هذا المنتج"
 }

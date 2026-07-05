@@ -737,4 +737,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get kycSubmittedSnack =>
       'Verification submitted — we\'ll review it shortly.';
+
+  @override
+  String get writeReview => 'Write a review';
+
+  @override
+  String get reviewSheetTitle => 'Rate this product';
+
+  @override
+  String get reviewTapToRate => 'Tap a star to rate';
+
+  @override
+  String get reviewNoteOptionalHint => 'Tell us what went wrong (optional)';
+
+  @override
+  String get reviewSubmit => 'Submit review';
+
+  @override
+  String get reviewSubmittedPending =>
+      'Thanks! Your review is pending approval.';
+
+  @override
+  String get reviewAlreadyReviewed => 'You\'ve already reviewed this product.';
+
+  @override
+  String get reviewYouReviewed => 'You reviewed this product';
 }
