@@ -112,25 +112,39 @@ func (r *MongoRepository) FindByID(ctx context.Context, id bson.ObjectID) (*Subm
 // clearing any prior moderation outcome (re-submitting re-enters the queue).
 func (r *MongoRepository) Upsert(ctx context.Context, s *Submission) (*Submission, error) {
 	now := time.Now().UTC()
+	// This field list is what actually persists — a Submission field absent here
+	// is silently dropped. fakeRepo.Upsert in kyc_test.go mirrors it; keep both
+	// in sync when adding fields.
+	set := bson.D{
+		{Key: "fullName", Value: s.FullName},
+		{Key: "dateOfBirth", Value: s.DateOfBirth},
+		{Key: "placeOfBirth", Value: s.PlaceOfBirth},
+		{Key: "placeOfResidence", Value: s.PlaceOfResidence},
+		{Key: "documentType", Value: s.DocumentType},
+		{Key: "documentNumber", Value: s.DocumentNumber},
+		{Key: "documentFrontUrl", Value: s.DocumentFrontURL},
+		{Key: "status", Value: StatusPending},
+		{Key: "updatedAt", Value: now},
+	}
+	unset := bson.D{
+		{Key: "rejectionReason", Value: ""},
+		{Key: "reviewedBy", Value: ""},
+		{Key: "reviewedAt", Value: ""},
+	}
+	// The back photo is optional (passports): unset when absent so a passport
+	// resubmission clears a stale back URL from a prior id_card submission.
+	if s.DocumentBackURL != "" {
+		set = append(set, bson.E{Key: "documentBackUrl", Value: s.DocumentBackURL})
+	} else {
+		unset = append(unset, bson.E{Key: "documentBackUrl", Value: ""})
+	}
+
 	var out Submission
 	err := r.collection.FindOneAndUpdate(ctx,
 		bson.D{{Key: "userId", Value: s.UserID}},
 		bson.D{
-			{Key: "$set", Value: bson.D{
-				{Key: "fullName", Value: s.FullName},
-				{Key: "dateOfBirth", Value: s.DateOfBirth},
-				{Key: "placeOfBirth", Value: s.PlaceOfBirth},
-				{Key: "placeOfResidence", Value: s.PlaceOfResidence},
-				{Key: "documentType", Value: s.DocumentType},
-				{Key: "documentNumber", Value: s.DocumentNumber},
-				{Key: "status", Value: StatusPending},
-				{Key: "updatedAt", Value: now},
-			}},
-			{Key: "$unset", Value: bson.D{
-				{Key: "rejectionReason", Value: ""},
-				{Key: "reviewedBy", Value: ""},
-				{Key: "reviewedAt", Value: ""},
-			}},
+			{Key: "$set", Value: set},
+			{Key: "$unset", Value: unset},
 			{Key: "$setOnInsert", Value: bson.D{
 				{Key: "userId", Value: s.UserID},
 				{Key: "createdAt", Value: now},

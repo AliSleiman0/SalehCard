@@ -26,12 +26,29 @@ func (f *fakeRepo) FindByUserID(_ context.Context, userID bson.ObjectID) (*Submi
 	return nil, apperrors.ErrNotFound
 }
 
+// Upsert mirrors MongoRepository.Upsert's explicit per-field $set/$unset list
+// (repository.go) rather than storing the caller's struct wholesale — a field
+// missing from the real list must also be missing here, so a Submission field
+// that is validated but never persisted fails the persistence tests. KEEP IN
+// SYNC with the real Upsert's field list.
 func (f *fakeRepo) Upsert(_ context.Context, s *Submission) (*Submission, error) {
-	s.ID = bson.NewObjectID()
-	s.Status = StatusPending
-	s.RejectionReason = ""
-	f.byUser[s.UserID] = s
-	return s, nil
+	stored := &Submission{
+		ID:               bson.NewObjectID(),
+		UserID:           s.UserID,
+		FullName:         s.FullName,
+		DateOfBirth:      s.DateOfBirth,
+		PlaceOfBirth:     s.PlaceOfBirth,
+		PlaceOfResidence: s.PlaceOfResidence,
+		DocumentType:     s.DocumentType,
+		DocumentNumber:   s.DocumentNumber,
+		DocumentFrontURL: s.DocumentFrontURL,
+		Status:           StatusPending,
+	}
+	if s.DocumentBackURL != "" {
+		stored.DocumentBackURL = s.DocumentBackURL
+	}
+	f.byUser[s.UserID] = stored
+	return stored, nil
 }
 
 func (f *fakeRepo) FindByID(context.Context, bson.ObjectID) (*Submission, error) {
@@ -125,6 +142,49 @@ func TestSubmit_IDCardWithBothPhotos_OK(t *testing.T) {
 	assert.Equal(t, ProfilePending, p.Status)
 	assert.Equal(t, "https://cdn.test/uploads/kyc/abc.jpg", p.Submission.DocumentFrontURL)
 	assert.Equal(t, "https://cdn.test/uploads/kyc/def.jpg", p.Submission.DocumentBackURL)
+}
+
+// TestSubmit_PersistsDocumentURLs: the photo URLs must survive the repository
+// round trip (regression: Upsert's $set list originally omitted them, so they
+// validated fine and then silently dropped).
+func TestSubmit_PersistsDocumentURLs(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo)
+	uid := bson.NewObjectID()
+	in := validInput()
+	in.DocumentType = DocIDCard
+	in.DocumentBackURL = "https://cdn.test/uploads/kyc/def.jpg"
+	_, err := svc.Submit(context.Background(), uid, in)
+	require.NoError(t, err)
+
+	p, err := svc.GetProfile(context.Background(), uid)
+	require.NoError(t, err)
+	require.NotNil(t, p.Submission)
+	assert.Equal(t, "https://cdn.test/uploads/kyc/abc.jpg", p.Submission.DocumentFrontURL)
+	assert.Equal(t, "https://cdn.test/uploads/kyc/def.jpg", p.Submission.DocumentBackURL)
+}
+
+// TestSubmit_PassportResubmitClearsBackURL: resubmitting as a passport (no back
+// photo) must clear a stale back URL left by a prior id_card submission.
+func TestSubmit_PassportResubmitClearsBackURL(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo)
+	uid := bson.NewObjectID()
+
+	first := validInput()
+	first.DocumentType = DocIDCard
+	first.DocumentBackURL = "https://cdn.test/uploads/kyc/def.jpg"
+	_, err := svc.Submit(context.Background(), uid, first)
+	require.NoError(t, err)
+
+	_, err = svc.Submit(context.Background(), uid, validInput()) // passport, no back
+	require.NoError(t, err)
+
+	p, err := svc.GetProfile(context.Background(), uid)
+	require.NoError(t, err)
+	require.NotNil(t, p.Submission)
+	assert.Equal(t, "https://cdn.test/uploads/kyc/abc.jpg", p.Submission.DocumentFrontURL)
+	assert.Empty(t, p.Submission.DocumentBackURL)
 }
 
 func TestGetProfile_NoSubmission_Unverified(t *testing.T) {
