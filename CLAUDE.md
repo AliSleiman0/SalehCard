@@ -167,6 +167,14 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout
   shows a blocking verify panel until an admin approves the submission (`/api/admin/kyc`).
+  **Document photos are mandatory**: the app uploads front (+ back unless passport) via
+  `POST /api/v1/kyc/documents` (AuthRequired, per-IP rate-limited `RATE_LIMIT_KYC_UPLOAD_*`,
+  multipart `image`, same content-sniff + 1024px-JPEG re-encode as product images, stored
+  under a `kyc/` key on the shared `blob.Storage`) and submits the returned URLs as
+  `documentFrontUrl`/`documentBackUrl` — the server 400s a submission without them
+  (`validDocURL` ties them to the kyc keyspace); the admin KYC queue shows clickable
+  front/back thumbnails. NOTE: kyc images share the public-read container with product
+  images (unguessable hex URLs) — accepted v1 trade-off, tighten later if needed.
 - **Wallet funding is an admin-approved request queue** (`topup_requests`): customers file
   amount + out-of-band channel (whish/omt/cash/usdt/other) via `POST /api/v1/wallet/topups`;
   admins approve (atomic pending-claim → credit → **mandatory** ledger row, with
@@ -202,5 +210,7 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   `api`/`web`/`admin`, via OIDC — no stored secrets). Merging a PR to `main` ships prod.
 - **GitHub repo is `AliSleiman0/SalehCard`** (capital S/C — renamed from lowercase; `origin` still
   redirects). OIDC subject matching is **case-sensitive** — keep Azure federated creds on `SalehCard`.
-- **Corporate-proxy gotcha**: `az` fails TLS locally; run Azure CLI in **Azure Cloud Shell**
-  (browser, pre-auth, no proxy). `git`/`gh`/`docker`/Go trust the Windows cert store and work.
+- **Azure CLI works locally again (2026-07-05)**: the old "`az` fails TLS" gotcha was Norton's
+  HTTPS interception, and Norton has been removed — local `az` (logged in as the OZ Consultants
+  account) is the normal path now; Cloud Shell is just a fallback. One-time trap already handled:
+  `Microsoft.Storage` needed `az provider register` (surfaced as a misleading `SubscriptionNotFound`).

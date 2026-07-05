@@ -9,30 +9,20 @@ where it came from and how to verify it. Prod context: App Service
 > the proxy CA). Use the **Azure portal** or **Cloud Shell** for everything below
 > that touches Azure. See `DEPLOYMENT.md`.
 
-## 1. FCM push app settings (BL-11 — blocks prod push delivery)
+## 1. FCM push app settings (BL-11) ✅ DONE 2026-07-05
 
-The BL-11 API code is deployed but prod still runs `PUSH_PROVIDER=log`
-(inbox notifications work; FCM tray delivery is off until this lands).
+`PUSH_PROVIDER=fcm` + `FCM_CREDENTIALS_JSON` applied to `salehcard-api` via local
+`az` (Norton is gone — local CLI works again; ignore the Cloud Shell detour notes).
+Boot log captured via live `az webapp log tail` across a restart: **no**
+`push provider misconfigured — falling back to log sender` warning → the FCM adapter
+constructed successfully. Remaining soft-verify: trigger any business event and
+confirm a tray push actually arrives on a device (needs an app build with
+`firebase_options.dart`).
 
-Portal → **salehcard-api** → Environment variables → add, then Apply (restarts app):
+## 2. `BUSINESS_TZ=Asia/Beirut` app setting (BL-10) ✅ DONE 2026-07-05
 
-| Setting | Value |
-|---|---|
-| `PUSH_PROVIDER` | `fcm` |
-| `FCM_CREDENTIALS_JSON` | one-line contents of `C:\Users\user\Downloads\salehcard-fcm-minified.json` |
-
-Cloud Shell alternative:
-`az webapp config appsettings set -g salehcard-prod -n salehcard-api --settings PUSH_PROVIDER=fcm FCM_CREDENTIALS_JSON='<paste one-line JSON>'`
-
-Verify: `https://salehcard-api.azurewebsites.net/health` returns ok after
-restart; trigger any business event and check Log Stream for a successful FCM
-send (or absence of `push: falling back to log sender` warnings).
-
-## 2. `BUSINESS_TZ=Asia/Beirut` app setting (BL-10)
-
-Dashboard "today" KPIs (orders + wallet top-ups, `api/pkg/timeutil`) bucket on
-UTC until this is set. Same portal screen as item 1 — add
-`BUSINESS_TZ` = `Asia/Beirut`, Apply. (Batch it with item 1 to get one restart.)
+Applied in the same settings batch as item 1 (one restart). Dashboard "today"
+KPIs now bucket on Beirut time.
 
 ## 3. Restrict the Firebase Android API key
 
@@ -44,16 +34,12 @@ Credentials → the auto-created Android key → Application restrictions →
 signing SHA-1 (and debug SHA-1 for dev builds). This also moots the
 GitGuardian flag on PR #27.
 
-## 4. Service-account key custody
+## 4. Service-account key custody ✅ DONE 2026-07-05
 
-The FCM service-account private key lives at
-`C:\Users\user\Downloads\salehcard-app-firebase-adminsdk-fbsvc-185f034406.json`
-(plus the minified copy). After item 1 is applied:
-- Move both files out of Downloads into a proper secrets location (or delete
-  them — the value then lives only in Azure app settings; a new key can always
-  be generated in Firebase console → Project settings → Service accounts).
-- Never commit either file. Rotate the key if it ever leaks
-  (generate new → update `FCM_CREDENTIALS_JSON` → delete old key in console).
+Both key files moved out of Downloads to `C:\Users\user\.salehcard-secrets\`
+(value now also lives in the Azure app settings). Never commit either file.
+Rotate the key if it ever leaks (generate new in Firebase console → Project
+settings → Service accounts → update `FCM_CREDENTIALS_JSON` → delete old key).
 
 ## 5. Verify Cosmos picked up the new indexes (BL-11)
 
@@ -72,11 +58,11 @@ app ships manually. Before launch decide + set up:
 - Note: push notifications require the shipped app build to include the
   BL-11 code + real `firebase_options.dart` (already on `main`).
 
-## 7. CI workflow action bumps (low priority)
+## 7. CI workflow action bumps (low priority) ✅ DONE 2026-07-05 (pending commit)
 
-Deploy runs annotate: *"Node.js 20 is deprecated… actions/checkout@v4,
-dorny/paths-filter@v3"*. Bump to checkout@v5 / paths-filter current when
-convenient. Cosmetic for now — runners force Node 24 and the workflows pass.
+`actions/checkout` v4→v5 and `dorny/paths-filter` v3→v4 bumped in `ci.yml` +
+`deploy.yml` (scoped to exactly the two actions the deprecation annotations
+named). Sitting uncommitted on `main` — ships with the next push.
 
 ---
 
@@ -153,7 +139,22 @@ dependency as OTP/bulk-SMS — see `HANDOFF-OTP-DEPLOY.md`). Rollout:
 - `app_settings` already exists (settings singleton); this is an additive boolean,
   no migration.
 
-## 13. Product image storage — provision Azure Blob (product images feature)
+## 13. Product image storage — provision Azure Blob ✅ DONE 2026-07-05
+
+Storage account `salehcardassets` (Standard_LRS, westeurope) + public-read
+container `product-images` created; `STORAGE_PROVIDER=azure` +
+`AZURE_STORAGE_CONNECTION_STRING` + `AZURE_STORAGE_CONTAINER` applied to
+`salehcard-api`. Verified: boot log shows **no** `storage provider misconfigured`
+warning, and a smoke-test blob uploaded + fetched anonymously (HTTP 200) + deleted.
+Connection string recorded in `DEPLOY-CREDS.local.md`. Gotcha for posterity: the
+`Microsoft.Storage` resource provider was NotRegistered on the subscription
+(first-ever storage account) — `az provider register -n Microsoft.Storage` fixed
+the misleading `SubscriptionNotFound` error. Remaining e2e check (→ QA-TODO):
+upload a real product image through the admin editor and confirm the app renders it.
+
+<details><summary>Original provisioning notes (superseded)</summary>
+
+## Original item 13 text — provision Azure Blob (product images feature)
 
 Product image uploads (admin editor → Go API compresses to a 1024px display JPEG
 + 256px thumbnail → blob storage) ship with a **hexagonal `platform/blob` port**:
@@ -182,3 +183,5 @@ az storage account show-connection-string -n salehcardassets -g salehcard-prod
   Verify the startup log shows no `storage provider misconfigured` warning.
 - **Future work:** swap connection-string auth → managed identity; optional
   best-effort old-blob delete on replace (v1 leaves orphans — pennies).
+
+</details>

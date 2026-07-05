@@ -100,6 +100,17 @@ With real FCM (after `DEVOPS-TODO.md` item 1, on a device/emulator with Play ser
 8. Known v1 limitation to confirm acceptable: FCM tray text is the English
    server fallback (in-app inbox is localized).
 
+## Product images on prod Azure Blob (DEVOPS-TODO item 13, provisioned 2026-07-05)
+
+Infra verified (public container serves anonymously; API booted with no
+`storage provider misconfigured` warning). Deferred e2e:
+
+1. Prod admin console → edit a product → upload an image → the returned URL is
+   `https://salehcardassets.blob.core.windows.net/product-images/…` (not `/uploads/…`),
+   the display JPEG + 256px thumbnail both exist, and the image renders in the
+   admin list + Flutter app (catalog + product detail).
+2. Replace the image → new blob referenced (v1 leaves the old blob orphaned — expected).
+
 ## Admin SMS 2FA (setting-gated second factor)
 
 Backend + admin console shipped; deferred manual/e2e checks:
@@ -119,3 +130,25 @@ Dev (API :8090, `SMS_PROVIDER=log` → the code prints to the API log):
 Prod (real, billed Monty SMS — see `DEVOPS-TODO.md`):
 6. Confirm `admin@salehcard.com` phone is `+961 78991778`, enable the toggle, then
    log out/in → a real SMS arrives; enter it → signed in.
+
+## KYC document-photo upload (mandatory front + back)
+
+Backend + Flutter + admin shipped on green static gates; deferred manual/e2e checks
+(dev: API :8090 with default `STORAGE_PROVIDER=local` → files land in `api/uploads/kyc/`):
+
+1. App KYC form: submit with no photos → both tiles show "This photo is required.";
+   passport selected → back tile shows "Optional for passports" (and a Remove link once
+   uploaded); switching to ID card/license makes back required again.
+2. Pick via **gallery** and via **camera** → tile shows preview + spinner, then check
+   badge; Submit lands the submission as pending; API log/`uploads/kyc/` has the JPEGs.
+3. Kill the API mid-upload → tile shows "Upload failed — tap to retry."; retry works.
+4. `curl POST /api/v1/kyc` (Bearer) without `documentFrontUrl` → 400; with an
+   off-keyspace URL (`https://x/y.jpg`) → 400.
+5. Upload an 11 MB file and a `.txt` renamed `.jpg` → both 400; 11 rapid uploads from
+   one IP → the 11th is 429 (`RATE_LIMIT_KYC_UPLOAD_MAX` default 10/min).
+6. Admin `/kyc`: row shows Front/Back thumbnails; click opens the full image in a new
+   tab; legacy (pre-photo) submissions still render and can be approved/rejected.
+7. Arabic: all new strings render correctly in RTL.
+8. **If iOS ever ships**: add `NSCameraUsageDescription` +
+   `NSPhotoLibraryUsageDescription` to `app/ios/Runner/Info.plist` (image_picker) —
+   Android needs no manifest change (system photo picker / camera intent).

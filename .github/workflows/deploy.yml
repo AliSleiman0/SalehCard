@@ -41,8 +41,8 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       admin: ${{ steps.filter.outputs.admin }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -61,7 +61,7 @@ jobs:
     if: needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -108,7 +108,7 @@ jobs:
     env:
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
         with:
@@ -155,7 +155,7 @@ jobs:
     env:
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
         with:
