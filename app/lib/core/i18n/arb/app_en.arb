@@ -14,6 +14,10 @@
   "emptyCatalog": "No products available.",
   "offersEmpty": "No offers right now. Check back soon.",
   "productDetailUnavailable": "This product is currently unavailable.",
+  "verifyChecking": "Checking ID…",
+  "verifyFound": "Account",
+  "verifyNotFound": "We couldn't find that ID. Please check and try again.",
+  "verifyUnavailable": "Couldn't verify right now — you can still continue.",
   "languageToggle": "العربية",
 
   "welcomeBackTitle": "Welcome back",

@@ -220,6 +220,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			FulfillmentProvider: p.FulfillmentProvider,
 			PlayerID:            in.PlayerID,
 			Recipient:           in.Recipient,
+			Fields:              resolveOrderFields(p, in.Fields),
 		})
 		subtotal += price * float64(in.Qty)
 	}
@@ -542,4 +543,28 @@ func findVariant(p *product.Product, variantID string) (product.Variant, bool) {
 		}
 	}
 	return product.Variant{}, false
+}
+
+// resolveOrderFields snapshots the customer's per-line inputs with their
+// server-resolved labels (from the product's InputFields spec — client labels
+// are never trusted). Fields with an empty value, an unknown key, or a spec
+// marked Sensitive (spec §3.2) are dropped, so sensitive values are never
+// persisted on the order.
+func resolveOrderFields(p *product.Product, in []OrderFieldInput) []OrderField {
+	if len(in) == 0 || len(p.InputFields) == 0 {
+		return nil
+	}
+	spec := make(map[string]product.InputField, len(p.InputFields))
+	for _, f := range p.InputFields {
+		spec[f.Key] = f
+	}
+	var out []OrderField
+	for _, f := range in {
+		def, ok := spec[f.Key]
+		if !ok || def.Sensitive || strings.TrimSpace(f.Value) == "" {
+			continue
+		}
+		out = append(out, OrderField{Key: f.Key, Label: def.Label, Value: f.Value})
+	}
+	return out
 }

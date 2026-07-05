@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +17,7 @@ import '../../../cart/presentation/controllers/cart_controller.dart';
 import '../../../checkout/presentation/widgets/dynamic_input_field.dart';
 import '../../domain/entities/product.dart';
 import '../providers.dart';
+import '../verify_state.dart';
 
 /// Product detail + buy entry point: variant chips, quantity stepper, a preview
 /// of the first dynamic input (for non-`code` products), and a sticky
@@ -34,10 +37,59 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   int _qty = 1;
   final _field = TextEditingController();
 
+  // Purchase-time ID verification (only used for products configured for it).
+  VerifyState _verify = const VerifyState();
+  Timer? _verifyDebounce;
+  String _verifyPending = '';
+
   @override
   void dispose() {
+    _verifyDebounce?.cancel();
     _field.dispose();
     super.dispose();
+  }
+
+  /// Debounced game-ID → nickname lookup, driven by the player-ID field. The
+  /// newest input wins; a transport error resolves to "unavailable" so an
+  /// upstream outage never blocks a sale (fail-open).
+  void _onVerifyIdChanged(String raw, String productId) {
+    _verifyDebounce?.cancel();
+    final id = raw.trim();
+    _verifyPending = id;
+    if (id.isEmpty) {
+      setState(() => _verify = const VerifyState()); // idle → Buy stays gated
+      return;
+    }
+    setState(() => _verify = const VerifyState(status: VerifyStatus.checking));
+    _verifyDebounce = Timer(
+      const Duration(milliseconds: 500),
+      () => _runVerify(id, productId),
+    );
+  }
+
+  Future<void> _runVerify(String id, String productId) async {
+    try {
+      final r = await ref
+          .read(catalogRemoteDataSourceProvider)
+          .verifyAccount(productId, id);
+      if (!mounted || _verifyPending != id) return; // disposed or superseded
+      if (r.found) {
+        setState(() => _verify = VerifyState(
+              status: VerifyStatus.found,
+              username: r.username,
+              banned: r.banned,
+            ));
+      } else if (r.reason == 'id_not_found') {
+        setState(() => _verify = const VerifyState(status: VerifyStatus.notFound));
+      } else {
+        setState(() =>
+            _verify = const VerifyState(status: VerifyStatus.unavailable));
+      }
+    } catch (_) {
+      if (!mounted || _verifyPending != id) return;
+      setState(
+          () => _verify = const VerifyState(status: VerifyStatus.unavailable));
+    }
   }
 
   @override
@@ -97,6 +149,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     final needsInput =
         product.fulfillmentType != 'code' && product.inputFields.isNotEmpty;
     final firstField = needsInput ? product.inputFields.first : null;
+    // Purchase-time ID verification only kicks in when the product is configured
+    // for it AND has a field to type the ID into.
+    final verifyActive = product.requiresIdVerification && firstField != null;
 
     return Column(
       children: [
@@ -225,8 +280,18 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   field: firstField,
                   localeCode: localeCode,
                   controller: _field,
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (v) {
+                    if (verifyActive) {
+                      _onVerifyIdChanged(v, product.id);
+                    } else {
+                      setState(() {});
+                    }
+                  },
                 ),
+                if (verifyActive) ...[
+                  const SizedBox(height: 10),
+                  _VerifyStatusLine(state: _verify, l10n: l10n, colors: colors),
+                ],
                 const SizedBox(height: 8),
                 Text(
                   l10n.creditAfterProcessing,
@@ -249,7 +314,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         ),
         _BottomBar(
           total: total,
-          enabled: inStock && hasVariants,
+          enabled: inStock &&
+              hasVariants &&
+              (verifyActive ? _verify.allowsPurchase : true),
           l10n: l10n,
           colors: colors,
           onAddToCart: () => _addToCart(
@@ -375,6 +442,100 @@ class _Banner extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Inline result of the game-ID lookup shown under the player-ID field: a
+/// spinner while checking, the resolved nickname when found, an error when the
+/// id is unknown, or a soft note when the check is unavailable (Buy still allowed
+/// in that case — see [VerifyState.allowsPurchase]).
+class _VerifyStatusLine extends StatelessWidget {
+  const _VerifyStatusLine({
+    required this.state,
+    required this.l10n,
+    required this.colors,
+  });
+
+  final VerifyState state;
+  final AppLocalizations l10n;
+  final AppColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (state.status) {
+      case VerifyStatus.idle:
+        return const SizedBox.shrink();
+      case VerifyStatus.checking:
+        return Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              l10n.verifyChecking,
+              style: TextStyle(fontSize: 13, color: colors.textDim),
+            ),
+          ],
+        );
+      case VerifyStatus.found:
+        return Row(
+          children: [
+            const Icon(
+              Icons.check_circle_rounded,
+              size: 18,
+              color: Color(0xFF16A34A),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${l10n.verifyFound}: ${state.username}',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: colors.text,
+                ),
+              ),
+            ),
+          ],
+        );
+      case VerifyStatus.notFound:
+        return Row(
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 18,
+              color: AppTokens.danger,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.verifyNotFound,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTokens.danger,
+                ),
+              ),
+            ),
+          ],
+        );
+      case VerifyStatus.unavailable:
+        return Row(
+          children: [
+            Icon(Icons.info_outline_rounded, size: 18, color: colors.textDim),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.verifyUnavailable,
+                style: TextStyle(fontSize: 12.5, color: colors.textDim),
+              ),
+            ),
+          ],
+        );
+    }
   }
 }
 

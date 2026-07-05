@@ -52,6 +52,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'This product is currently unavailable.';
 
   @override
+  String get verifyChecking => 'Checking ID…';
+
+  @override
+  String get verifyFound => 'Account';
+
+  @override
+  String get verifyNotFound =>
+      'We couldn\'t find that ID. Please check and try again.';
+
+  @override
+  String get verifyUnavailable =>
+      'Couldn\'t verify right now — you can still continue.';
+
+  @override
   String get languageToggle => 'العربية';
 
   @override

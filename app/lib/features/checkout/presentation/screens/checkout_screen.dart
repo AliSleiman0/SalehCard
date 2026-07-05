@@ -257,6 +257,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final fields = product?.inputFields ?? const <InputField>[];
       String? playerId;
       OrderRecipient? recipient;
+      var fieldList = const <PlaceOrderField>[];
       if (product != null &&
           product.fulfillmentType != 'code' &&
           fields.isNotEmpty) {
@@ -267,8 +268,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         if (product.fulfillmentType == 'transfer') {
           recipient = _buildRecipient(values);
         } else {
-          playerId =
-              values.values.where((v) => v.isNotEmpty).join(' / ');
+          // Structured per-field capture: send every filled field (key+value) so
+          // the operator sees labeled inputs (Account ID, Zone ID, Email…), and
+          // set playerId = the first field (the account/player id) so the
+          // server's CreditedToID / api-mode fulfillment stays clean.
+          fieldList = [
+            for (final field in fields)
+              if ((values[field.key] ?? '').isNotEmpty)
+                PlaceOrderField(key: field.key, value: values[field.key]!),
+          ];
+          playerId = fieldList.isNotEmpty ? fieldList.first.value : null;
         }
       } else if (item.playerId != null && item.playerId!.isNotEmpty) {
         playerId = item.playerId;
@@ -279,6 +288,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         qty: item.qty,
         playerId: playerId,
         recipient: recipient,
+        fields: fieldList,
       ));
     }
 

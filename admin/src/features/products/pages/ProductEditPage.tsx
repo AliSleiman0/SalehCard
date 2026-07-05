@@ -23,6 +23,18 @@ function toFulfillment(ff: FfKey): FulfillmentType {
   return ff === 'credit' ? 'account_credit' : ff === 'transfer' ? 'transfer' : 'code'
 }
 
+// The verification-provider id stored on a product. One provider today (RapidAPI
+// ID Game Checker); the active adapter is chosen globally by the API's
+// IDCHECK_PROVIDER, so this is just the stored label.
+const VERIFY_PROVIDER_ID = 1
+
+// Known ID Game Checker game slugs — a datalist so ops pick a verified slug
+// without typos, while still allowing any slug the provider supports. Only
+// single-parameter (id-only) games belong here: multi-param games like Mobile
+// Legends (id+zone) / Genshin (id+server) can't be verified by the single-id
+// lookup, so they stay collect-only (no verification).
+const KNOWN_GAME_SLUGS = ['pubgm-global', 'dfm-garena', 'free-fire']
+
 export default function ProductEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -48,6 +60,9 @@ export default function ProductEditPage() {
   // Input-field specs are edited labels-only; everything else is preserved as
   // loaded so a save never mangles legacy fulfillment config.
   const [inputFields, setInputFields] = useState<InputField[]>([])
+  // Purchase-time ID verification (check_name): toggle + provider game slug.
+  const [verifyEnabled, setVerifyEnabled] = useState(false)
+  const [verifyApp, setVerifyApp] = useState('')
 
   // Populate from the loaded product when editing.
   useEffect(() => {
@@ -69,6 +84,8 @@ export default function ProductEditPage() {
         : [{ denomination: '', price: '', resellerPrice: '' }]
     )
     setInputFields(p.inputFields ?? [])
+    setVerifyEnabled(!!p.verification)
+    setVerifyApp(p.verification?.app ?? '')
   }, [data])
 
   // Default a brand-new product to the first real category once the list loads.
@@ -87,26 +104,39 @@ export default function ProductEditPage() {
   const pending = create.isPending || update.isPending
   const error = create.error || update.error
 
-  const buildInput = () => ({
-    title,
-    description,
-    category,
-    images: data?.data?.images ?? [],
-    fulfillmentType: toFulfillment(ff),
-    available: active,
-    stock,
-    variants: variants
-      .filter((v) => v.denomination.trim() && v.price.trim())
-      .map((v) => ({
-        denomination: v.denomination,
-        price: parseFloat(v.price) || 0,
-        ...(v.resellerPrice.trim() ? { resellerPrice: parseFloat(v.resellerPrice) || 0 } : {}),
-      })),
-    // Round-trip the full array (labels edited, rest preserved) only when the
-    // product actually has input fields — omitting it leaves stored data
-    // untouched via the backend's nil-guard.
-    ...(inputFields.length ? { inputFields } : {}),
-  })
+  const buildInput = () => {
+    // Verification: send the config when enabled with a slug; send the clear
+    // sentinel ({provider:0, app:''}) when disabling a product that had it; omit
+    // otherwise so the backend's nil-guard leaves stored data untouched.
+    const hadVerification = !!data?.data?.verification
+    const verification =
+      verifyEnabled && verifyApp.trim()
+        ? { provider: VERIFY_PROVIDER_ID, app: verifyApp.trim() }
+        : hadVerification
+          ? { provider: 0, app: '' }
+          : undefined
+    return {
+      title,
+      description,
+      category,
+      images: data?.data?.images ?? [],
+      fulfillmentType: toFulfillment(ff),
+      available: active,
+      stock,
+      variants: variants
+        .filter((v) => v.denomination.trim() && v.price.trim())
+        .map((v) => ({
+          denomination: v.denomination,
+          price: parseFloat(v.price) || 0,
+          ...(v.resellerPrice.trim() ? { resellerPrice: parseFloat(v.resellerPrice) || 0 } : {}),
+        })),
+      // Send the full array whenever the product has fields now or had them
+      // before (so removing them all clears the stored config); omit only when
+      // there were never any, leaving stored data untouched via the nil-guard.
+      ...(inputFields.length || data?.data?.inputFields?.length ? { inputFields } : {}),
+      ...(verification ? { verification } : {}),
+    }
+  }
 
   const onSave = () => {
     const input = buildInput()
@@ -322,17 +352,36 @@ export default function ProductEditPage() {
             </div>
           </div>
 
-          {/* Input-field labels (labels-only editor; key/type preserved) */}
-          {inputFields.length > 0 && (
-            <div className="acard">
-              <div className="panelhead">
-                <Icon name="layers" size={17} />
-                <h3>Input field labels</h3>
+          {/* Input fields — define what the customer enters at checkout */}
+          <div className="acard">
+            <div className="panelhead">
+              <Icon name="layers" size={17} />
+              <h3>Input fields</h3>
+              <div className="ph-act">
+                <button
+                  className="abtn xs"
+                  onClick={() =>
+                    setInputFields([
+                      ...inputFields,
+                      { key: '', label: { en: '', ar: '' }, type: 'text', sensitive: false },
+                    ])
+                  }
+                >
+                  <Icon name="plus" size={13} /> Add field
+                </button>
               </div>
-              <div className="ahint" style={{ margin: '0 0 10px' }}>
-                Customer-facing prompts for this product's input fields. Edit the
-                English/Arabic wording only — the field key and type are fixed.
+            </div>
+            <div className="ahint" style={{ margin: '0 0 10px' }}>
+              Fields the customer fills at checkout (e.g. Account ID, Zone ID, Email). Values are
+              attached to the order for fulfillment. Keys must be unique. <b>Sensitive</b> fields
+              are masked and never stored on the order. <code>select</code> options aren't editable
+              here yet — use <code>text</code> for now.
+            </div>
+            {inputFields.length === 0 ? (
+              <div className="ahint" style={{ margin: 0 }}>
+                No input fields — the customer enters nothing at checkout.
               </div>
+            ) : (
               <div className="tablewrap">
                 <table className="tbl">
                   <thead>
@@ -341,46 +390,83 @@ export default function ProductEditPage() {
                       <th>Type</th>
                       <th>Label (EN)</th>
                       <th>Label (AR)</th>
+                      <th>Sensitive</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {inputFields.map((f, i) => (
-                      <tr key={f.key || i}>
-                        <td><span className="muted">{f.key}</span></td>
-                        <td><span className="muted">{f.type}</span></td>
-                        <td>
-                          <input
-                            className="afield"
-                            style={{ padding: '7px 10px', minWidth: 160 }}
-                            value={f.label.en}
-                            dir="ltr"
-                            onChange={(e) => {
-                              const next = [...inputFields]
-                              next[i] = { ...f, label: { ...f.label, en: e.target.value } }
-                              setInputFields(next)
-                            }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="afield"
-                            style={{ padding: '7px 10px', minWidth: 160 }}
-                            value={f.label.ar}
-                            dir="rtl"
-                            onChange={(e) => {
-                              const next = [...inputFields]
-                              next[i] = { ...f, label: { ...f.label, ar: e.target.value } }
-                              setInputFields(next)
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    ))}
+                    {inputFields.map((f, i) => {
+                      const patch = (u: Partial<InputField>) => {
+                        const next = [...inputFields]
+                        next[i] = { ...f, ...u }
+                        setInputFields(next)
+                      }
+                      return (
+                        <tr key={i}>
+                          <td>
+                            <input
+                              className="afield"
+                              style={{ padding: '7px 10px', width: 120 }}
+                              value={f.key}
+                              placeholder="accountId"
+                              dir="ltr"
+                              onChange={(e) => patch({ key: e.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <select
+                              className="select"
+                              value={f.type}
+                              onChange={(e) => patch({ type: e.target.value as InputField['type'] })}
+                            >
+                              {(['text', 'select', 'amount', 'quantity'] as const).map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              className="afield"
+                              style={{ padding: '7px 10px', minWidth: 150 }}
+                              value={f.label.en}
+                              dir="ltr"
+                              onChange={(e) => patch({ label: { ...f.label, en: e.target.value } })}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="afield"
+                              style={{ padding: '7px 10px', minWidth: 150 }}
+                              value={f.label.ar}
+                              dir="rtl"
+                              onChange={(e) => patch({ label: { ...f.label, ar: e.target.value } })}
+                            />
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={!!f.sensitive}
+                              onChange={(e) => patch({ sensitive: e.target.checked })}
+                            />
+                          </td>
+                          <td>
+                            <span
+                              className="iact danger"
+                              onClick={() => setInputFields(inputFields.filter((_, j) => j !== i))}
+                            >
+                              <Icon name="trash" size={15} />
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Fulfillment-specific block */}
           {ff === 'code' && (
@@ -437,6 +523,48 @@ export default function ProductEditPage() {
               </div>
             </div>
           )}
+
+          {/* Purchase-time ID verification (check_name) */}
+          <div className="acard pad">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Icon name="shield" size={17} />
+                <h3 style={{ fontSize: 15, fontWeight: 800 }}>Purchase-time ID verification</h3>
+              </div>
+              <Toggle on={verifyEnabled} onClick={() => setVerifyEnabled(!verifyEnabled)} />
+            </div>
+            <div className="ahint" style={{ marginTop: 0 }}>
+              When on, customers enter their game ID on the product page and must see the resolved
+              nickname before they can buy — catching wrong IDs before payment. Best for
+              account-credit top-ups (PUBG, Delta Force, …).
+            </div>
+            {verifyEnabled && (
+              <div style={{ marginTop: 14 }}>
+                <label className="alabel">Game (provider slug)</label>
+                <input
+                  className="afield"
+                  list="game-slugs"
+                  value={verifyApp}
+                  onChange={(e) => setVerifyApp(e.target.value)}
+                  placeholder="e.g. pubgm-global"
+                />
+                <datalist id="game-slugs">
+                  {KNOWN_GAME_SLUGS.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+                <div className="ahint">
+                  Must exactly match the ID Game Checker slug for this game (e.g. <b>pubgm-global</b>,{' '}
+                  <b>dfm-garena</b>). Add a text input field for the player ID too, so it shows at checkout.
+                </div>
+                {!verifyApp.trim() && (
+                  <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>
+                    Enter a game slug, or turn verification off.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* SIDE */}
