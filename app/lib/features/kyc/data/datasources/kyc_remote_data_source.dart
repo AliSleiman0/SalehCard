@@ -23,8 +23,21 @@ class KycRemoteDataSource {
       'placeOfResidence': s.placeOfResidence,
       'documentType': s.documentType.apiValue,
       'documentNumber': s.documentNumber,
+      'documentFrontUrl': s.documentFrontUrl,
+      if (s.documentBackUrl != null) 'documentBackUrl': s.documentBackUrl,
     });
     return _fromJson(unwrap(response) as Map<String, dynamic>);
+  }
+
+  /// Uploads one document photo (multipart `image` field); the API re-encodes
+  /// it and returns the stored public URL. Dio sets the multipart content-type
+  /// (with boundary) itself for [FormData] bodies.
+  Future<String> uploadDocument(String filePath) async {
+    final form = FormData.fromMap({
+      'image': await MultipartFile.fromFile(filePath, filename: 'document.jpg'),
+    });
+    final response = await _dio.post<dynamic>('/kyc/documents', data: form);
+    return (unwrap(response) as Map<String, dynamic>)['imageUrl'] as String;
   }
 
   KycProfile _fromJson(Map<String, dynamic> json) {
@@ -47,6 +60,8 @@ class KycRemoteDataSource {
       placeOfResidence: (raw['placeOfResidence'] as String?) ?? '',
       documentType: kycDocumentTypeFromWire(raw['documentType'] as String?),
       documentNumber: (raw['documentNumber'] as String?) ?? '',
+      documentFrontUrl: raw['documentFrontUrl'] as String?,
+      documentBackUrl: raw['documentBackUrl'] as String?,
     );
   }
 }

@@ -18,6 +18,8 @@ export interface AdminKyc {
   placeOfResidence: string
   documentType: KycDocumentType
   documentNumber: string
+  documentFrontUrl?: string
+  documentBackUrl?: string
   status: KycStatus
   rejectionReason?: string
   reviewedBy?: string

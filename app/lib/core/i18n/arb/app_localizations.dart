@@ -1412,6 +1412,78 @@ abstract class AppLocalizations {
   /// **'Verification submitted — we\'ll review it shortly.'**
   String get kycSubmittedSnack;
 
+  /// No description provided for @kycDocPhotosLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Document photos'**
+  String get kycDocPhotosLabel;
+
+  /// No description provided for @kycDocFrontLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Front of document'**
+  String get kycDocFrontLabel;
+
+  /// No description provided for @kycDocBackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Back of document'**
+  String get kycDocBackLabel;
+
+  /// No description provided for @kycDocBackOptionalTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional for passports'**
+  String get kycDocBackOptionalTag;
+
+  /// No description provided for @kycDocAddPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get kycDocAddPhoto;
+
+  /// No description provided for @kycDocReplacePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace photo'**
+  String get kycDocReplacePhoto;
+
+  /// No description provided for @kycDocRemovePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get kycDocRemovePhoto;
+
+  /// No description provided for @kycDocUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get kycDocUploading;
+
+  /// No description provided for @kycDocUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed — tap to retry.'**
+  String get kycDocUploadFailed;
+
+  /// No description provided for @kycDocPhotoRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo is required.'**
+  String get kycDocPhotoRequired;
+
+  /// No description provided for @kycDocSourceCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo'**
+  String get kycDocSourceCamera;
+
+  /// No description provided for @kycDocSourceGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from gallery'**
+  String get kycDocSourceGallery;
+
   /// No description provided for @writeReview.
   ///
   /// In en, this message translates to:

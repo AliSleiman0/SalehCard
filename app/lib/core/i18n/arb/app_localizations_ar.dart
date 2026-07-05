@@ -729,6 +729,42 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kycSubmittedSnack => 'تم إرسال طلب التحقق — سنراجعه قريباً.';
 
   @override
+  String get kycDocPhotosLabel => 'صور المستند';
+
+  @override
+  String get kycDocFrontLabel => 'وجه المستند';
+
+  @override
+  String get kycDocBackLabel => 'ظهر المستند';
+
+  @override
+  String get kycDocBackOptionalTag => 'اختياري لجوازات السفر';
+
+  @override
+  String get kycDocAddPhoto => 'إضافة صورة';
+
+  @override
+  String get kycDocReplacePhoto => 'استبدال الصورة';
+
+  @override
+  String get kycDocRemovePhoto => 'إزالة';
+
+  @override
+  String get kycDocUploading => 'جارٍ الرفع…';
+
+  @override
+  String get kycDocUploadFailed => 'فشل الرفع — اضغط لإعادة المحاولة.';
+
+  @override
+  String get kycDocPhotoRequired => 'هذه الصورة مطلوبة.';
+
+  @override
+  String get kycDocSourceCamera => 'التقاط صورة';
+
+  @override
+  String get kycDocSourceGallery => 'اختيار من المعرض';
+
+  @override
   String get writeReview => 'اكتب مراجعة';
 
   @override

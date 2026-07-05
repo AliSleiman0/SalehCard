@@ -30,8 +30,9 @@ const (
 	DocLicense  = "license"
 )
 
-// Submission is a customer's KYC record (one per user). It carries personal
-// background info only — no document images (per product scope).
+// Submission is a customer's KYC record (one per user): personal background
+// info plus photos of the identity document (front always; back required for
+// id_card/license) uploaded via POST /api/v1/kyc/documents.
 type Submission struct {
 	ID               bson.ObjectID `bson:"_id,omitempty"             json:"id"`
 	UserID           bson.ObjectID `bson:"userId"                    json:"userId"`
@@ -41,6 +42,8 @@ type Submission struct {
 	PlaceOfResidence string        `bson:"placeOfResidence"          json:"placeOfResidence"`
 	DocumentType     string        `bson:"documentType"              json:"documentType"`
 	DocumentNumber   string        `bson:"documentNumber"            json:"documentNumber"`
+	DocumentFrontURL string        `bson:"documentFrontUrl,omitempty" json:"documentFrontUrl,omitempty"`
+	DocumentBackURL  string        `bson:"documentBackUrl,omitempty"  json:"documentBackUrl,omitempty"`
 	Status           string        `bson:"status"                    json:"status"`
 	RejectionReason  string        `bson:"rejectionReason,omitempty" json:"rejectionReason,omitempty"`
 	ReviewedBy       string        `bson:"reviewedBy,omitempty"      json:"reviewedBy,omitempty"`
@@ -57,6 +60,8 @@ type SubmitInput struct {
 	PlaceOfResidence string `json:"placeOfResidence"`
 	DocumentType     string `json:"documentType"`
 	DocumentNumber   string `json:"documentNumber"`
+	DocumentFrontURL string `json:"documentFrontUrl"`
+	DocumentBackURL  string `json:"documentBackUrl"`
 }
 
 // Profile is the derived KYC view returned to the customer (GET /api/v1/kyc/me).

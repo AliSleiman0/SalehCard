@@ -128,6 +128,12 @@ export default function KycPage() {
                           {k.documentLabel} <b className="mono">{k.documentNumber}</b>
                         </span>
                       </div>
+                      {(k.documentFrontUrl || k.documentBackUrl) && (
+                        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                          {k.documentFrontUrl && <DocThumb url={k.documentFrontUrl} label="Front" />}
+                          {k.documentBackUrl && <DocThumb url={k.documentBackUrl} label="Back" />}
+                        </div>
+                      )}
                       {k.status === 'rejected' && k.rejectionReason && (
                         <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>
                           Rejected: {k.rejectionReason}
@@ -173,6 +179,29 @@ export default function KycPage() {
 
       {toReject && <RejectModal kyc={toReject} onClose={() => setToReject(null)} />}
     </div>
+  )
+}
+
+/** Labeled document-photo thumbnail; clicking opens the full image in a new tab. */
+function DocThumb({ url, label }: { url: string; label: string }) {
+  return (
+    <a href={url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+      <img
+        src={url}
+        alt={`${label} of document`}
+        style={{
+          width: 72,
+          height: 48,
+          objectFit: 'cover',
+          borderRadius: 6,
+          border: '1px solid var(--border)',
+          display: 'block',
+        }}
+      />
+      <div className="faint" style={{ fontSize: 11, textAlign: 'center', marginTop: 2 }}>
+        {label}
+      </div>
+    </a>
   )
 }
 

@@ -109,6 +109,10 @@ type Config struct {
 	// hits a paid upstream API, so it is capped independently of the auth limiter.
 	RateLimitVerifyMax    int
 	RateLimitVerifyWindow time.Duration
+	// Rate limiting on customer KYC document uploads (per-IP fixed window). Each
+	// accepted upload writes billed blob storage.
+	RateLimitKycUploadMax    int
+	RateLimitKycUploadWindow time.Duration
 
 	// Storage (product image uploads). StorageProvider selects the active blob
 	// adapter: "azure" or "local" (default — dev works with zero Azure config).
@@ -193,6 +197,9 @@ func Load() *Config {
 		RapidAPIKey:           os.Getenv("RAPIDAPI_KEY"),
 		RateLimitVerifyMax:    getInt("RATE_LIMIT_VERIFY_MAX", 20),
 		RateLimitVerifyWindow: getDuration("RATE_LIMIT_VERIFY_WINDOW", time.Minute),
+
+		RateLimitKycUploadMax:    getInt("RATE_LIMIT_KYC_UPLOAD_MAX", 10),
+		RateLimitKycUploadWindow: getDuration("RATE_LIMIT_KYC_UPLOAD_WINDOW", time.Minute),
 
 		StorageProvider:              getEnv("STORAGE_PROVIDER", "local"),
 		AzureStorageConnectionString: os.Getenv("AZURE_STORAGE_CONNECTION_STRING"),

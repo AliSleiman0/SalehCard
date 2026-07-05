@@ -16,6 +16,8 @@ export interface KycView {
   placeOfResidence: string
   documentLabel: string
   documentNumber: string
+  documentFrontUrl: string
+  documentBackUrl: string
   status: AdminKyc['status']
   rejectionReason: string
   submitted: string
@@ -41,6 +43,8 @@ export function adaptKyc(k: AdminKyc): KycView {
     placeOfResidence: k.placeOfResidence,
     documentLabel: DOC_LABEL[k.documentType] ?? k.documentType,
     documentNumber: k.documentNumber,
+    documentFrontUrl: k.documentFrontUrl ?? '',
+    documentBackUrl: k.documentBackUrl ?? '',
     status: k.status,
     rejectionReason: k.rejectionReason ?? '',
     submitted: dateLabel(k.createdAt),

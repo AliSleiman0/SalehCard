@@ -56,6 +56,7 @@ func validInput() SubmitInput {
 		PlaceOfResidence: "Beirut",
 		DocumentType:     DocPassport,
 		DocumentNumber:   "RL1234567",
+		DocumentFrontURL: "https://cdn.test/uploads/kyc/abc.jpg",
 	}
 }
 
@@ -77,6 +78,23 @@ func TestSubmit_Validation(t *testing.T) {
 		"empty res":     func(in SubmitInput) SubmitInput { in.PlaceOfResidence = ""; return in },
 		"bad doc type":  func(in SubmitInput) SubmitInput { in.DocumentType = "ssn"; return in },
 		"empty doc num": func(in SubmitInput) SubmitInput { in.DocumentNumber = ""; return in },
+		"missing front photo": func(in SubmitInput) SubmitInput { in.DocumentFrontURL = "  "; return in },
+		"front not a URL":     func(in SubmitInput) SubmitInput { in.DocumentFrontURL = "not-a-url"; return in },
+		"front off keyspace":  func(in SubmitInput) SubmitInput { in.DocumentFrontURL = "https://cdn.test/x.jpg"; return in },
+		"front bad scheme":    func(in SubmitInput) SubmitInput { in.DocumentFrontURL = "ftp://cdn.test/kyc/a.jpg"; return in },
+		"id_card missing back": func(in SubmitInput) SubmitInput {
+			in.DocumentType = DocIDCard
+			return in
+		},
+		"license missing back": func(in SubmitInput) SubmitInput {
+			in.DocumentType = DocLicense
+			return in
+		},
+		"junk back photo": func(in SubmitInput) SubmitInput {
+			in.DocumentType = DocIDCard
+			in.DocumentBackURL = "not-a-url"
+			return in
+		},
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -85,6 +103,28 @@ func TestSubmit_Validation(t *testing.T) {
 			assert.ErrorIs(t, err, apperrors.ErrBadRequest)
 		})
 	}
+}
+
+// TestSubmit_PassportBackOptional: passports are single-sided, so the back
+// photo may be omitted (validInput uses DocPassport with no back URL).
+func TestSubmit_PassportBackOptional(t *testing.T) {
+	svc := NewService(newFakeRepo())
+	p, err := svc.Submit(context.Background(), bson.NewObjectID(), validInput())
+	require.NoError(t, err)
+	assert.Equal(t, ProfilePending, p.Status)
+	assert.Empty(t, p.Submission.DocumentBackURL)
+}
+
+func TestSubmit_IDCardWithBothPhotos_OK(t *testing.T) {
+	svc := NewService(newFakeRepo())
+	in := validInput()
+	in.DocumentType = DocIDCard
+	in.DocumentBackURL = "https://cdn.test/uploads/kyc/def.jpg"
+	p, err := svc.Submit(context.Background(), bson.NewObjectID(), in)
+	require.NoError(t, err)
+	assert.Equal(t, ProfilePending, p.Status)
+	assert.Equal(t, "https://cdn.test/uploads/kyc/abc.jpg", p.Submission.DocumentFrontURL)
+	assert.Equal(t, "https://cdn.test/uploads/kyc/def.jpg", p.Submission.DocumentBackURL)
 }
 
 func TestGetProfile_NoSubmission_Unverified(t *testing.T) {

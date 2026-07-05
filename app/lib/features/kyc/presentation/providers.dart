@@ -8,6 +8,7 @@ import '../domain/entities/kyc.dart';
 import '../domain/repositories/kyc_repository.dart';
 import '../domain/usecases/get_kyc_status.dart';
 import '../domain/usecases/submit_kyc.dart';
+import '../domain/usecases/upload_kyc_document.dart';
 
 // ---- KYC (wired to /api/v1/kyc) ----
 
@@ -25,6 +26,10 @@ final getKycStatusUseCaseProvider = Provider<GetKycStatus>(
 
 final submitKycUseCaseProvider = Provider<SubmitKyc>(
   (ref) => SubmitKyc(ref.watch(kycRepositoryProvider)),
+);
+
+final uploadKycDocumentUseCaseProvider = Provider<UploadKycDocument>(
+  (ref) => UploadKycDocument(ref.watch(kycRepositoryProvider)),
 );
 
 /// The customer's KYC profile (status + optional rejection reason). Throws the
@@ -77,3 +82,63 @@ class KycFormController extends Notifier<KycFormState> {
 
 final kycFormControllerProvider =
     NotifierProvider<KycFormController, KycFormState>(KycFormController.new);
+
+/// The two document-photo slots the KYC form collects. The back slot is
+/// optional only for passports.
+enum KycDocSlot { front, back }
+
+/// Upload state of one document-photo slot. [url] is the server URL Submit
+/// sends; [localPath] is the picked file shown as the tile preview; [failure]
+/// marks a failed upload (the tile offers retry).
+class KycDocUploadState {
+  const KycDocUploadState({
+    this.uploading = false,
+    this.url,
+    this.localPath,
+    this.failure,
+  });
+
+  final bool uploading;
+  final String? url;
+  final String? localPath;
+  final Failure? failure;
+}
+
+/// Per-slot document-photo upload state. Photos upload immediately on pick, so
+/// the server URLs are ready when the customer hits Submit.
+class KycDocUploadsController
+    extends Notifier<Map<KycDocSlot, KycDocUploadState>> {
+  @override
+  Map<KycDocSlot, KycDocUploadState> build() => const {
+        KycDocSlot.front: KycDocUploadState(),
+        KycDocSlot.back: KycDocUploadState(),
+      };
+
+  KycDocUploadState _slot(KycDocSlot slot) =>
+      state[slot] ?? const KycDocUploadState();
+
+  void _set(KycDocSlot slot, KycDocUploadState value) =>
+      state = {...state, slot: value};
+
+  /// Uploads the picked file for [slot]. On failure the local preview is kept
+  /// so the tile can render it behind the retry affordance.
+  Future<void> upload(KycDocSlot slot, String filePath) async {
+    if (_slot(slot).uploading) return;
+    _set(slot, KycDocUploadState(uploading: true, localPath: filePath));
+    final result =
+        await ref.read(uploadKycDocumentUseCaseProvider).call(filePath);
+    result.match(
+      (failure) =>
+          _set(slot, KycDocUploadState(localPath: filePath, failure: failure)),
+      (url) => _set(slot, KycDocUploadState(url: url, localPath: filePath)),
+    );
+  }
+
+  /// Clears one slot (e.g. removing the optional passport back photo).
+  void remove(KycDocSlot slot) => _set(slot, const KycDocUploadState());
+
+  void reset() => state = build();
+}
+
+final kycDocUploadsProvider = NotifierProvider<KycDocUploadsController,
+    Map<KycDocSlot, KycDocUploadState>>(KycDocUploadsController.new);

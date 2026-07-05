@@ -2,6 +2,7 @@ package kyc
 
 import (
 	"context"
+	"net/url"
 	"strings"
 	"time"
 
@@ -39,6 +40,8 @@ func (s *KycService) Submit(ctx context.Context, userID bson.ObjectID, in Submit
 		PlaceOfResidence: strings.TrimSpace(in.PlaceOfResidence),
 		DocumentType:     strings.TrimSpace(in.DocumentType),
 		DocumentNumber:   strings.TrimSpace(in.DocumentNumber),
+		DocumentFrontURL: strings.TrimSpace(in.DocumentFrontURL),
+		DocumentBackURL:  strings.TrimSpace(in.DocumentBackURL),
 	}
 	if sub.FullName == "" {
 		return nil, badRequest("full name is required")
@@ -60,6 +63,16 @@ func (s *KycService) Submit(ctx context.Context, userID bson.ObjectID, in Submit
 	if sub.DocumentNumber == "" {
 		return nil, badRequest("document number is required")
 	}
+	if !validDocURL(sub.DocumentFrontURL) {
+		return nil, badRequest("a photo of the front of your document is required")
+	}
+	// Passports are single-sided; every other document needs both sides.
+	if sub.DocumentType != DocPassport && sub.DocumentBackURL == "" {
+		return nil, badRequest("a photo of the back of your document is required")
+	}
+	if sub.DocumentBackURL != "" && !validDocURL(sub.DocumentBackURL) {
+		return nil, badRequest("the back document photo URL is invalid")
+	}
 
 	saved, err := s.repo.Upsert(ctx, sub)
 	if err != nil {
@@ -79,6 +92,21 @@ func (s *KycService) GetProfile(ctx context.Context, userID bson.ObjectID) (*Pro
 		return nil, err
 	}
 	return profileFor(sub), nil
+}
+
+// validDocURL accepts only URLs shaped like our own document uploads (POST
+// /api/v1/kyc/documents stores under a kyc/ key as re-encoded JPEG on both the
+// azure and local adapters). Not ownership-proof — admins review the images
+// visually — but it rejects junk and off-keyspace URLs.
+func validDocURL(s string) bool {
+	if s == "" || len(s) > 512 {
+		return false
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return false
+	}
+	return strings.Contains(u.Path, "/kyc/") && strings.HasSuffix(u.Path, ".jpg")
 }
 
 // badRequest builds a 400-classified validation error.

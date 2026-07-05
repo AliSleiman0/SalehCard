@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -10,11 +11,14 @@ import '../../../../core/widgets/auth_text_field.dart';
 import '../../../../core/widgets/step_dots.dart';
 import '../../domain/entities/kyc.dart';
 import '../providers.dart';
+import '../widgets/kyc_doc_tile.dart';
 
 /// KYC verification form (`/kyc/form`). Collects personal background info
-/// (full name, date of birth, place of birth, place of residence) plus a
-/// document type + number via [AuthTextField]s and a document-type selector
-/// (reusing the topup method-tile/radio pattern) — no document upload.
+/// (full name, date of birth, place of birth, place of residence), a document
+/// type + number via [AuthTextField]s and a document-type selector (reusing
+/// the topup method-tile/radio pattern), plus mandatory document photos
+/// ([KycDocTile]s — front always, back unless passport) which upload to
+/// `POST /kyc/documents` immediately on pick.
 /// Submit-validates: empty required fields show their inline error. On a valid
 /// submit the [KycFormController] POSTs to the API and we navigate back to
 /// `/kyc`, which now shows the pending card.
@@ -39,7 +43,9 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(kycFormControllerProvider.notifier).reset();
+      if (!mounted) return;
+      ref.read(kycFormControllerProvider.notifier).reset();
+      ref.read(kycDocUploadsProvider.notifier).reset();
     });
   }
 
@@ -57,6 +63,57 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
   bool get _placeOfResidenceValid =>
       _placeOfResidenceController.text.trim().isNotEmpty;
   bool get _numberValid => _numberController.text.trim().isNotEmpty;
+
+  /// Passports are single-sided; every other document needs a back photo.
+  bool get _backDocRequired => _docType != KycDocumentType.passport;
+
+  KycDocUploadState _docState(KycDocSlot slot) =>
+      ref.read(kycDocUploadsProvider)[slot] ?? const KycDocUploadState();
+
+  bool get _frontDocValid => _docState(KycDocSlot.front).url != null;
+  bool get _backDocValid =>
+      !_backDocRequired || _docState(KycDocSlot.back).url != null;
+
+  /// Bottom sheet: camera or gallery, then upload the picked photo for [slot].
+  Future<void> _pickDocPhoto(KycDocSlot slot) async {
+    FocusScope.of(context).unfocus();
+    final l10n = AppLocalizations.of(context);
+    final colors = context.colors;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.photo_camera_outlined, color: colors.text),
+              title: Text(l10n.kycDocSourceCamera,
+                  style: TextStyle(color: colors.text)),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_library_outlined, color: colors.text),
+              title: Text(l10n.kycDocSourceGallery,
+                  style: TextStyle(color: colors.text)),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    // Downscale on-device: keeps the multipart body well under the API's 10 MB
+    // cap; the server re-encodes to its display size anyway.
+    final picked = await ImagePicker()
+        .pickImage(source: source, imageQuality: 85, maxWidth: 2000);
+    if (picked == null || !mounted) return;
+    await ref.read(kycDocUploadsProvider.notifier).upload(slot, picked.path);
+  }
 
   String _isoDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -81,10 +138,13 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
         _dob == null ||
         !_placeOfBirthValid ||
         !_placeOfResidenceValid ||
-        !_numberValid) {
+        !_numberValid ||
+        !_frontDocValid ||
+        !_backDocValid) {
       return;
     }
 
+    // An uploaded back photo is sent even for passports (where it's optional).
     final ok = await ref.read(kycFormControllerProvider.notifier).submit(
           KycSubmission(
             fullName: _nameController.text.trim(),
@@ -93,6 +153,8 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
             placeOfResidence: _placeOfResidenceController.text.trim(),
             documentType: _docType,
             documentNumber: _numberController.text.trim(),
+            documentFrontUrl: _docState(KycDocSlot.front).url!,
+            documentBackUrl: _docState(KycDocSlot.back).url,
           ),
         );
     if (!mounted) return;
@@ -118,6 +180,11 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
     final submitting = ref.watch(kycFormControllerProvider).submitting;
+    final docUploads = ref.watch(kycDocUploadsProvider);
+    final frontState =
+        docUploads[KycDocSlot.front] ?? const KycDocUploadState();
+    final backState = docUploads[KycDocSlot.back] ?? const KycDocUploadState();
+    final anyUploading = frontState.uploading || backState.uploading;
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -229,12 +296,46 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
                       ? l10n.kycFieldRequired
                       : null,
                 ),
+                const SizedBox(height: 18),
+                Text(
+                  l10n.kycDocPhotosLabel,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.text),
+                ),
+                const SizedBox(height: 12),
+                KycDocTile(
+                  label: l10n.kycDocFrontLabel,
+                  state: frontState,
+                  onTap: () => _pickDocPhoto(KycDocSlot.front),
+                  errorText: _submitted && !_frontDocValid
+                      ? l10n.kycDocPhotoRequired
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                KycDocTile(
+                  label: l10n.kycDocBackLabel,
+                  sublabel:
+                      _backDocRequired ? null : l10n.kycDocBackOptionalTag,
+                  state: backState,
+                  onTap: () => _pickDocPhoto(KycDocSlot.back),
+                  onRemove: _backDocRequired
+                      ? null
+                      : () => ref
+                          .read(kycDocUploadsProvider.notifier)
+                          .remove(KycDocSlot.back),
+                  errorText: _submitted && !_backDocValid
+                      ? l10n.kycDocPhotoRequired
+                      : null,
+                ),
               ],
             ),
           ),
           _SubmitBar(
             label: l10n.kycSubmitCta,
             submitting: submitting,
+            enabled: !anyUploading,
             colors: colors,
             onTap: _submit,
           ),
@@ -420,10 +521,15 @@ class _SubmitBar extends StatelessWidget {
     required this.submitting,
     required this.colors,
     required this.onTap,
+    this.enabled = true,
   });
 
   final String label;
   final bool submitting;
+
+  /// Disabled without the spinner (e.g. while a document photo uploads — the
+  /// tile carries its own spinner).
+  final bool enabled;
   final AppColors colors;
   final VoidCallback onTap;
 
@@ -437,7 +543,7 @@ class _SubmitBar extends StatelessWidget {
         border: Border(top: BorderSide(color: colors.border)),
       ),
       child: FilledButton(
-        onPressed: submitting ? null : onTap,
+        onPressed: (submitting || !enabled) ? null : onTap,
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(54),
           backgroundColor: AppTokens.cta,

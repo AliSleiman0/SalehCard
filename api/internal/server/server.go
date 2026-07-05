@@ -80,7 +80,8 @@ func (s *Server) Routes() {
 
 	s.router.Get("/health", s.handleHealth)
 
-	// Product image storage for the admin editor (POST /api/admin/products/images).
+	// Blob storage for product images (POST /api/admin/products/images) and
+	// customer KYC document photos (POST /api/v1/kyc/documents).
 	// Falls open to the dev local adapter on Azure misconfig, mirroring the
 	// sms/push fallback — constructed directly (NewLocal is infallible) so a
 	// failed Azure setup logs a warning instead of leaving a nil store.
@@ -171,7 +172,7 @@ func (s *Server) Routes() {
 	wallet.RegisterRoutes(s.router, s.db, s.cfg)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
-	kyc.RegisterRoutes(s.router, s.db, s.cfg)
+	kyc.RegisterRoutes(s.router, s.db, s.cfg, store)
 	notification.RegisterRoutes(s.router, s.db, s.cfg)
 
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role

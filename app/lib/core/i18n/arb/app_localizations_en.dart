@@ -730,6 +730,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'Verification submitted — we\'ll review it shortly.';
 
   @override
+  String get kycDocPhotosLabel => 'Document photos';
+
+  @override
+  String get kycDocFrontLabel => 'Front of document';
+
+  @override
+  String get kycDocBackLabel => 'Back of document';
+
+  @override
+  String get kycDocBackOptionalTag => 'Optional for passports';
+
+  @override
+  String get kycDocAddPhoto => 'Add photo';
+
+  @override
+  String get kycDocReplacePhoto => 'Replace photo';
+
+  @override
+  String get kycDocRemovePhoto => 'Remove';
+
+  @override
+  String get kycDocUploading => 'Uploading…';
+
+  @override
+  String get kycDocUploadFailed => 'Upload failed — tap to retry.';
+
+  @override
+  String get kycDocPhotoRequired => 'This photo is required.';
+
+  @override
+  String get kycDocSourceCamera => 'Take a photo';
+
+  @override
+  String get kycDocSourceGallery => 'Choose from gallery';
+
+  @override
   String get writeReview => 'Write a review';
 
   @override

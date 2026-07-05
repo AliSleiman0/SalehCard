@@ -11,4 +11,8 @@ abstract interface class KycRepository {
 
   /// Submits the verification form. Returns the new profile (pending review).
   Future<Either<Failure, KycProfile>> submit(KycSubmission submission);
+
+  /// Uploads one document photo (multipart); returns its public URL, which the
+  /// form places in [KycSubmission.documentFrontUrl]/[KycSubmission.documentBackUrl].
+  Future<Either<Failure, String>> uploadDocument(String filePath);
 }

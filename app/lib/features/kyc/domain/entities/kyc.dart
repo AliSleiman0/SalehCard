@@ -31,8 +31,9 @@ KycStatus kycStatusFromWire(String? value) => switch (value) {
       _ => KycStatus.unverified,
     };
 
-/// The form payload submitted for verification — personal background info only
-/// (no document upload).
+/// The form payload submitted for verification — personal background info plus
+/// the uploaded document-photo URLs (front always; back required for
+/// id_card/license, optional for passports).
 class KycSubmission {
   const KycSubmission({
     required this.fullName,
@@ -41,6 +42,8 @@ class KycSubmission {
     required this.placeOfResidence,
     required this.documentType,
     required this.documentNumber,
+    required this.documentFrontUrl,
+    this.documentBackUrl,
   });
 
   final String fullName;
@@ -51,6 +54,12 @@ class KycSubmission {
   final String placeOfResidence;
   final KycDocumentType documentType;
   final String documentNumber;
+
+  /// Public URL returned by `POST /kyc/documents` for the front photo.
+  final String documentFrontUrl;
+
+  /// Back-photo URL; null only when the document is a passport.
+  final String? documentBackUrl;
 }
 
 /// The stored details of a customer's KYC submission, echoed back by
@@ -64,6 +73,8 @@ class KycSubmissionDetails {
     required this.placeOfResidence,
     required this.documentType,
     required this.documentNumber,
+    this.documentFrontUrl,
+    this.documentBackUrl,
   });
 
   final String fullName;
@@ -74,6 +85,8 @@ class KycSubmissionDetails {
   final String placeOfResidence;
   final KycDocumentType documentType;
   final String documentNumber;
+  final String? documentFrontUrl;
+  final String? documentBackUrl;
 }
 
 /// The customer's derived KYC profile. [rejectionReason] is present only when

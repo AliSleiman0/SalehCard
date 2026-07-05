@@ -27,4 +27,13 @@ class KycRepositoryImpl implements KycRepository {
       return Left(mapError(error));
     }
   }
+
+  @override
+  Future<Either<Failure, String>> uploadDocument(String filePath) async {
+    try {
+      return Right(await _remote.uploadDocument(filePath));
+    } catch (error) {
+      return Left(mapError(error));
+    }
+  }
 }
