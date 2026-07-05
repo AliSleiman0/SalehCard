@@ -95,4 +95,55 @@ void main() {
       expect(product.variants.first.hasOffer, isFalse);
     });
   });
+
+  group('Product image getters (thumbnail / thumbUrl / imageUrl)', () {
+    test('thumbnail is parsed and thumbUrl prefers it', () {
+      final product = ProductDto.fromJson(<String, dynamic>{
+        'id': 'p5',
+        'images': ['https://cdn/x.jpg'],
+        'thumbnail': 'https://cdn/x_thumb.jpg',
+      }).toEntity();
+
+      expect(product.thumbnail, 'https://cdn/x_thumb.jpg');
+      expect(product.thumbUrl, 'https://cdn/x_thumb.jpg');
+      expect(product.imageUrl, 'https://cdn/x.jpg');
+    });
+
+    test('thumbUrl falls back to the display image when no thumbnail', () {
+      final product = ProductDto.fromJson(<String, dynamic>{
+        'id': 'p6',
+        'images': ['https://cdn/x.jpg'],
+      }).toEntity();
+
+      expect(product.thumbnail, isNull);
+      expect(product.thumbUrl, 'https://cdn/x.jpg');
+    });
+
+    test('empty-string thumbnail falls back to the display image (not "")', () {
+      final product = ProductDto.fromJson(<String, dynamic>{
+        'id': 'p7',
+        'images': ['https://cdn/x.jpg'],
+        'thumbnail': '',
+      }).toEntity();
+
+      expect(product.thumbUrl, 'https://cdn/x.jpg');
+    });
+
+    test('empty-string image yields a null imageUrl and thumbUrl', () {
+      final product = ProductDto.fromJson(<String, dynamic>{
+        'id': 'p8',
+        'images': [''],
+      }).toEntity();
+
+      expect(product.imageUrl, isNull);
+      expect(product.thumbUrl, isNull);
+    });
+
+    test('no images at all leaves both getters null', () {
+      final product = ProductDto.fromJson(<String, dynamic>{'id': 'p9'}).toEntity();
+
+      expect(product.imageUrl, isNull);
+      expect(product.thumbUrl, isNull);
+    });
+  });
 }

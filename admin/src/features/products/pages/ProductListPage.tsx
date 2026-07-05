@@ -38,7 +38,7 @@ type StatusFilter = 'all' | 'active' | 'draft' | 'out'
 // Prefers the compressed thumbnail, falling back to the display image, then to
 // the gradient placeholder — both up front (no thumbnail/image) and on a
 // broken URL (onError).
-function ProductThumb({ p }: { p: Product }) {
+export function ProductThumb({ p }: { p: Product }) {
   const [failed, setFailed] = useState(false)
   const src = p.thumbnail || p.images[0]
   if (!src || failed) return <Art art={artForCategory(p.category)} size={36} />
