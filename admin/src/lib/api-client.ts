@@ -28,16 +28,13 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-  isFormData = false,
-): Promise<ApiResponse<T>> {
+async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResponse<T>> {
   const url = `${BASE()}${path}`
 
-  // Skip the JSON Content-Type for FormData — the browser sets the multipart
-  // boundary itself; setting it manually breaks the boundary.
+  // Detect FormData from the body itself, so the flag can never disagree with
+  // the payload (a FormData body passed to post() Just Works). Skip the JSON
+  // Content-Type for it — the browser sets the multipart boundary itself.
+  const isFormData = body instanceof FormData
   const headers: Record<string, string> = isFormData ? {} : { 'Content-Type': 'application/json' }
   if (_accessToken) headers['Authorization'] = `Bearer ${_accessToken}`
 
@@ -94,6 +91,6 @@ export const apiClient = {
     return request<T>('DELETE', path)
   },
   upload<T>(path: string, formData: FormData): Promise<ApiResponse<T>> {
-    return request<T>('POST', path, formData, true)
+    return request<T>('POST', path, formData)
   },
 }

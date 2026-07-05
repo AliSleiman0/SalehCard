@@ -630,42 +630,43 @@ export default function ProductEditPage() {
                 if (file) onImageFile(file)
               }}
             />
-            {thumbnail || images[0] ? (
-              <>
-                <img
-                  src={thumbnail || images[0]}
-                  alt=""
-                  className="imgslot"
-                  style={{ width: '100%', height: 140, objectFit: 'cover' }}
-                />
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <button
-                    className="abtn sm"
-                    disabled={uploadImage.isPending}
-                    onClick={() => imageFileRef.current?.click()}
-                  >
-                    <Icon name="upload" size={13} /> Replace
-                  </button>
-                  <button className="abtn sm danger" disabled={uploadImage.isPending} onClick={onRemoveImage}>
-                    <Icon name="x" size={13} /> Remove
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="imgslot" style={{ width: '100%', height: 140 }}>
-                {uploadImage.isPending ? 'Uploading…' : 'No image'}
-              </div>
-            )}
-            {!thumbnail && !images[0] && (
-              <button
-                className="abtn sm"
-                style={{ marginTop: 10, width: '100%' }}
-                disabled={uploadImage.isPending}
-                onClick={() => imageFileRef.current?.click()}
-              >
-                <Icon name="upload" size={13} /> {uploadImage.isPending ? 'Uploading…' : 'Choose image'}
-              </button>
-            )}
+            {(() => {
+              const preview = thumbnail || images[0]
+              if (preview) {
+                return (
+                  <>
+                    <img
+                      src={preview}
+                      alt=""
+                      className="imgslot"
+                      style={{ width: '100%', height: 140, objectFit: 'cover' }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <button
+                        className="abtn sm"
+                        disabled={uploadImage.isPending}
+                        onClick={() => imageFileRef.current?.click()}
+                      >
+                        <Icon name="upload" size={13} /> Replace
+                      </button>
+                      <button className="abtn sm danger" disabled={uploadImage.isPending} onClick={onRemoveImage}>
+                        <Icon name="x" size={13} /> Remove
+                      </button>
+                    </div>
+                  </>
+                )
+              }
+              return (
+                <button
+                  className="abtn sm"
+                  style={{ width: '100%', height: 140 }}
+                  disabled={uploadImage.isPending}
+                  onClick={() => imageFileRef.current?.click()}
+                >
+                  <Icon name="upload" size={13} /> {uploadImage.isPending ? 'Uploading…' : 'Choose image'}
+                </button>
+              )
+            })()}
             <div className="ahint">JPEG, PNG, or WebP · max 10 MB · compressed to 1024px + 256px thumbnail.</div>
             {imageError && (
               <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{imageError}</div>

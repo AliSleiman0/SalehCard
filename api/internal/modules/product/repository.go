@@ -417,7 +417,6 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		{Key: "rootDomain", Value: lit(in.RootDomain)},
 		{Key: "legacyCategoryId", Value: lit(in.LegacyCategoryID)},
 		{Key: "images", Value: lit(in.Images)},
-		{Key: "thumbnail", Value: lit(in.Thumbnail)},
 		{Key: "description", Value: lit(in.Description)},
 		{Key: "descriptionHadMarkup", Value: lit(in.DescriptionHadMarkup)},
 		{Key: "fulfillmentType", Value: lit(in.FulfillmentType)},
@@ -436,6 +435,10 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		// Insert-only (admin/operational): preserved on re-import via $ifNull.
 		{Key: "createdAt", Value: ifNull("createdAt", now)},
 		{Key: "legacyId", Value: ifNull("legacyId", in.LegacyID)},
+		// thumbnail is admin-owned (uploaded via the product editor; the loader
+		// never has one). Insert-only so a catalog re-import never wipes an
+		// admin-uploaded thumbnail. First insert seeds in.Thumbnail (usually "").
+		{Key: "thumbnail", Value: ifNull("thumbnail", in.Thumbnail)},
 		{Key: "stock", Value: ifNull("stock", 0)},
 		{Key: "ratings", Value: ifNull("ratings", RatingsSummary{})},
 		{Key: "available", Value: ifNull("available", in.Available)},

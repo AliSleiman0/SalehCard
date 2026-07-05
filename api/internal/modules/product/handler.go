@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
@@ -265,16 +266,23 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The two uploads are independent (different keys, no data dependency), so
+	// run them concurrently — on the Azure adapter each is a network round trip.
 	key := bson.NewObjectID().Hex()
-	imageURL, err := h.store.Upload(r.Context(), "products/"+key+".jpg", "image/jpeg", display)
-	if err != nil {
+	var imageURL, thumbnailURL string
+	g, gctx := errgroup.WithContext(r.Context())
+	g.Go(func() error {
+		var err error
+		imageURL, err = h.store.Upload(gctx, "products/"+key+".jpg", "image/jpeg", display)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		thumbnailURL, err = h.store.Upload(gctx, "products/"+key+"_thumb.jpg", "image/jpeg", thumb)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		slog.Error("product: image upload failed", "error", err)
-		response.InternalError(w)
-		return
-	}
-	thumbnailURL, err := h.store.Upload(r.Context(), "products/"+key+"_thumb.jpg", "image/jpeg", thumb)
-	if err != nil {
-		slog.Error("product: thumbnail upload failed", "error", err)
 		response.InternalError(w)
 		return
 	}

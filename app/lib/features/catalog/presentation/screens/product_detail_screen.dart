@@ -430,6 +430,11 @@ class _Banner extends StatelessWidget {
                     height: 158,
                     width: double.infinity,
                     fit: BoxFit.cover,
+                    // Decode near the on-screen width rather than the full 1024px
+                    // source (capped there anyway when the image is smaller).
+                    cacheWidth: (MediaQuery.of(context).size.width *
+                            MediaQuery.of(context).devicePixelRatio)
+                        .round(),
                     errorBuilder: (_, _, _) => _initials(),
                   )
                 : _initials(),

@@ -124,12 +124,22 @@ class Product {
   final bool available;
 
   /// Full-size display image URL (the 1024px image), or null when the product
-  /// has no image.
-  String? get imageUrl => images.isNotEmpty ? images.first : null;
+  /// has no image. An empty string counts as no image (the catalog can store
+  /// "" — see [thumbUrl]).
+  String? get imageUrl {
+    final first = images.isNotEmpty ? images.first : null;
+    return (first != null && first.isNotEmpty) ? first : null;
+  }
 
   /// Small preview URL for lists/chips: the thumbnail when present, else the
-  /// full display image.
-  String? get thumbUrl => thumbnail ?? imageUrl;
+  /// full display image. Treats an empty-string [thumbnail] as absent — the
+  /// backend stores "" for products without an uploaded thumbnail (e.g. every
+  /// catalog-migration product), and "" must fall through to [imageUrl], not
+  /// short-circuit it (a bare `thumbnail ?? imageUrl` would return "").
+  String? get thumbUrl {
+    final t = thumbnail;
+    return (t != null && t.isNotEmpty) ? t : imageUrl;
+  }
 
   /// Live sale on this product, or null when there is no active offer.
   final ProductOffer? offer;

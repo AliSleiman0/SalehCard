@@ -80,9 +80,30 @@ func (s *Server) Routes() {
 
 	s.router.Get("/health", s.handleHealth)
 
-	// Serve the local blob adapter's files directly — only relevant in dev
-	// (STORAGE_PROVIDER=local, the default); prod serves uploads from Azure Blob.
-	if s.cfg.StorageProvider == "" || s.cfg.StorageProvider == "local" {
+	// Product image storage for the admin editor (POST /api/admin/products/images).
+	// Falls open to the dev local adapter on Azure misconfig, mirroring the
+	// sms/push fallback — constructed directly (NewLocal is infallible) so a
+	// failed Azure setup logs a warning instead of leaving a nil store.
+	store, err := blob.New(blob.Config{
+		Provider: s.cfg.StorageProvider,
+		Azure: blob.AzureConfig{
+			ConnectionString: s.cfg.AzureStorageConnectionString,
+			Container:        s.cfg.AzureStorageContainer,
+		},
+		Local: blob.LocalConfig{
+			Dir:        s.cfg.UploadsDir,
+			PublicBase: s.cfg.PublicBaseURL,
+		},
+	})
+	if err != nil {
+		slog.Warn("server: storage provider misconfigured — falling back to local adapter", "provider", s.cfg.StorageProvider, "error", err)
+		store = blob.NewLocal(blob.LocalConfig{Dir: s.cfg.UploadsDir, PublicBase: s.cfg.PublicBaseURL})
+	}
+
+	// Serve the local adapter's files directly. Gate on the CONSTRUCTED adapter,
+	// not the config: a fallback-to-local (Azure misconfig) still needs its
+	// /uploads mount, and a real Azure adapter must not expose local disk.
+	if _, ok := store.(*blob.LocalStorage); ok {
 		fs := http.FileServer(http.Dir(s.cfg.UploadsDir))
 		s.router.Handle("/uploads/*", http.StripPrefix("/uploads/", fs))
 	}
@@ -152,24 +173,6 @@ func (s *Server) Routes() {
 	review.RegisterRoutes(s.router, s.db, s.cfg)
 	kyc.RegisterRoutes(s.router, s.db, s.cfg)
 	notification.RegisterRoutes(s.router, s.db, s.cfg)
-
-	// Product image uploads (admin console editor). Falls open to the dev local
-	// adapter on Azure misconfig, mirroring the sms/push fallback.
-	store, err := blob.New(blob.Config{
-		Provider: s.cfg.StorageProvider,
-		Azure: blob.AzureConfig{
-			ConnectionString: s.cfg.AzureStorageConnectionString,
-			Container:        s.cfg.AzureStorageContainer,
-		},
-		Local: blob.LocalConfig{
-			Dir:        s.cfg.UploadsDir,
-			PublicBase: s.cfg.PublicBaseURL,
-		},
-	})
-	if err != nil {
-		slog.Warn("server: storage provider misconfigured — falling back to local adapter", "provider", s.cfg.StorageProvider, "error", err)
-		store, _ = blob.New(blob.Config{Local: blob.LocalConfig{Dir: s.cfg.UploadsDir, PublicBase: s.cfg.PublicBaseURL}})
-	}
 
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role
 	// (AdminOnly bypasses only in development when no JWT secret is configured).

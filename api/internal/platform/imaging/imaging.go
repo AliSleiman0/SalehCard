@@ -85,33 +85,34 @@ func Process(data []byte) (display []byte, thumb []byte, err error) {
 		return nil, nil, fmt.Errorf("imaging: decode: %w", err)
 	}
 
-	opaque := compositeOnWhite(img)
+	// Only images that actually carry alpha need compositing onto white before a
+	// (JPEG-can't-hold-alpha) encode; opaque JPEGs/PNGs skip it entirely.
+	opaque := false
+	if oi, ok := img.(interface{ Opaque() bool }); ok {
+		opaque = oi.Opaque()
+	}
 
-	display, err = resizeAndEncode(opaque, displayMaxEdge)
-	if err != nil {
+	// Scale to the display size from the source, then derive the thumbnail from
+	// the (much smaller, already-opaque) display bitmap rather than re-sampling
+	// the full-resolution source a second time.
+	displayImg := scaleOnto(img, displayMaxEdge, opaque)
+	thumbImg := scaleOnto(displayImg, thumbMaxEdge, true)
+
+	if display, err = encodeJPEG(displayImg); err != nil {
 		return nil, nil, err
 	}
-	thumb, err = resizeAndEncode(opaque, thumbMaxEdge)
-	if err != nil {
+	if thumb, err = encodeJPEG(thumbImg); err != nil {
 		return nil, nil, err
 	}
 	return display, thumb, nil
 }
 
-// compositeOnWhite flattens img onto an opaque white canvas of the same size,
-// killing any alpha channel before JPEG encoding.
-func compositeOnWhite(img image.Image) *image.RGBA {
-	b := img.Bounds()
-	dst := image.NewRGBA(b)
-	draw.Draw(dst, b, &image.Uniform{C: color.White}, image.Point{}, draw.Src)
-	draw.Draw(dst, b, img, b.Min, draw.Over)
-	return dst
-}
-
-// resizeAndEncode scales img down (never up) so its longer edge is at most
-// maxEdge, using CatmullRom resampling, and JPEG-encodes the result at
-// [jpegQuality].
-func resizeAndEncode(img image.Image, maxEdge int) ([]byte, error) {
+// scaleOnto scales img down (never up) so its longer edge is at most maxEdge,
+// using CatmullRom resampling into an opaque RGBA. When img has alpha
+// (opaque=false) it composites onto white in the same pass (fill white, then
+// draw Over) — killing transparency for the JPEG encode; an opaque img is
+// copied straight (draw Src), avoiding a wasted full-canvas composite.
+func scaleOnto(img image.Image, maxEdge int, opaque bool) *image.RGBA {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 
@@ -133,10 +134,19 @@ func resizeAndEncode(img image.Image, maxEdge int) ([]byte, error) {
 	}
 
 	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
-	xdraw.CatmullRom.Scale(dst, dst.Bounds(), img, b, xdraw.Src, nil)
+	op := xdraw.Src
+	if !opaque {
+		draw.Draw(dst, dst.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+		op = xdraw.Over
+	}
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), img, b, op, nil)
+	return dst
+}
 
+// encodeJPEG encodes img as a JPEG at [jpegQuality].
+func encodeJPEG(img image.Image) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: jpegQuality}); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: jpegQuality}); err != nil {
 		return nil, fmt.Errorf("imaging: encode: %w", err)
 	}
 	return buf.Bytes(), nil

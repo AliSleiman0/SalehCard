@@ -90,6 +90,10 @@ class ProductChip extends StatelessWidget {
                             width: 60,
                             height: 60,
                             fit: BoxFit.cover,
+                            // Decode near the 60px display size, not the source
+                            // resolution — thumbUrl falls back to the 1024px
+                            // display image, so an undecoded chip would pin ~4MB.
+                            cacheWidth: (60 * MediaQuery.of(context).devicePixelRatio).round(),
                             errorBuilder: (_, _, _) => _initials(),
                           )
                         : _initials(),

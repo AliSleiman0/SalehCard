@@ -19,6 +19,13 @@ type LocalStorage struct {
 	publicBase string
 }
 
+// NewLocal builds the dev local-disk adapter directly. It never returns an
+// error, so a caller on a fallback path (Azure misconfig) can construct it
+// without an error check — unlike the generic [New] switch.
+func NewLocal(cfg LocalConfig) *LocalStorage {
+	return newLocalStorage(cfg)
+}
+
 // newLocalStorage builds a disk-backed Storage from cfg. Dir defaults to
 // [defaultUploadsDir]; PublicBase defaults to "" (relative URLs).
 func newLocalStorage(cfg LocalConfig) *LocalStorage {
