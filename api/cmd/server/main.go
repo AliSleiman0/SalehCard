@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -58,6 +59,20 @@ func main() {
 		}
 	}()
 
+	// Background workers (currently just the USDT payment watcher) run under a
+	// cancellable context and are awaited on shutdown. An interrupted tick is
+	// safe by design: claimed-but-unsettled intents stay `confirming` and are
+	// retried on the next boot's first tick.
+	workerCtx, stopWorkers := context.WithCancel(context.Background())
+	var workers sync.WaitGroup
+	if w := srv.Watcher(); w != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			w.Run(workerCtx)
+		}()
+	}
+
 	// Wait for interrupt signal to gracefully shut down the server.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -68,10 +83,12 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
+	stopWorkers()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("forced server shutdown", "error", err)
 		os.Exit(1)
 	}
+	workers.Wait()
 
 	slog.Info("server exited cleanly")
 }

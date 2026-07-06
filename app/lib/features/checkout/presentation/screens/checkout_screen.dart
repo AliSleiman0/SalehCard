@@ -19,6 +19,7 @@ import '../../../cart/domain/entities/cart_item.dart';
 import '../../../cart/presentation/controllers/cart_controller.dart';
 import '../../../kyc/domain/entities/kyc.dart';
 import '../../../kyc/presentation/providers.dart' show kycProfileProvider;
+import '../../../payments/presentation/providers.dart' show paymentConfigProvider;
 import '../../../wallet/presentation/providers.dart' show walletProvider;
 import '../../domain/entities/order.dart';
 import '../providers.dart';
@@ -41,9 +42,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final Map<String, TextEditingController> _fieldControllers = {};
   final Map<String, String> _selectValues = {};
   Map<String, String?> _fieldErrors = {};
-  // Wallet is the only live payment method (card/usdt disabled until a real
-  // gateway is integrated).
-  final String _payment = 'wallet';
+  // Selected payment method: wallet, or usdt (on-chain) when the backend has
+  // USDT payments enabled. Card stays disabled until a real gateway exists.
+  String _payment = 'wallet';
 
   @override
   void initState() {
@@ -107,6 +108,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final kycStatus = kycAsync.asData?.value.status;
     final kycBlocked = kycStatus != null && kycStatus != KycStatus.verified;
 
+    // USDT (on-chain) is offered only when the backend has it enabled. It does
+    // not draw on the wallet, so it also unblocks an insufficient-balance CTA.
+    final usdtEnabled =
+        ref.watch(paymentConfigProvider).asData?.value.usdtEnabled ?? false;
+    final payingWithUsdt = _payment == 'usdt';
+    final ctaBlocked = walletInsufficient && !payingWithUsdt;
+
     return Scaffold(
       backgroundColor: colors.bg,
       appBar: AppBar(
@@ -145,6 +153,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       _PaymentSelector(
                         balance: balance,
                         walletInsufficient: walletInsufficient,
+                        selected: _payment,
+                        usdtEnabled: usdtEnabled,
+                        onSelect: (method) =>
+                            setState(() => _payment = method),
                         l10n: l10n,
                       ),
                       const SizedBox(height: 18),
@@ -155,7 +167,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 _PlaceOrderBar(
                   total: subtotal,
                   submitting: submitState.submitting,
-                  enabled: !walletInsufficient,
+                  enabled: !ctaBlocked,
                   l10n: l10n,
                   colors: colors,
                   onPlaceOrder: () => _submit(items,
@@ -305,7 +317,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (!mounted) return;
     if (order != null) {
       ref.read(cartControllerProvider.notifier).clear();
-      context.pushReplacement('/order-success/${order.id}', extra: order);
+      // A USDT order comes back pending with a deposit intent — route to the
+      // waiting-for-payment screen; it navigates on to the order once the
+      // on-chain payment confirms.
+      final intent = order.paymentIntent;
+      if (intent != null) {
+        context.pushReplacement('/payments/usdt-deposit', extra: intent);
+      } else {
+        context.pushReplacement('/order-success/${order.id}', extra: order);
+      }
     }
   }
 
@@ -545,26 +565,36 @@ class _OrderSummary extends StatelessWidget {
   }
 }
 
-/// Wallet is the single live payment method at launch: the row shows the
-/// balance, and an insufficient balance swaps in a "Top up wallet" CTA
-/// (funding happens via the wallet top-up request flow).
+/// Payment method selector. Wallet is always offered (its row shows the
+/// balance); when the backend has on-chain USDT enabled, a USDT row is offered
+/// too. An insufficient wallet balance swaps in a "Top up wallet" CTA — unless
+/// USDT is selected, which doesn't draw on the wallet.
 class _PaymentSelector extends StatelessWidget {
   const _PaymentSelector({
     required this.balance,
     required this.walletInsufficient,
+    required this.selected,
+    required this.usdtEnabled,
+    required this.onSelect,
     required this.l10n,
   });
 
   final double balance;
   final bool walletInsufficient;
+  final String selected;
+  final bool usdtEnabled;
+  final ValueChanged<String> onSelect;
   final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
+    final walletSelected = selected == 'wallet';
+    // The top-up CTA shows only when the (selected) wallet can't cover the order.
+    final showTopUp = walletSelected && walletInsufficient;
     return Column(
       children: [
         _PayRow(
-          selected: !walletInsufficient,
+          selected: walletSelected,
           enabled: true,
           icon: Icons.account_balance_wallet_outlined,
           iconColor: AppTokens.accent,
@@ -573,9 +603,21 @@ class _PaymentSelector extends StatelessWidget {
               ? '${l10n.insufficientBalance} · ${formatUsd(balance)}'
               : '${l10n.balanceLabel} ${formatUsd(balance)}',
           subtitleDanger: walletInsufficient,
-          onTap: () {},
+          onTap: () => onSelect('wallet'),
         ),
-        if (walletInsufficient) ...[
+        if (usdtEnabled) ...[
+          const SizedBox(height: 12),
+          _PayRow(
+            selected: selected == 'usdt',
+            enabled: true,
+            icon: Icons.currency_bitcoin_rounded,
+            iconColor: AppTokens.brand1,
+            title: l10n.usdtPayLabel,
+            subtitle: 'TRC20',
+            onTap: () => onSelect('usdt'),
+          ),
+        ],
+        if (showTopUp) ...[
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,

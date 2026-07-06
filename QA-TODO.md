@@ -152,3 +152,28 @@ Backend + Flutter + admin shipped on green static gates; deferred manual/e2e che
 8. **If iOS ever ships**: add `NSCameraUsageDescription` +
    `NSPhotoLibraryUsageDescription` to `app/ios/Runner/Info.plist` (image_picker) —
    Android needs no manifest change (system photo picker / camera intent).
+
+## On-chain USDT payments — real-chain test matrix (before prod enable)
+
+Stub-mode e2e is covered by automated tests + dev manual checks; the following
+need REAL small-value TRC20 transfers against a staging/prod config (each costs
+real USDT + TRX fees):
+
+1. Exact payment: top-up intent $1 → send exactly 1 USDT → confirmed within
+   ~1 min, wallet +$1, ledger row `type=topup method=usdt_trc20`, push received.
+2. Order flow: place a $1 usdt order (inventory product) → pay exactly → order
+   completes with delivered code.
+3. Underpay an order intent by $0.50 → order fails, wallet credited $0.50,
+   "underpaid" notification.
+4. Overpay a top-up by $0.30 → full received amount credited (top-ups credit
+   actual). Overpay an ORDER by $0.30 → order fulfilled + $0.30 excess credited.
+5. Pay AFTER expiry (set `USDT_INTENT_EXPIRY=2m` on staging): order fails at
+   expiry; the late transfer lands as a wallet credit within the grace window.
+6. Send a NON-USDT TRC20 token to a deposit address → ignored (no credit).
+7. Send the same-address twice: second transfer to an already-confirmed intent's
+   address is NOT credited (only the first transfer per intent counts) — funds
+   recoverable by the owner via sweep; verify support can find it via
+   /api/admin/payments + tronscan.
+8. Rate limits: 11 rapid intent creations from one IP → 429 on the 11th.
+9. Watcher resilience: restart the API mid-pending-intent → intent still
+   confirms after boot (first tick runs immediately).

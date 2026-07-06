@@ -24,9 +24,12 @@ import (
 
 // RegisterRoutes wires the customer-facing order routes onto r. /api/v1/orders
 // is guarded by AuthRequired. The order service depends on the product catalog
-// (pricing), code inventory (fulfillment), wallet (payment), and the notifier
-// (customer inbox + push on instant completion).
-func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf notification.Notifier) {
+// (pricing), code inventory (fulfillment), wallet (payment), the notifier
+// (customer inbox + push on instant completion), and — for on-chain USDT
+// checkout — the payment intents port (nil disables the usdt method). It
+// returns the constructed *OrderService so the caller can wire it back as the
+// payment module's OrderSettler (the async fulfillment callback).
+func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf notification.Notifier, usdt usdtIntents) *OrderService {
 	repo := NewMongoRepository(db.Collection("orders"))
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("order: failed to ensure indexes", "error", err)
@@ -51,8 +54,8 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	margins := reseller.NewMongoRepository(db)
 	points := loyalty.NewAwarder(db)
 
-	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, kycGate, margins, ntf, points)
-	h := NewHandler(svc)
+	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, usdt, kycGate, margins, ntf, points)
+	h := NewHandler(svc, usdt)
 
 	r.Route("/api/v1/orders", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
@@ -60,4 +63,5 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 		r.Get("/", h.ListOrders)
 		r.Get("/{id}", h.GetOrder)
 	})
+	return svc
 }

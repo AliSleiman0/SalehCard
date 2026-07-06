@@ -35,8 +35,10 @@ type Handler struct {
 
 // RegisterAdminRoutes mounts the finance routes onto r (the /api/admin group,
 // guarded by AdminOnly): the wallet-ledger transactions feed and the revenue
-// summary. (A USDT verification queue is intentionally deferred — USDT top-ups
-// auto-confirm today, so there is nothing to verify.)
+// summary. (USDT flows need no verification queue here: manual usdt top-ups go
+// through the admin-approved topup_requests queue, and on-chain usdt_trc20
+// settlements are confirmed automatically by the payment module's watcher and
+// browsable at /api/admin/payments.)
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 	h := &Handler{
 		tx:     db.Collection("wallet_transactions"),

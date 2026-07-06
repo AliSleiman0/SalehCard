@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_envelope.dart';
+import '../../../payments/data/dtos/payment_intent_dto.dart';
 import '../../domain/entities/order.dart';
 import '../dtos/order_dto.dart';
 
@@ -11,7 +12,9 @@ class OrderRemoteDataSource {
 
   /// POST /orders. The price is derived server-side; [idempotencyKey] dedupes
   /// retries of the same checkout attempt via the `Idempotency-Key` header.
-  Future<OrderDto> placeOrder(
+  /// A USDT order comes back still-pending with an embedded `paymentIntent`
+  /// (deposit address + amount) attached to the returned entity.
+  Future<Order> placeOrder(
     PlaceOrderInput input, {
     required String idempotencyKey,
   }) async {
@@ -20,7 +23,13 @@ class OrderRemoteDataSource {
       data: _toRequestJson(input),
       options: Options(headers: {'Idempotency-Key': idempotencyKey}),
     );
-    return OrderDto.fromJson(unwrap(response) as Map<String, dynamic>);
+    final map = unwrap(response) as Map<String, dynamic>;
+    final order = OrderDto.fromJson(map).toEntity();
+    final intent = map['paymentIntent'];
+    if (intent is Map<String, dynamic>) {
+      return order.withPaymentIntent(PaymentIntentDto.fromJson(intent).toEntity());
+    }
+    return order;
   }
 
   Future<OrderDto> getOrder(String id) async {

@@ -1,4 +1,5 @@
 import '../../../../core/i18n/i18n_string.dart';
+import '../../../payments/domain/entities/payment_intent.dart';
 
 /// Lifecycle status of an order (mirrors the backend `OrderStatus`).
 enum OrderStatus { pending, processing, completed, failed, refunded, unknown }
@@ -101,6 +102,7 @@ class Order {
     required this.fulfillment,
     this.createdAt,
     this.updatedAt,
+    this.paymentIntent,
   });
 
   final String id;
@@ -114,6 +116,28 @@ class Order {
   final Fulfillment fulfillment;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  /// The on-chain deposit intent, present only on the response to placing a
+  /// USDT order (the client shows its waiting-for-payment screen). Null for
+  /// wallet/card orders and for orders re-fetched via GET /orders.
+  final PaymentIntent? paymentIntent;
+
+  /// Returns a copy with [paymentIntent] attached (used by the order datasource
+  /// to carry the intent parsed from the place-order response).
+  Order withPaymentIntent(PaymentIntent? intent) => Order(
+        id: id,
+        userId: userId,
+        items: items,
+        subtotal: subtotal,
+        total: total,
+        currency: currency,
+        paymentMethod: paymentMethod,
+        status: status,
+        fulfillment: fulfillment,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+        paymentIntent: intent,
+      );
 
   bool get isProcessing => status == OrderStatus.processing;
   bool get isCompleted => status == OrderStatus.completed;

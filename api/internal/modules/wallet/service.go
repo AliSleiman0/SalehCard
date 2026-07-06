@@ -224,3 +224,36 @@ func (s *WalletService) Refund(ctx context.Context, userID bson.ObjectID, amount
 	}
 	return tx, nil
 }
+
+// TopUp credits the wallet and records a top-up ledger row with the caller's
+// method and reference (e.g. "usdt_trc20" + the payment-intent id for on-chain
+// deposits). Unlike ApproveTopUpRequest there is no request queue involved —
+// this is the settlement path for payments confirmed automatically. Same
+// mandatory-ledger compensation contract as Refund, so callers can safely
+// retry without double-crediting.
+func (s *WalletService) TopUp(ctx context.Context, userID bson.ObjectID, amount float64, method, ref string) (*WalletTransaction, error) {
+	if amount <= 0 {
+		return nil, &apperrors.AppError{Code: "BAD_REQUEST", Message: "top-up amount must be positive", Err: apperrors.ErrBadRequest}
+	}
+	balance, err := s.repo.Credit(ctx, userID, amount)
+	if err != nil {
+		return nil, err
+	}
+	tx := &WalletTransaction{
+		UserID:       userID,
+		Type:         TxTypeTopUp,
+		Amount:       amount,
+		BalanceAfter: balance,
+		Method:       method,
+		Ref:          ref,
+		CreatedAt:    time.Now().UTC(),
+	}
+	if err := s.repo.Create(ctx, tx); err != nil {
+		if _, undoErr := s.repo.Debit(ctx, userID, amount); undoErr != nil {
+			slog.Error("wallet: top-up ledger insert failed AND reversal failed — balance credited without a ledger row",
+				"user", userID.Hex(), "amount", amount, "method", method, "ref", ref, "ledgerError", err, "revertError", undoErr)
+		}
+		return nil, err
+	}
+	return tx, nil
+}

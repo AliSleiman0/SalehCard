@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
+import '../../../../core/network/idempotency.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
+import '../../../payments/presentation/providers.dart';
 import '../../domain/entities/wallet.dart';
 import '../providers.dart';
 
@@ -68,6 +71,19 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       ).showSnackBar(SnackBar(content: Text(l10n.topUpAmount)));
       return;
     }
+
+    // USDT is an on-chain, auto-confirming top-up when the backend has it
+    // enabled: create a deposit intent and hand off to the waiting screen.
+    // (If it is disabled, fall through to the manual out-of-band request.)
+    if (_channel == 'usdt') {
+      final config = await ref.read(paymentConfigProvider.future);
+      if (!mounted) return;
+      if (config.usdtEnabled) {
+        await _submitUsdtIntent(amount, l10n);
+        return;
+      }
+    }
+
     final req = await ref
         .read(topUpControllerProvider.notifier)
         .submit(
@@ -97,6 +113,28 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     }
   }
 
+  /// Creates an on-chain USDT top-up intent and pushes the deposit screen.
+  Future<void> _submitUsdtIntent(double amount, AppLocalizations l10n) async {
+    final intent = await ref
+        .read(createTopUpIntentControllerProvider.notifier)
+        .submit(amount, idempotencyKey: newIdempotencyKey());
+    if (!mounted) return;
+    if (intent != null) {
+      context.push('/payments/usdt-deposit', extra: intent);
+    } else {
+      final failure = ref.read(createTopUpIntentControllerProvider).failure;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            failure?.message.isNotEmpty == true
+                ? failure!.message
+                : l10n.paymentFailed,
+          ),
+        ),
+      );
+    }
+  }
+
   /// Pull-to-refresh for the request history: an admin approval moves both the
   /// request status and the wallet balance, so refresh both.
   Future<void> _refreshRequests() async {
@@ -109,7 +147,8 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
-    final submitting = ref.watch(topUpControllerProvider).submitting;
+    final submitting = ref.watch(topUpControllerProvider).submitting ||
+        ref.watch(createTopUpIntentControllerProvider).submitting;
     final requestsAsync = ref.watch(topUpRequestsProvider);
     final amount = _amount;
 

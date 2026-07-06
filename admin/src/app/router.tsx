@@ -19,6 +19,7 @@ const UserDetailPage = lazy(() => import('@/features/users/pages/UserDetailPage'
 // const ResellerDetailPage = lazy(() => import('@/features/resellers/pages/ResellerDetailPage'))
 const FinancePage = lazy(() => import('@/features/finance/pages/FinancePage'))
 const TopupsPage = lazy(() => import('@/features/topups/pages/TopupsPage'))
+const PaymentsPage = lazy(() => import('@/features/payments/pages/PaymentsPage'))
 const PromoListPage = lazy(() => import('@/features/promos/pages/PromoListPage'))
 const PromoEditPage = lazy(() => import('@/features/promos/pages/PromoEditPage'))
 const OffersListPage = lazy(() => import('@/features/offers/pages/OffersListPage'))
@@ -56,6 +57,7 @@ export default function AppRouter() {
         {/* <Route path="/resellers/:id" element={<ResellerDetailPage />} /> */}
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/topups" element={<TopupsPage />} />
+        <Route path="/payments" element={<PaymentsPage />} />
         <Route path="/promos" element={<PromoListPage />} />
         <Route path="/promos/new" element={<PromoEditPage />} />
         <Route path="/promos/:id/edit" element={<PromoEditPage />} />

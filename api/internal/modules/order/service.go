@@ -11,6 +11,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/payment"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
@@ -23,6 +24,16 @@ import (
 // badRequest builds a 400-class AppError with a machine code.
 func badRequest(msg string) error {
 	return &apperrors.AppError{Code: "BAD_REQUEST", Message: msg, Err: apperrors.ErrBadRequest}
+}
+
+// unavailablePaymentMethod is the shared rejection for a payment method whose
+// backing gateway/provider is not configured.
+func unavailablePaymentMethod() error {
+	return &apperrors.AppError{
+		Code:    "PAYMENT_METHOD_UNAVAILABLE",
+		Message: "this payment method is not available — top up your wallet to purchase",
+		Err:     apperrors.ErrBadRequest,
+	}
 }
 
 // ErrKYCRequired rejects checkout for users without an approved KYC
@@ -53,6 +64,19 @@ type loyaltyAwarder interface {
 	Award(ctx context.Context, userID bson.ObjectID, orderTotal float64)
 }
 
+// usdtIntents is the slice of the payment module the order service needs for
+// on-chain USDT checkout: create a payment intent for a placed order, and let
+// the handler re-read the live intent (deposit address/amount) to attach it to
+// the order response. nil (or Enabled()==false) means USDT checkout is off, so
+// the usdt method is rejected exactly like an unconfigured gateway. The reverse
+// direction — the watcher fulfilling a paid order — is the payment.OrderSettler
+// interface, which *OrderService implements (FulfillPaidOrder/FailUnpaidOrder).
+type usdtIntents interface {
+	Enabled() bool
+	CreateOrderIntent(ctx context.Context, userID, orderID bson.ObjectID, amountUSD float64) (*payment.Intent, error)
+	GetActiveOrderIntent(ctx context.Context, orderID bson.ObjectID) (*payment.Intent, error)
+}
+
 // Service defines the business-logic operations for the order domain.
 type Service interface {
 	PlaceOrder(ctx context.Context, userID bson.ObjectID, isReseller bool, idempotencyKey string, input PlaceOrderInput) (*Order, error)
@@ -73,6 +97,7 @@ type OrderService struct {
 	offers    offer.Service
 	providers *provider.Registry
 	payments  *payments.Registry
+	usdt      usdtIntents
 	kyc       kycChecker
 	margins   resellerPricing
 	ntf       notification.Notifier
@@ -80,11 +105,12 @@ type OrderService struct {
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
-// inventory, wallet, promo, offers, upstream-provider registry, KYC gate,
-// reseller-margin lookup, and notifier it depends on. A nil margins port
-// disables tier-margin pricing (resellers fall back to per-variant overrides).
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, pay *payments.Registry, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier, loyalty loyaltyAwarder) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, payments: pay, kyc: kycGate, margins: margins, ntf: ntf, loyalty: loyalty}
+// inventory, wallet, promo, offers, upstream-provider registry, USDT payment
+// intents, KYC gate, reseller-margin lookup, and notifier it depends on. A nil
+// margins port disables tier-margin pricing (resellers fall back to per-variant
+// overrides); a nil usdt port disables on-chain USDT checkout.
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, pay *payments.Registry, usdt usdtIntents, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier, loyalty loyaltyAwarder) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, payments: pay, usdt: usdt, kyc: kycGate, margins: margins, ntf: ntf, loyalty: loyalty}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -114,15 +140,18 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	}
 	switch input.PaymentMethod {
 	case PaymentMethodWallet:
-	case PaymentMethodCard, PaymentMethodUSDT:
-		// Card/USDT are accepted only when a gateway provider is configured
+	case PaymentMethodUSDT:
+		// On-chain USDT is accepted only when the payment module is enabled
+		// (USDT_XPUB set). It settles asynchronously — see the intent branch
+		// after the order is persisted.
+		if s.usdt == nil || !s.usdt.Enabled() {
+			return nil, unavailablePaymentMethod()
+		}
+	case PaymentMethodCard:
+		// Card is accepted only when a gateway provider is configured
 		// (PAYMENT_PROVIDER); otherwise checkout stays wallet-only.
 		if s.payments == nil || !s.payments.Enabled(string(input.PaymentMethod)) {
-			return nil, &apperrors.AppError{
-				Code:    "PAYMENT_METHOD_UNAVAILABLE",
-				Message: "this payment method is not available — top up your wallet to purchase",
-				Err:     apperrors.ErrBadRequest,
-			}
+			return nil, unavailablePaymentMethod()
 		}
 	default:
 		return nil, &apperrors.AppError{
@@ -275,8 +304,22 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		return nil, err
 	}
 
-	// 6. Charge. Only wallet reaches this point (validated above); the guard
-	//    stays so a zero-total order simply skips the debit.
+	// 5b. On-chain USDT: no synchronous charge and no immediate fulfillment.
+	//     Create the deposit intent and return the still-pending order; the
+	//     payment module's watcher confirms the transfer and calls back into
+	//     FulfillPaidOrder, which runs the same dispatch below with charged=true.
+	//     Promo redemption is likewise deferred to fulfillment. (A zero-total
+	//     order needs no payment, so it falls through to instant fulfillment.)
+	if order.PaymentMethod == PaymentMethodUSDT && total > 0 {
+		if _, err := s.usdt.CreateOrderIntent(ctx, userID, order.ID, total); err != nil {
+			_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
+			return nil, err
+		}
+		return order, nil
+	}
+
+	// 6. Charge. Only wallet reaches this point (card via the gateway, and
+	//    wallet); the guard stays so a zero-total order simply skips the debit.
 	charged := false
 	if total > 0 {
 		switch order.PaymentMethod {
@@ -287,8 +330,8 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			}
 			charged = true
 		default:
-			// Card/USDT via the configured gateway (validated enabled in step 1).
-			// The returned transaction id is persisted so refund/compensation can
+			// Card via the configured gateway (validated enabled in step 1). The
+			// returned transaction id is persisted so refund/compensation can
 			// reverse the charge.
 			prov, _ := s.payments.For(string(order.PaymentMethod))
 			txn, err := prov.ProcessPayment(ctx, total, currency, order.ID.Hex())
@@ -311,7 +354,15 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		}
 	}
 
-	// 7. Dispatch on the order's fulfillment mode (spec §2.2).
+	return s.dispatchFulfillment(ctx, userID, order, charged)
+}
+
+// dispatchFulfillment routes an order down one of the four fulfillment paths
+// keyed on its resolved mode (spec §2.2). Shared by PlaceOrder (wallet/card,
+// synchronously) and FulfillPaidOrder (usdt, after the on-chain payment
+// confirms). `charged` tells the compensation path whether a wallet/gateway
+// charge must be reversed on failure.
+func (s *OrderService) dispatchFulfillment(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
 	switch resolveOrderMode(order.Items) {
 	case product.FulfillmentModeInventory:
 		return s.fulfillInventory(ctx, userID, order, charged)
@@ -493,6 +544,78 @@ func (s *OrderService) compensate(ctx context.Context, userID bson.ObjectID, ord
 		}
 	}
 	_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
+}
+
+// FulfillPaidOrder fulfills a USDT order whose on-chain payment has confirmed.
+// It implements payment.OrderSettler and is called by the payment watcher, so
+// it is idempotent and safe to retry:
+//   - It first claims pending → processing atomically (TransitionStatus). That
+//     claim is the race guard against the intent-expiry sweep: whichever of the
+//     two transitions the order wins, the other sees ErrConflict.
+//   - ErrConflict is resolved by re-reading: an order already processing or
+//     completed is treated as done (nil, a no-op retry); an order that the
+//     sweep already failed returns payment.ErrOrderNotPayable, telling the
+//     payment module to credit the paid amount to the wallet instead.
+//   - Fulfillment runs with charged=false: there is nothing to reverse
+//     on-chain, so a failure (e.g. an out-of-stock code pool) marks the order
+//     failed and returns ErrOrderNotPayable, again routing the money to the
+//     wallet (once, keyed on the intent ref) rather than stranding it.
+func (s *OrderService) FulfillPaidOrder(ctx context.Context, orderID bson.ObjectID, paidUSD float64, txRef string) error {
+	_, err := s.repo.TransitionStatus(ctx, orderID,
+		[]OrderStatus{OrderStatusPending}, OrderStatusProcessing,
+		TimelineEvent{Status: "payment_confirmed", Note: "USDT payment confirmed on-chain", At: time.Now().UTC()},
+		bson.D{{Key: "paymentRef", Value: txRef}},
+	)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrConflict) {
+			o, ferr := s.repo.FindByID(ctx, orderID)
+			if ferr != nil {
+				return ferr
+			}
+			if o.Status == OrderStatusFailed {
+				return payment.ErrOrderNotPayable // expiry sweep won → credit the wallet
+			}
+			return nil // already processing/completed → idempotent no-op
+		}
+		return err
+	}
+
+	o, err := s.repo.FindByID(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	o.PaymentRef = txRef
+	if _, ferr := s.dispatchFulfillment(ctx, o.UserID, o, false); ferr != nil {
+		// dispatchFulfillment already released any claimed codes and marked the
+		// order failed (compensate). The on-chain money is real, so hand it to
+		// the payment module to credit to the wallet rather than retrying.
+		slog.Warn("order: usdt fulfillment failed after payment — crediting wallet",
+			"order", orderID.Hex(), "error", ferr)
+		return payment.ErrOrderNotPayable
+	}
+
+	// Promo redemption was deferred from PlaceOrder (best-effort).
+	if o.PromoCode != "" {
+		if rerr := s.promo.Redeem(ctx, o.PromoCode); rerr != nil {
+			slog.Warn("promo: redeem failed after usdt fulfillment", "code", o.PromoCode, "order", orderID.Hex(), "error", rerr)
+		}
+	}
+	return nil
+}
+
+// FailUnpaidOrder marks a pending USDT order failed (expiry or underpayment).
+// Implements payment.OrderSettler; idempotent — an order that already moved on
+// (fulfilled, or failed by a prior call) is a no-op.
+func (s *OrderService) FailUnpaidOrder(ctx context.Context, orderID bson.ObjectID, reason string) error {
+	_, err := s.repo.TransitionStatus(ctx, orderID,
+		[]OrderStatus{OrderStatusPending}, OrderStatusFailed,
+		TimelineEvent{Status: "failed", Note: reason, At: time.Now().UTC()},
+		nil,
+	)
+	if errors.Is(err, apperrors.ErrConflict) || errors.Is(err, apperrors.ErrNotFound) {
+		return nil
+	}
+	return err
 }
 
 // GetOrder returns an order, enforcing that it belongs to userID (a foreign

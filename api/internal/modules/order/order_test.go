@@ -338,7 +338,7 @@ func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc 
 		byID[p.ID.Hex()] = p
 	}
 	prodSvc := &fakeProductSvc{byID: byID}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), payments.New(payments.Config{}), &fakeKycGate{approved: true}, nil, notification.Nop{}, &fakeAwarder{})
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), payments.New(payments.Config{}), nil, &fakeKycGate{approved: true}, nil, notification.Nop{}, &fakeAwarder{})
 	return svc, repo
 }
 

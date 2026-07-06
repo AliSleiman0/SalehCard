@@ -16,9 +16,9 @@ class OrderRepositoryImpl implements OrderRepository {
     required String idempotencyKey,
   }) async {
     try {
-      final dto =
+      final order =
           await _remote.placeOrder(input, idempotencyKey: idempotencyKey);
-      return Right(dto.toEntity());
+      return Right(order);
     } catch (error) {
       return Left(mapError(error));
     }
