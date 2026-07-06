@@ -299,11 +299,13 @@ func apiProduct(price float64, providerID *int) *product.Product {
 }
 
 func bridgeProduct(price float64) *product.Product {
+	face := price
 	return &product.Product{
 		ID:              bson.NewObjectID(),
 		FulfillmentType: product.FulfillmentCredit,
 		FulfillmentMode: product.FulfillmentModeBridgeDevice,
-		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "Touch $5", Price: price}},
+		Bridge:          &product.BridgeSpec{Provider: product.BridgeProviderTouch, Method: product.BridgeMethodTransferCredit},
+		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "Touch $5", Price: price, FaceValue: &face}},
 	}
 }
 
@@ -734,8 +736,10 @@ func TestPlaceOrder_BridgeModeParks(t *testing.T) {
 	walletSvc := &fakeWalletSvc{balance: 100}
 	svc, _ := newSUT(p, codeSvc, walletSvc)
 
+	item := itemFor(p, 1)
+	item.PlayerID = "71123456"
 	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
-		Items:         []PlaceOrderItemInput{itemFor(p, 1)},
+		Items:         []PlaceOrderItemInput{item},
 		PaymentMethod: PaymentMethodWallet,
 	})
 	require.NoError(t, err)

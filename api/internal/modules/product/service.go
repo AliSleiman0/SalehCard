@@ -162,13 +162,72 @@ func fromPrice(p *Product) float64 {
 func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Product, error) {
 	// TODO: validate that at least one variant is supplied.
 	// TODO: validate that image URLs are reachable (async background job).
+	mode := in.FulfillmentMode
+	if mode == "" {
+		mode = DeriveMode(in.FulfillmentType)
+	}
+	if err := validateBridge(mode, in.Bridge, in.Variants); err != nil {
+		return nil, err
+	}
 	return s.repo.Create(ctx, in)
 }
 
 // Update applies a partial update to the product identified by id.
 func (s *ProductService) Update(ctx context.Context, id string, in UpdateProductInput) (*Product, error) {
 	// TODO: emit a product-updated event so dependent read-models can refresh.
+	// Validate bridge config when it (or a switch to bridge mode) is part of this
+	// update. A partial update that touches neither the mode nor the spec skips
+	// this — the admin editor always sends mode+spec+variants together on save.
+	if in.FulfillmentMode != nil && *in.FulfillmentMode == FulfillmentModeBridgeDevice {
+		if err := validateBridge(FulfillmentModeBridgeDevice, in.Bridge, in.Variants); err != nil {
+			return nil, err
+		}
+	} else if in.Bridge != nil && in.Bridge.Provider != "" {
+		if !in.Bridge.Valid() {
+			return nil, badRequest("bridge fulfillment requires a valid operator (touch|alfa) and method (transfer_credit|recharge_line)")
+		}
+		if in.Bridge.Method == BridgeMethodTransferCredit && in.Variants != nil {
+			if err := validateFaceValues(in.Variants); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return s.repo.Update(ctx, id, in)
+}
+
+// badRequest builds a 400-class validation error with a machine code.
+func badRequest(msg string) error {
+	return &apperrors.AppError{Code: "BAD_REQUEST", Message: msg, Err: apperrors.ErrBadRequest}
+}
+
+// validateBridge enforces the bridge_device invariants on a create/full update:
+// a bridge product must carry a valid BridgeSpec, and a transfer_credit product's
+// every variant must have a positive face value (the amount transferred). A
+// non-bridge product carrying a stray spec is rejected so the two never drift.
+func validateBridge(mode FulfillmentMode, spec *BridgeSpec, variants []Variant) error {
+	if mode != FulfillmentModeBridgeDevice {
+		if spec != nil && spec.Provider != "" {
+			return badRequest("only bridge_device products may carry a bridge spec")
+		}
+		return nil
+	}
+	if spec == nil || !spec.Valid() {
+		return badRequest("bridge fulfillment requires a valid operator (touch|alfa) and method (transfer_credit|recharge_line)")
+	}
+	if spec.Method == BridgeMethodTransferCredit {
+		return validateFaceValues(variants)
+	}
+	return nil
+}
+
+// validateFaceValues requires every variant to carry a positive face value.
+func validateFaceValues(variants []Variant) error {
+	for _, v := range variants {
+		if v.FaceValue == nil || *v.FaceValue <= 0 {
+			return badRequest("each recharge denomination needs a positive face value")
+		}
+	}
+	return nil
 }
 
 // Delete removes the product identified by id.

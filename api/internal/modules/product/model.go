@@ -59,10 +59,56 @@ type Variant struct {
 	Denomination  string        `bson:"denomination"            json:"denomination"`
 	Price         float64       `bson:"price"                   json:"price"`
 	ResellerPrice *float64      `bson:"resellerPrice,omitempty" json:"resellerPrice,omitempty"`
+	// FaceValue is the amount the bridge transfers on a transfer_credit recharge
+	// (e.g. a "$5 Alfa recharge" variant has FaceValue 5). It is the operator
+	// credit moved to the customer's line, distinct from Price (what the customer
+	// pays). Only meaningful for bridge_device products with the transfer_credit
+	// method; nil otherwise.
+	FaceValue *float64 `bson:"faceValue,omitempty" json:"faceValue,omitempty"`
 	// OfferPrice is the discounted unit price when a live offer applies. It is
 	// transient (never persisted) and only set on catalog reads. A pointer, not
 	// a bare float, so a legitimate 0 sale price still serializes.
 	OfferPrice *float64 `bson:"-" json:"offerPrice,omitempty"`
+}
+
+// BridgeProvider is the Lebanese mobile operator a bridge_device recharge targets.
+type BridgeProvider string
+
+const (
+	BridgeProviderTouch BridgeProvider = "touch" // MTC Touch
+	BridgeProviderAlfa  BridgeProvider = "alfa"
+)
+
+// BridgeMethod is how a bridge_device recharge is delivered on the SIM: a credit
+// transfer from the SIM's own prepaid balance (by amount), or applying a
+// scratch-card code (claimed from the code inventory) to the customer's line.
+type BridgeMethod string
+
+const (
+	BridgeMethodTransferCredit BridgeMethod = "transfer_credit"
+	BridgeMethodRechargeLine   BridgeMethod = "recharge_line"
+)
+
+// BridgeSpec is the bridge_device fulfillment configuration on a product: which
+// operator and which delivery method. Present only on bridge_device products.
+type BridgeSpec struct {
+	Provider BridgeProvider `bson:"provider" json:"provider"`
+	Method   BridgeMethod   `bson:"method"   json:"method"`
+}
+
+// Valid reports whether the spec names a supported operator and method.
+func (b BridgeSpec) Valid() bool {
+	switch b.Provider {
+	case BridgeProviderTouch, BridgeProviderAlfa:
+	default:
+		return false
+	}
+	switch b.Method {
+	case BridgeMethodTransferCredit, BridgeMethodRechargeLine:
+		return true
+	default:
+		return false
+	}
 }
 
 // OfferInfo is the product-level live-offer summary attached to catalog reads.
@@ -192,8 +238,11 @@ type Product struct {
 	AmountConstraints *AmountConstraints `bson:"amountConstraints,omitempty" json:"amountConstraints,omitempty"`
 	InputFields       []InputField       `bson:"inputFields,omitempty"       json:"inputFields,omitempty"`
 	Verification      *Verification      `bson:"verification,omitempty"      json:"verification,omitempty"`
-	Stock             int                `bson:"stock"     json:"stock"`
-	Available         bool               `bson:"available" json:"available"`
+	// Bridge configures Lebanese mobile-recharge fulfillment for bridge_device
+	// products (operator + delivery method); nil for all other products.
+	Bridge    *BridgeSpec `bson:"bridge,omitempty"            json:"bridge,omitempty"`
+	Stock     int         `bson:"stock"     json:"stock"`
+	Available bool        `bson:"available" json:"available"`
 	// Migration: status fidelity + ordering + review markers.
 	Status    string         `bson:"status,omitempty"    json:"status,omitempty"`
 	SortOrder int            `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
@@ -259,6 +308,8 @@ type CreateProductInput struct {
 	FulfillmentType     FulfillmentType `json:"fulfillmentType"`
 	FulfillmentMode     FulfillmentMode `json:"fulfillmentMode,omitempty"`
 	FulfillmentProvider *int            `json:"fulfillmentProvider,omitempty"`
+	Bridge              *BridgeSpec     `json:"bridge,omitempty"`
+	InputFields         []InputField    `json:"inputFields,omitempty"`
 	Stock               int             `json:"stock"`
 	Available           bool            `json:"available"`
 	Ratings             RatingsSummary  `json:"ratings"`
@@ -284,6 +335,10 @@ type UpdateProductInput struct {
 	// with a non-empty App sets it; a non-nil value with an empty App clears it
 	// (disables verification). Nil leaves it unchanged.
 	Verification *Verification `json:"verification,omitempty"`
+	// Bridge configures bridge_device recharge fulfillment. A non-nil value with a
+	// non-empty Provider sets it; a non-nil value with an empty Provider clears it
+	// (product is no longer bridge-fulfilled). Nil leaves it unchanged.
+	Bridge *BridgeSpec `json:"bridge,omitempty"`
 }
 
 // ListFilter holds the optional query filters for listing products.

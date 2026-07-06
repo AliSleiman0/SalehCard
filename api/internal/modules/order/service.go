@@ -236,6 +236,27 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		if mode == product.FulfillmentModeInventory {
 			codeNeed[p.ID.Hex()] += in.Qty
 		}
+		// Bridge (Lebanese mobile recharge) lines carry hard constraints the
+		// device engine relies on: exactly one line, quantity one (a partial
+		// multi-unit recharge has no clean meaning), a dialable mobile number, and
+		// — for transfer_credit — a positive face value to transfer.
+		if mode == product.FulfillmentModeBridgeDevice {
+			if len(input.Items) != 1 {
+				return nil, badRequest("a mobile recharge must be purchased on its own")
+			}
+			if in.Qty != 1 {
+				return nil, badRequest("a mobile recharge must have quantity 1")
+			}
+			if p.Bridge == nil || !p.Bridge.Valid() {
+				return nil, badRequest("this product is not configured for mobile recharge")
+			}
+			if !validLebaneseMobile(normalizeLebanesePhone(bridgePhone(in))) {
+				return nil, badRequest("a valid Lebanese mobile number is required")
+			}
+			if p.Bridge.Method == product.BridgeMethodTransferCredit && (variant.FaceValue == nil || *variant.FaceValue <= 0) {
+				return nil, badRequest("this recharge denomination is missing its amount")
+			}
+		}
 		items = append(items, OrderItem{
 			ProductID:           p.ID,
 			VariantID:           variant.ID,

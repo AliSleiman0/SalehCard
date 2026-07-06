@@ -327,6 +327,8 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		FulfillmentType:     in.FulfillmentType,
 		FulfillmentMode:     mode,
 		FulfillmentProvider: in.FulfillmentProvider,
+		InputFields:         in.InputFields,
+		Bridge:              in.Bridge,
 		Stock:               in.Stock,
 		Available:           in.Available,
 		Ratings:             in.Ratings,
@@ -516,6 +518,14 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 			set = append(set, bson.E{Key: "verification", Value: nil})
 		} else {
 			set = append(set, bson.E{Key: "verification", Value: in.Verification})
+		}
+	}
+	if in.Bridge != nil {
+		// An empty Provider means "no longer bridge-fulfilled" → clear the spec.
+		if in.Bridge.Provider == "" {
+			set = append(set, bson.E{Key: "bridge", Value: nil})
+		} else {
+			set = append(set, bson.E{Key: "bridge", Value: in.Bridge})
 		}
 	}
 
