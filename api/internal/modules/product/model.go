@@ -237,6 +237,17 @@ type UpsertProductInput struct {
 	Flags                  []string
 }
 
+// normalize repairs invariants JSON consumers rely on: Images is always an
+// array. Legacy-import documents can store images as null/absent, which decodes
+// to a nil slice and would marshal as JSON null — crashing clients that index
+// images[0] (the admin product list did exactly that). Call after every decode
+// (and before insert) in the repository.
+func (p *Product) normalize() {
+	if p.Images == nil {
+		p.Images = []string{}
+	}
+}
+
 // CreateProductInput carries all the data required to create a new product.
 type CreateProductInput struct {
 	Title               I18nString      `json:"title"`
