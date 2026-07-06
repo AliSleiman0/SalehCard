@@ -1,5 +1,8 @@
 # Stage 1: Build
-FROM golang:1.22-alpine AS builder
+# Must satisfy go.mod's `go` directive (1.23.2 since the USDT/tron deps) — the
+# official Go images set GOTOOLCHAIN=local, so an older image fails
+# `go mod download` instead of auto-downloading the required toolchain.
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
