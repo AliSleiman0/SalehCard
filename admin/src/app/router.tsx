@@ -20,6 +20,7 @@ const UserDetailPage = lazy(() => import('@/features/users/pages/UserDetailPage'
 const FinancePage = lazy(() => import('@/features/finance/pages/FinancePage'))
 const TopupsPage = lazy(() => import('@/features/topups/pages/TopupsPage'))
 const PaymentsPage = lazy(() => import('@/features/payments/pages/PaymentsPage'))
+const BridgePage = lazy(() => import('@/features/bridge/pages/BridgePage'))
 const PromoListPage = lazy(() => import('@/features/promos/pages/PromoListPage'))
 const PromoEditPage = lazy(() => import('@/features/promos/pages/PromoEditPage'))
 const OffersListPage = lazy(() => import('@/features/offers/pages/OffersListPage'))
@@ -50,6 +51,7 @@ export default function AppRouter() {
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/orders" element={<OrderListPage />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/bridge" element={<BridgePage />} />
         <Route path="/users" element={<UserListPage />} />
         <Route path="/users/:id" element={<UserDetailPage />} />
         {/* Reseller routes hidden for now — see the commented imports above. */}

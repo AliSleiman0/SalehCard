@@ -28,6 +28,7 @@ export const NAV: NavGroup[] = [
     group: 'grp_operations',
     items: [
       { to: '/orders', icon: 'bag', label: 'nav_orders' },
+      { to: '/bridge', icon: 'server', label: 'nav_bridge' },
       { to: '/users', icon: 'users', label: 'nav_users' },
       // Reseller management is hidden for now. Re-enable this item (and the
       // /resellers routes in router.tsx + the "Reseller" role option in

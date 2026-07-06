@@ -30,6 +30,18 @@ export interface Variant {
   denomination: string
   price: number
   resellerPrice?: number
+  /** Amount the bridge transfers on a transfer_credit recharge (bridge products). */
+  faceValue?: number
+}
+
+/** How an order is executed (orthogonal to fulfillmentType). Only bridge_device
+ *  is surfaced in the admin editor; the rest are backend-derived. */
+export type FulfillmentMode = 'api' | 'manual_operator' | 'inventory' | 'bridge_device'
+
+/** Lebanese mobile-recharge fulfillment config (bridge_device products). */
+export interface BridgeSpec {
+  provider: 'touch' | 'alfa'
+  method: 'transfer_credit' | 'recharge_line'
 }
 
 export interface RatingsSummary {
@@ -69,6 +81,8 @@ export interface Product {
   thumbnail?: string
   variants: Variant[]
   fulfillmentType: FulfillmentType
+  fulfillmentMode?: FulfillmentMode
+  bridge?: BridgeSpec
   stock: number
   available: boolean
   ratings: RatingsSummary

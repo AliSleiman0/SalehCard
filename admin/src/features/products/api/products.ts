@@ -1,5 +1,14 @@
 import { apiClient } from '@/lib/api-client'
-import type { ApiResponse, PaginationMeta, Product, FulfillmentType, InputField, Verification } from '@/types'
+import type {
+  ApiResponse,
+  PaginationMeta,
+  Product,
+  FulfillmentType,
+  FulfillmentMode,
+  BridgeSpec,
+  InputField,
+  Verification,
+} from '@/types'
 
 export interface ProductListParams {
   page?: number
@@ -17,8 +26,15 @@ export interface ProductInput {
   category: string
   images: string[]
   thumbnail?: string
-  variants: { denomination: string; price: number; resellerPrice?: number }[]
+  variants: { denomination: string; price: number; resellerPrice?: number; faceValue?: number }[]
   fulfillmentType: FulfillmentType
+  // Execution mode. Sent as 'bridge_device' for mobile-recharge products (and
+  // 'manual_operator' to turn a former bridge product back into plain credit);
+  // omitted otherwise so the backend derives it.
+  fulfillmentMode?: FulfillmentMode
+  // Bridge recharge config. A non-empty `provider` sets it; `{provider:'',...}`
+  // clears it. Omitted = leave unchanged.
+  bridge?: BridgeSpec | { provider: ''; method: '' }
   stock: number
   available: boolean
   inputFields?: InputField[]

@@ -14,6 +14,7 @@ interface VariantRow {
   denomination: string
   price: string
   resellerPrice: string
+  faceValue: string
 }
 
 const FF_OPTIONS: [FfKey, string, string, string, string][] = [
@@ -59,8 +60,15 @@ export default function ProductEditPage() {
   const [active, setActive] = useState(false)
   const [stock, setStock] = useState(0)
   const [variants, setVariants] = useState<VariantRow[]>([
-    { denomination: '', price: '', resellerPrice: '' },
+    { denomination: '', price: '', resellerPrice: '', faceValue: '' },
   ])
+  // Mobile-recharge (bridge) delivery — a sub-mode of account_credit. When on,
+  // the product fulfills via the Android bridge device instead of the manual queue.
+  const [bridgeOn, setBridgeOn] = useState(false)
+  const [bridgeProvider, setBridgeProvider] = useState<'touch' | 'alfa'>('touch')
+  const [bridgeMethod, setBridgeMethod] = useState<'transfer_credit' | 'recharge_line'>(
+    'transfer_credit',
+  )
   // Input-field specs are edited labels-only; everything else is preserved as
   // loaded so a save never mangles legacy fulfillment config.
   const [inputFields, setInputFields] = useState<InputField[]>([])
@@ -88,9 +96,16 @@ export default function ProductEditPage() {
             denomination: v.denomination,
             price: String(v.price),
             resellerPrice: v.resellerPrice != null ? String(v.resellerPrice) : '',
+            faceValue: v.faceValue != null ? String(v.faceValue) : '',
           }))
-        : [{ denomination: '', price: '', resellerPrice: '' }]
+        : [{ denomination: '', price: '', resellerPrice: '', faceValue: '' }]
     )
+    const isBridge = p.fulfillmentMode === 'bridge_device'
+    setBridgeOn(isBridge)
+    if (p.bridge) {
+      setBridgeProvider(p.bridge.provider)
+      setBridgeMethod(p.bridge.method)
+    }
     setInputFields(p.inputFields ?? [])
     setVerifyEnabled(!!p.verification)
     setVerifyApp(p.verification?.app ?? '')
@@ -125,6 +140,21 @@ export default function ProductEditPage() {
         : hadVerification
           ? { provider: 0, app: '' }
           : undefined
+
+    // Bridge (mobile recharge) is a sub-mode of account_credit. When enabled we
+    // send fulfillmentMode=bridge_device + the spec, seed a `phone` field if the
+    // ops user didn't add one, and carry each variant's transfer face value. When
+    // it's off but the product used to be a bridge, we send the clear sentinels.
+    const isBridge = ff === 'credit' && bridgeOn
+    const wasBridge = data?.data?.fulfillmentMode === 'bridge_device'
+    let fields = inputFields
+    if (isBridge && !fields.some((f) => f.key === 'phone')) {
+      fields = [
+        ...fields,
+        { key: 'phone', label: { en: 'Mobile number', ar: 'رقم الهاتف' }, type: 'text', sensitive: false },
+      ]
+    }
+
     return {
       title,
       description,
@@ -132,6 +162,11 @@ export default function ProductEditPage() {
       images,
       thumbnail,
       fulfillmentType: toFulfillment(ff),
+      ...(isBridge
+        ? { fulfillmentMode: 'bridge_device' as const, bridge: { provider: bridgeProvider, method: bridgeMethod } }
+        : wasBridge
+          ? { fulfillmentMode: 'manual_operator' as const, bridge: { provider: '' as const, method: '' as const } }
+          : {}),
       available: active,
       stock,
       variants: variants
@@ -140,11 +175,14 @@ export default function ProductEditPage() {
           denomination: v.denomination,
           price: parseFloat(v.price) || 0,
           ...(v.resellerPrice.trim() ? { resellerPrice: parseFloat(v.resellerPrice) || 0 } : {}),
+          ...(isBridge && bridgeMethod === 'transfer_credit' && v.faceValue.trim()
+            ? { faceValue: parseFloat(v.faceValue) || 0 }
+            : {}),
         })),
       // Send the full array whenever the product has fields now or had them
       // before (so removing them all clears the stored config); omit only when
       // there were never any, leaving stored data untouched via the nil-guard.
-      ...(inputFields.length || data?.data?.inputFields?.length ? { inputFields } : {}),
+      ...(fields.length || data?.data?.inputFields?.length ? { inputFields: fields } : {}),
       ...(verification ? { verification } : {}),
     }
   }
@@ -313,7 +351,7 @@ export default function ProductEditPage() {
               <div className="ph-act">
                 <button
                   className="abtn xs"
-                  onClick={() => setVariants([...variants, { denomination: '', price: '', resellerPrice: '' }])}
+                  onClick={() => setVariants([...variants, { denomination: '', price: '', resellerPrice: '', faceValue: '' }])}
                 >
                   <Icon name="plus" size={13} /> Add variant
                 </button>
@@ -326,6 +364,9 @@ export default function ProductEditPage() {
                     <th>{ff === 'credit' ? 'Denomination' : 'Face value'}</th>
                     <th>Customer price</th>
                     <th>Reseller price</th>
+                    {ff === 'credit' && bridgeOn && bridgeMethod === 'transfer_credit' && (
+                      <th>Transfer amount</th>
+                    )}
                     <th>Margin</th>
                     <th></th>
                   </tr>
@@ -369,6 +410,21 @@ export default function ProductEditPage() {
                           }}
                         />
                       </td>
+                      {ff === 'credit' && bridgeOn && bridgeMethod === 'transfer_credit' && (
+                        <td>
+                          <input
+                            className="afield"
+                            style={{ padding: '7px 10px', width: 100 }}
+                            value={v.faceValue}
+                            placeholder="5"
+                            onChange={(e) => {
+                              const next = [...variants]
+                              next[i] = { ...v, faceValue: e.target.value }
+                              setVariants(next)
+                            }}
+                          />
+                        </td>
+                      )}
                       <td>
                         <span className="st st-ok" style={{ fontSize: 11 }}>
                           {margin(v)}%
@@ -542,6 +598,69 @@ export default function ProductEditPage() {
               <div className="ahint" style={{ marginTop: 0 }}>
                 Customers enter their player/account ID at checkout; top-ups are credited
                 automatically via the provider API.
+              </div>
+
+              {/* Mobile-recharge (bridge) delivery */}
+              <div
+                style={{
+                  marginTop: 14,
+                  paddingTop: 14,
+                  borderTop: '1px solid var(--border)',
+                }}
+              >
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={bridgeOn}
+                    onChange={(e) => setBridgeOn(e.target.checked)}
+                  />
+                  <b style={{ fontSize: 13.5 }}>Deliver via mobile-recharge bridge (Lebanon)</b>
+                </label>
+                <div className="ahint" style={{ margin: '6px 0 0' }}>
+                  Fulfill this top-up automatically on a dual-SIM bridge phone (MTC Touch / Alfa)
+                  instead of the manual queue. Adds a <code>phone</code> field at checkout. Manage
+                  devices under <b>Bridge</b>.
+                </div>
+                {bridgeOn && (
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+                    <div>
+                      <label className="alabel">Operator</label>
+                      <select
+                        className="select"
+                        value={bridgeProvider}
+                        onChange={(e) => setBridgeProvider(e.target.value as 'touch' | 'alfa')}
+                      >
+                        <option value="touch">MTC Touch</option>
+                        <option value="alfa">Alfa</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="alabel">Method</label>
+                      <select
+                        className="select"
+                        value={bridgeMethod}
+                        onChange={(e) =>
+                          setBridgeMethod(e.target.value as 'transfer_credit' | 'recharge_line')
+                        }
+                      >
+                        <option value="transfer_credit">Credit transfer (by amount)</option>
+                        <option value="recharge_line">Scratch card (from inventory)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {bridgeOn && bridgeMethod === 'transfer_credit' && (
+                  <div className="ahint" style={{ margin: '10px 0 0' }}>
+                    Set each variant's <b>Transfer amount</b> above — the credit sent to the
+                    customer's line (distinct from the price they pay).
+                  </div>
+                )}
+                {bridgeOn && bridgeMethod === 'recharge_line' && (
+                  <div className="ahint" style={{ margin: '10px 0 0' }}>
+                    Scratch-card codes are claimed from this product's code <b>Inventory</b> — upload
+                    codes there, one applied per order.
+                  </div>
+                )}
               </div>
             </div>
           )}
