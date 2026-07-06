@@ -76,7 +76,7 @@ class DynamicInputField extends StatelessWidget {
       input = TextField(
         controller: controller,
         obscureText: field.sensitive,
-        keyboardType: _keyboardType(field.type),
+        keyboardType: _keyboardType(field.type, field.key),
         onChanged: onChanged,
         style: TextStyle(fontSize: 15, color: colors.text),
         cursorColor: AppTokens.brand1,
@@ -138,7 +138,8 @@ class DynamicInputField extends StatelessWidget {
     );
   }
 
-  TextInputType _keyboardType(String type) {
+  TextInputType _keyboardType(String type, String key) {
+    if (key == 'phone') return TextInputType.phone;
     switch (type) {
       case 'amount':
         return const TextInputType.numberWithOptions(decimal: true);

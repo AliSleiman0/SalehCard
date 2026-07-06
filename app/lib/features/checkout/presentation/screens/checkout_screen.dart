@@ -251,8 +251,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (product == null || product.fulfillmentType == 'code') continue;
       for (final field in product.inputFields) {
         final key = '${item.key}|${field.key}';
-        if (_valueFor(key, field).trim().isEmpty) {
+        final value = _valueFor(key, field).trim();
+        if (value.isEmpty) {
           errors[key] = l10n.fieldRequired;
+        } else if (field.key == 'phone' && !_isValidLebaneseMobile(value)) {
+          // Bridge (mobile recharge) products collect the target number in a
+          // 'phone' field — validate it client-side so an obvious typo is caught
+          // before the order is placed (the server re-validates regardless).
+          errors[key] = l10n.invalidLebanesePhone;
         }
       }
     }
@@ -327,6 +333,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         context.pushReplacement('/order-success/${order.id}', extra: order);
       }
     }
+  }
+
+  /// Validates a Lebanese mobile number, mirroring the API's normalization
+  /// (strip separators / international / trunk prefixes, re-expand the legacy 03
+  /// range) and prefix check (03 / 70 / 71 / 76 / 78 / 79 / 81 + 6 digits).
+  static bool _isValidLebaneseMobile(String raw) {
+    var d = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    if (d.startsWith('00961')) {
+      d = d.substring(5);
+    } else if (d.startsWith('961')) {
+      d = d.substring(3);
+    }
+    if (d.startsWith('0')) d = d.substring(1);
+    if (d.length == 7 && d.startsWith('3')) d = '0$d';
+    return RegExp(r'^(03|70|71|76|78|79|81)\d{6}$').hasMatch(d);
   }
 
   OrderRecipient _buildRecipient(Map<String, String> values) {

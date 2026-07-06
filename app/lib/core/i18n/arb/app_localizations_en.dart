@@ -333,6 +333,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fieldRequired => 'This field is required.';
 
   @override
+  String get invalidLebanesePhone =>
+      'Enter a valid Lebanese mobile number (e.g. 71 123 456).';
+
+  @override
   String get orderCompletedTitle => 'Order completed';
 
   @override

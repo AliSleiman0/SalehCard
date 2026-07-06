@@ -123,6 +123,7 @@
   "applyLabel": "تطبيق",
   "placeOrderCta": "تأكيد الطلب",
   "fieldRequired": "هذا الحقل مطلوب.",
+  "invalidLebanesePhone": "أدخل رقم هاتف محمول لبناني صالح (مثال: 71 123 456).",
 
   "orderCompletedTitle": "تم إتمام الطلب",
   "orderProcessingTitle": "نُكمل طلبك",

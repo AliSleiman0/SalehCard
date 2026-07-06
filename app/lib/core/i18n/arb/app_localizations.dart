@@ -698,6 +698,12 @@ abstract class AppLocalizations {
   /// **'This field is required.'**
   String get fieldRequired;
 
+  /// No description provided for @invalidLebanesePhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid Lebanese mobile number (e.g. 71 123 456).'**
+  String get invalidLebanesePhone;
+
   /// No description provided for @orderCompletedTitle.
   ///
   /// In en, this message translates to:

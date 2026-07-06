@@ -333,6 +333,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get fieldRequired => 'هذا الحقل مطلوب.';
 
   @override
+  String get invalidLebanesePhone =>
+      'أدخل رقم هاتف محمول لبناني صالح (مثال: 71 123 456).';
+
+  @override
   String get orderCompletedTitle => 'تم إتمام الطلب';
 
   @override

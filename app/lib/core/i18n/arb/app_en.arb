@@ -123,6 +123,7 @@
   "applyLabel": "Apply",
   "placeOrderCta": "Place order",
   "fieldRequired": "This field is required.",
+  "invalidLebanesePhone": "Enter a valid Lebanese mobile number (e.g. 71 123 456).",
 
   "orderCompletedTitle": "Order completed",
   "orderProcessingTitle": "We're completing your order",
