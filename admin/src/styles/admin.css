@@ -243,6 +243,8 @@ body { background: var(--bg); overflow: hidden; }
   border-radius: var(--ar-lg); 
 }
 .acard.pad { padding: 18px; }
+/* body padding for cards built as .acard > .panelhead + .pad (e.g. Settings) */
+.pad { padding: 18px; }
 .panelhead {
   display: flex; align-items: center; gap: 12px;
   padding: 15px 18px; border-bottom: 1px solid var(--border);
