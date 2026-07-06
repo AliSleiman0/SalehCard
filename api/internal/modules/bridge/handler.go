@@ -200,13 +200,7 @@ func (h *Handler) PostHeartbeat(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "invalid heartbeat body")
 		return
 	}
-	if err := h.svc.Heartbeat(r.Context(), d, HeartbeatInput{
-		TouchBalance:  body.TouchBalance,
-		TouchValidity: body.TouchValidity,
-		AlfaBalance:   body.AlfaBalance,
-		AlfaValidity:  body.AlfaValidity,
-		AppVersion:    body.AppVersion,
-	}); err != nil {
+	if err := h.svc.Heartbeat(r.Context(), d, HeartbeatInput(body)); err != nil {
 		response.InternalError(w)
 		return
 	}
