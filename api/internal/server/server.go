@@ -14,6 +14,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/bridge"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/category"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/dashboard"
@@ -49,10 +50,16 @@ type Server struct {
 	// watcher is the on-chain USDT payment watcher (nil when USDT payments
 	// are not enabled); main.go runs it alongside the HTTP listener.
 	watcher *payment.Watcher
+	// bridgeReaper requeues stale mobile-bridge command leases (nil when bridge
+	// fulfillment is disabled); main.go runs it alongside the HTTP listener.
+	bridgeReaper *bridge.Reaper
 }
 
 // Watcher returns the USDT payment watcher, or nil when the feature is off.
 func (s *Server) Watcher() *payment.Watcher { return s.watcher }
+
+// BridgeReaper returns the mobile-bridge reaper, or nil when bridge is disabled.
+func (s *Server) BridgeReaper() *bridge.Reaper { return s.bridgeReaper }
 
 // New creates a new Server instance with the provided config and database.
 func New(cfg *config.Config, db *mongo.Database) *Server {
@@ -184,13 +191,24 @@ func (s *Server) Routes() {
 		s.watcher = payment.NewWatcher(paySvc, s.cfg.USDTWatchInterval)
 	}
 
+	// Mobile Bridge (Lebanese recharge automation). Device routes are always
+	// mounted so a provisioned phone can reach config/poll; DispatchOrder and the
+	// reaper are gated on BRIDGE_ENABLED. The order service is handed to the
+	// bridge as its OrderSettler (the device-result completion callback).
+	bridgeReg := bridge.RegisterRoutes(s.router, s.db, s.cfg)
+
 	// Customer orders + wallet + promo validation + review submission +
 	// notification inbox (guarded by AuthRequired). Order takes the payment
-	// service as its USDT-intents port, and we close the loop by handing the
-	// order service back to the payment module as its OrderSettler (the
-	// watcher's fulfillment callback for confirmed on-chain payments).
-	orderSvc := order.RegisterRoutes(s.router, s.db, s.cfg, ntf, paySvc)
+	// service as its USDT-intents port and the bridge service as its recharge
+	// dispatcher, and we close the loop by handing the order service back to the
+	// payment module (OrderSettler for confirmed on-chain payments) and the bridge
+	// module (OrderSettler for confirmed device recharges).
+	orderSvc := order.RegisterRoutes(s.router, s.db, s.cfg, ntf, paySvc, bridgeReg.Service)
 	paySvc.SetOrderSettler(orderSvc)
+	bridgeReg.Service.SetOrderSettler(orderSvc)
+	if bridgeReg.Service.Enabled() {
+		s.bridgeReaper = bridge.NewReaper(bridgeReg.Service, s.cfg.Bridge.ReaperInterval)
+	}
 	wallet.RegisterRoutes(s.router, s.db, s.cfg)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
@@ -221,6 +239,7 @@ func (s *Server) Routes() {
 		audit.RegisterAdminRoutes(r, s.db)
 		settings.RegisterAdminRoutes(r, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider)
 		payment.RegisterAdminRoutes(r, s.db)
+		bridge.RegisterAdminRoutes(r, bridgeReg.Service, bridgeReg.Store, rec)
 	})
 }
 

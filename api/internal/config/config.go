@@ -160,6 +160,44 @@ type Config struct {
 	RateLimitPaymentCreateWindow time.Duration
 	RateLimitPaymentPollMax      int
 	RateLimitPaymentPollWindow   time.Duration
+
+	// Bridge (Lebanese mobile-recharge automation via the Android bridge device).
+	// Off by default: until BRIDGE_ENABLED, recharge orders park for manual
+	// completion exactly as before. See internal/modules/bridge.
+	Bridge BridgeConfig
+}
+
+// BridgeConfig groups the mobile-bridge tunables. The control knobs govern the
+// command lease/reaper lifecycle; the operator block carries the per-network
+// SMS/USSD templates, shortcodes, and fees the device dials with — all
+// env-overridable so a live-SIM calibration never needs an APK rebuild.
+type BridgeConfig struct {
+	Enabled           bool
+	Stub              bool // dev-only auto-succeed; Validate rejects outside development
+	StubDelay         time.Duration
+	LeaseTTL          time.Duration
+	MaxAttempts       int
+	QueueTimeout      time.Duration
+	ReaperInterval    time.Duration
+	PollInterval      time.Duration
+	HeartbeatInterval time.Duration
+	MaxSMSPerHalfHour int
+	SuccessPatterns   []string
+	FailurePatterns   []string
+
+	TouchBalanceUSSD      string
+	AlfaBalanceUSSD       string
+	TouchRechargeTemplate string
+	TouchTransferTemplate string
+	TouchTransferDest     string
+	AlfaRechargeTemplate  string
+	AlfaRechargeDest      string
+	AlfaTransferTemplate  string
+	AlfaTransferDest      string
+	TouchMinBalance       float64
+	AlfaMinBalance        float64
+	TouchMessageFee       float64
+	AlfaMessageFee        float64
 }
 
 // Load reads configuration from environment variables, applying defaults where
@@ -253,7 +291,67 @@ func Load() *Config {
 		RateLimitPaymentCreateWindow: getDuration("RATE_LIMIT_PAYMENT_CREATE_WINDOW", time.Minute),
 		RateLimitPaymentPollMax:      getInt("RATE_LIMIT_PAYMENT_POLL_MAX", 60),
 		RateLimitPaymentPollWindow:   getDuration("RATE_LIMIT_PAYMENT_POLL_WINDOW", time.Minute),
+
+		Bridge: BridgeConfig{
+			Enabled:           getBool("BRIDGE_ENABLED", false),
+			Stub:              getBool("BRIDGE_STUB", false),
+			StubDelay:         getDuration("BRIDGE_STUB_DELAY", 10*time.Second),
+			LeaseTTL:          getDuration("BRIDGE_LEASE_TTL", 3*time.Minute),
+			MaxAttempts:       getInt("BRIDGE_MAX_ATTEMPTS", 3),
+			QueueTimeout:      getDuration("BRIDGE_QUEUE_TIMEOUT", 30*time.Minute),
+			ReaperInterval:    getDuration("BRIDGE_REAPER_INTERVAL", 30*time.Second),
+			PollInterval:      getDuration("BRIDGE_POLL_INTERVAL", 5*time.Second),
+			HeartbeatInterval: getDuration("BRIDGE_HEARTBEAT_INTERVAL", 5*time.Minute),
+			MaxSMSPerHalfHour: getInt("BRIDGE_MAX_SMS_PER_HALF_HOUR", 25),
+			SuccessPatterns:   getCSV("BRIDGE_SUCCESS_PATTERNS", []string{"success", "transferred"}),
+			FailurePatterns:   getCSV("BRIDGE_FAILURE_PATTERNS", []string{"fail", "do not have", "insufficient"}),
+
+			TouchBalanceUSSD:      getEnv("BRIDGE_TOUCH_BALANCE_USSD", "*220#"),
+			AlfaBalanceUSSD:       getEnv("BRIDGE_ALFA_BALANCE_USSD", "*11#"),
+			TouchRechargeTemplate: getEnv("BRIDGE_TOUCH_RECHARGE_TEMPLATE", "*300*{phone}#{card}"),
+			TouchTransferTemplate: getEnv("BRIDGE_TOUCH_TRANSFER_TEMPLATE", "{phone}T{amount}"),
+			TouchTransferDest:     getEnv("BRIDGE_TOUCH_TRANSFER_DEST", "1199"),
+			AlfaRechargeTemplate:  getEnv("BRIDGE_ALFA_RECHARGE_TEMPLATE", "{phone}R{code}"),
+			AlfaRechargeDest:      getEnv("BRIDGE_ALFA_RECHARGE_DEST", "1313"),
+			AlfaTransferTemplate:  getEnv("BRIDGE_ALFA_TRANSFER_TEMPLATE", "{phone}T{amount}"),
+			AlfaTransferDest:      getEnv("BRIDGE_ALFA_TRANSFER_DEST", "1399"),
+			TouchMinBalance:       getFloat("BRIDGE_TOUCH_MIN_BALANCE", 20),
+			AlfaMinBalance:        getFloat("BRIDGE_ALFA_MIN_BALANCE", 20),
+			TouchMessageFee:       getFloat("BRIDGE_TOUCH_MESSAGE_FEE", 0.16),
+			AlfaMessageFee:        getFloat("BRIDGE_ALFA_MESSAGE_FEE", 0.14),
+		},
 	}
+}
+
+// getFloat parses a float from the environment, falling back to defaultVal when
+// unset or unparseable.
+func getFloat(key string, defaultVal float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return defaultVal
+}
+
+// getCSV parses a comma-separated list from the environment (trimming blanks),
+// falling back to defaultVal when unset.
+func getCSV(key string, defaultVal []string) []string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return defaultVal
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return defaultVal
+	}
+	return out
 }
 
 // getBool parses a boolean from the environment ("1"/"true"/"yes", case-
@@ -287,6 +385,9 @@ func (c *Config) Validate() error {
 	}
 	if c.USDTProvider == "trongrid" && c.USDTXPub != "" && c.TronGridAPIKey == "" {
 		return errors.New("TRONGRID_API_KEY is required when USDT payments are enabled with the trongrid provider")
+	}
+	if c.Bridge.Stub {
+		return errors.New("BRIDGE_STUB auto-completes recharge orders without a real device — unset it outside development")
 	}
 	return nil
 }

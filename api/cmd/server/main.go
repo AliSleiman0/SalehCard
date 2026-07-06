@@ -72,6 +72,13 @@ func main() {
 			w.Run(workerCtx)
 		}()
 	}
+	if rp := srv.BridgeReaper(); rp != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			rp.Run(workerCtx)
+		}()
+	}
 
 	// Wait for interrupt signal to gracefully shut down the server.
 	quit := make(chan os.Signal, 1)

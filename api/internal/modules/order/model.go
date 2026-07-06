@@ -94,23 +94,23 @@ type Fulfillment struct {
 
 // Order is the root aggregate for a customer purchase.
 type Order struct {
-	ID             bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	UserID         bson.ObjectID `bson:"userId"        json:"userId"`
-	Items          []OrderItem   `bson:"items"         json:"items"`
-	Subtotal       float64       `bson:"subtotal"      json:"subtotal"`
-	Discount       float64       `bson:"discount,omitempty"  json:"discount,omitempty"`
-	PromoCode      string        `bson:"promoCode,omitempty" json:"promoCode,omitempty"`
-	Total          float64       `bson:"total"         json:"total"`
-	Currency       string        `bson:"currency"      json:"currency"`
-	PaymentMethod  PaymentMethod `bson:"paymentMethod" json:"paymentMethod"`
+	ID            bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID        bson.ObjectID `bson:"userId"        json:"userId"`
+	Items         []OrderItem   `bson:"items"         json:"items"`
+	Subtotal      float64       `bson:"subtotal"      json:"subtotal"`
+	Discount      float64       `bson:"discount,omitempty"  json:"discount,omitempty"`
+	PromoCode     string        `bson:"promoCode,omitempty" json:"promoCode,omitempty"`
+	Total         float64       `bson:"total"         json:"total"`
+	Currency      string        `bson:"currency"      json:"currency"`
+	PaymentMethod PaymentMethod `bson:"paymentMethod" json:"paymentMethod"`
 	// PaymentRef is the gateway transaction id for card/usdt orders (empty for
 	// wallet orders); used to reverse the charge on refund / compensation.
-	PaymentRef     string        `bson:"paymentRef,omitempty" json:"paymentRef,omitempty"`
-	Status         OrderStatus   `bson:"status"        json:"status"`
-	Fulfillment    Fulfillment   `bson:"fulfillment"   json:"fulfillment"`
-	IdempotencyKey string        `bson:"idempotencyKey,omitempty" json:"-"`
-	CreatedAt      time.Time     `bson:"createdAt"     json:"createdAt"`
-	UpdatedAt      time.Time     `bson:"updatedAt"     json:"updatedAt"`
+	PaymentRef     string      `bson:"paymentRef,omitempty" json:"paymentRef,omitempty"`
+	Status         OrderStatus `bson:"status"        json:"status"`
+	Fulfillment    Fulfillment `bson:"fulfillment"   json:"fulfillment"`
+	IdempotencyKey string      `bson:"idempotencyKey,omitempty" json:"-"`
+	CreatedAt      time.Time   `bson:"createdAt"     json:"createdAt"`
+	UpdatedAt      time.Time   `bson:"updatedAt"     json:"updatedAt"`
 }
 
 // PlaceOrderItemInput is a single requested line. The client sends only what it

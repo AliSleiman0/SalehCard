@@ -111,6 +111,15 @@ func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, fr
 	return &before, nil
 }
 
+func (f *fakeOrderRepo) AppendTimelineEvent(_ context.Context, id bson.ObjectID, event TimelineEvent) error {
+	o, ok := f.byID[id]
+	if !ok {
+		return apperrors.ErrNotFound
+	}
+	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	return nil
+}
+
 func (f *fakeOrderRepo) ListAll(_ context.Context, _ OrderFilter, _ pagination.Params) ([]*Order, int64, error) {
 	out := []*Order{}
 	for _, o := range f.byID {
@@ -340,7 +349,7 @@ func newSUTWithOffers(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc 
 		byID[p.ID.Hex()] = p
 	}
 	prodSvc := &fakeProductSvc{byID: byID}
-	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), payments.New(payments.Config{}), nil, &fakeKycGate{approved: true}, nil, notification.Nop{}, &fakeAwarder{})
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, offerSvc, provider.NewRegistry(), payments.New(payments.Config{}), nil, &fakeKycGate{approved: true}, nil, notification.Nop{}, &fakeAwarder{}, nil)
 	return svc, repo
 }
 

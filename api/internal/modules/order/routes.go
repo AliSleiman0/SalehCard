@@ -29,7 +29,7 @@ import (
 // checkout — the payment intents port (nil disables the usdt method). It
 // returns the constructed *OrderService so the caller can wire it back as the
 // payment module's OrderSettler (the async fulfillment callback).
-func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf notification.Notifier, usdt usdtIntents) *OrderService {
+func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf notification.Notifier, usdt usdtIntents, brdg bridgeDispatcher) *OrderService {
 	repo := NewMongoRepository(db.Collection("orders"))
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("order: failed to ensure indexes", "error", err)
@@ -54,7 +54,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	margins := reseller.NewMongoRepository(db)
 	points := loyalty.NewAwarder(db)
 
-	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, usdt, kycGate, margins, ntf, points)
+	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, usdt, kycGate, margins, ntf, points, brdg)
 	h := NewHandler(svc, usdt)
 
 	r.Route("/api/v1/orders", func(r chi.Router) {

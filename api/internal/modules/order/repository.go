@@ -35,6 +35,10 @@ type Repository interface {
 	// not in one of the `from` states (e.g. an already-refunded order), which
 	// makes the single document write the double-refund lock.
 	TransitionStatus(ctx context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error)
+	// AppendTimelineEvent pushes a fulfillment timeline event WITHOUT changing the
+	// order's status. Used to record a bridge failure on a processing order that
+	// must stay in the manual queue (bridge failures never auto-refund).
+	AppendTimelineEvent(ctx context.Context, id bson.ObjectID, event TimelineEvent) error
 	ListAll(ctx context.Context, f OrderFilter, p pagination.Params) ([]*Order, int64, error)
 
 	// Admin dashboard aggregations.
@@ -292,6 +296,25 @@ func (r *MongoRepository) TransitionStatus(ctx context.Context, id bson.ObjectID
 		return nil, err
 	}
 	return &before, nil
+}
+
+// AppendTimelineEvent pushes a fulfillment timeline event without touching the
+// order status (see Repository).
+func (r *MongoRepository) AppendTimelineEvent(ctx context.Context, id bson.ObjectID, event TimelineEvent) error {
+	res, err := r.collection.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: id}},
+		bson.D{
+			{Key: "$set", Value: bson.D{{Key: "updatedAt", Value: time.Now().UTC()}}},
+			{Key: "$push", Value: bson.D{{Key: "fulfillment.statusTimeline", Value: event}}},
+		},
+	)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return apperrors.ErrNotFound
+	}
+	return nil
 }
 
 // ListAll returns a paginated slice of orders matching f (admin), newest first.

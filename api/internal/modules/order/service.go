@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/bridge"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
@@ -102,6 +103,7 @@ type OrderService struct {
 	margins   resellerPricing
 	ntf       notification.Notifier
 	loyalty   loyaltyAwarder
+	bridge    bridgeDispatcher
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
@@ -109,8 +111,8 @@ type OrderService struct {
 // intents, KYC gate, reseller-margin lookup, and notifier it depends on. A nil
 // margins port disables tier-margin pricing (resellers fall back to per-variant
 // overrides); a nil usdt port disables on-chain USDT checkout.
-func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, pay *payments.Registry, usdt usdtIntents, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier, loyalty loyaltyAwarder) *OrderService {
-	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, payments: pay, usdt: usdt, kyc: kycGate, margins: margins, ntf: ntf, loyalty: loyalty}
+func NewOrderService(repo Repository, products product.Service, codes code.Service, wlt wallet.Service, promos promo.Service, offers offer.Service, providers *provider.Registry, pay *payments.Registry, usdt usdtIntents, kycGate kycChecker, margins resellerPricing, ntf notification.Notifier, loyalty loyaltyAwarder, brdg bridgeDispatcher) *OrderService {
+	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, payments: pay, usdt: usdt, kyc: kycGate, margins: margins, ntf: ntf, loyalty: loyalty, bridge: brdg}
 }
 
 // PlaceOrder validates and prices an order server-side, charges the chosen
@@ -390,7 +392,7 @@ func (s *OrderService) dispatchFulfillment(ctx context.Context, userID bson.Obje
 	case product.FulfillmentModeAPI:
 		return s.fulfillAPI(ctx, userID, order, charged)
 	case product.FulfillmentModeBridgeDevice:
-		return s.fulfillBridge(ctx, order)
+		return s.fulfillBridge(ctx, userID, order, charged)
 	default: // manual_operator (and the safe fallback for mixed carts)
 		return s.fulfillProcessing(ctx, order)
 	}
@@ -544,11 +546,66 @@ func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, ord
 	}
 }
 
-// fulfillBridge dispatches a bridge_device-mode order (Lebanese mobile recharge).
-// The bridge module (spec §10) is not built yet, so the order parks queued for a
-// device; a bridge device is just another operator type that will pick it up.
-func (s *OrderService) fulfillBridge(ctx context.Context, order *Order) (*Order, error) {
-	return s.park(ctx, order, "queued for bridge device")
+// fulfillBridge dispatches a bridge_device-mode order (Lebanese mobile recharge)
+// to the bridge module: for a recharge_line it first claims a scratch-card code
+// from inventory; it parks the order (processing) BEFORE enqueuing the command so
+// a device result can never race a still-pending order; then it enqueues the
+// command. A claim/dispatch failure compensates (release the code + refund if
+// charged) and fails the order. When the bridge is disabled the order simply
+// parks for manual completion — the pre-bridge behavior.
+func (s *OrderService) fulfillBridge(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
+	if s.bridge == nil || !s.bridge.Enabled() {
+		return s.park(ctx, order, "queued for bridge device")
+	}
+	// PlaceOrder guarantees a single, qty-1 bridge line.
+	it := order.Items[0]
+	p, perr := s.products.FindByID(ctx, it.ProductID.Hex())
+	if perr != nil || p.Bridge == nil || !p.Bridge.Valid() {
+		// Misconfigured after purchase — don't fail a paid order; queue it for a
+		// human to sort out rather than dispatching an ambiguous command.
+		return s.park(ctx, order, "queued for manual recharge")
+	}
+	phone := normalizeLebanesePhone(it.PlayerID)
+	spec := p.Bridge
+
+	// recharge_line: claim one card code up front (while pending) so a shortage
+	// fails cleanly with no processing flicker.
+	var claimedProducts []string
+	var cardCode string
+	if spec.Method == product.BridgeMethodRechargeLine {
+		codes, err := s.codes.ClaimForOrder(ctx, p.ID.Hex(), order.ID.Hex(), "bridge:"+phone, 1)
+		if err != nil {
+			s.compensate(ctx, userID, order, nil, charged)
+			return nil, err
+		}
+		claimedProducts = []string{p.ID.Hex()}
+		cardCode = codes[0].Code
+	}
+
+	// Park BEFORE the command becomes visible to devices.
+	if _, err := s.park(ctx, order, "dispatched to bridge device"); err != nil {
+		s.compensate(ctx, userID, order, claimedProducts, charged)
+		return nil, err
+	}
+
+	var amount *float64
+	if spec.Method == product.BridgeMethodTransferCredit {
+		if v, ok := findVariant(p, it.VariantID.Hex()); ok {
+			amount = v.FaceValue
+		}
+	}
+	if err := s.bridge.DispatchOrder(ctx, bridge.DispatchInput{
+		OrderID:  order.ID,
+		Provider: string(spec.Provider),
+		Method:   string(spec.Method),
+		Phone:    phone,
+		Amount:   amount,
+		CardCode: cardCode,
+	}); err != nil {
+		s.compensate(ctx, userID, order, claimedProducts, charged)
+		return nil, err
+	}
+	return s.repo.FindByID(ctx, order.ID)
 }
 
 // compensate reverses a partially-fulfilled order: releases any claimed codes,

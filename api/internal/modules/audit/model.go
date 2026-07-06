@@ -44,6 +44,13 @@ const (
 
 	ActionResellerPriceSet    = "reseller.price_set"
 	ActionResellerPriceDelete = "reseller.price_delete"
+
+	ActionBridgeDeviceCreate  = "bridge.device_create"
+	ActionBridgeDeviceUpdate  = "bridge.device_update"
+	ActionBridgeDeviceDelete  = "bridge.device_delete"
+	ActionBridgeTokenRotate   = "bridge.token_rotate"
+	ActionBridgeCommandRetry  = "bridge.command_retry"
+	ActionBridgeCommandCancel = "bridge.command_cancel"
 )
 
 // Recorder is the write side of the audit log, passed into each admin module.
