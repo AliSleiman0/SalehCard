@@ -22,7 +22,7 @@ import kotlin.math.roundToInt
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.RequiresApi
-import com.example.mobilebridgev2.websocket.BridgeWebSocketClient
+import com.example.mobilebridgev2.net.BridgeReporter
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
@@ -483,7 +483,10 @@ object CommandExecutor {
                 SmsReplyRouter.clearReplyWait(replyWaiter)
 
                 if (isTouch) {
-                    BridgeWebSocketClient.demandCredits()
+                    // The SIM ran out of prepaid credit mid-transfer. The admin sees
+                    // this on the Bridge page (failed command + balance) and tops up
+                    // the SIM; the order stays in the manual queue.
+                    BridgeReporter.log("WARN", "Touch SIM out of balance during transfer")
                 }
 
                 val statusCode =
@@ -633,8 +636,15 @@ object CommandExecutor {
             reply
         )
 
-        ProviderStore.touchSimBalance = balance
-        ProviderStore.touchSimValidityDate = validityDate
+        // Write the balance/validity to the queried provider's slot — the old
+        // build always wrote the touch fields even for an alfa balance check.
+        if (command.provider.equals("touch", ignoreCase = true)) {
+            ProviderStore.touchSimBalance = balance
+            ProviderStore.touchSimValidityDate = validityDate
+        } else {
+            ProviderStore.alfaSimBalance = balance
+            ProviderStore.alfaSimValidityDate = validityDate
+        }
 
         return CommandResultDTO(
             command.commandId,

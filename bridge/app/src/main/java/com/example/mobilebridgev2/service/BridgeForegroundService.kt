@@ -22,11 +22,9 @@ import com.example.mobilebridgev2.ProviderStore
 import com.example.mobilebridgev2.R
 import com.example.mobilebridgev2.dto.CommandResultCodes
 import com.example.mobilebridgev2.dto.CommandResultDTO
-import com.example.mobilebridgev2.dto.LogErrorCodes
+import com.example.mobilebridgev2.net.BridgeReporter
 import com.example.mobilebridgev2.retrofit.RetrofitClient
 import com.example.mobilebridgev2.sms.SmsReplyRouter
-import com.example.mobilebridgev2.websocket.BridgeWebSocketClient
-import com.example.mobilebridgev2.websocket.WebSocketLogDTO
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,8 +33,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 class BridgeForegroundService : Service() {
@@ -60,6 +56,7 @@ class BridgeForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        com.example.mobilebridgev2.config.DeviceConfigStore.init(this)
         createNotificationChannel()
     }
 
@@ -71,12 +68,7 @@ class BridgeForegroundService : Service() {
         if (hasRequiredPermissions()) {
             startBridgeEngine()
         } else {
-            BridgeWebSocketClient.log(WebSocketLogDTO(
-                level = "CRITICAL",
-                errorCode = LogErrorCodes.REQUIRED_PERMISSIONS_NOT_GRANTED,
-                message = "Required permissions are not granted",
-                timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-            ))
+            BridgeReporter.log("CRITICAL", "Required permissions are not granted")
             stopSelf()
         }
 
@@ -129,8 +121,7 @@ class BridgeForegroundService : Service() {
                 loadProviderConfigAndState()
                 readActiveSimSubscriptions()
 
-                startWebSocketReporter()
-
+                launch { startHeartbeatLoop() }
                 launch { startPollingLoop() }
                 launch { startCommandQueueWorker() }
                 launch { regularBalanceChecks() }
@@ -148,7 +139,7 @@ class BridgeForegroundService : Service() {
                 CommandDTO(
                     UUID.randomUUID().toString(),
                     "touch",
-                    "CHECK-BALANCE",
+                    "CHECK_BALANCE",
                     System.currentTimeMillis(),
                     null,
                     null,
@@ -161,38 +152,31 @@ class BridgeForegroundService : Service() {
         }
     }
 
-    private fun startWebSocketReporter() {
-        BridgeWebSocketClient.connect(ProviderStore.deviceId.toString(),
-            "hello world",
-            "application/json")
+    /** Sends a liveness + SIM-balance heartbeat on the server-advertised cadence. */
+    private suspend fun startHeartbeatLoop() {
+        while (serviceScope.isActive) {
+            BridgeReporter.heartbeat()
+            delay(ProviderStore.heartbeatIntervalSeconds.coerceAtLeast(30) * 1000L)
+        }
     }
 
     private suspend fun startPollingLoop() {
-        while(serviceScope.isActive){
-            try{
-                val commandList = RetrofitClient.api.getPendingCommands(ProviderStore.deviceId)
-                commandList.forEach{ command ->
-                    when(command.provider){
+        while (serviceScope.isActive) {
+            try {
+                // Lease a small batch; the server hands out only this device's
+                // operators and never re-leases a command already in flight.
+                val commandList = RetrofitClient.api.getCommands(3)
+                commandList.forEach { command ->
+                    when (command.provider) {
                         "touch" -> touchCommandsQueue.send(command)
                         "alfa" -> alfaCommandsQueue.send(command)
-                        else -> BridgeWebSocketClient.log(WebSocketLogDTO(
-                            level = "WARN",
-                            errorCode = LogErrorCodes.INVALID_PROVIDER,
-                            message = "Command sent with unknown provider",
-                            timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-                        ))
+                        else -> BridgeReporter.log("WARN", "Command with unknown provider: ${command.provider}")
                     }
                 }
+            } catch (e: Exception) {
+                BridgeReporter.log("WARN", "Polling failed: ${e.message}")
             }
-            catch (e: Exception){
-                BridgeWebSocketClient.log(WebSocketLogDTO(
-                    level = "CRITICAL",
-                    errorCode = LogErrorCodes.POLLING_LOOP_START_FAILED,
-                    message = "Polling loop did not start: $e",
-                    timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-                ))
-            }
-            delay(5000)
+            delay(ProviderStore.pollIntervalSeconds.coerceAtLeast(2) * 1000L)
         }
     }
 
@@ -209,43 +193,33 @@ class BridgeForegroundService : Service() {
             }
 
             if (command == null) {
-                BridgeWebSocketClient.log(WebSocketLogDTO(
-                    level = "INFO",
-                    errorCode = null,
-                    message = "Command queues are empty",
-                    timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-                ))
+                // Idle — no log spam; just wait for the next poll to enqueue work.
                 delay(1000)
                 continue
             }
 
             turn = !turn
 
-            try{
+            try {
                 val result = CommandDispatcher.dispatch(command, applicationContext)
-                if(!BridgeWebSocketClient.isConnected) BridgeWebSocketClient.connect(ProviderStore.deviceId.toString(),
-                    "hello world",
-                    "application/json")
-                BridgeWebSocketClient.sendCommandResult(result)
-            }
-            catch (e: Exception){
-                if(!BridgeWebSocketClient.isConnected) BridgeWebSocketClient.connect(ProviderStore.deviceId.toString(),
-                    "hello world",
-                    "application/json")
-                BridgeWebSocketClient.sendCommandResult(CommandResultDTO(
-                    id = command.commandId,
-                    recipientNumber = command.recipientNumber,
-                    type = command.commandType,
-                    timestamp = System.currentTimeMillis(),
-                    statusCode = CommandResultCodes.COMMAND_EXECUTION_FAILED,
-                    amount = null,
-                    cardCode = null,
-                    billingAmount = null,
-                    provider = command.provider,
-                    balance = null,
-                    validityDate = null,
-                    errorMessage = "Error in command execution"
-                ))
+                BridgeReporter.reportResult(result)
+            } catch (e: Exception) {
+                BridgeReporter.reportResult(
+                    CommandResultDTO(
+                        id = command.commandId,
+                        recipientNumber = command.recipientNumber,
+                        type = command.commandType,
+                        timestamp = System.currentTimeMillis(),
+                        statusCode = CommandResultCodes.COMMAND_EXECUTION_FAILED,
+                        amount = null,
+                        cardCode = null,
+                        billingAmount = null,
+                        provider = command.provider,
+                        balance = null,
+                        validityDate = null,
+                        errorMessage = "Error in command execution: ${e.message}"
+                    )
+                )
             }
         }
     }
@@ -267,6 +241,15 @@ class BridgeForegroundService : Service() {
         ProviderStore.touchCreditTransferMessageFee = dto.touchCreditTransferMessageFee
         ProviderStore.alfaCreditTransferMessageFee = dto.alfaCreditTransferMessageFee
         ProviderStore.alfaCreditTransferSmsTemplate = dto.alfaCreditTransferSmsTemplate
+        // Alfa balance echo (restores state after a reinstall) + control knobs +
+        // server-configurable reply matching.
+        ProviderStore.alfaSimBalance = dto.alfaSimBalance
+        ProviderStore.alfaSimValidityDate = dto.alfaSimValidityDate
+        ProviderStore.pollIntervalSeconds = dto.pollIntervalSeconds
+        ProviderStore.heartbeatIntervalSeconds = dto.heartbeatIntervalSeconds
+        ProviderStore.maxSmsPerHalfHour = dto.maxSmsPerHalfHour
+        ProviderStore.successMatchPatterns = dto.successMatchPatterns
+        ProviderStore.failureMatchPatterns = dto.failureMatchPatterns
     }
 
     private fun readActiveSimSubscriptions() {
@@ -277,13 +260,8 @@ class BridgeForegroundService : Service() {
             ) == PermissionChecker.PERMISSION_GRANTED
 
         if (!hasPermission) {
-            BridgeWebSocketClient.log(WebSocketLogDTO(
-                level = "CRITICAL",
-                errorCode = LogErrorCodes.READ_PHONE_STATE_PERMISSION_NOT_GRANTED,
-                message = "READ_PHONE_STATE permission not granted",
-                timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-            ))
-            return;
+            BridgeReporter.log("CRITICAL", "READ_PHONE_STATE permission not granted")
+            return
         }
 
         val subscriptionManager =
@@ -291,13 +269,13 @@ class BridgeForegroundService : Service() {
 
         val sims = subscriptionManager.activeSubscriptionInfoList
 
-        if(sims == null){
-            BridgeWebSocketClient.sendMessage("Device doesn't have any SIM cards")
+        if (sims == null) {
+            BridgeReporter.log("CRITICAL", "Device doesn't have any SIM cards")
             return
         }
 
-        if(sims.size != 2){
-            BridgeWebSocketClient.sendMessage("Device doesn't have dual SIM")
+        if (sims.size != 2) {
+            BridgeReporter.log("WARN", "Device doesn't have dual SIM (found ${sims.size})")
         }
 
         sims.forEach { sim ->
@@ -315,16 +293,13 @@ class BridgeForegroundService : Service() {
         }
     }
 
-    private suspend fun loadProviderConfigAndState(){
+    private suspend fun loadProviderConfigAndState() {
         try {
-            val dto = RetrofitClient.api.getDeviceConfig()
+            val dto = RetrofitClient.api.getConfig()
             fillProviderStore(dto)
             configLoaded = true
         } catch (e: Exception) {
-            if(!BridgeWebSocketClient.isConnected) BridgeWebSocketClient.connect(ProviderStore.deviceId.toString(),
-                "hello world",
-                "application/json")
-            BridgeWebSocketClient.sendMessage("Config not loaded")
+            BridgeReporter.log("WARN", "Config not loaded: ${e.message}")
             configLoaded = false
         }
     }
@@ -354,8 +329,6 @@ class BridgeForegroundService : Service() {
 
         touchCommandsQueue.close()
         alfaCommandsQueue.close()
-
-        BridgeWebSocketClient.disconnect()
 
         stopForeground(STOP_FOREGROUND_REMOVE)
 

@@ -12,5 +12,8 @@ data class CommandResultDTO(
     val provider: String,
     val balance: Double?,
     val validityDate: String?,
-    val errorMessage: String?
+    val errorMessage: String?,
+    // Raw operator SMS/USSD reply, forwarded verbatim so the server can persist
+    // it for audit (keyword matching is fragile; the source is kept).
+    val rawReply: String? = null
 )

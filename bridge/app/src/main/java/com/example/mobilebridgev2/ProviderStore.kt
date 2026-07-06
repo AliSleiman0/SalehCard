@@ -22,4 +22,14 @@ object ProviderStore {
     var touchCreditTransferMessageFee: Double = 0.16
     var alfaCreditTransferMessageFee: Double = 0.14
     var touchSimValidityDate: String = LocalDate.now().toString()
+    // Alfa balance/validity are tracked separately from touch (the old build only
+    // ever wrote the touch fields — see checkBalance).
+    var alfaSimBalance: Double = 0.00
+    var alfaSimValidityDate: String = LocalDate.now().toString()
+    // Control knobs + reply matching, pushed from the server config.
+    var pollIntervalSeconds: Int = 5
+    var heartbeatIntervalSeconds: Int = 300
+    var maxSmsPerHalfHour: Int = 25
+    var successMatchPatterns: List<String> = listOf("success", "transferred")
+    var failureMatchPatterns: List<String> = listOf("fail", "do not have", "insufficient")
 }

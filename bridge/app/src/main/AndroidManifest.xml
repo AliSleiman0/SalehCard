@@ -39,6 +39,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MobileBridgeV2">
 
         <activity
@@ -61,7 +62,7 @@
 
         <!-- Receives incoming SMS replies from providers -->
         <receiver
-            android:name=".receiver.SmsReplyReceiver"
+            android:name=".sms.SmsReplyReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_SMS">
             <intent-filter android:priority="999">

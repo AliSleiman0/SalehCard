@@ -12,17 +12,23 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.mobilebridgev2.config.DeviceConfigStore
 import com.example.mobilebridgev2.service.BridgeForegroundService
 import com.example.mobilebridgev2.ui.theme.MobileBridgeV2Theme
 
@@ -37,73 +43,85 @@ class MainActivity : ComponentActivity() {
             ActivityResultContracts.RequestMultiplePermissions()
         ) {
             if (hasRequiredPermissions()) {
-                permissionStatusMessage =
-                    "Permissions granted. MobileBridge service is running."
-
+                permissionStatusMessage = "Permissions granted. Bridge service is running."
                 startBridgeService()
             } else {
-                permissionStatusMessage =
-                    "Required permissions were denied. MobileBridge cannot start."
+                permissionStatusMessage = "Required permissions were denied. Bridge cannot start."
             }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        DeviceConfigStore.init(this)
         enableEdgeToEdge()
 
         setContent {
             MobileBridgeV2Theme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize()
-                ) { innerPadding ->
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    var serverUrl by remember { mutableStateOf(DeviceConfigStore.baseUrl) }
+                    var token by remember { mutableStateOf(DeviceConfigStore.token) }
+                    var saved by remember { mutableStateOf("") }
 
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
+                            .padding(24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "MobileBridge"
-                        )
+                        Text("MobileBridge")
 
-                        Text(
-                            text = permissionStatusMessage,
-                            modifier = Modifier.padding(top = 16.dp)
+                        OutlinedTextField(
+                            value = serverUrl,
+                            onValueChange = { serverUrl = it },
+                            label = { Text("Server URL (https://…)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
-
+                        OutlinedTextField(
+                            value = token,
+                            onValueChange = { token = it },
+                            label = { Text("Device token (bd_…)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         Button(
                             onClick = {
-                                checkPermissionsAndStartService()
+                                DeviceConfigStore.baseUrl = serverUrl.trim()
+                                DeviceConfigStore.token = token.trim()
+                                saved = if (DeviceConfigStore.isProvisioned())
+                                    "Saved. Start the bridge below." else "Enter both a URL and a token."
                             },
-                            modifier = Modifier.padding(top = 24.dp)
-                        ) {
-                            Text("Start MobileBridge")
-                        }
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Save provisioning") }
+
+                        if (saved.isNotEmpty()) Text(saved)
+
+                        Text(permissionStatusMessage, modifier = Modifier.padding(top = 8.dp))
+
+                        Button(
+                            onClick = { checkPermissionsAndStartService() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Start MobileBridge") }
                     }
                 }
             }
         }
-
-        checkPermissionsAndStartService()
     }
 
     private fun checkPermissionsAndStartService() {
+        if (!DeviceConfigStore.isProvisioned()) {
+            permissionStatusMessage = "Save the server URL and device token first."
+            return
+        }
         if (hasRequiredPermissions()) {
-            permissionStatusMessage =
-                "Permissions granted. MobileBridge service is running."
-
+            permissionStatusMessage = "Permissions granted. Bridge service is running."
             startBridgeService()
         } else {
-            permissionStatusMessage =
-                "MobileBridge requires telecom permissions."
-
-            permissionLauncher.launch(
-                getRequiredPermissions()
-            )
+            permissionStatusMessage = "MobileBridge requires telecom permissions."
+            permissionLauncher.launch(getRequiredPermissions())
         }
     }
 
@@ -115,32 +133,22 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_SMS
         )
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions += Manifest.permission.POST_NOTIFICATIONS
         }
-
         return permissions.toTypedArray()
     }
 
     private fun hasRequiredPermissions(): Boolean {
         return getRequiredPermissions().all { permission ->
-            ContextCompat.checkSelfPermission(
-                this,
-                permission
-            ) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
         }
     }
 
     private fun startBridgeService() {
-        val serviceIntent = Intent(
-            this,
-            BridgeForegroundService::class.java
-        )
-
         ContextCompat.startForegroundService(
             this,
-            serviceIntent
+            Intent(this, BridgeForegroundService::class.java)
         )
     }
 }

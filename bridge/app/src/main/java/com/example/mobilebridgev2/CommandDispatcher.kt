@@ -18,7 +18,7 @@ object CommandDispatcher {
                 "SEND_SMS" -> CommandExecutor.smsTransfer(command, context)
                 "TRANSFER_CREDIT" -> CommandExecutor.transferCredits(command, context)
                 "RECHARGE_LINE" -> CommandExecutor.rechargeAlfa(command, context)
-                "CHECK-BALANCE" -> CommandExecutor.checkBalance(command, context)
+                "CHECK_BALANCE" -> CommandExecutor.checkBalance(command, context)
                 else -> CommandResultDTO(
                     id = command.commandId,
                     recipientNumber = command.recipientNumber,
@@ -38,7 +38,7 @@ object CommandDispatcher {
                 "SEND_SMS" -> CommandExecutor.smsTransfer(command, context)
                 "TRANSFER_CREDIT" -> CommandExecutor.transferCredits(command, context)
                 "RECHARGE_LINE" -> CommandExecutor.rechargeTouch(command, context)
-                "CHECK-BALANCE" -> CommandExecutor.checkBalance(command, context)
+                "CHECK_BALANCE" -> CommandExecutor.checkBalance(command, context)
                 else -> CommandResultDTO(
                     id = command.commandId,
                     recipientNumber = command.recipientNumber,
