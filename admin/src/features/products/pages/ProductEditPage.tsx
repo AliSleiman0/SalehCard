@@ -5,12 +5,17 @@ import { Icon, PageHead, Toggle, StatusBadge, LoadingSpinner, ErrorState, ffKey,
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useProduct, useCreateProduct, useUpdateProduct, useUploadProductImage } from '../hooks/useProducts'
+import { reconcileBridgePhoneField } from '../lib/bridgeFields'
 import type { FulfillmentType, Locale, InputField } from '@/types'
 
 const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp'
 
 interface VariantRow {
+  // Carried through so an edit preserves the variant's identity: the backend
+  // mints a fresh _id for any variant submitted without one, which would orphan
+  // the customer's cart line and reseller per-variant price overrides.
+  id?: string
   denomination: string
   price: string
   resellerPrice: string
@@ -93,6 +98,7 @@ export default function ProductEditPage() {
     setVariants(
       p.variants.length
         ? p.variants.map((v) => ({
+            id: v.id,
             denomination: v.denomination,
             price: String(v.price),
             resellerPrice: v.resellerPrice != null ? String(v.resellerPrice) : '',
@@ -142,18 +148,13 @@ export default function ProductEditPage() {
           : undefined
 
     // Bridge (mobile recharge) is a sub-mode of account_credit. When enabled we
-    // send fulfillmentMode=bridge_device + the spec, seed a `phone` field if the
-    // ops user didn't add one, and carry each variant's transfer face value. When
-    // it's off but the product used to be a bridge, we send the clear sentinels.
+    // send fulfillmentMode=bridge_device + the spec, reconcile the input fields to
+    // a single first-positioned `phone` field, and carry each variant's transfer
+    // face value. When it's off but the product used to be a bridge, we send the
+    // clear sentinels.
     const isBridge = ff === 'credit' && bridgeOn
     const wasBridge = data?.data?.fulfillmentMode === 'bridge_device'
-    let fields = inputFields
-    if (isBridge && !fields.some((f) => f.key === 'phone')) {
-      fields = [
-        ...fields,
-        { key: 'phone', label: { en: 'Mobile number', ar: 'رقم الهاتف' }, type: 'text', sensitive: false },
-      ]
-    }
+    const fields = isBridge ? reconcileBridgePhoneField(inputFields) : inputFields
 
     return {
       title,
@@ -172,6 +173,9 @@ export default function ProductEditPage() {
       variants: variants
         .filter((v) => v.denomination.trim() && v.price.trim())
         .map((v) => ({
+          // Echo the existing variant id so the backend keeps it; omit for new
+          // rows (never send an empty string — the ObjectID JSON decode rejects it).
+          ...(v.id ? { id: v.id } : {}),
           denomination: v.denomination,
           price: parseFloat(v.price) || 0,
           ...(v.resellerPrice.trim() ? { resellerPrice: parseFloat(v.resellerPrice) || 0 } : {}),

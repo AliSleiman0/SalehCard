@@ -26,7 +26,9 @@ export interface ProductInput {
   category: string
   images: string[]
   thumbnail?: string
-  variants: { denomination: string; price: number; resellerPrice?: number; faceValue?: number }[]
+  // `id` is echoed for existing variants so the backend preserves their _id
+  // (omit for new rows → the backend mints one).
+  variants: { id?: string; denomination: string; price: number; resellerPrice?: number; faceValue?: number }[]
   fulfillmentType: FulfillmentType
   // Execution mode. Sent as 'bridge_device' for mobile-recharge products (and
   // 'manual_operator' to turn a former bridge product back into plain credit);

@@ -160,6 +160,26 @@ func (h *Handler) VerifyAccount(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// writeProductError maps a service error to the right HTTP response, mirroring
+// the order/wallet handlers: ErrNotFound → 404, ErrBadRequest → 400 (preserving
+// the AppError's code+message so a validation failure surfaces its real reason
+// instead of an opaque 500), everything else → 500.
+func writeProductError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, apperrors.ErrNotFound):
+		response.NotFound(w)
+	case errors.Is(err, apperrors.ErrBadRequest):
+		var appErr *apperrors.AppError
+		if errors.As(err, &appErr) {
+			response.Error(w, http.StatusBadRequest, appErr.Code, appErr.Message)
+			return
+		}
+		response.BadRequest(w, err.Error())
+	default:
+		response.InternalError(w)
+	}
+}
+
 // Create handles POST /api/v1/products.
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var in CreateProductInput
@@ -170,7 +190,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	product, err := h.svc.Create(r.Context(), in)
 	if err != nil {
-		response.InternalError(w)
+		writeProductError(w, err)
 		return
 	}
 
@@ -192,11 +212,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.svc.Update(r.Context(), id, in)
 	if err != nil {
-		if errors.Is(err, apperrors.ErrNotFound) {
-			response.NotFound(w)
-			return
-		}
-		response.InternalError(w)
+		writeProductError(w, err)
 		return
 	}
 
