@@ -185,3 +185,40 @@ az storage account show-connection-string -n salehcardassets -g salehcard-prod
   best-effort old-blob delete on replace (v1 leaves orphans — pennies).
 
 </details>
+
+## 14. On-chain USDT payments (TRC20) — prod rollout (payment module PR1/PR2)
+
+The feature ships DISABLED (no `USDT_XPUB` app setting → intent creation refuses,
+no watcher runs, `GET /api/v1/payments/config` answers `usdtEnabled:false`). To
+enable in prod, in order:
+
+1. **Generate the wallet OFFLINE** (owner, never on the server / never in the repo):
+   create a fresh mnemonic on a hardware wallet or an offline BIP39 tool, derive the
+   BIP44 TRON account `m/44'/195'/0'`, and export its **xpub** (watch-only). The
+   mnemonic is the spend key — store it like the prod DB password. The server only
+   ever sees the xpub.
+2. Create a TronGrid account (trongrid.io) → API key.
+3. Azure App Service app settings on the API:
+   - `USDT_PROVIDER=trongrid`  (⚠️ NEVER `stub` in prod — `config.Validate` refuses
+     to boot with stub+xpub outside development, because the stub auto-confirms
+     unpaid intents)
+   - `USDT_XPUB=<the account xpub>`
+   - `TRONGRID_API_KEY=<key>`
+   - optional tuning: `USDT_INTENT_EXPIRY=30m`, `USDT_WATCH_INTERVAL=25s`
+4. Confirm **Always On** is enabled on the App Service (the watcher is an in-process
+   background loop — idle-unload kills it). Single instance recommended: duplicate
+   watchers are SAFE (atomic claims + unique (network,txHash) index prevent double
+   credits) but waste TronGrid quota.
+5. Boot check: the startup log must show
+   `payment: on-chain USDT payments enabled ... address0=T...` — verify that address
+   matches index 0/0 of the wallet in an independent tool (TronLink import of the
+   xpub, or iancoleman.io/bip39 offline) BEFORE announcing the feature.
+6. Confirm the new Cosmos collections/indexes came up: `payment_intents`
+   (unique partial `network+txHash`, unique `address`, unique partial
+   `userId+idempotencyKey`), `counters`, and the new unique partial
+   `method+ref` (method=usdt_trc20) index on `wallet_transactions`.
+7. **Sweep runbook** (moving customer deposits to treasury): import the mnemonic
+   into TronLink → funds sit on the per-intent derived addresses (0/0, 0/1, …).
+   Each address needs a little TRX for energy/bandwidth to move USDT out; sweep
+   periodically, oldest first. The admin `/payments` page + tronscan links show
+   every funded address.

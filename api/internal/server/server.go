@@ -23,6 +23,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/offer"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/payment"
 	product "github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/reseller"
@@ -34,6 +35,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/tron"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -44,7 +46,13 @@ type Server struct {
 	router *chi.Mux
 	db     *mongo.Database
 	cfg    *config.Config
+	// watcher is the on-chain USDT payment watcher (nil when USDT payments
+	// are not enabled); main.go runs it alongside the HTTP listener.
+	watcher *payment.Watcher
 }
+
+// Watcher returns the USDT payment watcher, or nil when the feature is off.
+func (s *Server) Watcher() *payment.Watcher { return s.watcher }
 
 // New creates a new Server instance with the provided config and database.
 func New(cfg *config.Config, db *mongo.Database) *Server {
@@ -166,9 +174,23 @@ func (s *Server) Routes() {
 		smsSender = sms.LogSender{}
 	}
 
+	// On-chain USDT payments. The routes are always mounted so the client
+	// feature gate (GET /payments/config) answers even when the feature is
+	// off (no USDT_XPUB → Enabled()==false → intent creation refuses); the
+	// background watcher runs only when it is on.
+	paySvc := s.buildPaymentService(ntf)
+	payment.RegisterRoutes(s.router, s.db, s.cfg, paySvc)
+	if paySvc.Enabled() {
+		s.watcher = payment.NewWatcher(paySvc, s.cfg.USDTWatchInterval)
+	}
+
 	// Customer orders + wallet + promo validation + review submission +
-	// notification inbox (guarded by AuthRequired).
-	order.RegisterRoutes(s.router, s.db, s.cfg, ntf)
+	// notification inbox (guarded by AuthRequired). Order takes the payment
+	// service as its USDT-intents port, and we close the loop by handing the
+	// order service back to the payment module as its OrderSettler (the
+	// watcher's fulfillment callback for confirmed on-chain payments).
+	orderSvc := order.RegisterRoutes(s.router, s.db, s.cfg, ntf, paySvc)
+	paySvc.SetOrderSettler(orderSvc)
 	wallet.RegisterRoutes(s.router, s.db, s.cfg)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
@@ -198,6 +220,45 @@ func (s *Server) Routes() {
 		kyc.RegisterAdminRoutes(r, s.db, rec, ntf)
 		audit.RegisterAdminRoutes(r, s.db)
 		settings.RegisterAdminRoutes(r, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider)
+		payment.RegisterAdminRoutes(r, s.db)
+	})
+}
+
+// buildPaymentService constructs the USDT payment service. Misconfiguration
+// (bad provider name, invalid xpub) logs and degrades to a disabled service —
+// the store still serves reads, but no new intents can be created and no
+// watcher runs. config.Validate separately refuses stub+xpub outside dev.
+func (s *Server) buildPaymentService(ntf notification.Notifier) *payment.Service {
+	xpub := s.cfg.USDTXPub
+	reader, err := tron.New(tron.Config{
+		Provider: s.cfg.USDTProvider,
+		TronGrid: tron.TronGridConfig{
+			BaseURL:  s.cfg.TronGridBaseURL,
+			APIKey:   s.cfg.TronGridAPIKey,
+			Contract: s.cfg.USDTContract,
+		},
+		Stub: tron.StubConfig{Delay: s.cfg.USDTStubDelay},
+	})
+	if err != nil {
+		slog.Error("payment: chain provider misconfigured — USDT payments disabled", "provider", s.cfg.USDTProvider, "error", err)
+		reader, xpub = nil, ""
+	}
+	if xpub != "" {
+		// Startup smoke-check: a bad xpub should surface in the boot log, not
+		// on the first customer intent.
+		if addr, derr := tron.DeriveAddress(xpub, 0); derr != nil {
+			slog.Error("payment: USDT_XPUB is invalid — USDT payments disabled", "error", derr)
+			xpub = ""
+		} else {
+			slog.Info("payment: on-chain USDT payments enabled",
+				"provider", s.cfg.USDTProvider, "network", payment.NetworkTRC20, "address0", addr)
+		}
+	}
+	wsvc := wallet.NewWalletService(wallet.NewMongoRepository(s.db), nil)
+	return payment.NewService(payment.NewMongoStore(s.db), reader, wsvc, ntf, payment.Config{
+		XPub:         xpub,
+		IntentExpiry: s.cfg.USDTIntentExpiry,
+		LateGrace:    s.cfg.USDTLateGrace,
 	})
 }
 

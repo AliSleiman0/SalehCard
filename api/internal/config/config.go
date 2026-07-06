@@ -132,6 +132,34 @@ type Config struct {
 	// (instead of parking). Off by default.
 	FulfillmentMock   bool
 	FulfillmentMockID int
+
+	// On-chain USDT payments (payment module + platform/tron). The feature is
+	// enabled iff USDTXPub is set; USDTProvider selects the chain reader:
+	// "trongrid" (real chain) or "stub" (dev — auto-pays after USDTStubDelay).
+	USDTProvider string
+	// USDTXPub is the watch-only BIP44 account key (m/44'/195'/0') deposit
+	// addresses derive from. The mnemonic/xprv never touches the server.
+	USDTXPub string
+	// USDTContract overrides the token contract (default mainnet USDT).
+	USDTContract string
+	// TronGridAPIKey raises the TronGrid rate limit (required in prod).
+	TronGridAPIKey  string
+	TronGridBaseURL string
+	// USDTIntentExpiry is the customer's payment window (default 30m).
+	USDTIntentExpiry time.Duration
+	// USDTWatchInterval is the watcher tick (default 25s).
+	USDTWatchInterval time.Duration
+	// USDTLateGrace keeps scanning expired-unpaid addresses so late transfers
+	// still credit the wallet (default 168h).
+	USDTLateGrace time.Duration
+	// USDTStubDelay is the stub reader's auto-pay delay (dev only).
+	USDTStubDelay time.Duration
+	// Rate limiting on payment-intent creation (burns HD addresses) and status
+	// polling (the app polls every ~7s ≈ 9/min; 60 leaves headroom).
+	RateLimitPaymentCreateMax    int
+	RateLimitPaymentCreateWindow time.Duration
+	RateLimitPaymentPollMax      int
+	RateLimitPaymentPollWindow   time.Duration
 }
 
 // Load reads configuration from environment variables, applying defaults where
@@ -210,6 +238,21 @@ func Load() *Config {
 		PaymentProvider:   getEnv("PAYMENT_PROVIDER", "log"),
 		FulfillmentMock:   getBool("FULFILLMENT_MOCK", false),
 		FulfillmentMockID: getInt("FULFILLMENT_MOCK_ID", 1),
+
+		USDTProvider:      getEnv("USDT_PROVIDER", "stub"),
+		USDTXPub:          os.Getenv("USDT_XPUB"),
+		USDTContract:      os.Getenv("USDT_CONTRACT"), // empty → platform/tron default
+		TronGridAPIKey:    os.Getenv("TRONGRID_API_KEY"),
+		TronGridBaseURL:   getEnv("TRONGRID_BASE_URL", "https://api.trongrid.io"),
+		USDTIntentExpiry:  getDuration("USDT_INTENT_EXPIRY", 30*time.Minute),
+		USDTWatchInterval: getDuration("USDT_WATCH_INTERVAL", 25*time.Second),
+		USDTLateGrace:     getDuration("USDT_LATE_GRACE", 168*time.Hour),
+		USDTStubDelay:     getDuration("USDT_STUB_DELAY", 15*time.Second),
+
+		RateLimitPaymentCreateMax:    getInt("RATE_LIMIT_PAYMENT_CREATE_MAX", 10),
+		RateLimitPaymentCreateWindow: getDuration("RATE_LIMIT_PAYMENT_CREATE_WINDOW", time.Minute),
+		RateLimitPaymentPollMax:      getInt("RATE_LIMIT_PAYMENT_POLL_MAX", 60),
+		RateLimitPaymentPollWindow:   getDuration("RATE_LIMIT_PAYMENT_POLL_WINDOW", time.Minute),
 	}
 }
 
@@ -238,6 +281,12 @@ func (c *Config) Validate() error {
 	}
 	if c.AllowedOrigins == "" {
 		return errors.New("ALLOWED_ORIGINS is required when ENV is not development")
+	}
+	if c.USDTXPub != "" && c.USDTProvider == "stub" {
+		return errors.New("USDT_PROVIDER=stub would auto-confirm unpaid USDT payments outside development — set USDT_PROVIDER=trongrid or unset USDT_XPUB")
+	}
+	if c.USDTProvider == "trongrid" && c.USDTXPub != "" && c.TronGridAPIKey == "" {
+		return errors.New("TRONGRID_API_KEY is required when USDT payments are enabled with the trongrid provider")
 	}
 	return nil
 }

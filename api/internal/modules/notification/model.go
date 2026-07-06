@@ -21,6 +21,10 @@ const (
 	KindKYCApproved    = "kyc_approved"
 	KindKYCRejected    = "kyc_rejected"
 	KindCodeDelivered  = "code_delivered"
+	// On-chain USDT payment lifecycle (payment module).
+	KindPaymentConfirmed = "payment_confirmed"
+	KindPaymentUnderpaid = "payment_underpaid"
+	KindPaymentExpired   = "payment_expired"
 )
 
 // Notification is one inbox row. Title/Body are the English fallback copy (also

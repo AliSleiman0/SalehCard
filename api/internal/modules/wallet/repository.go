@@ -49,10 +49,21 @@ func NewMongoRepository(db *mongo.Database) *MongoRepository {
 	}
 }
 
-// EnsureIndexes creates the index the wallet ledger relies on.
+// EnsureIndexes creates the indexes the wallet ledger relies on.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
-	_, err := db.Collection("wallet_transactions").Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}},
+	_, err := db.Collection("wallet_transactions").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}},
+		// One on-chain settlement credit per payment-intent ref: the payment
+		// module's watcher retries settlement until it succeeds, and this
+		// unique constraint is what makes the retried TopUp a safe no-op
+		// (duplicate insert → TopUp's compensation reverses the second
+		// balance bump) instead of a double credit.
+		{
+			Keys: bson.D{{Key: "method", Value: 1}, {Key: "ref", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.D{{Key: "method", Value: "usdt_trc20"}}),
+		},
 	})
 	return err
 }

@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/payment"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -18,11 +19,21 @@ import (
 // Handler exposes order domain operations over HTTP.
 type Handler struct {
 	service Service
+	usdt    usdtIntents // nil when on-chain USDT checkout is disabled
 }
 
-// NewHandler constructs a Handler backed by the given service.
-func NewHandler(service Service) *Handler {
-	return &Handler{service: service}
+// NewHandler constructs a Handler backed by the given service. usdt (optional)
+// lets a placed USDT order carry its deposit intent back in the response.
+func NewHandler(service Service, usdt usdtIntents) *Handler {
+	return &Handler{service: service, usdt: usdt}
+}
+
+// placeOrderResponse is the POST /orders body. It embeds the order (its fields
+// promote to the top level) and, for a USDT order awaiting payment, the deposit
+// intent the client shows on its waiting-for-payment screen.
+type placeOrderResponse struct {
+	*Order
+	PaymentIntent *payment.IntentView `json:"paymentIntent,omitempty"`
 }
 
 // PlaceOrder handles POST /api/v1/orders. The price is derived server-side; the
@@ -52,6 +63,18 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeOrderError(w, err)
 		return
+	}
+
+	// A USDT order returns still-pending with an on-chain deposit intent; attach
+	// it so the client can render its waiting-for-payment screen. This also
+	// covers an Idempotency-Key replay — the live intent is re-read for the
+	// order, recovering the deposit details after a lost response.
+	if order.PaymentMethod == PaymentMethodUSDT && order.Status == OrderStatusPending && h.usdt != nil {
+		if intent, ierr := h.usdt.GetActiveOrderIntent(r.Context(), order.ID); ierr == nil {
+			view := payment.NewIntentView(intent)
+			response.OK(w, placeOrderResponse{Order: order, PaymentIntent: &view})
+			return
+		}
 	}
 	response.OK(w, order)
 }
