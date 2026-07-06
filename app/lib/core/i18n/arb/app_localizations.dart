@@ -1531,6 +1531,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You reviewed this product'**
   String get reviewYouReviewed;
+
+  /// No description provided for @commonDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get commonDone;
+
+  /// No description provided for @usdtPayLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay with USDT (crypto)'**
+  String get usdtPayLabel;
+
+  /// No description provided for @usdtDepositTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send USDT'**
+  String get usdtDepositTitle;
+
+  /// No description provided for @usdtSendExactly.
+  ///
+  /// In en, this message translates to:
+  /// **'Send exactly this amount to the address below:'**
+  String get usdtSendExactly;
+
+  /// No description provided for @usdtAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get usdtAmountLabel;
+
+  /// No description provided for @usdtAmountCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount copied'**
+  String get usdtAmountCopied;
+
+  /// No description provided for @usdtAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{network} deposit address'**
+  String usdtAddressLabel(String network);
+
+  /// No description provided for @usdtAddressCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Address copied'**
+  String get usdtAddressCopied;
+
+  /// No description provided for @usdtNetworkWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Send only USDT on the {network} network. Sending any other coin or network will lose the funds.'**
+  String usdtNetworkWarning(String network);
+
+  /// No description provided for @usdtExpiresIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires in {time}'**
+  String usdtExpiresIn(String time);
+
+  /// No description provided for @usdtWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your payment…'**
+  String get usdtWaiting;
+
+  /// No description provided for @usdtConfirming.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment detected — confirming on-chain…'**
+  String get usdtConfirming;
+
+  /// No description provided for @usdtConfirmedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment confirmed'**
+  String get usdtConfirmedTitle;
+
+  /// No description provided for @usdtConfirmedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your USDT payment was confirmed.'**
+  String get usdtConfirmedBody;
+
+  /// No description provided for @usdtExpiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment window expired'**
+  String get usdtExpiredTitle;
+
+  /// No description provided for @usdtExpiredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'No payment was received in time. Start again to get a fresh address.'**
+  String get usdtExpiredBody;
 }
 
 class _AppLocalizationsDelegate

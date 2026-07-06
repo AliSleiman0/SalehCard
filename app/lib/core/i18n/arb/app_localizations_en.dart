@@ -789,4 +789,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reviewYouReviewed => 'You reviewed this product';
+
+  @override
+  String get commonDone => 'Done';
+
+  @override
+  String get usdtPayLabel => 'Pay with USDT (crypto)';
+
+  @override
+  String get usdtDepositTitle => 'Send USDT';
+
+  @override
+  String get usdtSendExactly =>
+      'Send exactly this amount to the address below:';
+
+  @override
+  String get usdtAmountLabel => 'Amount';
+
+  @override
+  String get usdtAmountCopied => 'Amount copied';
+
+  @override
+  String usdtAddressLabel(String network) {
+    return '$network deposit address';
+  }
+
+  @override
+  String get usdtAddressCopied => 'Address copied';
+
+  @override
+  String usdtNetworkWarning(String network) {
+    return 'Send only USDT on the $network network. Sending any other coin or network will lose the funds.';
+  }
+
+  @override
+  String usdtExpiresIn(String time) {
+    return 'Expires in $time';
+  }
+
+  @override
+  String get usdtWaiting => 'Waiting for your payment…';
+
+  @override
+  String get usdtConfirming => 'Payment detected — confirming on-chain…';
+
+  @override
+  String get usdtConfirmedTitle => 'Payment confirmed';
+
+  @override
+  String get usdtConfirmedBody => 'Your USDT payment was confirmed.';
+
+  @override
+  String get usdtExpiredTitle => 'Payment window expired';
+
+  @override
+  String get usdtExpiredBody =>
+      'No payment was received in time. Start again to get a fresh address.';
 }

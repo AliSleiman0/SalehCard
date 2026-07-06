@@ -286,5 +286,30 @@
   "reviewSubmit": "إرسال المراجعة",
   "reviewSubmittedPending": "شكراً! مراجعتك قيد المراجعة والموافقة.",
   "reviewAlreadyReviewed": "لقد قمت بمراجعة هذا المنتج بالفعل.",
-  "reviewYouReviewed": "لقد قمت بمراجعة هذا المنتج"
+  "reviewYouReviewed": "لقد قمت بمراجعة هذا المنتج",
+  "commonDone": "تم",
+  "usdtPayLabel": "الدفع بعملة USDT (كريبتو)",
+  "usdtDepositTitle": "إرسال USDT",
+  "usdtSendExactly": "أرسل هذا المبلغ بالضبط إلى العنوان أدناه:",
+  "usdtAmountLabel": "المبلغ",
+  "usdtAmountCopied": "تم نسخ المبلغ",
+  "usdtAddressLabel": "عنوان الإيداع على شبكة {network}",
+  "@usdtAddressLabel": {
+    "placeholders": { "network": { "type": "String" } }
+  },
+  "usdtAddressCopied": "تم نسخ العنوان",
+  "usdtNetworkWarning": "أرسل عملة USDT فقط على شبكة {network}. إرسال أي عملة أو شبكة أخرى سيؤدي إلى فقدان الأموال.",
+  "@usdtNetworkWarning": {
+    "placeholders": { "network": { "type": "String" } }
+  },
+  "usdtExpiresIn": "تنتهي الصلاحية خلال {time}",
+  "@usdtExpiresIn": {
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "usdtWaiting": "بانتظار الدفع…",
+  "usdtConfirming": "تم رصد الدفعة — جارٍ التأكيد على الشبكة…",
+  "usdtConfirmedTitle": "تم تأكيد الدفع",
+  "usdtConfirmedBody": "تم تأكيد دفعتك بعملة USDT.",
+  "usdtExpiredTitle": "انتهت مهلة الدفع",
+  "usdtExpiredBody": "لم يتم استلام أي دفعة في الوقت المحدد. ابدأ من جديد للحصول على عنوان جديد."
 }

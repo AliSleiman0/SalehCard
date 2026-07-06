@@ -22,6 +22,8 @@ import '../../features/kyc/presentation/screens/kyc_status_screen.dart';
 import '../../features/offers/presentation/screens/offers_screen.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
 import '../../features/orders/presentation/screens/orders_list_screen.dart';
+import '../../features/payments/domain/entities/payment_intent.dart';
+import '../../features/payments/presentation/screens/usdt_deposit_screen.dart';
 import '../../features/shell/presentation/app_shell.dart';
 import '../../features/splash/presentation/splash_screen.dart';
 import '../../features/wallet/presentation/screens/send_money_screen.dart';
@@ -136,6 +138,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/wallet/send',
         builder: (context, state) => const SendMoneyScreen(),
+      ),
+      // On-chain USDT deposit (waiting-for-payment). Requires the freshly
+      // created PaymentIntent as `extra`; a bare visit with no intent falls
+      // back to the wallet.
+      GoRoute(
+        path: '/payments/usdt-deposit',
+        builder: (context, state) {
+          final intent = state.extra;
+          if (intent is! PaymentIntent) return const WalletScreen();
+          return UsdtDepositScreen(intent: intent);
+        },
       ),
       // Tabbed shell.
       StatefulShellRoute.indexedStack(

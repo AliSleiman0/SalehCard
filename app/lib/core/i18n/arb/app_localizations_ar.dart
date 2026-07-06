@@ -787,4 +787,59 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get reviewYouReviewed => 'لقد قمت بمراجعة هذا المنتج';
+
+  @override
+  String get commonDone => 'تم';
+
+  @override
+  String get usdtPayLabel => 'الدفع بعملة USDT (كريبتو)';
+
+  @override
+  String get usdtDepositTitle => 'إرسال USDT';
+
+  @override
+  String get usdtSendExactly => 'أرسل هذا المبلغ بالضبط إلى العنوان أدناه:';
+
+  @override
+  String get usdtAmountLabel => 'المبلغ';
+
+  @override
+  String get usdtAmountCopied => 'تم نسخ المبلغ';
+
+  @override
+  String usdtAddressLabel(String network) {
+    return 'عنوان الإيداع على شبكة $network';
+  }
+
+  @override
+  String get usdtAddressCopied => 'تم نسخ العنوان';
+
+  @override
+  String usdtNetworkWarning(String network) {
+    return 'أرسل عملة USDT فقط على شبكة $network. إرسال أي عملة أو شبكة أخرى سيؤدي إلى فقدان الأموال.';
+  }
+
+  @override
+  String usdtExpiresIn(String time) {
+    return 'تنتهي الصلاحية خلال $time';
+  }
+
+  @override
+  String get usdtWaiting => 'بانتظار الدفع…';
+
+  @override
+  String get usdtConfirming => 'تم رصد الدفعة — جارٍ التأكيد على الشبكة…';
+
+  @override
+  String get usdtConfirmedTitle => 'تم تأكيد الدفع';
+
+  @override
+  String get usdtConfirmedBody => 'تم تأكيد دفعتك بعملة USDT.';
+
+  @override
+  String get usdtExpiredTitle => 'انتهت مهلة الدفع';
+
+  @override
+  String get usdtExpiredBody =>
+      'لم يتم استلام أي دفعة في الوقت المحدد. ابدأ من جديد للحصول على عنوان جديد.';
 }
