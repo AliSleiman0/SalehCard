@@ -38,6 +38,14 @@ describe('ProductThumb', () => {
     expect(screen.getByTestId('art-placeholder')).toHaveAttribute('data-art', 'art:topup')
   })
 
+  // Legacy-import products come back with images: null (regression: this
+  // crashed the whole /products page with "Cannot read properties of null").
+  it('renders the placeholder when images is null', () => {
+    const { container } = render(<ProductThumb p={makeProduct({ category: 'dd-live', images: null })} />)
+    expect(img(container)).toBeNull()
+    expect(screen.getByTestId('art-placeholder')).toHaveAttribute('data-art', 'art:dd-live')
+  })
+
   it('swaps to the placeholder when the image URL fails to load', () => {
     const { container } = render(<ProductThumb p={makeProduct({ thumbnail: 'http://cdn/broken.jpg', images: [] })} />)
     const el = img(container)

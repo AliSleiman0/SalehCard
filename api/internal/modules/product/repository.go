@@ -179,6 +179,9 @@ func (r *MongoRepository) FindAll(ctx context.Context, f ListFilter, p paginatio
 	if err := cursor.All(ctx, &products); err != nil {
 		return nil, 0, err
 	}
+	for i := range products {
+		products[i].normalize()
+	}
 
 	return products, total, nil
 }
@@ -199,6 +202,7 @@ func (r *MongoRepository) FindByID(ctx context.Context, id string) (*Product, er
 		}
 		return nil, err
 	}
+	p.normalize()
 
 	return &p, nil
 }
@@ -213,6 +217,7 @@ func (r *MongoRepository) FindByLegacyID(ctx context.Context, legacyID int) (*Pr
 		}
 		return nil, err
 	}
+	p.normalize()
 	return &p, nil
 }
 
@@ -328,6 +333,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
+	p.normalize() // persist images as [] (not null) when created without any
 
 	if _, err := r.col.InsertOne(ctx, p); err != nil {
 		return nil, err
@@ -358,6 +364,7 @@ func (r *MongoRepository) Upsert(ctx context.Context, in UpsertProductInput) (*P
 	if err != nil {
 		return nil, err
 	}
+	updated.normalize()
 	return &updated, nil
 }
 
@@ -528,6 +535,7 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 		}
 		return nil, err
 	}
+	updated.normalize()
 
 	return &updated, nil
 }

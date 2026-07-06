@@ -64,7 +64,8 @@ export interface Product {
   title: I18nString
   description: I18nString
   category: string
-  images: string[]
+  /** Display-image URLs. Legacy-import products can return null (no images). */
+  images: string[] | null
   thumbnail?: string
   variants: Variant[]
   fulfillmentType: FulfillmentType
