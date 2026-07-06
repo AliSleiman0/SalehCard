@@ -1,6 +1,7 @@
 package product_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -324,6 +325,58 @@ func TestHandler_GetByID_NotFound(t *testing.T) {
 	errObj, ok := body["error"].(map[string]interface{})
 	require.True(t, ok, "expected error field in response")
 	assert.Equal(t, "NOT_FOUND", errObj["code"])
+}
+
+// A bridge (mobile-recharge) product with transfer_credit but a variant missing
+// its face value is a validation (bad-request) error, not a server fault. The
+// Create/Update handlers must surface it as HTTP 400 with the real message — a
+// regression guard against the old behavior of dumping it into a 500.
+
+func TestHandler_Update_BridgeValidation_Returns400(t *testing.T) {
+	repo := &mockRepo{products: []product.Product{{Title: product.I18nString{En: "1$ ALFA"}}}}
+	h := product.NewHandler(product.NewProductService(repo))
+
+	body, _ := json.Marshal(map[string]any{
+		"fulfillmentMode": "bridge_device",
+		"bridge":          map[string]string{"provider": "alfa", "method": "transfer_credit"},
+		"variants":        []map[string]any{{"denomination": "Default", "price": 1.235}}, // no faceValue
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/admin/products/x", bytes.NewReader(body))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "6a3f0455ea6747f81d0baeb6")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	h.Update(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.False(t, resp["success"].(bool))
+	errObj := resp["error"].(map[string]any)
+	assert.Equal(t, "BAD_REQUEST", errObj["code"])
+	assert.Contains(t, errObj["message"], "face value")
+}
+
+func TestHandler_Create_BridgeValidation_Returns400(t *testing.T) {
+	h := product.NewHandler(product.NewProductService(&mockRepo{}))
+
+	body, _ := json.Marshal(map[string]any{
+		"title":           map[string]any{"en": "1$ ALFA"},
+		"fulfillmentType": "account_credit",
+		"fulfillmentMode": "bridge_device",
+		"bridge":          map[string]string{"provider": "alfa", "method": "transfer_credit"},
+		"variants":        []map[string]any{{"denomination": "Default", "price": 1.0}}, // no faceValue
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/products", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	errObj := resp["error"].(map[string]any)
+	assert.Equal(t, "BAD_REQUEST", errObj["code"])
 }
 
 // ---------------------------------------------------------------------------
