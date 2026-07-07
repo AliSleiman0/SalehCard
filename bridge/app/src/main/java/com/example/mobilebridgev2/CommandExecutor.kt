@@ -29,8 +29,11 @@ import java.util.UUID
 object CommandExecutor {
 
     fun getBalanceFromReply(reply: String): Pair<Double, String>{
+        // Accept a 2- OR 4-digit year: live Touch/Alfa balance SMS use a 2-digit
+        // year ("Exp:10-06-27"); requiring \d{4} silently failed the parse and left
+        // the cached balance at 0.00, which then blocked every transfer pre-check.
         val lineRegex = Regex(
-            """USD\s+(\d+(?:\.\d{1,2})?)\s+Exp:\s*(\d{2}[-/]\d{2}[-/]\d{4})""",
+            """USD\s+(\d+(?:\.\d{1,2})?)\s+Exp:\s*(\d{2}[-/]\d{2}[-/]\d{2,4})""",
             RegexOption.IGNORE_CASE
         )
         val lineOne = lineRegex.find(reply)?.value ?: return Pair(0.0, "0")
@@ -104,9 +107,9 @@ object CommandExecutor {
 
                 val subscriptionId =
                     if (provider.lowercase() == "touch") {
-                        ProviderStore.touchSim.subscriptionId
+                        ProviderStore.touchSim!!.subscriptionId
                     } else {
-                        ProviderStore.alfaSim.subscriptionId
+                        ProviderStore.alfaSim!!.subscriptionId
                     }
 
                 val defaultSmsManager = context.getSystemService(SmsManager::class.java)
@@ -592,8 +595,8 @@ object CommandExecutor {
         command: CommandDTO,
         context: Context): CommandResultDTO {
 
-        val subscriptionId = if(command.provider == "touch") ProviderStore.touchSim.subscriptionId
-        else ProviderStore.alfaSim.subscriptionId
+        val subscriptionId = if(command.provider == "touch") ProviderStore.touchSim!!.subscriptionId
+        else ProviderStore.alfaSim!!.subscriptionId
 
         val ussdCode = if(command.provider == "touch") ProviderStore.touchBalanceCheckUssd
         else ProviderStore.alfaBalanceCheckUssd
@@ -705,7 +708,7 @@ object CommandExecutor {
         val reply = withTimeoutOrNull(30_000L) {
             sendUssd(
                 context = context,
-                subscriptionId = ProviderStore.touchSim.subscriptionId,
+                subscriptionId = ProviderStore.touchSim!!.subscriptionId,
                 ussdCode = ussdCode
             )
         } ?: return CommandResultDTO(
