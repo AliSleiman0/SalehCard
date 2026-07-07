@@ -36,6 +36,22 @@ class PaymentRepositoryImpl implements PaymentRepository {
   }
 
   @override
+  Future<Either<Failure, PaymentIntent>> createWhishTopUpIntent(
+    double amount, {
+    required String idempotencyKey,
+  }) async {
+    try {
+      final dto = await _remote.createWhishTopUpIntent(
+        amount,
+        idempotencyKey: idempotencyKey,
+      );
+      return Right(dto.toEntity());
+    } catch (error) {
+      return Left(mapError(error));
+    }
+  }
+
+  @override
   Future<Either<Failure, PaymentIntent>> getIntent(String id) async {
     try {
       return Right((await _remote.getIntent(id)).toEntity());

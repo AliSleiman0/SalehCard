@@ -72,14 +72,18 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       return;
     }
 
-    // USDT is an on-chain, auto-confirming top-up when the backend has it
-    // enabled: create a deposit intent and hand off to the waiting screen.
-    // (If it is disabled, fall through to the manual out-of-band request.)
-    if (_channel == 'usdt') {
+    // USDT / Whish are auto-confirming top-ups when the backend has them
+    // enabled: create the payment intent and hand off to the waiting screen.
+    // (If disabled, fall through to the manual out-of-band request.)
+    if (_channel == 'usdt' || _channel == 'whish') {
       final config = await ref.read(paymentConfigProvider.future);
       if (!mounted) return;
-      if (config.usdtEnabled) {
+      if (_channel == 'usdt' && config.usdtEnabled) {
         await _submitUsdtIntent(amount, l10n);
+        return;
+      }
+      if (_channel == 'whish' && config.whishEnabled) {
+        await _submitWhishIntent(amount, l10n);
         return;
       }
     }
@@ -135,6 +139,28 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     }
   }
 
+  /// Creates a Whish redirect top-up intent and pushes the redirect screen.
+  Future<void> _submitWhishIntent(double amount, AppLocalizations l10n) async {
+    final intent = await ref
+        .read(createWhishTopUpIntentControllerProvider.notifier)
+        .submit(amount, idempotencyKey: newIdempotencyKey());
+    if (!mounted) return;
+    if (intent != null) {
+      context.push('/payments/whish-redirect', extra: intent);
+    } else {
+      final failure = ref.read(createWhishTopUpIntentControllerProvider).failure;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            failure?.message.isNotEmpty == true
+                ? failure!.message
+                : l10n.paymentFailed,
+          ),
+        ),
+      );
+    }
+  }
+
   /// Pull-to-refresh for the request history: an admin approval moves both the
   /// request status and the wallet balance, so refresh both.
   Future<void> _refreshRequests() async {
@@ -148,7 +174,8 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
     final submitting = ref.watch(topUpControllerProvider).submitting ||
-        ref.watch(createTopUpIntentControllerProvider).submitting;
+        ref.watch(createTopUpIntentControllerProvider).submitting ||
+        ref.watch(createWhishTopUpIntentControllerProvider).submitting;
     final requestsAsync = ref.watch(topUpRequestsProvider);
     final amount = _amount;
 

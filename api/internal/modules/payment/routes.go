@@ -38,10 +38,21 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, svc *S
 		return "paypoll:" + ratelimit.ClientIP(req)
 	})
 
+	// Public Whish webhook routes — mounted OUTSIDE the AuthRequired group.
+	// Whish's server-to-server callbacks carry no JWT; the HMAC token in the
+	// query string is the authentication (chi is explicit about ordering, but
+	// the "register webhooks before the authed group" rule from LACPA still
+	// holds). Rate-limited by the poll limiter (bursty gateway retries).
+	r.Route("/api/v1/payments/webhooks/whish", func(r chi.Router) {
+		r.With(pollLimit).Get("/success", h.WhishCallback)
+		r.With(pollLimit).Get("/failure", h.WhishCallback)
+	})
+
 	r.Route("/api/v1/payments", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
 		r.Get("/config", h.GetConfig)
 		r.With(createLimit).Post("/usdt/topup-intents", h.CreateTopUpIntent)
+		r.With(createLimit).Post("/whish/topup-intents", h.CreateWhishTopUpIntent)
 		r.With(pollLimit).Get("/intents/{id}", h.GetIntent)
 	})
 }

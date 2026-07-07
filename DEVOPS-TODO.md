@@ -222,3 +222,43 @@ enable in prod, in order:
    Each address needs a little TRX for energy/bandwidth to move USDT out; sweep
    periodically, oldest first. The admin `/payments` page + tronscan links show
    every funded address.
+
+## 15. Whish Pay (redirect + callback) — prod rollout (payment module Whish PR)
+
+The feature ships DISABLED (no `WHISH_*` creds → intent creation refuses, no
+sweeper runs, `GET /api/v1/payments/config` answers `whishEnabled:false`). To
+enable in prod, in order:
+
+1. **Obtain SalehCard's OWN Whish merchant account** → per-merchant `channel` +
+   `secret` + `websiteUrl`. ⚠️ The LACPA reference creds used for sandbox testing
+   (`channel 10200046`, `websiteUrl lacpa.academy`) are NOT SalehCard's and must
+   never ship. They were chat-exposed → **ask LACPA to rotate them.**
+2. Azure App Service app settings on the API:
+   - `WHISH_PROVIDER=whish`  (⚠️ NEVER `stub` in prod — `config.Validate` refuses
+     to boot with creds + stub outside development; the stub auto-confirms on
+     re-poll)
+   - `WHISH_CHANNEL` / `WHISH_SECRET` / `WHISH_WEBSITE_URL` = SalehCard's merchant creds
+   - `WHISH_BASE_URL=https://api.whish.money/itel-service/api`  (prod, not sandbox)
+   - `PAYMENTS_WEBHOOK_BASE_URL=https://<prod-api-host>`  (public host Whish can reach)
+   - `PAYMENTS_HMAC_SECRET=<openssl rand -hex 32>`  (store like a DB password)
+   - optional: `WHISH_SUCCESS_REDIRECT_URL` / `WHISH_FAILURE_REDIRECT_URL`,
+     tuning `WHISH_INTENT_EXPIRY=30m`, `WHISH_SWEEP_INTERVAL=60s`
+3. Confirm **Always On** on the App Service (the reconciliation sweeper is an
+   in-process loop). Duplicate sweepers are SAFE (atomic claims + wallet
+   `(method,ref)` index prevent double credits).
+4. **Whish caller-IP allowlist?** Whish may IP-allowlist the merchant's calling IP
+   (like Monty SMS does). If so, prod already egresses via the NAT Gateway fixed
+   IP (see `HANDOFF-OTP-DEPLOY.md`) — register that IP with Whish. Confirm before
+   go-live, or `Initiate`/`GetStatus` will fail.
+5. Boot check: the startup log must show `payment: Whish redirect payments
+   enabled provider=whish`. Confirm the new Cosmos index came up: unique partial
+   `provider+externalId` on `payment_intents`. The `wallet_transactions`
+   `(method,ref)` unique-partial index is auto-migrated from usdt_trc20-only to
+   `method ∈ {usdt_trc20, whish}` at startup (`wallet.EnsureIndexes` drops the
+   stale `method_1_ref_1` and recreates it widened — Mongo/Cosmos won't recreate
+   a same-named index with a different partial filter otherwise). Watch for no
+   `wallet: failed to ensure indexes` warning in the boot log.
+6. **Reconciliation:** abandoned intents are swept to `expired` after
+   `WHISH_INTENT_EXPIRY` (the sweep re-polls Whish first, so a lost-callback-but-
+   paid intent still settles). Monitor the admin `/payments` page (filter Whish /
+   Failed) for stuck intents.

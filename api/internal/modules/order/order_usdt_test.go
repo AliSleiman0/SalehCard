@@ -16,13 +16,21 @@ import (
 
 // fakeUSDT is the order module's view of the payment service (usdtIntents port).
 type fakeUSDT struct {
-	enabled   bool
-	createErr error
-	intents   map[bson.ObjectID]*payment.Intent // keyed by orderID
-	created   []bson.ObjectID
+	enabled      bool
+	whishEnabled bool
+	createErr    error
+	intents      map[bson.ObjectID]*payment.Intent // keyed by orderID
+	created      []bson.ObjectID
 }
 
-func (f *fakeUSDT) Enabled() bool { return f.enabled }
+func (f *fakeUSDT) Enabled() bool      { return f.enabled }
+func (f *fakeUSDT) WhishEnabled() bool { return f.whishEnabled }
+
+// CreateWhishOrderIntent shares the fake's create path (the order service treats
+// both providers identically — create async intent, return pending order).
+func (f *fakeUSDT) CreateWhishOrderIntent(ctx context.Context, userID, orderID bson.ObjectID, amountUSD float64) (*payment.Intent, error) {
+	return f.CreateOrderIntent(ctx, userID, orderID, amountUSD)
+}
 
 func (f *fakeUSDT) CreateOrderIntent(_ context.Context, userID, orderID bson.ObjectID, amountUSD float64) (*payment.Intent, error) {
 	if f.createErr != nil {

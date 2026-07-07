@@ -91,6 +91,69 @@ func (f *fakeStore) GetActiveByOrder(_ context.Context, orderID bson.ObjectID) (
 	return nil, apperrors.ErrNotFound
 }
 
+func (f *fakeStore) GetByExternalID(_ context.Context, externalID int64) (*Intent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, in := range f.intents {
+		if in.Provider == ProviderWhish && in.ExternalID == externalID {
+			cp := *in
+			return &cp, nil
+		}
+	}
+	return nil, apperrors.ErrNotFound
+}
+
+func (f *fakeStore) UpdateAfterInitiate(_ context.Context, id bson.ObjectID, redirectURL, providerRef string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	in, ok := f.intents[id]
+	if !ok {
+		return apperrors.ErrNotFound
+	}
+	in.RedirectURL = redirectURL
+	in.ProviderRef = providerRef
+	return nil
+}
+
+func (f *fakeStore) ClaimWhishConfirmed(_ context.Context, id bson.ObjectID, receivedMicros int64, payerPhone string) (*Intent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	in, ok := f.intents[id]
+	if !ok || in.Status != StatusPending {
+		return nil, apperrors.ErrConflict
+	}
+	in.Status = StatusConfirming
+	in.AmountReceivedMicros = receivedMicros
+	in.PayerPhone = payerPhone
+	cp := *in
+	return &cp, nil
+}
+
+func (f *fakeStore) MarkFailed(_ context.Context, id bson.ObjectID, reason string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	in, ok := f.intents[id]
+	if !ok || in.Status != StatusPending {
+		return apperrors.ErrConflict
+	}
+	in.Status = StatusFailed
+	in.Settlement = reason
+	return nil
+}
+
+func (f *fakeStore) ListWhishExpiryCandidates(_ context.Context, now time.Time, _ int) ([]*Intent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []*Intent
+	for _, in := range f.intents {
+		if in.Provider == ProviderWhish && in.Status == StatusPending && in.ExpiresAt.Before(now) {
+			cp := *in
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeStore) CountOpenForUser(_ context.Context, userID bson.ObjectID) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -391,7 +454,10 @@ func TestCanTransition(t *testing.T) {
 	}{
 		{StatusPending, StatusConfirming, true},
 		{StatusPending, StatusExpired, true},
+		{StatusPending, StatusFailed, true},
 		{StatusPending, StatusConfirmed, false},
+		{StatusConfirming, StatusFailed, false},
+		{StatusFailed, StatusConfirming, false},
 		{StatusConfirming, StatusConfirmed, true},
 		{StatusConfirming, StatusExpired, false},
 		{StatusConfirming, StatusPending, false},

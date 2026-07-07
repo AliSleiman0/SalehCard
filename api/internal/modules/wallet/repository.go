@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -51,21 +52,54 @@ func NewMongoRepository(db *mongo.Database) *MongoRepository {
 
 // EnsureIndexes creates the indexes the wallet ledger relies on.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
-	_, err := db.Collection("wallet_transactions").Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}},
-		// One on-chain settlement credit per payment-intent ref: the payment
-		// module's watcher retries settlement until it succeeds, and this
-		// unique constraint is what makes the retried TopUp a safe no-op
-		// (duplicate insert → TopUp's compensation reverses the second
-		// balance bump) instead of a double credit.
-		{
-			Keys: bson.D{{Key: "method", Value: 1}, {Key: "ref", Value: 1}},
-			Options: options.Index().
-				SetUnique(true).
-				SetPartialFilterExpression(bson.D{{Key: "method", Value: "usdt_trc20"}}),
-		},
-	})
-	return err
+	idx := db.Collection("wallet_transactions").Indexes()
+	if _, err := idx.CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}},
+	}); err != nil {
+		return err
+	}
+
+	// One settlement credit per payment-intent ref: the payment module retries
+	// settlement until it succeeds (USDT watcher / Whish callback + reconcile
+	// sweep), and this unique constraint is what makes the retried TopUp a safe
+	// no-op (duplicate insert → TopUp's compensation reverses the second balance
+	// bump) instead of a double credit. The filter covers every automatic-
+	// settlement method (usdt_trc20, whish); manual top-up channels ("whish"
+	// here is the AUTO Whish-gateway method, distinct from the manual whish
+	// channel on topup_requests) are unaffected.
+	settlementIdx := mongo.IndexModel{
+		Keys: bson.D{{Key: "method", Value: 1}, {Key: "ref", Value: 1}},
+		Options: options.Index().
+			SetUnique(true).
+			SetPartialFilterExpression(bson.D{{Key: "method", Value: bson.D{{Key: "$in", Value: bson.A{"usdt_trc20", "whish"}}}}}),
+	}
+	if _, err := idx.CreateOne(ctx, settlementIdx); err != nil {
+		// Migration: an earlier build created method_1_ref_1 with a narrower
+		// (usdt_trc20-only) partial filter. Mongo/Cosmos won't recreate an index
+		// of the same name with a different partial filter (IndexKeySpecsConflict
+		// / IndexOptionsConflict), so drop the stale one and recreate widened.
+		if !isIndexConflict(err) {
+			return err
+		}
+		if derr := idx.DropOne(ctx, "method_1_ref_1"); derr != nil {
+			return derr
+		}
+		if _, cerr := idx.CreateOne(ctx, settlementIdx); cerr != nil {
+			return cerr
+		}
+	}
+	return nil
+}
+
+// isIndexConflict reports whether err is Mongo's "an index with this name
+// already exists with different options" (codes 85 IndexOptionsConflict /
+// 86 IndexKeySpecsConflict).
+func isIndexConflict(err error) bool {
+	var cmdErr mongo.CommandError
+	if errors.As(err, &cmdErr) {
+		return cmdErr.Code == 85 || cmdErr.Code == 86
+	}
+	return false
 }
 
 // Create inserts a ledger row, stamping CreatedAt.

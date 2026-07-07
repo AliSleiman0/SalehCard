@@ -12,5 +12,10 @@ abstract class PaymentRepository {
     required String idempotencyKey,
   });
 
+  Future<Either<Failure, PaymentIntent>> createWhishTopUpIntent(
+    double amount, {
+    required String idempotencyKey,
+  });
+
   Future<Either<Failure, PaymentIntent>> getIntent(String id);
 }

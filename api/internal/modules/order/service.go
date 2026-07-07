@@ -75,6 +75,11 @@ type usdtIntents interface {
 	Enabled() bool
 	CreateOrderIntent(ctx context.Context, userID, orderID bson.ObjectID, amountUSD float64) (*payment.Intent, error)
 	GetActiveOrderIntent(ctx context.Context, orderID bson.ObjectID) (*payment.Intent, error)
+	// Whish redirect checkout (nil/WhishEnabled()==false disables the method,
+	// exactly like the usdt method). GetActiveOrderIntent is shared — it returns
+	// the order's live intent whichever provider created it.
+	WhishEnabled() bool
+	CreateWhishOrderIntent(ctx context.Context, userID, orderID bson.ObjectID, amountUSD float64) (*payment.Intent, error)
 }
 
 // Service defines the business-logic operations for the order domain.
@@ -145,6 +150,13 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		// (USDT_XPUB set). It settles asynchronously — see the intent branch
 		// after the order is persisted.
 		if s.usdt == nil || !s.usdt.Enabled() {
+			return nil, unavailablePaymentMethod()
+		}
+	case PaymentMethodWhish:
+		// Whish redirect checkout is accepted only when Whish is configured. Like
+		// USDT it settles asynchronously (redirect → callback) — see the intent
+		// branch after the order is persisted.
+		if s.usdt == nil || !s.usdt.WhishEnabled() {
 			return nil, unavailablePaymentMethod()
 		}
 	case PaymentMethodCard:
@@ -312,6 +324,17 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	//     order needs no payment, so it falls through to instant fulfillment.)
 	if order.PaymentMethod == PaymentMethodUSDT && total > 0 {
 		if _, err := s.usdt.CreateOrderIntent(ctx, userID, order.ID, total); err != nil {
+			_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
+			return nil, err
+		}
+		return order, nil
+	}
+
+	// 5c. Whish redirect checkout: same async shape as USDT — create the intent
+	//     (which opens the hosted page) and return the still-pending order; the
+	//     Whish callback confirms and calls FulfillPaidOrder.
+	if order.PaymentMethod == PaymentMethodWhish && total > 0 {
+		if _, err := s.usdt.CreateWhishOrderIntent(ctx, userID, order.ID, total); err != nil {
 			_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
 			return nil, err
 		}

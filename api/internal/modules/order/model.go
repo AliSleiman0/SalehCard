@@ -14,6 +14,7 @@ const (
 	PaymentMethodWallet PaymentMethod = "wallet"
 	PaymentMethodCard   PaymentMethod = "card"
 	PaymentMethodUSDT   PaymentMethod = "usdt"
+	PaymentMethodWhish  PaymentMethod = "whish"
 )
 
 // OrderStatus tracks the lifecycle of an order.
