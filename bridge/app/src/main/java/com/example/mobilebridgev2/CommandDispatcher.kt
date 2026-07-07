@@ -13,7 +13,26 @@ object CommandDispatcher {
     @RequiresApi(Build.VERSION_CODES.S)
     @RequiresPermission(Manifest.permission.CALL_PHONE)
     suspend fun dispatch(command: CommandDTO, context: Context): CommandResultDTO{
-        return when(command.provider.lowercase()){
+        val provider = command.provider.lowercase()
+        // Guard: if this provider's SIM was never detected, fail cleanly instead
+        // of crashing on the (previously lateinit) SIM reference downstream.
+        if ((provider == "touch" || provider == "alfa") && !ProviderStore.hasSim(provider)) {
+            return CommandResultDTO(
+                id = command.commandId,
+                recipientNumber = command.recipientNumber,
+                type = command.commandType,
+                timestamp = System.currentTimeMillis(),
+                statusCode = CommandResultCodes.SIM_NOT_AVAILABLE,
+                amount = null,
+                cardCode = null,
+                billingAmount = null,
+                provider = command.provider,
+                balance = null,
+                validityDate = null,
+                errorMessage = "No ${command.provider} SIM detected on this device"
+            )
+        }
+        return when(provider){
             "alfa" -> when(command.commandType){
                 "SEND_SMS" -> CommandExecutor.smsTransfer(command, context)
                 "TRANSFER_CREDIT" -> CommandExecutor.transferCredits(command, context)

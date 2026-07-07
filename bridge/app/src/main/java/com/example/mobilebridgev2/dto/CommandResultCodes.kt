@@ -87,4 +87,5 @@ object CommandResultCodes {
     const val COMMAND_NOT_SUPPORTED = 9001
     const val COMMAND_EXECUTION_FAILED = 9002
     const val COMMAND_RESULT_REPORT_FAILED = 9003
+    const val SIM_NOT_AVAILABLE = 9004
 }
