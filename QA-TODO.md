@@ -177,3 +177,34 @@ real USDT + TRX fees):
 8. Rate limits: 11 rapid intent creations from one IP → 429 on the 11th.
 9. Watcher resilience: restart the API mid-pending-intent → intent still
    confirms after boot (first tick runs immediately).
+
+## Whish Pay — sandbox/redirect test matrix (before prod enable)
+
+Stub-mode e2e is covered by automated tests (token sign/verify, HandleCallback
+success/failure/pending/replay). The following need the Whish **sandbox** through
+a public tunnel (`WHISH_PROVIDER=whish`, sandbox base URL, reference creds,
+`PAYMENTS_WEBHOOK_BASE_URL=<tunnel>`); sandbox delivers no OTP — use the fixed
+test values:
+
+1. Success top-up: Whish top-up intent $1 → app opens the hosted page in the
+   external browser → pay with sandbox phone `96170902894` / OTP `111111` →
+   return to app → poll flips to confirmed, wallet +$1, ledger row
+   `method=whish ref=<intentId>`, push received.
+2. Success order: place a $1 whish order → hosted page → pay → order completes
+   with delivered code (FulfillPaidOrder).
+3. Failure: pay with any OTP other than `111111` → intent `failed`, red terminal
+   screen; an order is failed (no charge, no fulfillment).
+4. Abandon → expiry: create an intent, never pay (set `WHISH_INTENT_EXPIRY=2m` on
+   staging) → the reconciliation sweep re-polls, then marks it `expired`; an order
+   is failed.
+5. **Browser-lands-on-failure-but-paid** (the re-poll guard): if the browser
+   returns to the failure redirect but the payment actually succeeded, the
+   callback re-poll of `GET /payment/collect/status` still confirms it — verify
+   the wallet is credited regardless of which redirect URL fired.
+6. Callback idempotency: replay the success callback (same `externalId`+`token`)
+   → wallet credited exactly once (the `(method,ref)` index dedupes).
+7. Bad token: hit the webhook with a wrong/absent `token` → 400, no state change.
+8. Rate limits: 11 rapid whish intent creations from one IP → 429 on the 11th.
+9. Manual-vs-auto whish top-up: with Whish DISABLED, the top-up `whish` channel
+   still files a manual PENDING request (admin-approved) — confirm the auto path
+   only triggers when `whishEnabled:true`.

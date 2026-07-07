@@ -59,10 +59,10 @@ func main() {
 		}
 	}()
 
-	// Background workers (currently just the USDT payment watcher) run under a
-	// cancellable context and are awaited on shutdown. An interrupted tick is
-	// safe by design: claimed-but-unsettled intents stay `confirming` and are
-	// retried on the next boot's first tick.
+	// Background workers (the USDT payment watcher and the Whish reconciliation
+	// sweeper) run under a cancellable context and are awaited on shutdown. An
+	// interrupted tick is safe by design: claimed-but-unsettled intents stay
+	// `confirming` and are retried on the next boot's first tick.
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	var workers sync.WaitGroup
 	if w := srv.Watcher(); w != nil {
@@ -70,6 +70,13 @@ func main() {
 		go func() {
 			defer workers.Done()
 			w.Run(workerCtx)
+		}()
+	}
+	if sw := srv.WhishSweeper(); sw != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			sw.Run(workerCtx)
 		}()
 	}
 

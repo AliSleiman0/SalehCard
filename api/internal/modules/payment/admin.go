@@ -39,10 +39,13 @@ type adminUser struct {
 type adminIntentView struct {
 	ID          string    `json:"id"`
 	UserID      string    `json:"userId"`
+	Provider    string    `json:"provider"`
 	Purpose     Purpose   `json:"purpose"`
 	OrderID     string    `json:"orderId,omitempty"`
-	Network     string    `json:"network"`
-	Address     string    `json:"address"`
+	Network     string    `json:"network,omitempty"`
+	Address     string    `json:"address,omitempty"`
+	RedirectURL string    `json:"redirectUrl,omitempty"`
+	PayerPhone  string    `json:"payerPhone,omitempty"`
 	AmountUSD   float64   `json:"amountUsd"`
 	ReceivedUSD float64   `json:"receivedUsd"`
 	Status      string    `json:"status"`
@@ -67,9 +70,12 @@ func (row *adminIntentRow) view() adminIntentView {
 	v := adminIntentView{
 		ID:          row.ID.Hex(),
 		UserID:      row.UserID.Hex(),
+		Provider:    ProviderOf(&row.Intent),
 		Purpose:     row.Purpose,
 		Network:     row.Network,
 		Address:     row.Address,
+		RedirectURL: row.RedirectURL,
+		PayerPhone:  row.PayerPhone,
 		AmountUSD:   MicrosToUSD(row.AmountExpectedMicros),
 		ReceivedUSD: MicrosToUSD(row.AmountReceivedMicros),
 		Status:      string(row.Status),

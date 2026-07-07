@@ -1,12 +1,20 @@
-// Package payment implements on-chain USDT payment intents with automatic
-// confirmation: a customer gets a unique watch-only deposit address per
-// intent, a background watcher polls the chain (platform/tron) for the
-// transfer, and a confirmed payment settles either a wallet top-up or an
-// order — no admin in the loop. Structure ports the LACPA payments module
-// (domain state machine / store / service / sweeper) minus the parts a
-// redirect gateway needs (callbacks, HMAC tokens): here the watcher is the
-// ground truth and the double-credit guard is the unique (network, txHash)
-// index.
+// Package payment implements async payment intents with automatic confirmation
+// across two provider kinds, both settling a wallet top-up or an order with no
+// admin in the loop:
+//
+//   - USDT (on-chain, provider "usdt"): a customer gets a unique watch-only
+//     deposit address, a background watcher polls the chain (platform/tron) for
+//     the transfer, and the double-credit guard is the unique (network, txHash)
+//     index. Here the watcher is the ground truth.
+//   - Whish (redirect, provider "whish"): the customer is redirected to a hosted
+//     page (platform/whish), pays, and the result returns as an unsigned server
+//     callback (HMAC-token authenticated) whose handler re-polls Whish's status
+//     API as the ground truth. The double-credit guard is the unique
+//     (provider, externalId) index plus the wallet (method, ref) index.
+//
+// Structure ports the LACPA payments module (domain state machine / store /
+// service / sweeper). The shared settlement path (settle → wallet/order) serves
+// both providers.
 package payment
 
 import (
@@ -28,18 +36,30 @@ const (
 // IntentStatus is the payment-intent lifecycle state.
 type IntentStatus string
 
-// Intent statuses. `confirming` is the atomic watcher claim separating
-// "transfer seen on-chain" from "money settled locally", so a crash between
-// the two retries idempotently. There is no failed status — settlement errors
-// stay confirming and retry every watcher tick.
+// Intent statuses. `confirming` is the atomic claim separating "payment seen"
+// from "money settled locally", so a crash between the two retries idempotently.
+// A USDT intent never reaches `failed` (settlement errors stay `confirming` and
+// retry every watcher tick); `failed` is a Whish-only terminal state for a
+// gateway-reported failed payment.
 const (
 	StatusPending    IntentStatus = "pending"
 	StatusConfirming IntentStatus = "confirming"
 	StatusConfirmed  IntentStatus = "confirmed"
 	StatusExpired    IntentStatus = "expired"
+	StatusFailed     IntentStatus = "failed"
 )
 
-// NetworkTRC20 is the only supported network at launch; the field exists so
+// Provider identifies which payment rail an intent uses. An intent stored
+// before this field existed (all on-chain) decodes as "" — treat empty as usdt.
+type ProviderKind = string
+
+// Provider kinds.
+const (
+	ProviderUSDT  ProviderKind = "usdt"
+	ProviderWhish ProviderKind = "whish"
+)
+
+// NetworkTRC20 is the only supported USDT network at launch; the field exists so
 // additional chains slot in without a schema change.
 const NetworkTRC20 = "trc20"
 
@@ -51,17 +71,27 @@ const (
 	SettlementLate           = "wallet_credit_late"      // paid after expiry → credited to wallet
 )
 
-// Intent is one on-chain payment request: a derived deposit address, the
-// expected amount, and what a confirmed transfer settles.
+// Intent is one payment request. For USDT it carries a derived deposit address
+// and the on-chain fields; for Whish it carries the gateway externalId, the
+// hosted redirect URL, and the payer phone. The shared fields (purpose, amount,
+// status, settlement) drive the provider-agnostic settlement path.
 type Intent struct {
-	ID      bson.ObjectID  `bson:"_id,omitempty"     json:"id"`
-	UserID  bson.ObjectID  `bson:"userId"            json:"-"`
-	Purpose Purpose        `bson:"purpose"           json:"purpose"`
-	OrderID *bson.ObjectID `bson:"orderId,omitempty" json:"orderId,omitempty"`
+	ID       bson.ObjectID  `bson:"_id,omitempty"     json:"id"`
+	UserID   bson.ObjectID  `bson:"userId"            json:"-"`
+	Purpose  Purpose        `bson:"purpose"           json:"purpose"`
+	OrderID  *bson.ObjectID `bson:"orderId,omitempty" json:"orderId,omitempty"`
+	Provider ProviderKind   `bson:"provider,omitempty" json:"provider"`
 
+	// USDT (on-chain) fields.
 	Network         string `bson:"network"         json:"network"`
 	Address         string `bson:"address"         json:"address"`
 	DerivationIndex uint32 `bson:"derivationIndex" json:"-"`
+
+	// Whish (redirect) fields.
+	ExternalID  int64  `bson:"externalId,omitempty"  json:"-"`
+	RedirectURL string `bson:"redirectUrl,omitempty" json:"redirectUrl,omitempty"`
+	ProviderRef string `bson:"providerRef,omitempty" json:"-"`
+	PayerPhone  string `bson:"payerPhone,omitempty"  json:"-"`
 
 	// Amounts are integer micro-USDT (6 decimals, the TRC20 base unit) so
 	// on-chain matching never touches floats; USD floats exist only at the
@@ -87,16 +117,31 @@ type Intent struct {
 // CanTransition reports whether an intent may move from cur to next.
 // expired → confirming is the late-payment grace: a transfer that lands after
 // expiry is still claimed and settled (as a wallet credit, never fulfillment).
+// pending → failed is the Whish gateway-failure path.
 func CanTransition(cur, next IntentStatus) bool {
 	switch cur {
 	case StatusPending:
-		return next == StatusConfirming || next == StatusExpired
+		return next == StatusConfirming || next == StatusExpired || next == StatusFailed
 	case StatusConfirming:
 		return next == StatusConfirmed
 	case StatusExpired:
 		return next == StatusConfirming
 	}
 	return false
+}
+
+// IsTerminal reports whether an intent status is final (no further transitions).
+func (s IntentStatus) IsTerminal() bool {
+	return s == StatusConfirmed || s == StatusExpired || s == StatusFailed
+}
+
+// ProviderOf returns the intent's provider, treating a legacy empty value
+// (pre-Whish on-chain intents) as usdt.
+func ProviderOf(in *Intent) ProviderKind {
+	if in.Provider == "" {
+		return ProviderUSDT
+	}
+	return in.Provider
 }
 
 // MicrosToUSD converts micro-USDT to USD (1 USDT = 1 USD by decision).

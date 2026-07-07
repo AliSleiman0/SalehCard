@@ -108,12 +108,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final kycStatus = kycAsync.asData?.value.status;
     final kycBlocked = kycStatus != null && kycStatus != KycStatus.verified;
 
-    // USDT (on-chain) is offered only when the backend has it enabled. It does
-    // not draw on the wallet, so it also unblocks an insufficient-balance CTA.
-    final usdtEnabled =
-        ref.watch(paymentConfigProvider).asData?.value.usdtEnabled ?? false;
-    final payingWithUsdt = _payment == 'usdt';
-    final ctaBlocked = walletInsufficient && !payingWithUsdt;
+    // USDT (on-chain) / Whish (redirect) are offered only when the backend has
+    // them enabled. Neither draws on the wallet, so selecting one also unblocks
+    // an insufficient-balance CTA.
+    final paymentConfig = ref.watch(paymentConfigProvider).asData?.value;
+    final usdtEnabled = paymentConfig?.usdtEnabled ?? false;
+    final whishEnabled = paymentConfig?.whishEnabled ?? false;
+    final payingWithoutWallet = _payment == 'usdt' || _payment == 'whish';
+    final ctaBlocked = walletInsufficient && !payingWithoutWallet;
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -155,6 +157,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         walletInsufficient: walletInsufficient,
                         selected: _payment,
                         usdtEnabled: usdtEnabled,
+                        whishEnabled: whishEnabled,
                         onSelect: (method) =>
                             setState(() => _payment = method),
                         l10n: l10n,
@@ -317,12 +320,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (!mounted) return;
     if (order != null) {
       ref.read(cartControllerProvider.notifier).clear();
-      // A USDT order comes back pending with a deposit intent — route to the
-      // waiting-for-payment screen; it navigates on to the order once the
-      // on-chain payment confirms.
+      // A USDT/Whish order comes back pending with a payment intent — route to
+      // the matching waiting-for-payment screen; it navigates on to the order
+      // once the payment confirms.
       final intent = order.paymentIntent;
       if (intent != null) {
-        context.pushReplacement('/payments/usdt-deposit', extra: intent);
+        final route = intent.isWhish
+            ? '/payments/whish-redirect'
+            : '/payments/usdt-deposit';
+        context.pushReplacement(route, extra: intent);
       } else {
         context.pushReplacement('/order-success/${order.id}', extra: order);
       }
@@ -575,6 +581,7 @@ class _PaymentSelector extends StatelessWidget {
     required this.walletInsufficient,
     required this.selected,
     required this.usdtEnabled,
+    required this.whishEnabled,
     required this.onSelect,
     required this.l10n,
   });
@@ -583,6 +590,7 @@ class _PaymentSelector extends StatelessWidget {
   final bool walletInsufficient;
   final String selected;
   final bool usdtEnabled;
+  final bool whishEnabled;
   final ValueChanged<String> onSelect;
   final AppLocalizations l10n;
 
@@ -615,6 +623,18 @@ class _PaymentSelector extends StatelessWidget {
             title: l10n.usdtPayLabel,
             subtitle: 'TRC20',
             onTap: () => onSelect('usdt'),
+          ),
+        ],
+        if (whishEnabled) ...[
+          const SizedBox(height: 12),
+          _PayRow(
+            selected: selected == 'whish',
+            enabled: true,
+            icon: Icons.phone_iphone_rounded,
+            iconColor: AppTokens.brand1,
+            title: 'Whish',
+            subtitle: 'Pay with Whish',
+            onTap: () => onSelect('whish'),
           ),
         ],
         if (showTopUp) ...[

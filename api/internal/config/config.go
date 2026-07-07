@@ -160,6 +160,38 @@ type Config struct {
 	RateLimitPaymentCreateWindow time.Duration
 	RateLimitPaymentPollMax      int
 	RateLimitPaymentPollWindow   time.Duration
+
+	// Whish redirect payments (payment module + platform/whish). The feature is
+	// enabled iff a real provider + credentials + the shared PAYMENTS_* callback
+	// config are all set; WhishProvider selects the adapter: "whish" (real API)
+	// or "stub" (dev — fake collectUrl, auto-success on re-poll).
+	WhishProvider   string
+	WhishBaseURL    string
+	WhishChannel    string
+	WhishSecret     string
+	WhishWebsiteURL string
+	WhishUserAgent  string
+	// PaymentsWebhookBaseURL is the public host Whish reaches for server
+	// callbacks (a dev tunnel; the prod API origin). Whish's sandbox cannot
+	// reach localhost.
+	PaymentsWebhookBaseURL string
+	// PaymentsHMACSecret signs the tokens on Whish's unsigned callback URLs.
+	PaymentsHMACSecret string
+	// WhishSuccessRedirectURL / WhishFailureRedirectURL are where the browser
+	// lands after the hosted page (optional for native clients).
+	WhishSuccessRedirectURL string
+	WhishFailureRedirectURL string
+	// WhishIntentExpiry is the customer's Whish payment window (default 30m).
+	WhishIntentExpiry time.Duration
+	// WhishSweepInterval is the reconciliation-sweep tick (default 60s).
+	WhishSweepInterval time.Duration
+}
+
+// whishConfigured reports whether Whish credentials + the shared callback config
+// are present (independent of provider validity — see WhishEnabled at runtime).
+func (c *Config) whishConfigured() bool {
+	return c.WhishChannel != "" && c.WhishSecret != "" && c.WhishWebsiteURL != "" &&
+		c.PaymentsWebhookBaseURL != "" && c.PaymentsHMACSecret != ""
 }
 
 // Load reads configuration from environment variables, applying defaults where
@@ -253,6 +285,19 @@ func Load() *Config {
 		RateLimitPaymentCreateWindow: getDuration("RATE_LIMIT_PAYMENT_CREATE_WINDOW", time.Minute),
 		RateLimitPaymentPollMax:      getInt("RATE_LIMIT_PAYMENT_POLL_MAX", 60),
 		RateLimitPaymentPollWindow:   getDuration("RATE_LIMIT_PAYMENT_POLL_WINDOW", time.Minute),
+
+		WhishProvider:           getEnv("WHISH_PROVIDER", "stub"),
+		WhishBaseURL:            os.Getenv("WHISH_BASE_URL"), // empty → platform/whish sandbox default
+		WhishChannel:            os.Getenv("WHISH_CHANNEL"),
+		WhishSecret:             os.Getenv("WHISH_SECRET"),
+		WhishWebsiteURL:         os.Getenv("WHISH_WEBSITE_URL"),
+		WhishUserAgent:          os.Getenv("WHISH_USER_AGENT"), // empty → platform/whish default
+		PaymentsWebhookBaseURL:  os.Getenv("PAYMENTS_WEBHOOK_BASE_URL"),
+		PaymentsHMACSecret:      os.Getenv("PAYMENTS_HMAC_SECRET"),
+		WhishSuccessRedirectURL: os.Getenv("WHISH_SUCCESS_REDIRECT_URL"),
+		WhishFailureRedirectURL: os.Getenv("WHISH_FAILURE_REDIRECT_URL"),
+		WhishIntentExpiry:       getDuration("WHISH_INTENT_EXPIRY", 30*time.Minute),
+		WhishSweepInterval:      getDuration("WHISH_SWEEP_INTERVAL", 60*time.Second),
 	}
 }
 
@@ -287,6 +332,17 @@ func (c *Config) Validate() error {
 	}
 	if c.USDTProvider == "trongrid" && c.USDTXPub != "" && c.TronGridAPIKey == "" {
 		return errors.New("TRONGRID_API_KEY is required when USDT payments are enabled with the trongrid provider")
+	}
+	// Whish: the stub auto-confirms unpaid payments on re-poll, so it must never
+	// run with real credentials outside development.
+	if c.whishConfigured() && c.WhishProvider == "stub" {
+		return errors.New("WHISH_PROVIDER=stub would auto-confirm unpaid Whish payments outside development — set WHISH_PROVIDER=whish or unset the WHISH_* credentials")
+	}
+	// A real Whish provider needs its credentials AND the shared callback config
+	// (a public webhook host + an HMAC secret) or callbacks can't be received or
+	// authenticated.
+	if c.WhishProvider == "whish" && !c.whishConfigured() {
+		return errors.New("Whish is set to the real provider but is missing credentials/callback config — set WHISH_CHANNEL, WHISH_SECRET, WHISH_WEBSITE_URL, PAYMENTS_WEBHOOK_BASE_URL, and PAYMENTS_HMAC_SECRET")
 	}
 	return nil
 }

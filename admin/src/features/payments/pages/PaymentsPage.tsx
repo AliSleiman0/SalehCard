@@ -24,6 +24,7 @@ const STATUS_FILTERS: [PaymentIntentStatus | '', string][] = [
   ['confirming', 'Confirming'],
   ['confirmed', 'Confirmed'],
   ['expired', 'Expired'],
+  ['failed', 'Failed'],
 ]
 
 const PURPOSE_FILTERS: [PaymentPurpose | '', string][] = [
@@ -37,6 +38,7 @@ const STATUS_CLASS: Record<PaymentIntentStatus, string> = {
   confirming: 'st st-warn',
   confirmed: 'st st-ok',
   expired: 'st st-danger',
+  failed: 'st st-danger',
 }
 
 /** A shortened hash/address for compact display (0x1234…abcd style). */
@@ -106,8 +108,8 @@ export default function PaymentsPage() {
           <ErrorState message="Couldn't load payments." onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState
-            title="No USDT payments"
-            sub="On-chain USDT deposits (wallet top-ups and order payments) appear here as customers pay."
+            title="No payments"
+            sub="USDT and Whish payments (wallet top-ups and order payments) appear here as customers pay."
           />
         ) : (
           <>
@@ -116,7 +118,10 @@ export default function PaymentsPage() {
                 <div key={r.id} style={{ borderBottom: '1px solid var(--border)', padding: '14px 18px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <b style={{ fontSize: 15 }}>{money(r.amountUsd)}</b>
-                    <span className="bdg">{r.network.toUpperCase()}</span>
+                    <span className="bdg">{r.provider === 'whish' ? 'Whish' : 'USDT'}</span>
+                    {r.provider !== 'whish' && r.network && (
+                      <span className="bdg">{r.network.toUpperCase()}</span>
+                    )}
                     <span className="bdg">{r.purpose === 'order' ? 'Order' : 'Top-up'}</span>
                     <span className="faint" style={{ fontSize: 12.5 }}>
                       {r.user.email || r.user.phone || r.userId.slice(-8)}
@@ -134,14 +139,17 @@ export default function PaymentsPage() {
                     style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: 12.5 }}
                     className="faint"
                   >
-                    <a href={tronscanAddress(r.address)} target="_blank" rel="noreferrer" title={r.address}>
-                      {short(r.address)} ↗
-                    </a>
-                    {r.txHash && (
+                    {r.provider !== 'whish' && r.address && (
+                      <a href={tronscanAddress(r.address)} target="_blank" rel="noreferrer" title={r.address}>
+                        {short(r.address)} ↗
+                      </a>
+                    )}
+                    {r.provider !== 'whish' && r.txHash && (
                       <a href={tronscanTx(r.txHash)} target="_blank" rel="noreferrer" title={r.txHash}>
                         tx {short(r.txHash)} ↗
                       </a>
                     )}
+                    {r.provider === 'whish' && r.payerPhone && <span>payer {r.payerPhone}</span>}
                     {r.orderId && <span>order …{r.orderId.slice(-6)}</span>}
                     {r.receivedUsd > 0 && r.receivedUsd !== r.amountUsd && (
                       <span style={{ color: 'var(--danger)' }}>received {money(r.receivedUsd)}</span>

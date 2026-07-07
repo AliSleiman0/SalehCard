@@ -36,6 +36,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/tron"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/whish"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -49,10 +50,16 @@ type Server struct {
 	// watcher is the on-chain USDT payment watcher (nil when USDT payments
 	// are not enabled); main.go runs it alongside the HTTP listener.
 	watcher *payment.Watcher
+	// whishSweeper reconciles Whish redirect intents (nil when Whish is not
+	// enabled); main.go runs it alongside the HTTP listener.
+	whishSweeper *payment.WhishSweeper
 }
 
 // Watcher returns the USDT payment watcher, or nil when the feature is off.
 func (s *Server) Watcher() *payment.Watcher { return s.watcher }
+
+// WhishSweeper returns the Whish reconciliation sweeper, or nil when Whish is off.
+func (s *Server) WhishSweeper() *payment.WhishSweeper { return s.whishSweeper }
 
 // New creates a new Server instance with the provided config and database.
 func New(cfg *config.Config, db *mongo.Database) *Server {
@@ -183,6 +190,9 @@ func (s *Server) Routes() {
 	if paySvc.Enabled() {
 		s.watcher = payment.NewWatcher(paySvc, s.cfg.USDTWatchInterval)
 	}
+	if paySvc.WhishEnabled() {
+		s.whishSweeper = payment.NewWhishSweeper(paySvc, s.cfg.WhishSweepInterval)
+	}
 
 	// Customer orders + wallet + promo validation + review submission +
 	// notification inbox (guarded by AuthRequired). Order takes the payment
@@ -255,11 +265,38 @@ func (s *Server) buildPaymentService(ntf notification.Notifier) *payment.Service
 		}
 	}
 	wsvc := wallet.NewWalletService(wallet.NewMongoRepository(s.db), nil)
-	return payment.NewService(payment.NewMongoStore(s.db), reader, wsvc, ntf, payment.Config{
-		XPub:         xpub,
-		IntentExpiry: s.cfg.USDTIntentExpiry,
-		LateGrace:    s.cfg.USDTLateGrace,
+	svc := payment.NewService(payment.NewMongoStore(s.db), reader, wsvc, ntf, payment.Config{
+		XPub:                    xpub,
+		IntentExpiry:            s.cfg.USDTIntentExpiry,
+		LateGrace:               s.cfg.USDTLateGrace,
+		WebhookBaseURL:          s.cfg.PaymentsWebhookBaseURL,
+		WhishSuccessRedirectURL: s.cfg.WhishSuccessRedirectURL,
+		WhishFailureRedirectURL: s.cfg.WhishFailureRedirectURL,
+		WhishIntentExpiry:       s.cfg.WhishIntentExpiry,
 	})
+
+	// Whish redirect payments. Enabled only when a provider, the HMAC secret,
+	// and a public callback host are all configured; any misconfig logs and
+	// leaves Whish disabled (the store still serves reads).
+	if s.cfg.PaymentsHMACSecret != "" && s.cfg.PaymentsWebhookBaseURL != "" {
+		wp, werr := whish.New(whish.Config{
+			Provider: s.cfg.WhishProvider,
+			Whish: whish.ClientConfig{
+				BaseURL:    s.cfg.WhishBaseURL,
+				Channel:    s.cfg.WhishChannel,
+				Secret:     s.cfg.WhishSecret,
+				WebsiteURL: s.cfg.WhishWebsiteURL,
+				UserAgent:  s.cfg.WhishUserAgent,
+			},
+		})
+		if werr != nil {
+			slog.Error("payment: Whish provider misconfigured — Whish payments disabled", "provider", s.cfg.WhishProvider, "error", werr)
+		} else {
+			svc.SetWhish(wp, payment.NewTokens(s.cfg.PaymentsHMACSecret))
+			slog.Info("payment: Whish redirect payments enabled", "provider", s.cfg.WhishProvider)
+		}
+	}
+	return svc
 }
 
 // handleHealth pings MongoDB and returns a status response.

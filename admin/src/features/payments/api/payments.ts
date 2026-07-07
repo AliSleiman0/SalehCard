@@ -1,20 +1,31 @@
 import { apiClient } from '@/lib/api-client'
 import type { ApiResponse, PaginationMeta } from '@/types'
 
-/** Lifecycle of an on-chain USDT payment intent (mirrors the backend). */
-export type PaymentIntentStatus = 'pending' | 'confirming' | 'confirmed' | 'expired'
+/** Lifecycle of a payment intent (mirrors the backend). `failed` is Whish-only. */
+export type PaymentIntentStatus =
+  | 'pending'
+  | 'confirming'
+  | 'confirmed'
+  | 'expired'
+  | 'failed'
 
 /** What a confirmed intent settled. */
 export type PaymentPurpose = 'topup' | 'order'
+
+/** Which payment rail an intent used. */
+export type PaymentProvider = 'usdt' | 'whish'
 
 /** A payment intent enriched with its owning customer (admin view). */
 export interface AdminPaymentIntent {
   id: string
   userId: string
+  provider: PaymentProvider
   purpose: PaymentPurpose
   orderId?: string
-  network: string
-  address: string
+  network?: string
+  address?: string
+  redirectUrl?: string
+  payerPhone?: string
   amountUsd: number
   receivedUsd: number
   status: PaymentIntentStatus

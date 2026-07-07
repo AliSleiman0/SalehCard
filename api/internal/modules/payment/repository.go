@@ -33,6 +33,26 @@ type Store interface {
 	GetActiveByOrder(ctx context.Context, orderID bson.ObjectID) (*Intent, error)
 	CountOpenForUser(ctx context.Context, userID bson.ObjectID) (int64, error)
 
+	// GetByExternalID finds a Whish intent by its gateway external id (the
+	// callback carries only this + the HMAC token).
+	GetByExternalID(ctx context.Context, externalID int64) (*Intent, error)
+	// UpdateAfterInitiate records the hosted redirect URL + provider ref on a
+	// pending Whish intent (status unchanged).
+	UpdateAfterInitiate(ctx context.Context, id bson.ObjectID, redirectURL, providerRef string) error
+	// ClaimWhishConfirmed atomically moves a pending Whish intent to confirming,
+	// stamping received micros (Whish collects the exact invoice amount, so the
+	// caller passes the expected amount) and the payer phone. The status
+	// precondition makes concurrent claims race safely; settlement then dedupes
+	// on the wallet (method, ref) index.
+	ClaimWhishConfirmed(ctx context.Context, id bson.ObjectID, receivedMicros int64, payerPhone string) (*Intent, error)
+	// MarkFailed atomically moves a pending intent to failed (Whish gateway
+	// failure). Idempotent: a re-delivered failure on an already-failed intent
+	// reports ErrConflict, which the caller treats as done.
+	MarkFailed(ctx context.Context, id bson.ObjectID, reason string) error
+	// ListWhishExpiryCandidates returns pending Whish intents past their expiry
+	// (the reconciliation sweep re-polls the gateway before expiring them).
+	ListWhishExpiryCandidates(ctx context.Context, now time.Time, limit int) ([]*Intent, error)
+
 	// ListWatchable returns the intents the watcher should scan the chain
 	// for: pending ones, plus expired ones with no payment seen yet whose
 	// expiry is within the late-payment grace window. Oldest first, capped.
@@ -101,6 +121,15 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		{
 			Keys:    bson.D{{Key: "orderId", Value: 1}},
 			Options: options.Index().SetPartialFilterExpression(bson.D{{Key: "orderId", Value: bson.D{{Key: "$exists", Value: true}}}}),
+		},
+		// Whish's gateway external id is unique per intent; the callback looks an
+		// intent up by it. Partial (only Whish intents carry it) so on-chain
+		// intents without the field don't collide on a null key.
+		{
+			Keys: bson.D{{Key: "provider", Value: 1}, {Key: "externalId", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.D{{Key: "externalId", Value: bson.D{{Key: "$exists", Value: true}}}}),
 		},
 	})
 	return err
@@ -171,6 +200,99 @@ func (s *MongoStore) GetActiveByOrder(ctx context.Context, orderID bson.ObjectID
 		return nil, err
 	}
 	return &in, nil
+}
+
+// GetByExternalID finds a Whish intent by its gateway external id.
+func (s *MongoStore) GetByExternalID(ctx context.Context, externalID int64) (*Intent, error) {
+	var in Intent
+	err := s.col.FindOne(ctx, bson.D{
+		{Key: "provider", Value: ProviderWhish},
+		{Key: "externalId", Value: externalID},
+	}).Decode(&in)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &in, nil
+}
+
+// UpdateAfterInitiate records the redirect URL + provider ref (status stays
+// pending).
+func (s *MongoStore) UpdateAfterInitiate(ctx context.Context, id bson.ObjectID, redirectURL, providerRef string) error {
+	res, err := s.col.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: id}},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "redirectUrl", Value: redirectURL},
+			{Key: "providerRef", Value: providerRef},
+			{Key: "updatedAt", Value: time.Now().UTC()},
+		}}},
+	)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return apperrors.ErrNotFound
+	}
+	return nil
+}
+
+// ClaimWhishConfirmed atomically moves a pending Whish intent to confirming,
+// stamping received = expected and the payer phone. ErrConflict when the intent
+// already moved on (concurrent claim or a re-delivered callback).
+func (s *MongoStore) ClaimWhishConfirmed(ctx context.Context, id bson.ObjectID, receivedMicros int64, payerPhone string) (*Intent, error) {
+	var in Intent
+	err := s.col.FindOneAndUpdate(ctx,
+		bson.D{
+			{Key: "_id", Value: id},
+			{Key: "status", Value: StatusPending},
+		},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "status", Value: StatusConfirming},
+			{Key: "amountReceivedMicros", Value: receivedMicros},
+			{Key: "payerPhone", Value: payerPhone},
+			{Key: "updatedAt", Value: time.Now().UTC()},
+		}}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&in)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrConflict
+		}
+		return nil, err
+	}
+	return &in, nil
+}
+
+// MarkFailed atomically moves a pending intent to failed. ErrConflict when it
+// already moved on (idempotent re-delivery).
+func (s *MongoStore) MarkFailed(ctx context.Context, id bson.ObjectID, reason string) error {
+	now := time.Now().UTC()
+	res, err := s.col.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: id}, {Key: "status", Value: StatusPending}},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "status", Value: StatusFailed},
+			{Key: "settlement", Value: reason},
+			{Key: "updatedAt", Value: now},
+		}}},
+	)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return apperrors.ErrConflict
+	}
+	return nil
+}
+
+// ListWhishExpiryCandidates returns pending Whish intents past their expiry.
+func (s *MongoStore) ListWhishExpiryCandidates(ctx context.Context, now time.Time, limit int) ([]*Intent, error) {
+	return s.list(ctx, bson.D{
+		{Key: "provider", Value: ProviderWhish},
+		{Key: "status", Value: StatusPending},
+		{Key: "expiresAt", Value: bson.D{{Key: "$lt", Value: now}}},
+	}, limit, 1)
 }
 
 // CountOpenForUser counts the user's pending intents (the spam guard, like

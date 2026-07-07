@@ -77,3 +77,40 @@ class CreateTopUpIntentController extends Notifier<CreateTopUpIntentState> {
 final createTopUpIntentControllerProvider =
     NotifierProvider<CreateTopUpIntentController, CreateTopUpIntentState>(
         CreateTopUpIntentController.new);
+
+/// Submit controller for a Whish redirect top-up intent — same shape as the
+/// USDT one, but hits `POST /payments/whish/topup-intents` (returns an intent
+/// carrying the hosted `redirectUrl`).
+class CreateWhishTopUpIntentController extends Notifier<CreateTopUpIntentState> {
+  @override
+  CreateTopUpIntentState build() => const CreateTopUpIntentState();
+
+  Future<PaymentIntent?> submit(
+    double amount, {
+    required String idempotencyKey,
+  }) async {
+    if (state.submitting) return null;
+    state = const CreateTopUpIntentState(submitting: true);
+    final result =
+        await ref.read(paymentRepositoryProvider).createWhishTopUpIntent(
+              amount,
+              idempotencyKey: idempotencyKey,
+            );
+    return result.match(
+      (failure) {
+        state = CreateTopUpIntentState(failure: failure);
+        return null;
+      },
+      (intent) {
+        state = const CreateTopUpIntentState();
+        return intent;
+      },
+    );
+  }
+
+  void reset() => state = const CreateTopUpIntentState();
+}
+
+final createWhishTopUpIntentControllerProvider = NotifierProvider<
+    CreateWhishTopUpIntentController,
+    CreateTopUpIntentState>(CreateWhishTopUpIntentController.new);

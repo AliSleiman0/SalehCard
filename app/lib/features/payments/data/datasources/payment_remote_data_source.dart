@@ -28,6 +28,21 @@ class PaymentRemoteDataSource {
     return PaymentIntentDto.fromJson(unwrap(response) as Map<String, dynamic>);
   }
 
+  /// POST /payments/whish/topup-intents → a new pending Whish top-up intent
+  /// (carries the hosted `redirectUrl` the app opens). [idempotencyKey] dedupes
+  /// retries of the same attempt.
+  Future<PaymentIntentDto> createWhishTopUpIntent(
+    double amount, {
+    required String idempotencyKey,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      '/payments/whish/topup-intents',
+      data: {'amount': amount},
+      options: Options(headers: {'Idempotency-Key': idempotencyKey}),
+    );
+    return PaymentIntentDto.fromJson(unwrap(response) as Map<String, dynamic>);
+  }
+
   /// GET /payments/intents/{id} → the current intent state (polled).
   Future<PaymentIntentDto> getIntent(String id) async {
     final response = await _dio.get<dynamic>('/payments/intents/$id');

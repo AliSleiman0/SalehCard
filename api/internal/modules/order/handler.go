@@ -65,11 +65,13 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A USDT order returns still-pending with an on-chain deposit intent; attach
-	// it so the client can render its waiting-for-payment screen. This also
-	// covers an Idempotency-Key replay — the live intent is re-read for the
-	// order, recovering the deposit details after a lost response.
-	if order.PaymentMethod == PaymentMethodUSDT && order.Status == OrderStatusPending && h.usdt != nil {
+	// An async order (USDT deposit or Whish redirect) returns still-pending with
+	// a payment intent; attach it so the client can render its waiting-for-
+	// payment / redirect screen. This also covers an Idempotency-Key replay — the
+	// live intent is re-read for the order, recovering the details after a lost
+	// response.
+	if (order.PaymentMethod == PaymentMethodUSDT || order.PaymentMethod == PaymentMethodWhish) &&
+		order.Status == OrderStatusPending && h.usdt != nil {
 		if intent, ierr := h.usdt.GetActiveOrderIntent(r.Context(), order.ID); ierr == nil {
 			view := payment.NewIntentView(intent)
 			response.OK(w, placeOrderResponse{Order: order, PaymentIntent: &view})
