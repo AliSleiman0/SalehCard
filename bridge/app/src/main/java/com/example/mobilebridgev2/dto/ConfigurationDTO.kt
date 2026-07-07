@@ -1,7 +1,11 @@
 package com.example.mobilebridgev2.dto
 
 data class ConfigurationDTO (
-    var deviceId: Int,
+    // String, not Int: the server sends the device's ObjectID hex here. Parsing
+    // it as an Int made Gson throw on EVERY config fetch, so the app silently ran
+    // on hardcoded defaults (min-balance 20, default templates/fees) and ignored
+    // all server-pushed calibration.
+    var deviceId: String,
     var touchBalanceCheckUssd: String,
     var alfaBalanceCheckUssd: String,
     var touchThirdPartyRechargeTemplate: String,
