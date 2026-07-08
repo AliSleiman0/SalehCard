@@ -534,7 +534,7 @@ func TestVerifyOTP_SetsPasswordThenPhoneLoginWorks(t *testing.T) {
 
 func TestHandler_GetProfile_Unauthenticated(t *testing.T) {
 	svc, _, _ := newTestService()
-	h := NewHandler(svc, false)
+	h := NewHandler(svc, false, 15*time.Minute)
 
 	// No claims in context → 401.
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)

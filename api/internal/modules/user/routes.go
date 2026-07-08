@@ -61,7 +61,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	// WithSettings enables the admin SMS-2FA gate (reads the app_settings singleton
 	// at login time); without it admin login stays password-only.
 	svc := NewUserService(repo, refreshRepo, otpRepo, sender, otpCfg, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL, WithSettings(settings.NewMongoRepository(db)))
-	h := NewHandler(svc, cfg.CookieSecure)
+	h := NewHandler(svc, cfg.CookieSecure, cfg.RefreshTokenTTL)
 
 	// Per-IP rate limiting on the public auth endpoints (RealIP upstream gives the
 	// true client IP). A general cap on all auth calls + a tighter cap on OTP
