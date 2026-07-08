@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { Icon, PageHead, Art, LoadingSpinner, ErrorState, EmptyState, Pagination, artForCategory } from '@/components'
@@ -79,8 +79,23 @@ function StockTab({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation()
   const [lowOnly, setLowOnly] = useState(false)
   const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  // Debounce the search box and reset to the first page on each new query.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
   // Backend-paginated: one page of rows + global KPI totals in meta.totals.
-  const { data, isLoading, isError, refetch } = useInventoryPage({ page, limit: PAGE_SIZE, low: lowOnly })
+  const { data, isLoading, isError, refetch } = useInventoryPage({
+    page,
+    limit: PAGE_SIZE,
+    low: lowOnly,
+    q: debouncedSearch.trim(),
+  })
   const rows = data?.data ?? []
   const meta = data?.meta
   const totals = meta?.totals
@@ -127,7 +142,7 @@ function StockTab({ onAdd }: { onAdd: () => void }) {
 
   if (isLoading) return <LoadingSpinner />
   if (isError) return <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
-  if (!lowOnly && (meta?.total ?? 0) === 0)
+  if (!lowOnly && !debouncedSearch.trim() && (meta?.total ?? 0) === 0)
     return <EmptyState icon="layers" title="No code inventory yet" sub="Code-type products will appear here once created." />
 
   return (
@@ -157,6 +172,14 @@ function StockTab({ onAdd }: { onAdd: () => void }) {
           <Icon name="layers" size={17} />
           <h3>Code inventory by product</h3>
           <div className="ph-act">
+            <div className="fsearch" style={{ minWidth: 0 }}>
+              <Icon name="search" size={15} />
+              <input
+                placeholder="Search by product…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
             <div className="aseg">
               <button className={!lowOnly ? 'on' : ''} onClick={() => setView(false)}>
                 {t('all')}
@@ -233,7 +256,7 @@ function StockTab({ onAdd }: { onAdd: () => void }) {
         </div>
         {rows.length === 0 && (
           <div className="lsrow faint" style={{ fontSize: 12.5, justifyContent: 'center' }}>
-            No low-stock products.
+            {debouncedSearch.trim() ? 'No products match your search.' : 'No low-stock products.'}
           </div>
         )}
         <Pagination
@@ -259,7 +282,11 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
   const [fileName, setFileName] = useState('')
   const [items, setItems] = useState<UploadItem[]>([])
   const [invalid, setInvalid] = useState(0)
+  const [manualText, setManualText] = useState('')
   const [result, setResult] = useState<{ inserted: number; duplicates: number; invalid: number } | null>(null)
+
+  // Manually-typed codes reuse the same parser + upload mutation as the file path.
+  const manualParsed = useMemo(() => parseCodesFile(manualText), [manualText])
 
   // Duplicate detection within the parsed batch (server also dedupes vs existing).
   const dupes = useMemo(() => {
@@ -292,6 +319,19 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
           setResult(res.data ?? null)
           setItems([])
           setFileName('')
+        },
+      }
+    )
+  }
+
+  const commitManual = () => {
+    if (!productId || manualParsed.items.length === 0) return
+    upload.mutate(
+      { productId, codes: manualParsed.items },
+      {
+        onSuccess: (res) => {
+          setResult(res.data ?? null)
+          setManualText('')
         },
       }
     )
@@ -390,6 +430,40 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
             <button className="abtn primary" disabled={validCount === 0 || upload.isPending} onClick={commit}>
               <Icon name="check" size={15} /> {upload.isPending ? 'Committing…' : `Commit ${validCount} codes`}
             </button>
+          </div>
+
+          {/* Manual entry — type codes directly instead of uploading a file. */}
+          <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+            <label className="alabel">Or type codes</label>
+            <div className="ahint" style={{ marginBottom: 8 }}>
+              One code per line, or <span style={{ fontFamily: 'ui-monospace' }}>code,pin</span> per line
+            </div>
+            <textarea
+              className="afield"
+              style={{ width: '100%', minHeight: 92, fontFamily: 'ui-monospace', resize: 'vertical' }}
+              placeholder={'ABC-123-XYZ\nDEF-456-UVW,1234'}
+              value={manualText}
+              onChange={(e) => setManualText(e.target.value)}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
+              {manualText.trim() && (
+                <span className="faint" style={{ fontSize: 12 }}>
+                  {manualParsed.items.length} valid
+                  {manualParsed.invalid > 0 ? ` · ${manualParsed.invalid} bad format` : ''}
+                </span>
+              )}
+              <button
+                className="abtn primary"
+                style={{ marginInlineStart: 'auto' }}
+                disabled={manualParsed.items.length === 0 || upload.isPending}
+                onClick={commitManual}
+              >
+                <Icon name="check" size={15} />{' '}
+                {upload.isPending
+                  ? 'Committing…'
+                  : `Add ${manualParsed.items.length || ''} code${manualParsed.items.length === 1 ? '' : 's'}`}
+              </button>
+            </div>
           </div>
         </div>
       </div>

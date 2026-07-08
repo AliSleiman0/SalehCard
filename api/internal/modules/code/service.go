@@ -3,6 +3,7 @@ package code
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -19,8 +20,9 @@ type Service interface {
 	// InventoryPaged returns one page of the inventory listing (sorted by title),
 	// the global totals across every code-type product (for the KPI cards), and
 	// the filtered total count for pagination. lowOnly restricts the returned rows
-	// to low-stock products without affecting the global totals.
-	InventoryPaged(ctx context.Context, p pagination.Params, lowOnly bool) (rows []InventoryStats, totals InventoryTotals, total int64, err error)
+	// to low-stock products; search restricts them to a case-insensitive title
+	// substring. Neither filter affects the global totals.
+	InventoryPaged(ctx context.Context, p pagination.Params, lowOnly bool, search string) (rows []InventoryStats, totals InventoryTotals, total int64, err error)
 	LowStock(ctx context.Context) ([]InventoryStats, error)
 	// ClaimForOrder claims qty available codes for a product against an order,
 	// re-mirroring product stock. On any shortfall it releases what it claimed
@@ -146,14 +148,15 @@ func (s *CodeService) Inventory(ctx context.Context) ([]InventoryStats, error) {
 // InventoryPaged returns one page of the inventory listing. It builds the full
 // stats set once (via Inventory), computes the global KPI totals over it, then
 // sorts by title (so skip/limit paging is deterministic), optionally filters to
-// low-stock rows, and slices the requested page.
-func (s *CodeService) InventoryPaged(ctx context.Context, p pagination.Params, lowOnly bool) ([]InventoryStats, InventoryTotals, int64, error) {
+// low-stock rows and/or a title search, and slices the requested page.
+func (s *CodeService) InventoryPaged(ctx context.Context, p pagination.Params, lowOnly bool, search string) ([]InventoryStats, InventoryTotals, int64, error) {
 	all, err := s.Inventory(ctx)
 	if err != nil {
 		return nil, InventoryTotals{}, 0, err
 	}
 
-	// Global totals across every product — unaffected by the page or low-only view.
+	// Global totals across every product — unaffected by the page, low-only, or
+	// search view.
 	var totals InventoryTotals
 	for _, st := range all {
 		totals.Uploaded += st.Uploaded
@@ -167,13 +170,18 @@ func (s *CodeService) InventoryPaged(ctx context.Context, p pagination.Params, l
 	// Stable, deterministic order for paging (natural product order is not).
 	sort.SliceStable(all, func(i, j int) bool { return all[i].Title < all[j].Title })
 
+	q := strings.ToLower(strings.TrimSpace(search))
 	rows := all
-	if lowOnly {
+	if lowOnly || q != "" {
 		rows = make([]InventoryStats, 0, len(all))
 		for _, st := range all {
-			if st.Level == LevelLo {
-				rows = append(rows, st)
+			if lowOnly && st.Level != LevelLo {
+				continue
 			}
+			if q != "" && !strings.Contains(strings.ToLower(st.Title), q) {
+				continue
+			}
+			rows = append(rows, st)
 		}
 	}
 

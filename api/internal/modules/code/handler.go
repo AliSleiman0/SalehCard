@@ -40,7 +40,8 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 
 	p := pagination.ParseParams(r)
 	lowOnly := r.URL.Query().Get("low") == "true"
-	rows, totals, total, err := h.svc.InventoryPaged(r.Context(), p, lowOnly)
+	search := r.URL.Query().Get("q")
+	rows, totals, total, err := h.svc.InventoryPaged(r.Context(), p, lowOnly, search)
 	if err != nil {
 		response.InternalError(w)
 		return
