@@ -329,6 +329,11 @@ func (r *MongoRepository) CodeProducts(ctx context.Context) ([]ProductMeta, erro
 			{Key: "fulfillmentMode", Value: bson.D{{Key: "$exists", Value: false}}},
 			{Key: "fulfillmentType", Value: "code"},
 		},
+		// Bridge recharge_line products consume one scratch-card PIN per order from
+		// this same code pool, so they need a code inventory too. bridge.method is
+		// unique to bridge products (Bridge is nil otherwise; disabling it clears the
+		// method), so this branch never pulls in transfer_credit or non-bridge products.
+		bson.D{{Key: "bridge.method", Value: "recharge_line"}},
 	}}})
 	if err != nil {
 		return nil, err

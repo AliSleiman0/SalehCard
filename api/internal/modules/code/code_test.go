@@ -218,7 +218,7 @@ func TestInventoryPaged(t *testing.T) {
 	ctx := context.Background()
 
 	// Page 1 of 2 (title-sorted): totals are global regardless of the page.
-	rows, totals, total, err := svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 2}, false)
+	rows, totals, total, err := svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 2}, false, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, total)
 	require.Len(t, rows, 2)
@@ -227,14 +227,14 @@ func TestInventoryPaged(t *testing.T) {
 	assert.Equal(t, InventoryTotals{Uploaded: 310, Available: 205, Delivered: 105, LowStock: 2}, totals)
 
 	// Page 2 returns the tail.
-	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 2, Limit: 2}, false)
+	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 2, Limit: 2}, false, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, total)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "Charlie", rows[0].Title)
 
 	// lowOnly filters the rows/count but leaves the global totals intact.
-	rows, totals, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, true)
+	rows, totals, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, true, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, total)
 	require.Len(t, rows, 2)
@@ -242,8 +242,23 @@ func TestInventoryPaged(t *testing.T) {
 	assert.Equal(t, "Charlie", rows[1].Title)
 	assert.Equal(t, 2, totals.LowStock)
 
+	// search filters by case-insensitive title substring, totals stay global.
+	rows, totals, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, false, "ra")
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total) // only "Bravo" contains "ra"
+	require.Len(t, rows, 1)
+	assert.Equal(t, "Bravo", rows[0].Title)
+	assert.Equal(t, 2, totals.LowStock)
+
+	// lowOnly + search compose (AND).
+	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, true, "alpha")
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "Alpha", rows[0].Title)
+
 	// Out-of-range page yields an empty slice, not an error.
-	rows, _, _, err = svc.InventoryPaged(ctx, pagination.Params{Page: 9, Limit: 2}, false)
+	rows, _, _, err = svc.InventoryPaged(ctx, pagination.Params{Page: 9, Limit: 2}, false, "")
 	require.NoError(t, err)
 	assert.Empty(t, rows)
 }

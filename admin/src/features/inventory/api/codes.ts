@@ -37,12 +37,13 @@ export type InventoryMeta = PaginationMeta & { totals: InventoryTotals }
  * global totals); `low` restricts the page to low-stock products.
  */
 export function listInventory(
-  params: { page?: number; limit?: number; low?: boolean } = {}
+  params: { page?: number; limit?: number; low?: boolean; q?: string } = {}
 ): Promise<ApiResponse<InventoryStats[]> & { meta?: InventoryMeta }> {
   const q = new URLSearchParams()
   if (params.page !== undefined) q.set('page', String(params.page))
   if (params.limit !== undefined) q.set('limit', String(params.limit))
   if (params.low) q.set('low', 'true')
+  if (params.q) q.set('q', params.q)
   const qs = q.toString()
   return apiClient.get<InventoryStats[]>(`/api/admin/inventory${qs ? `?${qs}` : ''}`) as Promise<
     ApiResponse<InventoryStats[]> & { meta?: InventoryMeta }
