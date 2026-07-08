@@ -23,7 +23,7 @@ object ProviderStore {
     var touchCreditTransferSmsTemplate: String = "{phone}T{amount}"
     var touchCreditTransferDestination: String = "1199"
     var alfaThirdPartyRechargeSmsTemplate: String = "{phone}R{code}"
-    var alfaCreditTransferDestination: String = "1399"
+    var alfaCreditTransferDestination: String = "1313"
     var alfaCreditTransferSmsTemplate: String = "{phone}T{amount}"
     var alfaThirdPartyRechargeDestination: String = "1313"
     var touchMinimumAllowedBalance: Double = 20.00

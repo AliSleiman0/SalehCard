@@ -314,7 +314,7 @@ func Load() *Config {
 			AlfaRechargeTemplate:  getEnv("BRIDGE_ALFA_RECHARGE_TEMPLATE", "{phone}R{code}"),
 			AlfaRechargeDest:      getEnv("BRIDGE_ALFA_RECHARGE_DEST", "1313"),
 			AlfaTransferTemplate:  getEnv("BRIDGE_ALFA_TRANSFER_TEMPLATE", "{phone}T{amount}"),
-			AlfaTransferDest:      getEnv("BRIDGE_ALFA_TRANSFER_DEST", "1399"),
+			AlfaTransferDest:      getEnv("BRIDGE_ALFA_TRANSFER_DEST", "1313"),
 			TouchMinBalance:       getFloat("BRIDGE_TOUCH_MIN_BALANCE", 20),
 			AlfaMinBalance:        getFloat("BRIDGE_ALFA_MIN_BALANCE", 20),
 			TouchMessageFee:       getFloat("BRIDGE_TOUCH_MESSAGE_FEE", 0.16),
