@@ -323,27 +323,42 @@ export default function ProductEditPage() {
               Determines how the product is delivered — this changes the fields below.
             </div>
             <div className="g3">
-              {FF_OPTIONS.map(([k, , color, label, desc]) => (
-                <div
-                  key={k}
-                  onClick={() => setFf(k)}
-                  style={{
-                    cursor: 'pointer',
-                    padding: 15,
-                    borderRadius: 'var(--ar-md)',
-                    border: '1.5px solid ' + (ff === k ? color : 'var(--border)'),
-                    background: ff === k ? 'var(--grad-soft)' : 'var(--surface-2)',
-                    transition: '.15s',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 99, background: color }} />
-                    <b style={{ fontSize: 13.5 }}>{label}</b>
-                    {ff === k && <Icon name="checkc" size={16} />}
+              {FF_OPTIONS.map(([k, , color, label, desc]) => {
+                // A mobile-recharge bridge product must stay account_credit — the
+                // bridge spec is a sub-mode of credit. Lock the other types while
+                // the bridge is on so a stray click can't flip it to Code/PIN and
+                // silently wipe the bridge config on save.
+                const locked = bridgeOn && k !== 'credit'
+                return (
+                  <div
+                    key={k}
+                    onClick={() => {
+                      if (!locked) setFf(k)
+                    }}
+                    title={
+                      locked
+                        ? 'Turn off the mobile-recharge bridge below to change the fulfillment type.'
+                        : undefined
+                    }
+                    style={{
+                      cursor: locked ? 'not-allowed' : 'pointer',
+                      opacity: locked ? 0.45 : 1,
+                      padding: 15,
+                      borderRadius: 'var(--ar-md)',
+                      border: '1.5px solid ' + (ff === k ? color : 'var(--border)'),
+                      background: ff === k ? 'var(--grad-soft)' : 'var(--surface-2)',
+                      transition: '.15s',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 99, background: color }} />
+                      <b style={{ fontSize: 13.5 }}>{label}</b>
+                      {ff === k && <Icon name="checkc" size={16} />}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}>{desc}</div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}>{desc}</div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 

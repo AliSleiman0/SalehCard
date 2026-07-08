@@ -21,6 +21,14 @@ export default function InventoryPage() {
   const [params] = useSearchParams()
   const uploadFor = params.get('upload') ?? undefined
   const [tab, setTab] = useState<Tab>(uploadFor ? 'upload' : 'stock')
+  // Which product the Bulk-upload picker should preselect. Seeded from the
+  // ?upload= deep link; updated when a Code-stock row's "Add" button is clicked
+  // so the upload view lands on that exact product.
+  const [uploadProduct, setUploadProduct] = useState<string | undefined>(uploadFor)
+  const openUpload = (productId?: string) => {
+    if (productId) setUploadProduct(productId)
+    setTab('upload')
+  }
 
   // The Code-stock table paginates from the backend (see StockTab). The upload
   // picker and thresholds editor need every product, so they fetch the full list
@@ -36,7 +44,7 @@ export default function InventoryPage() {
         title="Inventory & code management"
         sub="Mission-critical — if codes run out, purchases fail."
       >
-        <button className="abtn primary" onClick={() => setTab('upload')}>
+        <button className="abtn primary" onClick={() => openUpload()}>
           <Icon name="upload" size={15} /> Bulk upload codes
         </button>
       </PageHead>
@@ -56,7 +64,7 @@ export default function InventoryPage() {
         ))}
       </div>
 
-      {tab === 'stock' && <StockTab onAdd={() => setTab('upload')} />}
+      {tab === 'stock' && <StockTab onAdd={openUpload} />}
       {tab === 'audit' && <AuditTab />}
       {needsFullList &&
         (isLoading ? (
@@ -65,7 +73,7 @@ export default function InventoryPage() {
           <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
         ) : (
           <>
-            {tab === 'upload' && <UploadTab stats={stats} defaultProduct={uploadFor} />}
+            {tab === 'upload' && <UploadTab stats={stats} defaultProduct={uploadProduct} />}
             {tab === 'config' && <ConfigTab stats={stats} />}
           </>
         ))}
@@ -75,7 +83,7 @@ export default function InventoryPage() {
 
 const PAGE_SIZE = 20
 
-function StockTab({ onAdd }: { onAdd: () => void }) {
+function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
   const { t } = useTranslation()
   const [lowOnly, setLowOnly] = useState(false)
   const [page, setPage] = useState(1)
@@ -235,7 +243,7 @@ function StockTab({ onAdd }: { onAdd: () => void }) {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="abtn xs" onClick={onAdd}>
+                        <button className="abtn xs" onClick={() => onAdd(it.productId)}>
                           <Icon name="upload" size={13} /> Add
                         </button>
                         <button
@@ -279,6 +287,11 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
   const history = historyRes?.data ?? []
   const fileRef = useRef<HTMLInputElement>(null)
   const [productId, setProductId] = useState(defaultProduct || stats[0]?.productId || '')
+  // Follow the product chosen from a Code-stock row's "Add" (defaultProduct
+  // changes on each click); useState alone only reads the first value.
+  useEffect(() => {
+    if (defaultProduct) setProductId(defaultProduct)
+  }, [defaultProduct])
   const [fileName, setFileName] = useState('')
   const [items, setItems] = useState<UploadItem[]>([])
   const [invalid, setInvalid] = useState(0)
