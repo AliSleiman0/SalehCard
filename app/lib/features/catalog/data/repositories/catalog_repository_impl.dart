@@ -1,6 +1,7 @@
 import 'package:fpdart/fpdart.dart';
 
 import '../../../../core/error/failure.dart';
+import '../../../../core/network/paged.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/repositories/catalog_repository.dart';
 import '../datasources/catalog_remote_data_source.dart';
@@ -16,6 +17,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
     int limit = 20,
     String? category,
     String? rootDomain,
+    String? search,
   }) async {
     try {
       final dtos = await _remote.getProducts(
@@ -23,8 +25,31 @@ class CatalogRepositoryImpl implements CatalogRepository {
         limit: limit,
         category: category,
         rootDomain: rootDomain,
+        search: search,
       );
       return Right(dtos.map((d) => d.toEntity()).toList());
+    } catch (error) {
+      return Left(mapError(error));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Paged<Product>>> getProductsPage({
+    int page = 1,
+    int limit = 20,
+    String? category,
+    String? rootDomain,
+    String? search,
+  }) async {
+    try {
+      final page0 = await _remote.getProductsPage(
+        page: page,
+        limit: limit,
+        category: category,
+        rootDomain: rootDomain,
+        search: search,
+      );
+      return Right(page0.map((d) => d.toEntity()));
     } catch (error) {
       return Left(mapError(error));
     }

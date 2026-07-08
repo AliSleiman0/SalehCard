@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_envelope.dart';
+import '../../../../core/network/paged.dart';
 import '../dtos/product_dto.dart';
 
 class CatalogRemoteDataSource {
@@ -13,6 +14,26 @@ class CatalogRemoteDataSource {
     int limit = 20,
     String? category,
     String? rootDomain,
+    String? search,
+  }) async {
+    return (await getProductsPage(
+      page: page,
+      limit: limit,
+      category: category,
+      rootDomain: rootDomain,
+      search: search,
+    ))
+        .items;
+  }
+
+  /// Fetches one page of products plus the total count (from the response
+  /// `meta`), so paginated callers can tell whether more pages remain.
+  Future<Paged<ProductDto>> getProductsPage({
+    int page = 1,
+    int limit = 20,
+    String? category,
+    String? rootDomain,
+    String? search,
   }) async {
     final response = await _dio.get<dynamic>(
       '/products',
@@ -21,12 +42,17 @@ class CatalogRemoteDataSource {
         'limit': limit,
         if (category != null && category.isNotEmpty) 'category': category,
         if (rootDomain != null && rootDomain.isNotEmpty) 'rootDomain': rootDomain,
+        if (search != null && search.isNotEmpty) 'q': search,
       },
     );
-    final data = unwrap(response) as List<dynamic>;
-    return data
+    final (:data, :meta) = unwrapPaged(response);
+    final items = (data as List<dynamic>)
         .map((e) => ProductDto.fromJson(e as Map<String, dynamic>))
         .toList();
+    // Fall back to the page length when meta is absent so a single page still
+    // renders (hasMore is then false, which is correct for an unpaginated body).
+    final total = (meta?['total'] as num?)?.toInt() ?? items.length;
+    return Paged(items: items, total: total);
   }
 
   Future<ProductDto> getProduct(String id) async {

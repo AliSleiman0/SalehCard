@@ -30,3 +30,17 @@ dynamic unwrap(Response<dynamic> response) {
     statusCode: response.statusCode,
   );
 }
+
+/// Like [unwrap], but also returns the pagination `meta` block so paginated
+/// callers can tell whether more pages exist. `meta` is null when the endpoint
+/// omits it. Throws [ApiException] on the same error/shape conditions as [unwrap].
+({dynamic data, Map<String, dynamic>? meta}) unwrapPaged(
+  Response<dynamic> response,
+) {
+  final data = unwrap(response);
+  final body = response.data;
+  final meta = (body is Map && body['meta'] is Map)
+      ? (body['meta'] as Map).cast<String, dynamic>()
+      : null;
+  return (data: data, meta: meta);
+}
