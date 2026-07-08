@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -29,14 +30,17 @@ const refreshCookiePath = "/api/v1/auth"
 
 // Handler exposes user domain operations over HTTP.
 type Handler struct {
-	service Service
-	secure  bool
+	service    Service
+	secure     bool
+	refreshTTL time.Duration
 }
 
 // NewHandler constructs a Handler. secure marks the refresh cookie Secure
-// (enabled outside development).
-func NewHandler(service Service, secure bool) *Handler {
-	return &Handler{service: service, secure: secure}
+// (enabled outside development); refreshTTL sets the cookie's Max-Age so the
+// refresh cookie persists across browser restarts (it must match the server-side
+// refresh-token lifetime).
+func NewHandler(service Service, secure bool, refreshTTL time.Duration) *Handler {
+	return &Handler{service: service, secure: secure, refreshTTL: refreshTTL}
 }
 
 // Register handles POST /api/v1/auth/register.
@@ -266,6 +270,9 @@ func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string) {
 		HttpOnly: true,
 		Secure:   h.secure,
 		SameSite: h.refreshCookieSameSite(),
+		// Persist across browser restarts; without Max-Age this is a session
+		// cookie and the admin SPA loses its session when the browser closes.
+		MaxAge: int(h.refreshTTL.Seconds()),
 	})
 }
 

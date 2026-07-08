@@ -10,8 +10,8 @@ import (
 
 // Default token lifetimes used when the corresponding env vars are unset or invalid.
 const (
-	defaultAccessTokenTTL  = 15 * time.Minute
-	defaultRefreshTokenTTL = 720 * time.Hour // 30 days
+	defaultAccessTokenTTL  = 90 * 24 * time.Hour // 90 days
+	defaultRefreshTokenTTL = 90 * 24 * time.Hour // 90 days
 )
 
 // Config holds all application configuration values.
