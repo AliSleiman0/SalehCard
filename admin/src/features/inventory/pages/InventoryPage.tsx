@@ -18,17 +18,30 @@ type Tab = 'stock' | 'upload' | 'config' | 'audit'
 
 export default function InventoryPage() {
   const { t } = useTranslation()
-  const [params] = useSearchParams()
+  const [params, setSearchParams] = useSearchParams()
   const uploadFor = params.get('upload') ?? undefined
   const [tab, setTab] = useState<Tab>(uploadFor ? 'upload' : 'stock')
-  // Which product the Bulk-upload picker should preselect. Seeded from the
-  // ?upload= deep link; updated when a Code-stock row's "Add" button is clicked
-  // so the upload view lands on that exact product.
+  // Which product the Bulk-upload picker should preselect. Driven by the
+  // ?upload=<id> URL param (a shareable deep link) so clicking a Code-stock row
+  // navigates there and the picker follows.
   const [uploadProduct, setUploadProduct] = useState<string | undefined>(uploadFor)
   const openUpload = (productId?: string) => {
-    if (productId) setUploadProduct(productId)
-    setTab('upload')
+    if (productId) {
+      // Write the URL param; the effect below reacts to it (switch tab + select).
+      setSearchParams({ upload: productId })
+    } else {
+      setSearchParams({})
+      setTab('upload')
+    }
   }
+  // React to ?upload= changes (deep link, or a row click that set the param
+  // while already mounted — useState alone only reads the first value).
+  useEffect(() => {
+    if (uploadFor) {
+      setUploadProduct(uploadFor)
+      setTab('upload')
+    }
+  }, [uploadFor])
 
   // The Code-stock table paginates from the backend (see StockTab). The upload
   // picker and thresholds editor need every product, so they fetch the full list
@@ -218,7 +231,12 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                 return (
                   <tr key={it.productId}>
                     <td>
-                      <div className="cellprod">
+                      <div
+                        className="cellprod"
+                        onClick={() => onAdd(it.productId)}
+                        style={{ cursor: 'pointer' }}
+                        title="Upload codes for this product"
+                      >
                         <Art art={artForCategory(it.category || it.title)} size={34} />
                         <div className="pn">
                           <b>{it.title}</b>
