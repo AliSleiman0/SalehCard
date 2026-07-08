@@ -55,3 +55,8 @@ export function resendTwoFactor(pendingToken: string): Promise<ApiResponse<TwoFa
 export function refresh(): Promise<ApiResponse<AuthResponse>> {
   return apiClient.post<AuthResponse>('/api/v1/auth/refresh')
 }
+
+/** Revoke the refresh-token cookie server-side. Call before clearing local state. */
+export function logout(): Promise<ApiResponse<{ success: boolean }>> {
+  return apiClient.post<{ success: boolean }>('/api/v1/auth/logout')
+}

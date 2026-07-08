@@ -5,6 +5,7 @@ import { Icon } from '@/components'
 import { useThemeStore } from '@/stores/theme'
 import { useLocaleStore } from '@/stores/locale'
 import { useAuthStore } from '@/stores/auth'
+import { useLogout } from '@/features/auth/hooks/useLogout'
 import { LOCALE_NAMES, LOCALE_FLAGS } from '@/lib/utils'
 import type { Locale, Theme } from '@/types'
 
@@ -14,7 +15,8 @@ export function Topbar() {
   const { t } = useTranslation()
   const { theme, setTheme } = useThemeStore()
   const { locale, setLocale } = useLocaleStore()
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
+  const logout = useLogout()
   const navigate = useNavigate()
   const [menu, setMenu] = useState<Menu>(null)
   const [search, setSearch] = useState('')
@@ -137,8 +139,8 @@ export function Topbar() {
               <button
                 style={{ color: 'var(--danger)' }}
                 onClick={() => {
-                  logout()
-                  navigate('/login')
+                  close()
+                  logout.mutate(undefined, { onSuccess: () => navigate('/login') })
                 }}
               >
                 <Icon name="logout" size={16} /> {t('sign_out')}
