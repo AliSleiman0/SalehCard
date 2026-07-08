@@ -29,18 +29,23 @@ import java.util.UUID
 object CommandExecutor {
 
     fun getBalanceFromReply(reply: String): Pair<Double, String>{
-        // Accept a 2- OR 4-digit year: live Touch/Alfa balance SMS use a 2-digit
-        // year ("Exp:10-06-27"); requiring \d{4} silently failed the parse and left
-        // the cached balance at 0.00, which then blocked every transfer pre-check.
-        val lineRegex = Regex(
-            """USD\s+(\d+(?:\.\d{1,2})?)\s+Exp:\s*(\d{2}[-/]\d{2}[-/]\d{2,4})""",
-            RegexOption.IGNORE_CASE
+        // Touch and Alfa answer their balance USSD in two different shapes; each is
+        // matched by (amount, validity) capture group so the balance/date come
+        // straight off the match — no positional split/substring, which only ever
+        // fit the touch layout and left every alfa balance parsed as 0.00.
+        //   touch (*220#): "USD 5.00 Exp:10-06-27"    — currency-first, "Exp:", dash date, 2- or 4-digit year
+        //   alfa  (*11#):  "1.01 USD till 04/09/2026" — amount-first, "till", slash date
+        // The year width stays 2–4 digits so a future format tweak doesn't regress.
+        val patterns = listOf(
+            Regex("""USD\s+(\d+(?:\.\d{1,2})?)\s+Exp:\s*(\d{2}[-/]\d{2}[-/]\d{2,4})""", RegexOption.IGNORE_CASE),
+            Regex("""(\d+(?:\.\d{1,2})?)\s*USD\s+till\s+(\d{2}[-/]\d{2}[-/]\d{2,4})""", RegexOption.IGNORE_CASE),
         )
-        val lineOne = lineRegex.find(reply)?.value ?: return Pair(0.0, "0")
-        val lineList = lineOne.split(" ")
-        val balance = lineList[1].toDoubleOrNull() ?: 0.00
-        val validityDate = lineList[2].substring(4)
-        return Pair(balance, validityDate)
+        for (pattern in patterns) {
+            val match = pattern.find(reply) ?: continue
+            val balance = match.groupValues[1].toDoubleOrNull() ?: continue
+            return Pair(balance, match.groupValues[2])
+        }
+        return Pair(0.0, "0")
     }
 
     fun splitAmount(amount: Int, maxChunk: Int = 3): List<Int> {
@@ -96,10 +101,18 @@ object CommandExecutor {
                 val filter = IntentFilter(action)
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    // The SMS "sent" status is delivered by the telephony system
+                    // process through this PendingIntent's broadcast. A
+                    // RECEIVER_NOT_EXPORTED context receiver never fires for that
+                    // cross-process broadcast on Android 13+, so sendSms would time
+                    // out and report a send failure even though the radio actually
+                    // transmitted the SMS (the "transfer succeeded but shows failed"
+                    // bug). The action carries a random per-send UUID, so an exported
+                    // receiver can't be spoofed by another app.
                     context.registerReceiver(
                         receiver,
                         filter,
-                        Context.RECEIVER_NOT_EXPORTED
+                        Context.RECEIVER_EXPORTED
                     )
                 } else {
                     context.registerReceiver(receiver, filter)
@@ -393,37 +406,17 @@ object CommandExecutor {
             } ?: false
 
             if (!sentSuccessfully) {
-                SmsReplyRouter.clearReplyWait(replyWaiter)
-
-                val statusCode =
-                    if (processedChunks > 0) {
-                        CommandResultCodes.CREDIT_TRANSFER_PARTIALLY_COMPLETED
-                    } else {
-                        CommandResultCodes.CREDIT_TRANSFER_SMS_SEND_FAILED
-                    }
-
-                return CommandResultDTO(
-                    command.commandId,
-                    command.recipientNumber,
-                    command.commandType,
-                    System.currentTimeMillis(),
-                    statusCode,
-                    processedAmount,
-                    null,
-                    billingAmount,
-                    command.provider,
-                    if (isTouch) ProviderStore.touchSimBalance else null,
-                    if (isTouch) ProviderStore.touchSimValidityDate else null,
-                    if (processedChunks > 0) {
-                        "Credit transfer partially completed. " +
-                                "$processedChunks/$totalChunks chunks succeeded, " +
-                                "transferring $processedAmount. " +
-                                "SMS sending failed on chunk " +
-                                "$currentChunkNumber/$totalChunks."
-                    } else {
-                        "SMS sending failed on chunk " +
-                                "$currentChunkNumber/$totalChunks."
-                    }
+                // The system "sent" ack is unreliable — it can be dropped even when
+                // the SMS was actually transmitted — so a missing ack is NOT a hard
+                // failure. The operator's reply below is the source of truth: a
+                // genuine send failure yields no reply and falls through to the
+                // reply-timeout branch, while a merely-lost ack still receives the
+                // "transferred" confirmation and completes. This stops transfers that
+                // really went through from being flagged failed on the Bridge page.
+                BridgeReporter.log(
+                    "WARN",
+                    "Transfer chunk $currentChunkNumber/$totalChunks: SMS sent-ack " +
+                            "missing; awaiting operator reply as confirmation"
                 )
             }
 
@@ -810,20 +803,14 @@ object CommandExecutor {
         } ?: false
 
         if(!sentSuccessfully) {
-            SmsReplyRouter.clearReplyWait(replyWaiter)
-            return CommandResultDTO(
-                command.commandId,
-                command.recipientNumber,
-                command.commandType,
-                System.currentTimeMillis(),
-                CommandResultCodes.ALFA_RECHARGE_SMS_SEND_FAILED,
-                null,
-                command.cardCode,
-                0.0,
-                command.provider,
-                null,
-                null,
-                "credit transfer request - SMS sending failed"
+            // The system "sent" ack is unreliable and can be dropped even when the
+            // SMS was actually transmitted, so a missing ack is not treated as a hard
+            // failure — the operator reply below is the source of truth. A genuine
+            // send failure yields no reply and falls through to the reply-timeout
+            // branch. Keeps a recharge that really went out from being flagged failed.
+            BridgeReporter.log(
+                "WARN",
+                "Alfa recharge: SMS sent-ack missing; awaiting operator reply as confirmation"
             )
         }
 

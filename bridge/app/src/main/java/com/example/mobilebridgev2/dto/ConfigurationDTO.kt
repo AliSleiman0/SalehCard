@@ -1,7 +1,11 @@
 package com.example.mobilebridgev2.dto
 
 data class ConfigurationDTO (
-    var deviceId: Int,
+    // Mongo ObjectID hex string (server sends d.ID.Hex()), NOT a number. Typing it
+    // as Int made Gson throw NumberFormatException on the whole config payload, so
+    // the device silently fell back to hardcoded defaults (e.g. the 20.0 min-balance
+    // reserve) and never received the server's real config.
+    var deviceId: String,
     var touchBalanceCheckUssd: String,
     var alfaBalanceCheckUssd: String,
     var touchThirdPartyRechargeTemplate: String,

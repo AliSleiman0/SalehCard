@@ -313,7 +313,10 @@ func Load() *Config {
 			TouchTransferDest:     getEnv("BRIDGE_TOUCH_TRANSFER_DEST", "1199"),
 			AlfaRechargeTemplate:  getEnv("BRIDGE_ALFA_RECHARGE_TEMPLATE", "{phone}R{code}"),
 			AlfaRechargeDest:      getEnv("BRIDGE_ALFA_RECHARGE_DEST", "1313"),
-			AlfaTransferTemplate:  getEnv("BRIDGE_ALFA_TRANSFER_TEMPLATE", "{phone}T{amount}"),
+			// Alfa's credit-transfer SMS uses R, not T (verified from Alfa's own
+			// rejection: "The correct format is 03/70/71/76/79/81XXXXXXR<credit
+			// amount>"). Touch uses T; only Alfa differs.
+			AlfaTransferTemplate:  getEnv("BRIDGE_ALFA_TRANSFER_TEMPLATE", "{phone}R{amount}"),
 			AlfaTransferDest:      getEnv("BRIDGE_ALFA_TRANSFER_DEST", "1399"),
 			TouchMinBalance:       getFloat("BRIDGE_TOUCH_MIN_BALANCE", 20),
 			AlfaMinBalance:        getFloat("BRIDGE_ALFA_MIN_BALANCE", 20),

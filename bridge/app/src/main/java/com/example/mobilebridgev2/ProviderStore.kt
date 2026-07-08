@@ -4,7 +4,7 @@ import android.telephony.SubscriptionInfo
 import java.time.LocalDate
 
 object ProviderStore {
-    var deviceId: Int = 0
+    var deviceId: String = ""
     // Nullable (not lateinit): a phone may carry only one operator's SIM, so a
     // command for the missing operator must fail cleanly instead of crashing on
     // an uninitialized lateinit. Use hasSim() to guard before touching these.
@@ -24,7 +24,10 @@ object ProviderStore {
     var touchCreditTransferDestination: String = "1199"
     var alfaThirdPartyRechargeSmsTemplate: String = "{phone}R{code}"
     var alfaCreditTransferDestination: String = "1399"
-    var alfaCreditTransferSmsTemplate: String = "{phone}T{amount}"
+    // Alfa credit transfer uses R (e.g. 71937714R1), not T — per Alfa's own
+    // "Wrong format" reply. Overridden by server config at startup; this is the
+    // fallback if config fails to load.
+    var alfaCreditTransferSmsTemplate: String = "{phone}R{amount}"
     var alfaThirdPartyRechargeDestination: String = "1313"
     var touchMinimumAllowedBalance: Double = 20.00
     var alfaMinimumAllowedBalance: Double = 20.00
