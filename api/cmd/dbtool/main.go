@@ -15,6 +15,9 @@
 //	codes <productId>         List a product's code rows (masked) and any linked orders
 //	codes-clear <productId>   Delete ALL of a product's codes so it can be re-uploaded
 //	                          (DRY RUN; pass --apply to write; resets product.stock to 0)
+//	code <value>              Find a single code by its exact value (which product/status/order)
+//	code-clear <value>        Delete the code with this exact value, e.g. a burned/duplicate
+//	                          PIN (DRY RUN; pass --apply; re-mirrors affected product stock)
 //	order <id>                Show an order summary (status, total, user, items)
 //
 // Examples:
@@ -49,6 +52,8 @@ Commands:
   product <id>              Product fulfillment config + code counts by status (read-only)
   codes <productId>         List a product's code rows (masked) + linked orders (read-only)
   codes-clear <productId>   Delete ALL of a product's codes; resets stock (DRY RUN unless --apply)
+  code <value>              Find a single code by exact value: product/status/order (read-only)
+  code-clear <value>        Delete the code with this exact value (DRY RUN unless --apply)
   order <id>                Order summary (read-only)
 `
 
@@ -112,6 +117,17 @@ func main() {
 			log.Fatalf("usage: codes-clear <productId> [--apply]")
 		}
 		cmdCodesClear(ctx, db, fs.Arg(0), *apply)
+	case "code":
+		mustArg(args, "code <value>")
+		cmdCode(ctx, db, args[0])
+	case "code-clear":
+		fs := flag.NewFlagSet("code-clear", flag.ExitOnError)
+		apply := fs.Bool("apply", false, "delete the code (default is a dry run)")
+		_ = fs.Parse(args)
+		if fs.NArg() < 1 {
+			log.Fatalf("usage: code-clear <value> [--apply]")
+		}
+		cmdCodeClear(ctx, db, fs.Arg(0), *apply)
 	case "order":
 		mustArg(args, "order <id>")
 		cmdOrder(ctx, db, args[0])
@@ -180,6 +196,66 @@ func cmdCodesClear(ctx context.Context, db *mongo.Database, productID string, ap
 	_, _ = db.Collection("products").UpdateByID(ctx, oid,
 		bson.D{{Key: "$set", Value: bson.D{{Key: "stock", Value: 0}, {Key: "updatedAt", Value: time.Now().UTC()}}}})
 	fmt.Printf("\nDELETED %d code row(s); product.stock reset to 0.\n", res.DeletedCount)
+}
+
+func findByValue(ctx context.Context, db *mongo.Database, value string) []bson.M {
+	cur, err := db.Collection("codes").Find(ctx, bson.D{{Key: "code", Value: value}})
+	if err != nil {
+		log.Fatalf("codes find: %v", err)
+	}
+	var codes []bson.M
+	if err := cur.All(ctx, &codes); err != nil {
+		log.Fatalf("codes decode: %v", err)
+	}
+	return codes
+}
+
+func printCodeRow(ctx context.Context, db *mongo.Database, c bson.M) {
+	fmt.Printf("  code=%s productId=%v status=%v order=%v batch=%v\n",
+		mask(fmt.Sprint(c["code"])), c["productId"], c["status"], c["orderId"], c["batch"])
+	printLinkedOrder(ctx, db, c["orderId"])
+}
+
+func cmdCode(ctx context.Context, db *mongo.Database, value string) {
+	codes := findByValue(ctx, db, value)
+	fmt.Printf("%d row(s) with code=%s:\n", len(codes), mask(value))
+	for _, c := range codes {
+		printCodeRow(ctx, db, c)
+	}
+}
+
+func cmdCodeClear(ctx context.Context, db *mongo.Database, value string, apply bool) {
+	codes := findByValue(ctx, db, value)
+	fmt.Printf("%d row(s) with code=%s would be deleted:\n", len(codes), mask(value))
+	affected := map[string]bool{}
+	for _, c := range codes {
+		printCodeRow(ctx, db, c)
+		if pid, ok := c["productId"].(string); ok {
+			affected[pid] = true
+		}
+	}
+	if len(codes) == 0 {
+		fmt.Printf("nothing to delete — no code matches that exact value.\n")
+		return
+	}
+	if !apply {
+		fmt.Printf("\nDRY RUN — re-run with --apply to delete.\n")
+		return
+	}
+	res, err := db.Collection("codes").DeleteMany(ctx, bson.D{{Key: "code", Value: value}})
+	if err != nil {
+		log.Fatalf("delete: %v", err)
+	}
+	// Re-mirror stock for each affected product (available count may have dropped).
+	for pid := range affected {
+		if oid, err := bson.ObjectIDFromHex(pid); err == nil {
+			avail := codeCounts(ctx, db, pid)["available"]
+			_, _ = db.Collection("products").UpdateByID(ctx, oid,
+				bson.D{{Key: "$set", Value: bson.D{{Key: "stock", Value: avail}, {Key: "updatedAt", Value: time.Now().UTC()}}}})
+			fmt.Printf("  product %s stock re-mirrored to %d available\n", pid, avail)
+		}
+	}
+	fmt.Printf("\nDELETED %d row(s).\n", res.DeletedCount)
 }
 
 func cmdOrder(ctx context.Context, db *mongo.Database, id string) {
