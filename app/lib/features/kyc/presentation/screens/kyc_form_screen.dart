@@ -162,7 +162,15 @@ class _KycFormScreenState extends ConsumerState<KycFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.kycSubmittedSnack)),
       );
-      context.go('/kyc');
+      // Pop back to the status screen already in the stack (submit() invalidated
+      // kycProfileProvider, so it re-renders as the pending card) — it keeps its
+      // own back button to wherever KYC was opened from. Using go('/kyc') here
+      // would reset the stack and strand the user with no back button.
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/kyc');
+      }
     } else {
       final failure = ref.read(kycFormControllerProvider).failure;
       ScaffoldMessenger.of(context).showSnackBar(

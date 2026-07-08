@@ -27,6 +27,14 @@ class KycStatusScreen extends ConsumerWidget {
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.topbar,
+        // Always give the user a way out: pop when there's a screen below,
+        // otherwise fall back to Home. Without this, landing on /kyc as the
+        // stack root (e.g. via a reset navigation) leaves no back button and no
+        // bottom nav — a dead end.
+        leading: BackButton(
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/home'),
+        ),
         title: Text(l10n.kycTitle),
       ),
       body: profileAsync.when(
