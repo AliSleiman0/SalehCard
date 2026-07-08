@@ -54,6 +54,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	var f ListFilter
 	f.Category = q.Get("category")
 	f.RootDomain = q.Get("rootDomain")
+	f.Search = q.Get("q")
 
 	if raw := q.Get("available"); raw != "" {
 		v, err := strconv.ParseBool(raw)

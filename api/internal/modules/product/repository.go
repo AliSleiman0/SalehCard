@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -94,7 +95,9 @@ func buildFilter(f ListFilter) bson.D {
 		filter = append(filter, bson.E{Key: "fulfillmentType", Value: FulfillmentCode})
 	}
 	if f.Search != "" {
-		rx := bson.Regex{Pattern: f.Search, Options: "i"}
+		// Escape the user-supplied query so regex metacharacters (a stray "(", "*",
+		// etc.) match literally instead of erroring or opening a ReDoS vector.
+		rx := bson.Regex{Pattern: regexp.QuoteMeta(f.Search), Options: "i"}
 		filter = append(filter, bson.E{Key: "$or", Value: bson.A{
 			bson.D{{Key: "title.en", Value: rx}},
 			bson.D{{Key: "title.ar", Value: rx}},

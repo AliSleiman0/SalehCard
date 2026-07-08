@@ -7,6 +7,7 @@ import '../domain/entities/product.dart';
 import '../domain/repositories/catalog_repository.dart';
 import '../domain/usecases/get_product.dart';
 import '../domain/usecases/get_products.dart';
+import '../domain/usecases/get_products_page.dart';
 
 final catalogRemoteDataSourceProvider = Provider<CatalogRemoteDataSource>(
   (ref) => CatalogRemoteDataSource(ref.watch(dioProvider)),
@@ -24,6 +25,10 @@ final getProductUseCaseProvider = Provider<GetProduct>(
   (ref) => GetProduct(ref.watch(catalogRepositoryProvider)),
 );
 
+final getProductsPageUseCaseProvider = Provider<GetProductsPage>(
+  (ref) => GetProductsPage(ref.watch(catalogRepositoryProvider)),
+);
+
 /// First page of the catalog. Throws the [Failure] so the UI can render it via
 /// the AsyncValue error state.
 final catalogProductsProvider = FutureProvider<List<Product>>((ref) async {
@@ -35,14 +40,4 @@ final productDetailProvider =
     FutureProvider.family<Product, String>((ref, id) async {
   final result = await ref.watch(getProductUseCaseProvider).call(id);
   return result.match((failure) => throw failure, (product) => product);
-});
-
-/// Products in a single top-level domain (e.g. `games`), keyed by rootDomain.
-/// Backs the Category products screen reached by tapping a Browse tile — the
-/// backend filters via `GET /products?rootDomain=<domain>`.
-final productsByDomainProvider =
-    FutureProvider.family.autoDispose<List<Product>, String>((ref, domain) async {
-  final result =
-      await ref.watch(getProductsUseCaseProvider).call(rootDomain: domain);
-  return result.match((failure) => throw failure, (products) => products);
 });
