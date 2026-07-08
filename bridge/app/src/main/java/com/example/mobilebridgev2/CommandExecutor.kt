@@ -785,77 +785,49 @@ object CommandExecutor {
             )
         }
 
-        val message = ProviderStore.alfaThirdPartyRechargeSmsTemplate
-            .replace("{phone}",command.recipientNumber)
-            .replace("{code}",command.cardCode)
+        // Alfa third-party recharge is a USSD dial (*111*{code}*{phone}#), not an
+        // SMS — the same shape as Touch's *300 recharge. sendUssd returns the
+        // operator's synchronous response, which we scan for "fail".
+        val ussdCode = ProviderStore.alfaThirdPartyRechargeSmsTemplate
+            .replace("{code}", command.cardCode)
+            .replace("{phone}", command.recipientNumber)
 
-        val replyWaiter = SmsReplyRouter.prepareReplyWait(listOf(
-            command.provider, ProviderStore.alfaThirdPartyRechargeDestination
-        ))
-
-        val sentSuccessfully = withTimeoutOrNull(30_000L) {
-            sendSms(
+        val reply = withTimeoutOrNull(30_000L) {
+            sendUssd(
                 context = context,
-                provider = command.provider.lowercase(),
-                destination = ProviderStore.alfaThirdPartyRechargeDestination,
-                message = message
+                subscriptionId = ProviderStore.alfaSim!!.subscriptionId,
+                ussdCode = ussdCode
             )
-        } ?: false
+        } ?: return CommandResultDTO(
+            command.commandId,
+            command.recipientNumber,
+            command.commandType,
+            System.currentTimeMillis(),
+            CommandResultCodes.ALFA_RECHARGE_REPLY_TIMEOUT,
+            command.amount,
+            null,
+            null,
+            command.provider,
+            null,
+            null,
+            "No USSD reply detected"
+        )
 
-        if(!sentSuccessfully) {
-            // The system "sent" ack is unreliable and can be dropped even when the
-            // SMS was actually transmitted, so a missing ack is not treated as a hard
-            // failure — the operator reply below is the source of truth. A genuine
-            // send failure yields no reply and falls through to the reply-timeout
-            // branch. Keeps a recharge that really went out from being flagged failed.
-            BridgeReporter.log(
-                "WARN",
-                "Alfa recharge: SMS sent-ack missing; awaiting operator reply as confirmation"
-            )
-        }
+        if (reply.lowercase().contains("fail")) return CommandResultDTO(
+            command.commandId,
+            command.recipientNumber,
+            command.commandType,
+            System.currentTimeMillis(),
+            CommandResultCodes.ALFA_RECHARGE_PROVIDER_REJECTED,
+            command.amount,
+            null,
+            null,
+            command.provider,
+            null,
+            null,
+            "Recharge rejected by provider: $reply"
+        )
 
-        val reply = withTimeoutOrNull(30000) {replyWaiter.await()}
-
-        if (reply == null) {
-            SmsReplyRouter.clearReplyWait(replyWaiter)
-
-            return CommandResultDTO(
-                command.commandId,
-                command.recipientNumber,
-                command.commandType,
-                System.currentTimeMillis(),
-                CommandResultCodes.ALFA_RECHARGE_REPLY_TIMEOUT,
-                null,
-                null,
-                0.0,
-                command.provider,
-                null,
-                null,
-                "Timed out waiting for provider reply"
-            )
-        }
-
-        val isSuccess = reply.body.contains("success", ignoreCase = true) ||
-                reply.body.contains("transferred", ignoreCase = true)
-
-        if (!isSuccess) {
-            return CommandResultDTO(
-                command.commandId,
-                command.recipientNumber,
-                command.commandType,
-                System.currentTimeMillis(),
-                CommandResultCodes.CREDIT_TRANSFER_PROVIDER_REJECTED,
-                null,
-                command.cardCode,
-                null,
-                command.provider,
-                null,
-                null,
-                "Recharge request rejected by provider: $reply"
-            )
-        }
-
-        //calculate bill
         return CommandResultDTO(
             command.commandId,
             command.recipientNumber,
@@ -864,7 +836,7 @@ object CommandExecutor {
             CommandResultCodes.ALFA_RECHARGE_SUCCESS,
             command.amount,
             null,
-            null, //for now
+            null,
             command.provider,
             null,
             null,

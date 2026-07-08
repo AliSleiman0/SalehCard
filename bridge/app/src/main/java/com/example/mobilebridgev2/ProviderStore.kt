@@ -19,10 +19,12 @@ object ProviderStore {
     }
     var touchBalanceCheckUssd: String = "*220#"
     var alfaBalanceCheckUssd: String = "*11#"
-    var touchThirdPartyRechargeTemplate: String = "*300*{phone}#{card}"
+    var touchThirdPartyRechargeTemplate: String = "*300*961{phone}*{card}#"
     var touchCreditTransferSmsTemplate: String = "{phone}T{amount}"
     var touchCreditTransferDestination: String = "1199"
-    var alfaThirdPartyRechargeSmsTemplate: String = "{phone}R{code}"
+    // Alfa recharge is a USSD dial (*111*{code}*{phone}#), not SMS despite the
+    // legacy field name. Overridden by server config at startup.
+    var alfaThirdPartyRechargeSmsTemplate: String = "*111*{code}*{phone}#"
     var alfaCreditTransferDestination: String = "1313"
     var alfaCreditTransferSmsTemplate: String = "{phone}T{amount}"
     var alfaThirdPartyRechargeDestination: String = "1313"

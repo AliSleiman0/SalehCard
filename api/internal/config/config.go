@@ -308,10 +308,11 @@ func Load() *Config {
 
 			TouchBalanceUSSD:      getEnv("BRIDGE_TOUCH_BALANCE_USSD", "*220#"),
 			AlfaBalanceUSSD:       getEnv("BRIDGE_ALFA_BALANCE_USSD", "*11#"),
-			TouchRechargeTemplate: getEnv("BRIDGE_TOUCH_RECHARGE_TEMPLATE", "*300*{phone}#{card}"),
+			TouchRechargeTemplate: getEnv("BRIDGE_TOUCH_RECHARGE_TEMPLATE", "*300*961{phone}*{card}#"),
 			TouchTransferTemplate: getEnv("BRIDGE_TOUCH_TRANSFER_TEMPLATE", "{phone}T{amount}"),
 			TouchTransferDest:     getEnv("BRIDGE_TOUCH_TRANSFER_DEST", "1199"),
-			AlfaRechargeTemplate:  getEnv("BRIDGE_ALFA_RECHARGE_TEMPLATE", "{phone}R{code}"),
+			// Alfa recharge is a USSD dial (not SMS): *111*<card PIN>*<number>#.
+			AlfaRechargeTemplate:  getEnv("BRIDGE_ALFA_RECHARGE_TEMPLATE", "*111*{code}*{phone}#"),
 			AlfaRechargeDest:      getEnv("BRIDGE_ALFA_RECHARGE_DEST", "1313"),
 			AlfaTransferTemplate:  getEnv("BRIDGE_ALFA_TRANSFER_TEMPLATE", "{phone}T{amount}"),
 			AlfaTransferDest:      getEnv("BRIDGE_ALFA_TRANSFER_DEST", "1313"),
