@@ -16,6 +16,7 @@ import {
   EmptyState,
 } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
+import { useCan } from '@/stores/auth'
 import { useReviews, useSetReviewStatus, useDeleteReview } from '../hooks/useReviews'
 import { adaptReview, type ReviewView } from '../lib/adaptReview'
 import type { ReviewStatus } from '../api/reviews'
@@ -29,6 +30,8 @@ const FILTERS: [ReviewStatus | '', string][] = [
 
 export default function ReviewsPage() {
   const { t } = useTranslation()
+  const can = useCan()
+  const canManage = can('reviews.manage')
   const [searchParams] = useSearchParams()
 
   const [status, setStatus] = useState<ReviewStatus | ''>('pending')
@@ -103,7 +106,7 @@ export default function ReviewsPage() {
           </div>
         </div>
 
-        {bulk.some && (
+        {canManage && bulk.some && (
           <div className="bulkbar">
             <Checkbox on onClick={bulk.clear} />
             <span>
@@ -155,19 +158,21 @@ export default function ReviewsPage() {
                       </div>
                       <p style={{ fontSize: 13.5, color: 'var(--text-dim)', lineHeight: 1.5, maxWidth: 760 }}>{r.body}</p>
                       <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-                        {r.status !== 'approved' && (
+                        {canManage && r.status !== 'approved' && (
                           <button className="abtn xs ok" disabled={setStatusM.isPending} onClick={() => moderate(r.id, 'approved')}>
                             <Icon name="check" size={13} /> {t('approve')}
                           </button>
                         )}
-                        {r.status !== 'rejected' && (
+                        {canManage && r.status !== 'rejected' && (
                           <button className="abtn xs danger" disabled={setStatusM.isPending} onClick={() => moderate(r.id, 'rejected')}>
                             <Icon name="x" size={13} /> {t('reject')}
                           </button>
                         )}
-                        <button className="abtn xs" onClick={() => setToDelete(r)}>
-                          <Icon name="trash" size={13} /> {t('delete')}
-                        </button>
+                        {canManage && (
+                          <button className="abtn xs" onClick={() => setToDelete(r)}>
+                            <Icon name="trash" size={13} /> {t('delete')}
+                          </button>
+                        )}
                         {r.flagged && (
                           <span className="st st-danger" style={{ fontSize: 11 }}>
                             <i className="d" />

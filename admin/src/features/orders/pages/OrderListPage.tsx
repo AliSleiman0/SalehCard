@@ -19,6 +19,7 @@ import {
 import type { FfKey } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
 import { money, downloadCsv, downloadPdf } from '@/lib/utils'
+import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import { useOrders } from '../hooks/useOrders'
 import { useRefundBulk } from '../hooks/useOrderMutations'
@@ -42,6 +43,8 @@ const FF_API: Record<FfKey, FulfillmentType> = {
 export default function OrderListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('orders.manage')
   const [searchParams] = useSearchParams()
 
   const [status, setStatus] = useState<OrderStatus | 'all'>('all')
@@ -213,9 +216,11 @@ export default function OrderListPage() {
               <button className="abtn xs" onClick={() => handleExport('csv', true)} disabled={exporting}>
                 <Icon name="download" size={13} /> {exporting ? '…' : t('export')}
               </button>
-              <button className="abtn xs danger" onClick={runBulkRefund} disabled={refundBulk.isPending}>
-                <Icon name="refresh" size={13} /> {refundBulk.isPending ? '…' : t('refund')}
-              </button>
+              {canManage && (
+                <button className="abtn xs danger" onClick={runBulkRefund} disabled={refundBulk.isPending}>
+                  <Icon name="refresh" size={13} /> {refundBulk.isPending ? '…' : t('refund')}
+                </button>
+              )}
             </div>
           </div>
         )}

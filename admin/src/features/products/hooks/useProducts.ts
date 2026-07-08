@@ -12,11 +12,14 @@ import {
   type BulkAction,
 } from '../api/products'
 
-export function useProducts(params: ProductListParams = {}) {
+export function useProducts(params: ProductListParams = {}, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['admin', 'products', params],
     queryFn: () => listProducts(params),
     placeholderData: keepPreviousData,
+    // Cross-domain callers (the offer editor's product picker) pass enabled:false
+    // when the admin lacks products.view, so the fetch isn't fired to 403.
+    enabled: opts?.enabled ?? true,
   })
 }
 

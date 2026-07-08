@@ -22,6 +22,7 @@ import {
   useRetryCommand,
   useCancelCommand,
 } from '../hooks/useBridge'
+import { useCan } from '@/stores/auth'
 import type { BridgeCommandStatus, BridgeDevice } from '../api/bridge'
 
 const STATUS_FILTERS: [BridgeCommandStatus | '', string][] = [
@@ -47,6 +48,8 @@ const isOnline = (d: BridgeDevice) =>
 
 export default function BridgePage() {
   const { t } = useTranslation()
+  const can = useCan()
+  const canManage = can('bridge.manage')
   const [status, setStatus] = useState<BridgeCommandStatus | ''>('')
   const [page, setPage] = useState(1)
   const [registering, setRegistering] = useState(false)
@@ -85,9 +88,11 @@ export default function BridgePage() {
         title={t('nav_bridge')}
         sub={`${devices.length} device${devices.length === 1 ? '' : 's'}`}
       >
-        <button className="abtn primary" onClick={() => setRegistering(true)}>
-          <Icon name="plus" size={15} /> Register device
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={() => setRegistering(true)}>
+            <Icon name="plus" size={15} /> Register device
+          </button>
+        )}
       </PageHead>
 
       {/* Devices */}
@@ -133,32 +138,36 @@ export default function BridgePage() {
                   >
                     <Toggle
                       on={d.enabled}
-                      onClick={() => updateDevice.mutate({ id: d.id, patch: { enabled: !d.enabled } })}
+                      onClick={() => canManage && updateDevice.mutate({ id: d.id, patch: { enabled: !d.enabled } })}
                     />
-                    <button className="abtn xs" onClick={() => checkBalance.mutate(d.id)}>
-                      Check balance
-                    </button>
-                    <button
-                      className="abtn xs"
-                      onClick={() =>
-                        rotateToken.mutate(d.id, {
-                          onSuccess: (res) => res.data?.token && setRevealedToken(res.data.token),
-                        })
-                      }
-                    >
-                      Rotate token
-                    </button>
-                    <span
-                      className="iact danger"
-                      title="Remove device"
-                      onClick={() => {
-                        if (confirm(`Remove ${d.name}? Its token stops working immediately.`)) {
-                          deleteDevice.mutate(d.id)
-                        }
-                      }}
-                    >
-                      <Icon name="trash" size={15} />
-                    </span>
+                    {canManage && (
+                      <>
+                        <button className="abtn xs" onClick={() => checkBalance.mutate(d.id)}>
+                          Check balance
+                        </button>
+                        <button
+                          className="abtn xs"
+                          onClick={() =>
+                            rotateToken.mutate(d.id, {
+                              onSuccess: (res) => res.data?.token && setRevealedToken(res.data.token),
+                            })
+                          }
+                        >
+                          Rotate token
+                        </button>
+                        <span
+                          className="iact danger"
+                          title="Remove device"
+                          onClick={() => {
+                            if (confirm(`Remove ${d.name}? Its token stops working immediately.`)) {
+                              deleteDevice.mutate(d.id)
+                            }
+                          }}
+                        >
+                          <Icon name="trash" size={15} />
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="faint" style={{ fontSize: 12.5, marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -221,12 +230,12 @@ export default function BridgePage() {
                         <i className="d" />
                         {c.status}
                       </span>
-                      {(c.status === 'failed' || c.status === 'cancelled') && (
+                      {canManage && (c.status === 'failed' || c.status === 'cancelled') && (
                         <button className="abtn xs" onClick={() => retry.mutate(c.id)}>
                           Retry
                         </button>
                       )}
-                      {(c.status === 'queued' || c.status === 'leased') && (
+                      {canManage && (c.status === 'queued' || c.status === 'leased') && (
                         <button className="abtn xs" onClick={() => cancel.mutate(c.id)}>
                           Cancel
                         </button>

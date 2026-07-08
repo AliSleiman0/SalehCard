@@ -6,9 +6,11 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/role"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/ratelimit"
@@ -59,8 +61,18 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	}
 
 	// WithSettings enables the admin SMS-2FA gate (reads the app_settings singleton
-	// at login time); without it admin login stays password-only.
-	svc := NewUserService(repo, refreshRepo, otpRepo, sender, otpCfg, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL, WithSettings(settings.NewMongoRepository(db)))
+	// at login time); without it admin login stays password-only. WithRolePerms
+	// resolves a custom admin role's RBAC permission set into issued tokens.
+	roleRepo := role.NewMongoRepository(db)
+	svc := NewUserService(repo, refreshRepo, otpRepo, sender, otpCfg, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL,
+		WithSettings(settings.NewMongoRepository(db)),
+		WithRolePerms(func(ctx context.Context, id bson.ObjectID) ([]string, error) {
+			rl, err := roleRepo.FindByID(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			return rl.Permissions, nil
+		}))
 	h := NewHandler(svc, cfg.CookieSecure, cfg.RefreshTokenTTL)
 
 	// Per-IP rate limiting on the public auth endpoints (RealIP upstream gives the

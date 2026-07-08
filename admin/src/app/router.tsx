@@ -2,6 +2,7 @@ import { lazy } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { RequireAdmin } from './RequireAdmin'
+import { RequireDomain } from './RequireDomain'
 
 const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage'))
 const DashboardPage = lazy(() => import('@/features/dashboard/pages/DashboardPage'))
@@ -31,7 +32,15 @@ const ReviewsPage = lazy(() => import('@/features/reviews/pages/ReviewsPage'))
 const KycPage = lazy(() => import('@/features/kyc/pages/KycPage'))
 const AuditLogPage = lazy(() => import('@/features/audit/pages/AuditLogPage'))
 const SettingsPage = lazy(() => import('@/features/settings/pages/SettingsPage'))
+const RolesPage = lazy(() => import('@/features/roles/pages/RolesPage'))
 const NotFoundPage = lazy(() => import('@/features/misc/NotFoundPage'))
+
+// RBAC route guard: renders el only when the admin's role can view `domain`
+// (redirecting to their first permitted page otherwise). Domain keys mirror
+// nav.ts and the backend catalog (modules/role/permissions.go).
+function guard(domain: string, el: React.ReactNode) {
+  return <RequireDomain domain={domain}>{el}</RequireDomain>
+}
 
 export default function AppRouter() {
   return (
@@ -44,35 +53,43 @@ export default function AppRouter() {
           </RequireAdmin>
         }
       >
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/products" element={<ProductListPage />} />
-        <Route path="/products/new" element={<ProductEditPage />} />
-        <Route path="/products/:id/edit" element={<ProductEditPage />} />
-        <Route path="/inventory" element={<InventoryPage />} />
-        <Route path="/orders" element={<OrderListPage />} />
-        <Route path="/orders/:id" element={<OrderDetailPage />} />
-        <Route path="/bridge" element={<BridgePage />} />
-        <Route path="/users" element={<UserListPage />} />
-        <Route path="/users/:id" element={<UserDetailPage />} />
+        <Route path="/" element={guard('dashboard', <DashboardPage />)} />
+        <Route path="/products" element={guard('products', <ProductListPage />)} />
+        <Route path="/products/new" element={guard('products', <ProductEditPage />)} />
+        <Route path="/products/:id/edit" element={guard('products', <ProductEditPage />)} />
+        <Route path="/inventory" element={guard('inventory', <InventoryPage />)} />
+        <Route path="/orders" element={guard('orders', <OrderListPage />)} />
+        <Route path="/orders/:id" element={guard('orders', <OrderDetailPage />)} />
+        <Route path="/bridge" element={guard('bridge', <BridgePage />)} />
+        <Route path="/users" element={guard('users', <UserListPage />)} />
+        <Route path="/users/:id" element={guard('users', <UserDetailPage />)} />
         {/* Reseller routes hidden for now — see the commented imports above. */}
-        {/* <Route path="/resellers" element={<ResellerListPage />} /> */}
-        {/* <Route path="/resellers/:id" element={<ResellerDetailPage />} /> */}
-        <Route path="/finance" element={<FinancePage />} />
-        <Route path="/topups" element={<TopupsPage />} />
-        <Route path="/payments" element={<PaymentsPage />} />
-        <Route path="/promos" element={<PromoListPage />} />
-        <Route path="/promos/new" element={<PromoEditPage />} />
-        <Route path="/promos/:id/edit" element={<PromoEditPage />} />
-        <Route path="/offers" element={<OffersListPage />} />
-        <Route path="/offers/new" element={<OffersEditPage />} />
-        <Route path="/offers/:id/edit" element={<OffersEditPage />} />
-        <Route path="/expenses" element={<ExpensesListPage />} />
-        <Route path="/expenses/new" element={<ExpenseEditPage />} />
-        <Route path="/expenses/:id/edit" element={<ExpenseEditPage />} />
-        <Route path="/reviews" element={<ReviewsPage />} />
-        <Route path="/kyc" element={<KycPage />} />
-        <Route path="/audit" element={<AuditLogPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        {/* <Route path="/resellers" element={guard('resellers', <ResellerListPage />)} /> */}
+        {/* <Route path="/resellers/:id" element={guard('resellers', <ResellerDetailPage />)} /> */}
+        <Route path="/finance" element={guard('finance', <FinancePage />)} />
+        <Route path="/topups" element={guard('topups', <TopupsPage />)} />
+        <Route path="/payments" element={guard('payments', <PaymentsPage />)} />
+        <Route path="/promos" element={guard('promos', <PromoListPage />)} />
+        <Route path="/promos/new" element={guard('promos', <PromoEditPage />)} />
+        <Route path="/promos/:id/edit" element={guard('promos', <PromoEditPage />)} />
+        <Route path="/offers" element={guard('offers', <OffersListPage />)} />
+        <Route path="/offers/new" element={guard('offers', <OffersEditPage />)} />
+        <Route path="/offers/:id/edit" element={guard('offers', <OffersEditPage />)} />
+        <Route path="/expenses" element={guard('expenses', <ExpensesListPage />)} />
+        <Route path="/expenses/new" element={guard('expenses', <ExpenseEditPage />)} />
+        <Route path="/expenses/:id/edit" element={guard('expenses', <ExpenseEditPage />)} />
+        <Route path="/reviews" element={guard('reviews', <ReviewsPage />)} />
+        <Route path="/kyc" element={guard('kyc', <KycPage />)} />
+        <Route path="/audit" element={guard('audit', <AuditLogPage />)} />
+        <Route path="/settings" element={guard('settings', <SettingsPage />)} />
+        <Route
+          path="/roles"
+          element={
+            <RequireDomain superAdmin>
+              <RolesPage />
+            </RequireDomain>
+          }
+        />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

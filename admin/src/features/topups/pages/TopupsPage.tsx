@@ -13,6 +13,7 @@ import {
 } from '@/components'
 import { money } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
+import { useCan } from '@/stores/auth'
 import { useTopUps, useApproveTopUp, useRejectTopUp } from '../hooks/useTopups'
 import type { AdminTopUp, TopUpStatus } from '../api/topups'
 
@@ -31,6 +32,8 @@ const STATUS_CLASS: Record<TopUpStatus, string> = {
 
 export default function TopupsPage() {
   const { t } = useTranslation()
+  const can = useCan()
+  const canManage = can('topups.manage')
   const [status, setStatus] = useState<TopUpStatus | ''>('pending')
   const [page, setPage] = useState(1)
   const [toReject, setToReject] = useState<AdminTopUp | null>(null)
@@ -127,7 +130,7 @@ export default function TopupsPage() {
                       {r.decidedAt ? ` · ${new Date(r.decidedAt).toLocaleString()}` : ''}
                     </div>
                   )}
-                  {r.status === 'pending' && (
+                  {canManage && r.status === 'pending' && (
                     <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                       <button
                         className="abtn xs ok"

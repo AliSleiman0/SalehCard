@@ -16,7 +16,22 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 )
+
+// asSuperAdmin is chi middleware injecting super-admin claims (wildcard perm)
+// into the request context, standing in for the AdminOnly middleware chain.
+func asSuperAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := auth.ContextWithClaims(r.Context(), &auth.Claims{
+			UserID: bson.NewObjectID().Hex(),
+			Email:  "super@test.local",
+			Role:   "admin",
+			Perms:  []string{auth.PermAll},
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
 
 // fakeRecorder captures audit entries in memory.
 type fakeRecorder struct {
@@ -96,7 +111,7 @@ func TestUpdateRoleLastAdminGuard(t *testing.T) {
 	a, _, _, rec := newAdminFixture(admin)
 
 	rr := doJSON(t, http.MethodPut, "/users/"+admin.ID.Hex()+"/role", `{"role":"customer"}`,
-		func(r chi.Router) { r.Put("/users/{id}/role", a.updateRole) })
+		func(r chi.Router) { r.With(asSuperAdmin).Put("/users/{id}/role", a.updateRole) })
 
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("demoting the only admin: got status %d, want 409", rr.Code)
@@ -112,7 +127,7 @@ func TestUpdateRoleWithAnotherAdminSucceeds(t *testing.T) {
 	a, repo, _, rec := newAdminFixture(admin1, admin2)
 
 	rr := doJSON(t, http.MethodPut, "/users/"+admin1.ID.Hex()+"/role", `{"role":"customer"}`,
-		func(r chi.Router) { r.Put("/users/{id}/role", a.updateRole) })
+		func(r chi.Router) { r.With(asSuperAdmin).Put("/users/{id}/role", a.updateRole) })
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("demoting one of two admins: got status %d, want 200 (body %s)", rr.Code, rr.Body.String())
@@ -125,12 +140,85 @@ func TestUpdateRoleWithAnotherAdminSucceeds(t *testing.T) {
 	}
 }
 
+// asLimitedAdmin injects claims for an admin holding a custom role (users.manage
+// but no wildcard) — it must not be able to grant or revoke admin access.
+func asLimitedAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := auth.ContextWithClaims(r.Context(), &auth.Claims{
+			UserID: bson.NewObjectID().Hex(),
+			Email:  "limited@test.local",
+			Role:   "admin",
+			Perms:  []string{"users.view", "users.manage"},
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func TestUpdateRoleEscalationBlockedForLimitedAdmin(t *testing.T) {
+	customer := &User{ID: bson.NewObjectID(), Role: RoleCustomer, Status: StatusActive}
+	super := &User{ID: bson.NewObjectID(), Role: RoleAdmin, Status: StatusActive}
+	a, repo, _, rec := newAdminFixture(customer, super)
+
+	// Granting admin access requires a super-admin actor.
+	rr := doJSON(t, http.MethodPut, "/users/"+customer.ID.Hex()+"/role", `{"role":"admin"}`,
+		func(r chi.Router) { r.With(asLimitedAdmin).Put("/users/{id}/role", a.updateRole) })
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("limited admin granting admin: got status %d, want 403", rr.Code)
+	}
+	if repo.byID[customer.ID].Role != RoleCustomer {
+		t.Fatalf("role must not change, got %q", repo.byID[customer.ID].Role)
+	}
+
+	// Demoting an existing admin also requires a super-admin actor.
+	rr = doJSON(t, http.MethodPut, "/users/"+super.ID.Hex()+"/role", `{"role":"customer"}`,
+		func(r chi.Router) { r.With(asLimitedAdmin).Put("/users/{id}/role", a.updateRole) })
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("limited admin demoting an admin: got status %d, want 403", rr.Code)
+	}
+
+	// customer<->reseller changes stay open to users.manage.
+	rr = doJSON(t, http.MethodPut, "/users/"+customer.ID.Hex()+"/role", `{"role":"reseller"}`,
+		func(r chi.Router) { r.With(asLimitedAdmin).Put("/users/{id}/role", a.updateRole) })
+	if rr.Code != http.StatusOK {
+		t.Fatalf("limited admin customer->reseller: got status %d, want 200 (body %s)", rr.Code, rr.Body.String())
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected exactly the reseller change audited, got %+v", rec.entries)
+	}
+}
+
+func TestBulkStatusExcludesAdminsOnActivate(t *testing.T) {
+	// A suspended admin plus a normal customer. A limited admin bulk-activating
+	// both must reactivate only the customer — the admin account is managed
+	// solely through the super-admin-gated single endpoint.
+	admin := &User{ID: bson.NewObjectID(), Role: RoleAdmin, Status: StatusSuspended}
+	customer := &User{ID: bson.NewObjectID(), Role: RoleCustomer, Status: StatusSuspended}
+	a, repo, _, _ := newAdminFixture(admin, customer)
+
+	body, _ := json.Marshal(map[string]any{
+		"ids":    []string{admin.ID.Hex(), customer.ID.Hex()},
+		"action": "activate",
+	})
+	rr := doJSON(t, http.MethodPost, "/users/bulk", string(body),
+		func(r chi.Router) { r.Post("/users/bulk", a.bulkStatus) })
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("bulk activate: got status %d, want 200 (body %s)", rr.Code, rr.Body.String())
+	}
+	if repo.byID[admin.ID].Status != StatusSuspended {
+		t.Fatalf("admin account must NOT be reactivated by bulk, got status %q", repo.byID[admin.ID].Status)
+	}
+	if repo.byID[customer.ID].Status != StatusActive {
+		t.Fatalf("customer should be reactivated, got status %q", repo.byID[customer.ID].Status)
+	}
+}
+
 func TestUpdateStatusLastAdminGuard(t *testing.T) {
 	admin := &User{ID: bson.NewObjectID(), Role: RoleAdmin, Status: StatusActive}
 	a, _, _, _ := newAdminFixture(admin)
 
 	rr := doJSON(t, http.MethodPut, "/users/"+admin.ID.Hex()+"/status", `{"status":"suspended"}`,
-		func(r chi.Router) { r.Put("/users/{id}/status", a.updateStatus) })
+		func(r chi.Router) { r.With(asSuperAdmin).Put("/users/{id}/status", a.updateStatus) })
 
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("suspending the only admin: got status %d, want 409", rr.Code)

@@ -14,6 +14,33 @@ type Claims struct {
 	Email  string `json:"email"`
 	Phone  string `json:"phone"`
 	Role   string `json:"role"`
+	// Perms is the admin's permission set ("<domain>.view"/"<domain>.manage"),
+	// resolved from their assigned admin role at token-issue time. The single
+	// entry "*" marks a super admin (all permissions). Empty for customers.
+	Perms []string `json:"perms,omitempty"`
+}
+
+// PermAll is the wildcard permission carried by super admins.
+const PermAll = "*"
+
+// HasPerm reports whether the claim holder has the given permission, either
+// explicitly or via the super-admin wildcard.
+func (c *Claims) HasPerm(perm string) bool {
+	if c == nil {
+		return false
+	}
+	for _, p := range c.Perms {
+		if p == PermAll || p == perm {
+			return true
+		}
+	}
+	return false
+}
+
+// IsSuperAdmin reports whether the claim holder carries the wildcard
+// permission (an admin with no custom role assigned).
+func (c *Claims) IsSuperAdmin() bool {
+	return c.HasPerm(PermAll)
 }
 
 // ActorLabel is a never-blank identifier for the claim holder, for attributing

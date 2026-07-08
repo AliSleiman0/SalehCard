@@ -19,6 +19,7 @@ import {
 } from '@/components'
 import { downloadCsv } from '@/lib/utils'
 import { useBulk } from '@/hooks/useBulk'
+import { useCan } from '@/stores/auth'
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useProducts, useDeleteProduct, useBulkProductAction } from '../hooks/useProducts'
@@ -60,6 +61,11 @@ function toFulfillment(ff: FfKey): FulfillmentType {
 export default function ProductListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('products.manage')
+  // The Sold column reads the orders domain — hide it (and skip its fetch + CSV
+  // column) when the admin's role lacks orders.view.
+  const canViewSold = can('orders.view')
   const [ff, setFf] = useState<'all' | FfKey>('all')
   const [cat, setCat] = useState('all')
   const [status, setStatus] = useState<StatusFilter>('all')
@@ -90,7 +96,7 @@ export default function ProductListPage() {
   const del = useDeleteProduct()
   const bulkAction = useBulkProductAction()
   const { data: catsRes } = useProductCategories()
-  const { data: soldRes } = useSoldByProduct()
+  const { data: soldRes } = useSoldByProduct({ enabled: canViewSold })
   const cats = catsRes?.data ?? []
   const sold = soldRes?.data ?? {}
 
@@ -150,7 +156,10 @@ export default function ProductListPage() {
         p++
       } while (p <= pages)
 
-      const header = ['Name', 'ID', 'Category', 'Type', 'Variants', 'Stock', 'Price min', 'Price max', 'Sold', 'Status']
+      // Omit the Sold column entirely without orders.view, rather than exporting a
+      // misleading 0 for every product (the sold data would have 403'd).
+      const header = ['Name', 'ID', 'Category', 'Type', 'Variants', 'Stock', 'Price min', 'Price max',
+        ...(canViewSold ? ['Sold'] : []), 'Status']
       const csvRows = all.map((pr) => {
         const prices = pr.variants.map((v) => v.price)
         const min = prices.length ? Math.min(...prices) : 0
@@ -164,7 +173,7 @@ export default function ProductListPage() {
           pr.stock,
           min.toFixed(2),
           max.toFixed(2),
-          sold[pr.id] ?? 0,
+          ...(canViewSold ? [sold[pr.id] ?? 0] : []),
           productStatus(pr),
         ]
       })
@@ -186,9 +195,11 @@ export default function ProductListPage() {
         <button className="abtn" onClick={handleExport} disabled={exporting}>
           <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
         </button>
-        <button className="abtn primary" onClick={() => navigate('/products/new')}>
-          <Icon name="plus" size={15} /> {t('new_product')}
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={() => navigate('/products/new')}>
+            <Icon name="plus" size={15} /> {t('new_product')}
+          </button>
+        )}
       </PageHead>
 
       <div className="acard">
@@ -240,7 +251,7 @@ export default function ProductListPage() {
           </div>
         </div>
 
-        {bulk.some && (
+        {canManage && bulk.some && (
           <div className="bulkbar">
             <Checkbox on onClick={bulk.clear} />
             <span>
@@ -280,7 +291,7 @@ export default function ProductListPage() {
                   <th>Variants</th>
                   <th>Stock / codes</th>
                   <th>Price (USD)</th>
-                  <th>Sold</th>
+                  {canViewSold && <th>Sold</th>}
                   <th>{t('status')}</th>
                   <th></th>
                 </tr>
@@ -307,7 +318,9 @@ export default function ProductListPage() {
                     <td className="num">{p.variants.length}</td>
                     <td>{stockCell(p)}</td>
                     <td className="num strong">{priceRange(p) === '—' ? <span className="faint">—</span> : '$' + priceRange(p)}</td>
-                    <td className="num muted">{sold[p.id] ? sold[p.id].toLocaleString() : '—'}</td>
+                    {canViewSold && (
+                      <td className="num muted">{sold[p.id] ? sold[p.id].toLocaleString() : '—'}</td>
+                    )}
                     <td>
                       <StatusBadge s={productStatus(p)} />
                     </td>
@@ -316,14 +329,16 @@ export default function ProductListPage() {
                         <span className="iact" onClick={() => navigate(`/products/${p.id}/edit`)}>
                           <Icon name="edit" size={15} />
                         </span>
-                        <span
-                          className="iact danger"
-                          onClick={() => {
-                            if (window.confirm(`Delete "${p.title.en}"?`)) del.mutate(p.id)
-                          }}
-                        >
-                          <Icon name="trash" size={15} />
-                        </span>
+                        {canManage && (
+                          <span
+                            className="iact danger"
+                            onClick={() => {
+                              if (window.confirm(`Delete "${p.title.en}"?`)) del.mutate(p.id)
+                            }}
+                          >
+                            <Icon name="trash" size={15} />
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>

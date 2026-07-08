@@ -16,6 +16,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
@@ -58,6 +59,7 @@ type adminHandler struct {
 	repo       Repository
 	wallet     wallet.Repository
 	orders     *mongo.Collection
+	roles      *mongo.Collection
 	rec        audit.Recorder
 	smsSender  sms.Sender
 	maxBulkSMS int
@@ -72,6 +74,7 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, s
 		repo:       NewMongoRepository(db),
 		wallet:     wallet.NewMongoRepository(db),
 		orders:     db.Collection("orders"),
+		roles:      db.Collection("roles"),
 		rec:        rec,
 		smsSender:  smsSender,
 		maxBulkSMS: maxBulkSMS,
@@ -153,14 +156,20 @@ func (a *adminHandler) detail(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, adminUserDetail{User: u, orderStats: stats[id], Transactions: txns})
 }
 
-// updateRole handles PUT /api/admin/users/{id}/role.
+// updateRole handles PUT /api/admin/users/{id}/role. The body carries the full
+// target state: {role, adminRoleId?} — for an admin, a missing/empty adminRoleId
+// means built-in Super Admin, otherwise it references a custom RBAC role. Any
+// change that grants or revokes admin access (or reassigns an admin's RBAC
+// role) requires a super-admin actor, so a users.manage role can never escalate
+// its own authority. Permission changes bite on the target's next token refresh.
 func (a *adminHandler) updateRole(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
 	var body struct {
-		Role Role `json:"role"`
+		Role        Role    `json:"role"`
+		AdminRoleID *string `json:"adminRoleId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.BadRequest(w, "invalid request body")
@@ -172,29 +181,66 @@ func (a *adminHandler) updateRole(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "role must be one of customer, reseller, admin")
 		return
 	}
+	var adminRoleID *bson.ObjectID
+	if body.Role == RoleAdmin && body.AdminRoleID != nil && *body.AdminRoleID != "" {
+		rid, err := bson.ObjectIDFromHex(*body.AdminRoleID)
+		if err != nil {
+			response.BadRequest(w, "adminRoleId is not a valid id")
+			return
+		}
+		// Exists-then-assign is not atomic: a concurrent role delete could remove
+		// this role between the check and the write, leaving a dangling
+		// adminRoleId (resolvePerms fails closed to no permissions). Accepted, the
+		// mirror of role delete's ROLE_IN_USE race — a low-concurrency,
+		// super-admin-only surface under the no-transactions model.
+		n, err := a.roles.CountDocuments(r.Context(), bson.D{{Key: "_id", Value: rid}})
+		if err != nil {
+			response.InternalError(w)
+			return
+		}
+		if n == 0 {
+			response.BadRequest(w, "adminRoleId does not reference an existing role")
+			return
+		}
+		adminRoleID = &rid
+	}
 	current, err := a.repo.FindByID(r.Context(), id)
 	if err != nil {
 		a.writeRepoError(w, err)
 		return
 	}
-	// Never demote the platform's last remaining admin — that would lock
-	// everyone out of the console. (Count-then-update; the admin-only surface
-	// makes the race window acceptable.)
-	if current.Role == RoleAdmin && body.Role != RoleAdmin {
-		if ok := a.requireAnotherAdmin(w, r, "cannot demote the last remaining admin"); !ok {
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	if (current.Role == RoleAdmin || body.Role == RoleAdmin) && !claims.IsSuperAdmin() {
+		response.Forbidden(w, "only a super admin can grant or change admin access")
+		return
+	}
+	// Never remove the platform's last remaining super admin — that would leave
+	// nobody able to manage roles or admin accounts. (Count-then-update; the
+	// admin-only surface makes the race window acceptable.)
+	wasSuper := current.Role == RoleAdmin && current.AdminRoleID == nil
+	staysSuper := body.Role == RoleAdmin && adminRoleID == nil
+	if wasSuper && !staysSuper {
+		if ok := a.requireAnotherSuperAdmin(w, r, "cannot demote the last remaining super admin"); !ok {
 			return
 		}
 	}
-	u, err := a.repo.UpdateRole(r.Context(), id, body.Role)
+	u, err := a.repo.UpdateRole(r.Context(), id, body.Role, adminRoleID)
 	if err != nil {
 		a.writeRepoError(w, err)
 		return
+	}
+	summary := map[string]any{"from": string(current.Role), "to": string(body.Role)}
+	if current.AdminRoleID != nil {
+		summary["fromAdminRole"] = current.AdminRoleID.Hex()
+	}
+	if adminRoleID != nil {
+		summary["toAdminRole"] = adminRoleID.Hex()
 	}
 	a.rec.Record(r.Context(), audit.Entry{
 		Action:     audit.ActionRoleChange,
 		TargetType: "user",
 		TargetID:   id.Hex(),
-		Summary:    map[string]any{"from": string(current.Role), "to": string(body.Role)},
+		Summary:    summary,
 	})
 	response.OK(w, u)
 }
@@ -232,20 +278,24 @@ func (a *adminHandler) bulkStatus(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "no valid user ids supplied")
 		return
 	}
-	// Suspend must never remove the last admin: exclude admin accounts from a
-	// bulk suspension entirely (they go through the guarded single endpoint).
-	if status == StatusSuspended {
-		users, err := a.repo.FindByIDs(r.Context(), ids)
-		if err != nil {
-			response.InternalError(w)
-			return
+	// Bulk status is a customer-management tool: exclude admin accounts from the
+	// batch entirely, for BOTH actions. Admin accounts are managed only through
+	// the super-admin-gated single endpoints — otherwise a users.manage admin
+	// could reactivate (or suspend) an admin here, bypassing that gate.
+	users, err := a.repo.FindByIDs(r.Context(), ids)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	ids = ids[:0]
+	for _, u := range users {
+		if u.Role != RoleAdmin {
+			ids = append(ids, u.ID)
 		}
-		ids = ids[:0]
-		for _, u := range users {
-			if u.Role != RoleAdmin {
-				ids = append(ids, u.ID)
-			}
-		}
+	}
+	if len(ids) == 0 {
+		response.OK(w, map[string]int64{"modified": 0})
+		return
 	}
 	modified, err := a.repo.BulkUpdateStatus(r.Context(), ids, status)
 	if err != nil {
@@ -361,8 +411,16 @@ func (a *adminHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if current.Role == RoleAdmin {
-		if ok := a.requireAnotherAdmin(w, r, "cannot delete the last remaining admin"); !ok {
+		// Admin accounts are managed by super admins only, and the last super
+		// admin can never be deleted.
+		if claims, _ := auth.ClaimsFromContext(r.Context()); !claims.IsSuperAdmin() {
+			response.Forbidden(w, "only a super admin can delete an admin account")
 			return
+		}
+		if current.AdminRoleID == nil {
+			if ok := a.requireAnotherSuperAdmin(w, r, "cannot delete the last remaining super admin"); !ok {
+				return
+			}
 		}
 	}
 	u, err := a.repo.SoftDelete(r.Context(), id)
@@ -379,10 +437,12 @@ func (a *adminHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, u)
 }
 
-// requireAnotherAdmin writes a 409 and returns false when the platform has at
-// most one active admin left (so the caller must not demote/suspend it).
-func (a *adminHandler) requireAnotherAdmin(w http.ResponseWriter, r *http.Request, msg string) bool {
-	n, err := a.repo.CountActiveAdmins(r.Context())
+// requireAnotherSuperAdmin writes a 409 and returns false when the platform has
+// at most one active super admin left (so the caller must not demote/suspend/
+// delete it — limited admins cannot manage roles or admin accounts, so losing
+// the last super admin would lock those functions permanently).
+func (a *adminHandler) requireAnotherSuperAdmin(w http.ResponseWriter, r *http.Request, msg string) bool {
+	n, err := a.repo.CountActiveSuperAdmins(r.Context())
 	if err != nil {
 		response.InternalError(w)
 		return false
@@ -418,10 +478,18 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		a.writeRepoError(w, err)
 		return
 	}
-	// Suspending the last active admin would lock everyone out, same as a demote.
-	if current.Role == RoleAdmin && body.Status == StatusSuspended && current.Status != StatusSuspended {
-		if ok := a.requireAnotherAdmin(w, r, "cannot suspend the last remaining admin"); !ok {
+	if current.Role == RoleAdmin {
+		// Admin accounts are managed by super admins only.
+		if claims, _ := auth.ClaimsFromContext(r.Context()); !claims.IsSuperAdmin() {
+			response.Forbidden(w, "only a super admin can change an admin account's status")
 			return
+		}
+		// Suspending the last active super admin would lock role/admin
+		// management permanently, same as a demote.
+		if body.Status == StatusSuspended && current.Status != StatusSuspended && current.AdminRoleID == nil {
+			if ok := a.requireAnotherSuperAdmin(w, r, "cannot suspend the last remaining super admin"); !ok {
+				return
+			}
 		}
 	}
 	u, err := a.repo.UpdateStatus(r.Context(), id, body.Status)

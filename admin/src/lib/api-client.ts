@@ -48,9 +48,22 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error(`Network error: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  if (response.status === 401 || response.status === 403) {
-    // Unauthorized/forbidden — drop the session so the guard redirects to /login.
+  if (response.status === 401) {
+    // Unauthorized (expired/invalid token) — drop the session so the guard
+    // redirects to /login.
     import('@/stores/auth').then((m) => m.useAuthStore.getState().logout())
+  } else if (response.status === 403) {
+    // A 403 usually means the admin's role lacks a specific permission — surface
+    // it as a normal ApiError, do NOT log out. EXCEPTION: a session that carries
+    // no permissions at all is a pre-RBAC token (issued before this feature, so
+    // it has no perms claim and 403s on everything). Force a re-login so it is
+    // reissued with a permission set, instead of stranding the console in an
+    // all-errors state until the (long-lived) access token expires.
+    import('@/stores/auth').then((m) => {
+      if (!m.useAuthStore.getState().user?.permissions?.length) {
+        m.useAuthStore.getState().logout()
+      }
+    })
   }
 
   // 204 No Content (e.g. DELETE) has no JSON body.

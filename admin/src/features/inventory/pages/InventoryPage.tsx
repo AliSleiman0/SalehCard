@@ -12,12 +12,15 @@ import {
 } from '../hooks/useInventory'
 import { parseCodesFile, listCodes, type UploadItem } from '../api/codes'
 import { relativeTime, downloadCsv } from '@/lib/utils'
+import { useCan } from '@/stores/auth'
 import type { InventoryStats, Code } from '@/types'
 
 type Tab = 'stock' | 'upload' | 'config' | 'audit'
 
 export default function InventoryPage() {
   const { t } = useTranslation()
+  const can = useCan()
+  const canManage = can('inventory.manage')
   const [params, setSearchParams] = useSearchParams()
   const uploadFor = params.get('upload') ?? undefined
   const [tab, setTab] = useState<Tab>(uploadFor ? 'upload' : 'stock')
@@ -57,9 +60,11 @@ export default function InventoryPage() {
         title="Inventory & code management"
         sub="Mission-critical — if codes run out, purchases fail."
       >
-        <button className="abtn primary" onClick={() => openUpload()}>
-          <Icon name="upload" size={15} /> Bulk upload codes
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={() => openUpload()}>
+            <Icon name="upload" size={15} /> Bulk upload codes
+          </button>
+        )}
       </PageHead>
 
       <div className="atabs">
@@ -70,7 +75,10 @@ export default function InventoryPage() {
             ['config', 'Low-stock config'],
             ['audit', 'Code lookup'],
           ] as [Tab, string][]
-        ).map(([k, l]) => (
+        )
+          // Upload + threshold config are mutations — hidden for view-only admins.
+          .filter(([k]) => canManage || (k !== 'upload' && k !== 'config'))
+          .map(([k, l]) => (
           <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
             {l}
           </button>
@@ -86,8 +94,8 @@ export default function InventoryPage() {
           <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
         ) : (
           <>
-            {tab === 'upload' && <UploadTab stats={stats} defaultProduct={uploadProduct} />}
-            {tab === 'config' && <ConfigTab stats={stats} />}
+            {tab === 'upload' && canManage && <UploadTab stats={stats} defaultProduct={uploadProduct} />}
+            {tab === 'config' && canManage && <ConfigTab stats={stats} />}
           </>
         ))}
     </div>
@@ -98,6 +106,7 @@ const PAGE_SIZE = 20
 
 function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
   const { t } = useTranslation()
+  const canManage = useCan()('inventory.manage')
   const [lowOnly, setLowOnly] = useState(false)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -233,9 +242,9 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                     <td>
                       <div
                         className="cellprod"
-                        onClick={() => onAdd(it.productId)}
-                        style={{ cursor: 'pointer' }}
-                        title="Upload codes for this product"
+                        onClick={() => canManage && onAdd(it.productId)}
+                        style={{ cursor: canManage ? 'pointer' : 'default' }}
+                        title={canManage ? 'Upload codes for this product' : undefined}
                       >
                         <Art art={artForCategory(it.category || it.title)} size={34} />
                         <div className="pn">
@@ -261,17 +270,21 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="abtn xs" onClick={() => onAdd(it.productId)}>
-                          <Icon name="upload" size={13} /> Add
-                        </button>
-                        <button
-                          className="abtn xs"
-                          onClick={() => exportCodes(it.productId, it.title)}
-                          disabled={exportingId === it.productId}
-                          title="Export this product's codes as CSV"
-                        >
-                          <Icon name="download" size={13} /> {exportingId === it.productId ? '…' : 'Export'}
-                        </button>
+                        {canManage && (
+                          <button className="abtn xs" onClick={() => onAdd(it.productId)}>
+                            <Icon name="upload" size={13} /> Add
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            className="abtn xs"
+                            onClick={() => exportCodes(it.productId, it.title)}
+                            disabled={exportingId === it.productId}
+                            title="Export this product's codes as CSV"
+                          >
+                            <Icon name="download" size={13} /> {exportingId === it.productId ? '…' : 'Export'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

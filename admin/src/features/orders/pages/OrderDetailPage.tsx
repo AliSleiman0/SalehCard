@@ -15,6 +15,7 @@ import {
 } from '@/components'
 import { money } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
+import { useCan } from '@/stores/auth'
 import { useOrder } from '../hooks/useOrders'
 import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrderMutations'
 import { adaptOrder } from '../lib/adaptOrder'
@@ -24,6 +25,8 @@ export default function OrderDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
+  const can = useCan()
+  const canManage = can('orders.manage')
   const { data, isLoading, isError, refetch } = useOrder(id)
   const [masked, setMasked] = useState(true)
   const [refundOpen, setRefundOpen] = useState(false)
@@ -45,9 +48,9 @@ export default function OrderDetailPage() {
   // Mirrors the server's transition rules: refund allows processing|completed,
   // manual completion allows processing only, and the pending→failed cleanup
   // (money-neutral) allows pending only.
-  const refundable = o.status === 'processing' || o.status === 'completed'
-  const completable = o.status === 'processing'
-  const failable = o.status === 'pending'
+  const refundable = canManage && (o.status === 'processing' || o.status === 'completed')
+  const completable = canManage && o.status === 'processing'
+  const failable = canManage && o.status === 'pending'
   const refunded = o.status === 'refunded'
 
   return (

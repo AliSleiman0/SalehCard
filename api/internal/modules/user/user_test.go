@@ -122,10 +122,11 @@ func (f *fakeUserRepo) CountActiveSince(_ context.Context, since time.Time) (int
 	return n, nil
 }
 
-func (f *fakeUserRepo) CountActiveAdmins(_ context.Context) (int64, error) {
+func (f *fakeUserRepo) CountActiveSuperAdmins(_ context.Context) (int64, error) {
 	var n int64
 	for _, u := range f.byID {
-		if u.Role == RoleAdmin && u.Status != StatusSuspended {
+		if u.Role == RoleAdmin && u.AdminRoleID == nil &&
+			u.Status != StatusSuspended && u.Status != StatusDeleted {
 			n++
 		}
 	}
@@ -140,12 +141,17 @@ func (f *fakeUserRepo) ListAll(_ context.Context, _ UserFilter, _ pagination.Par
 	return out, int64(len(out)), nil
 }
 
-func (f *fakeUserRepo) UpdateRole(_ context.Context, id bson.ObjectID, role Role) (*User, error) {
+func (f *fakeUserRepo) UpdateRole(_ context.Context, id bson.ObjectID, role Role, adminRoleID *bson.ObjectID) (*User, error) {
 	u, ok := f.byID[id]
 	if !ok {
 		return nil, apperrors.ErrNotFound
 	}
 	u.Role = role
+	if role == RoleAdmin {
+		u.AdminRoleID = adminRoleID
+	} else {
+		u.AdminRoleID = nil
+	}
 	return u, nil
 }
 

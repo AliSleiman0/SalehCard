@@ -6,6 +6,9 @@ export interface AuthUser {
   email: string
   role: UserRole
   name?: string
+  // RBAC permissions ("<domain>.view"/"<domain>.manage", or ["*"] for a super
+  // admin). Present on admin auth responses; absent for customers.
+  permissions?: string[]
 }
 
 export interface AuthResponse {

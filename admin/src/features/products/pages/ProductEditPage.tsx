@@ -6,6 +6,7 @@ import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useProduct, useCreateProduct, useUpdateProduct, useUploadProductImage } from '../hooks/useProducts'
 import { reconcileBridgePhoneField } from '../lib/bridgeFields'
+import { useCan } from '@/stores/auth'
 import type { FulfillmentType, Locale, InputField } from '@/types'
 
 const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
@@ -47,6 +48,8 @@ const KNOWN_GAME_SLUGS = ['pubgm-global', 'dfm-garena', 'free-fire']
 export default function ProductEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('products.manage')
   const { id } = useParams<{ id: string }>()
   const isNew = !id
   const { data, isLoading, isError, refetch } = useProduct(id)
@@ -251,9 +254,11 @@ export default function ProductEditPage() {
         <button className="abtn" onClick={() => navigate('/products')}>
           <Icon name="chevleft" size={15} /> {t('back')}
         </button>
-        <button className="abtn primary" onClick={onSave} disabled={pending}>
-          <Icon name="check" size={15} /> {pending ? 'Saving…' : t('save')}
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={onSave} disabled={pending}>
+            <Icon name="check" size={15} /> {pending ? 'Saving…' : t('save')}
+          </button>
+        )}
       </PageHead>
 
       {error && (
@@ -782,12 +787,12 @@ export default function ProductEditPage() {
                     <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                       <button
                         className="abtn sm"
-                        disabled={uploadImage.isPending}
+                        disabled={uploadImage.isPending || !canManage}
                         onClick={() => imageFileRef.current?.click()}
                       >
                         <Icon name="upload" size={13} /> Replace
                       </button>
-                      <button className="abtn sm danger" disabled={uploadImage.isPending} onClick={onRemoveImage}>
+                      <button className="abtn sm danger" disabled={uploadImage.isPending || !canManage} onClick={onRemoveImage}>
                         <Icon name="x" size={13} /> Remove
                       </button>
                     </div>
@@ -798,7 +803,7 @@ export default function ProductEditPage() {
                 <button
                   className="abtn sm"
                   style={{ width: '100%', height: 140 }}
-                  disabled={uploadImage.isPending}
+                  disabled={uploadImage.isPending || !canManage}
                   onClick={() => imageFileRef.current?.click()}
                 >
                   <Icon name="upload" size={13} /> {uploadImage.isPending ? 'Uploading…' : 'Choose image'}

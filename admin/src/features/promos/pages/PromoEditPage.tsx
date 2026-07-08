@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, Chip, LoadingSpinner, ErrorState } from '@/components'
 import { ApiError } from '@/lib/api-client'
+import { useCan } from '@/stores/auth'
 import { usePromo, useCreatePromo, useUpdatePromo } from '../hooks/usePromos'
 import type { PromoInput, PromoType } from '../api/promos'
 
@@ -22,6 +23,8 @@ function randomCode(): string {
 export default function PromoEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('promos.manage')
   const { id } = useParams<{ id: string }>()
   const isNew = !id
 
@@ -115,9 +118,11 @@ export default function PromoEditPage() {
         <button className="abtn" onClick={() => navigate('/promos')}>
           <Icon name="chevleft" size={15} /> {t('back')}
         </button>
-        <button className="abtn primary" onClick={save} disabled={saving}>
-          <Icon name="check" size={15} /> {t('save')}
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={save} disabled={saving}>
+            <Icon name="check" size={15} /> {t('save')}
+          </button>
+        )}
       </PageHead>
 
       {error && (
