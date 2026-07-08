@@ -4,7 +4,7 @@ import android.telephony.SubscriptionInfo
 import java.time.LocalDate
 
 object ProviderStore {
-    var deviceId: Int = 0
+    var deviceId: String = ""
     // Nullable (not lateinit): a phone may carry only one operator's SIM, so a
     // command for the missing operator must fail cleanly instead of crashing on
     // an uninitialized lateinit. Use hasSim() to guard before touching these.
