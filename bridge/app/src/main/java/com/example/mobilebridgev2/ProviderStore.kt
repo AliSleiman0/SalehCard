@@ -24,10 +24,7 @@ object ProviderStore {
     var touchCreditTransferDestination: String = "1199"
     var alfaThirdPartyRechargeSmsTemplate: String = "{phone}R{code}"
     var alfaCreditTransferDestination: String = "1399"
-    // Alfa credit transfer uses R (e.g. 71937714R1), not T — per Alfa's own
-    // "Wrong format" reply. Overridden by server config at startup; this is the
-    // fallback if config fails to load.
-    var alfaCreditTransferSmsTemplate: String = "{phone}R{amount}"
+    var alfaCreditTransferSmsTemplate: String = "{phone}T{amount}"
     var alfaThirdPartyRechargeDestination: String = "1313"
     var touchMinimumAllowedBalance: Double = 20.00
     var alfaMinimumAllowedBalance: Double = 20.00
