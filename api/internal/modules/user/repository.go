@@ -32,16 +32,19 @@ type Repository interface {
 
 	// Admin operations.
 	ListAll(ctx context.Context, f UserFilter, p pagination.Params) ([]*User, int64, error)
-	UpdateRole(ctx context.Context, id bson.ObjectID, role Role) (*User, error)
+	// UpdateRole sets a user's role and RBAC role assignment together. A nil
+	// adminRoleID (or a non-admin role) clears the assignment — for an admin
+	// that means built-in Super Admin.
+	UpdateRole(ctx context.Context, id bson.ObjectID, role Role, adminRoleID *bson.ObjectID) (*User, error)
 	UpdateStatus(ctx context.Context, id bson.ObjectID, status Status) (*User, error)
 	// BulkUpdateStatus sets status on every user in ids, returning the modified count.
 	BulkUpdateStatus(ctx context.Context, ids []bson.ObjectID, status Status) (int64, error)
 	// SoftDelete anonymizes an account in place (status=deleted, PII unset).
 	SoftDelete(ctx context.Context, id bson.ObjectID) (*User, error)
 	UpdateResellerTier(ctx context.Context, id bson.ObjectID, tier string) (*User, error)
-	// CountActiveAdmins counts non-suspended admin accounts (the last-admin
-	// demotion/suspension guard).
-	CountActiveAdmins(ctx context.Context) (int64, error)
+	// CountActiveSuperAdmins counts non-suspended super admins — admins with no
+	// custom RBAC role (the last-super-admin demotion/suspension guard).
+	CountActiveSuperAdmins(ctx context.Context) (int64, error)
 }
 
 // UserFilter narrows an admin user listing. Zero-valued fields are ignored.
@@ -343,10 +346,36 @@ func (r *MongoRepository) ListAll(ctx context.Context, f UserFilter, p paginatio
 	return out, total, nil
 }
 
-// UpdateRole atomically sets a user's role and returns the updated document,
-// returning ErrNotFound when no user matches.
-func (r *MongoRepository) UpdateRole(ctx context.Context, id bson.ObjectID, role Role) (*User, error) {
-	return r.setFields(ctx, id, bson.D{{Key: "role", Value: role}})
+// UpdateRole atomically sets a user's role and RBAC role assignment and returns
+// the updated document, returning ErrNotFound when no user matches. The
+// assignment is cleared (unset) when adminRoleID is nil or the role is not
+// admin, so a demoted account never keeps a stale role reference.
+func (r *MongoRepository) UpdateRole(ctx context.Context, id bson.ObjectID, role Role, adminRoleID *bson.ObjectID) (*User, error) {
+	set := bson.D{
+		{Key: "role", Value: role},
+		{Key: "updatedAt", Value: time.Now().UTC()},
+	}
+	update := bson.D{}
+	if role == RoleAdmin && adminRoleID != nil {
+		set = append(set, bson.E{Key: "adminRoleId", Value: *adminRoleID})
+	} else {
+		update = append(update, bson.E{Key: "$unset", Value: bson.D{{Key: "adminRoleId", Value: ""}}})
+	}
+	update = append(update, bson.E{Key: "$set", Value: set})
+
+	var u User
+	err := r.collection.FindOneAndUpdate(ctx,
+		bson.D{{Key: "_id", Value: id}},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&u)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
 }
 
 // UpdateStatus atomically sets a user's status and returns the updated document,
@@ -395,6 +424,10 @@ func (r *MongoRepository) SoftDelete(ctx context.Context, id bson.ObjectID) (*Us
 				{Key: "phone", Value: ""},
 				{Key: "passwordHash", Value: ""},
 				{Key: "googleId", Value: ""},
+				// Sever any RBAC role assignment: a dead, anonymized account must
+				// not keep an adminRoleId, or role.CountAssigned would count it and
+				// block deletion of an otherwise-unused role forever.
+				{Key: "adminRoleId", Value: ""},
 			}},
 		},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
@@ -408,12 +441,18 @@ func (r *MongoRepository) SoftDelete(ctx context.Context, id bson.ObjectID) (*Us
 	return &u, nil
 }
 
-// CountActiveAdmins counts non-suspended admin accounts. The $ne keeps legacy
-// documents without a status field counted as active.
-func (r *MongoRepository) CountActiveAdmins(ctx context.Context) (int64, error) {
+// CountActiveSuperAdmins counts usable super admins (admins without a custom
+// RBAC role — a nil adminRoleId matches both missing and explicit null). It
+// excludes both suspended AND soft-deleted accounts: a deleted admin keeps
+// role=admin but can never sign in, so counting it would let the last usable
+// super admin be removed and permanently lock out role/admin management. The
+// $nin (rather than == active) keeps legacy documents with no status field
+// counted as active.
+func (r *MongoRepository) CountActiveSuperAdmins(ctx context.Context) (int64, error) {
 	return r.collection.CountDocuments(ctx, bson.D{
 		{Key: "role", Value: RoleAdmin},
-		{Key: "status", Value: bson.D{{Key: "$ne", Value: StatusSuspended}}},
+		{Key: "adminRoleId", Value: nil},
+		{Key: "status", Value: bson.D{{Key: "$nin", Value: bson.A{StatusSuspended, StatusDeleted}}}},
 	})
 }
 

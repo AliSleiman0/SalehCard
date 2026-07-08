@@ -84,6 +84,10 @@ type UserService struct {
 	// settings, when set (via WithSettings), enables admin SMS 2FA by letting the
 	// service read the AdminSmsTwoFactorEnabled flag at login time. Nil => 2FA off.
 	settings settingsSource
+	// rolePerms, when set (via WithRolePerms), resolves a custom admin role's
+	// permission set at token-issue time. Nil => admins with a custom role get no
+	// permissions (fail-closed); super admins (nil AdminRoleID) are unaffected.
+	rolePerms func(ctx context.Context, roleID bson.ObjectID) ([]string, error)
 }
 
 // UserServiceOption configures optional UserService dependencies.
@@ -94,6 +98,13 @@ type UserServiceOption func(*UserService)
 // (so existing call sites and tests keep their password-only behavior).
 func WithSettings(src settingsSource) UserServiceOption {
 	return func(s *UserService) { s.settings = src }
+}
+
+// WithRolePerms gives the service a resolver from a custom admin role to its
+// permission set, consulted when issuing tokens for admins with an assigned
+// role. Without it those admins get an empty permission set (fail-closed).
+func WithRolePerms(resolve func(ctx context.Context, roleID bson.ObjectID) ([]string, error)) UserServiceOption {
+	return func(s *UserService) { s.rolePerms = resolve }
 }
 
 // NewUserService constructs a UserService with its dependencies and token config.
@@ -370,16 +381,22 @@ func (s *UserService) UpdateProfile(ctx context.Context, id bson.ObjectID, input
 }
 
 // issueTokens mints an access JWT and a fresh, persisted refresh token for user.
+// For admins it resolves the RBAC permission set (from the assigned custom role,
+// or the "*" wildcard for super admins) into both the JWT claims and the user
+// payload — so role edits take effect on the holder's next refresh/login.
 func (s *UserService) issueTokens(ctx context.Context, user *User) (*AuthResult, error) {
 	var phone string
 	if user.Phone != nil {
 		phone = *user.Phone
 	}
+	perms := s.resolvePerms(ctx, user)
+	user.Permissions = perms
 	access, err := auth.IssueAccessToken(s.secret, auth.Claims{
 		UserID: user.ID.Hex(),
 		Email:  user.Email,
 		Phone:  phone,
 		Role:   string(user.Role),
+		Perms:  perms,
 	}, s.accessTTL)
 	if err != nil {
 		return nil, err
@@ -406,6 +423,30 @@ func (s *UserService) issueTokens(ctx context.Context, user *User) (*AuthResult,
 	user.LastSeen = now
 
 	return &AuthResult{User: user, AccessToken: access, RefreshToken: raw}, nil
+}
+
+// resolvePerms returns the RBAC permission set for user: nil for non-admins,
+// the "*" wildcard for super admins (no custom role assigned), and the assigned
+// role's permissions otherwise. A missing role or resolver failure yields an
+// empty set (fail-closed: the admin signs in but can access nothing) rather
+// than blocking the login.
+func (s *UserService) resolvePerms(ctx context.Context, user *User) []string {
+	if user.Role != RoleAdmin {
+		return nil
+	}
+	if user.AdminRoleID == nil {
+		return []string{auth.PermAll}
+	}
+	if s.rolePerms == nil {
+		return []string{}
+	}
+	perms, err := s.rolePerms(ctx, *user.AdminRoleID)
+	if err != nil {
+		slog.Warn("user: could not resolve admin role permissions; issuing none",
+			"userId", user.ID.Hex(), "roleId", user.AdminRoleID.Hex(), "err", err)
+		return []string{}
+	}
+	return perms
 }
 
 // ErrAdmin2FANoPhone is returned when admin SMS 2FA is enabled but the admin has

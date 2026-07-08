@@ -15,12 +15,15 @@ import {
 } from '../api/users'
 import type { UserRole } from '@/types'
 
-export function useUsers(params: UserListParams = {}) {
+export function useUsers(params: UserListParams = {}, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['admin', 'users', params],
     queryFn: () => listUsers(params),
     // Keep the current page visible while the next page/filter/search loads.
     placeholderData: keepPreviousData,
+    // Cross-domain callers (Settings' admin-accounts card) pass enabled:false
+    // when the admin lacks users.view, so the fetch isn't fired to 403.
+    enabled: opts?.enabled ?? true,
   })
 }
 
@@ -35,7 +38,8 @@ export function useUser(id: string | undefined) {
 export function useUpdateUserRole(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (role: UserRole) => updateUserRole(id, role),
+    mutationFn: ({ role, adminRoleId }: { role: UserRole; adminRoleId?: string | null }) =>
+      updateUserRole(id, role, adminRoleId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'users'] })
       qc.invalidateQueries({ queryKey: ['admin', 'user', id] })

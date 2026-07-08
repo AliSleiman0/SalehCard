@@ -11,6 +11,7 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
+import { useCan } from '@/stores/auth'
 import { useOffers, useDeleteOffer } from '../hooks/useOffers'
 import { adaptOffer, type OfferView } from '../lib/adaptOffer'
 import type { OfferStatus } from '../api/offers'
@@ -23,6 +24,8 @@ const TYPE_BADGE: Record<string, [string, string]> = {
 export default function OffersListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('offers.manage')
 
   const [status, setStatus] = useState<'' | OfferStatus>('')
   const [page, setPage] = useState(1)
@@ -46,9 +49,11 @@ export default function OffersListPage() {
         <button className="abtn" onClick={() => refetch()}>
           <Icon name="refresh" size={15} /> Refresh
         </button>
-        <button className="abtn primary" onClick={() => navigate('/offers/new')}>
-          <Icon name="plus" size={15} /> New offer
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={() => navigate('/offers/new')}>
+            <Icon name="plus" size={15} /> New offer
+          </button>
+        )}
       </PageHead>
 
       <div className="acard">
@@ -120,9 +125,11 @@ export default function OffersListPage() {
                             <span className="iact" onClick={() => navigate(`/offers/${o.id}/edit`)}>
                               <Icon name="edit" size={15} />
                             </span>
-                            <span className="iact danger" onClick={() => setToDelete(o)}>
-                              <Icon name="trash" size={15} />
-                            </span>
+                            {canManage && (
+                              <span className="iact danger" onClick={() => setToDelete(o)}>
+                                <Icon name="trash" size={15} />
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>

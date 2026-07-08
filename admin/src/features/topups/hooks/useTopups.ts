@@ -2,10 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listTopUps, approveTopUp, rejectTopUp, type TopUpListParams } from '../api/topups'
 import { toast } from '@/stores/toast'
 
-export function useTopUps(params: TopUpListParams) {
+export function useTopUps(params: TopUpListParams, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['admin', 'topups', params],
     queryFn: () => listTopUps(params),
+    // Cross-domain callers (Finance's USDT tab) pass enabled:false when the
+    // admin lacks topups.view, so the fetch isn't fired to 403.
+    enabled: opts?.enabled ?? true,
   })
 }
 

@@ -14,6 +14,7 @@ import { useExpenses, useExpenseSummary, useDeleteExpense } from '../hooks/useEx
 import { adaptExpense, amountLabel, type ExpenseView } from '../lib/adaptExpense'
 import { listExpenses, type AdminExpense, type ExpenseCategory } from '../api/expenses'
 import { downloadCsv } from '@/lib/utils'
+import { useCan } from '@/stores/auth'
 
 const CATEGORIES: ExpenseCategory[] = [
   'salary',
@@ -36,6 +37,8 @@ function endOfDayISO(d: string): string | undefined {
 export default function ExpensesListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('expenses.manage')
 
   const [category, setCategory] = useState<'' | ExpenseCategory>('')
   const [from, setFrom] = useState('')
@@ -114,9 +117,11 @@ export default function ExpensesListPage() {
         <button className="abtn" onClick={() => refetch()}>
           <Icon name="refresh" size={15} /> {t('exp_refresh')}
         </button>
-        <button className="abtn primary" onClick={() => navigate('/expenses/new')}>
-          <Icon name="plus" size={15} /> {t('exp_new')}
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={() => navigate('/expenses/new')}>
+            <Icon name="plus" size={15} /> {t('exp_new')}
+          </button>
+        )}
       </PageHead>
 
       {/* Totals strip — per-currency grand total over all filtered rows. */}
@@ -226,9 +231,11 @@ export default function ExpensesListPage() {
                           <span className="iact" onClick={() => navigate(`/expenses/${e.id}/edit`)}>
                             <Icon name="edit" size={15} />
                           </span>
-                          <span className="iact danger" onClick={() => setToDelete(e)}>
-                            <Icon name="trash" size={15} />
-                          </span>
+                          {canManage && (
+                            <span className="iact danger" onClick={() => setToDelete(e)}>
+                              <Icon name="trash" size={15} />
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>

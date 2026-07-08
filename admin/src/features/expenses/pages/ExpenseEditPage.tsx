@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, LoadingSpinner, ErrorState } from '@/components'
 import { ApiError } from '@/lib/api-client'
+import { useCan } from '@/stores/auth'
 import { useExpense, useCreateExpense, useUpdateExpense } from '../hooks/useExpenses'
 import type { ExpenseInput, ExpenseCategory } from '../api/expenses'
 
@@ -29,6 +30,8 @@ function todayInput(): string {
 export default function ExpenseEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('expenses.manage')
   const { id } = useParams<{ id: string }>()
   const isNew = !id
 
@@ -112,9 +115,11 @@ export default function ExpenseEditPage() {
         <button className="abtn" onClick={() => navigate('/expenses')}>
           <Icon name="chevleft" size={15} /> {t('back')}
         </button>
-        <button className="abtn primary" onClick={save} disabled={saving}>
-          <Icon name="check" size={15} /> {t('save')}
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={save} disabled={saving}>
+            <Icon name="check" size={15} /> {t('save')}
+          </button>
+        )}
       </PageHead>
 
       {error && (

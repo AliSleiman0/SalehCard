@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { Icon, PageHead, Avatar, StatusBadge, Toggle } from '@/components'
 import { useUsers } from '@/features/users/hooks/useUsers'
 import { adaptUser } from '@/features/users/lib/adaptUser'
+import { useRoles } from '@/features/roles/hooks/useRoles'
 import { lastActive } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
+import { useCan } from '@/stores/auth'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 
 // The persisted surfaces here are the admin-accounts list (backed by
@@ -14,8 +16,20 @@ import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 // edited here yet.
 export default function SettingsPage() {
   const { t } = useTranslation()
-  const { data: adminsRes, isLoading: adminsLoading } = useUsers({ role: 'admin', limit: 100 })
+  const can = useCan()
+  const canManage = can('settings.manage')
+  // The admin-accounts card reads the users domain; only fetch/show it when the
+  // admin can view users (a settings-only role would otherwise 403).
+  const canViewUsers = can('users.view')
+  const { data: adminsRes, isLoading: adminsLoading } = useUsers(
+    { role: 'admin', limit: 100 },
+    { enabled: canViewUsers },
+  )
   const adminRows = (adminsRes?.data ?? []).map(adaptUser)
+
+  // RBAC role names for the admin-accounts table (no assigned role = Super Admin).
+  const { data: rolesRes } = useRoles()
+  const roleNameById = new Map((rolesRes?.data ?? []).map((r) => [r.id, r.name]))
 
   // --- Loyalty program ------------------------------------------------------
   const { data: settingsRes, isLoading: settingsLoading } = useSettings()
@@ -176,7 +190,7 @@ export default function SettingsPage() {
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>
-            <button className="abtn primary" onClick={saveLoyalty} disabled={update.isPending || settingsLoading}>
+            <button className="abtn primary" onClick={saveLoyalty} disabled={update.isPending || settingsLoading || !canManage}>
               <Icon name="check" size={15} /> {t('save')}
             </button>
             {loyaltySaved && !update.isPending && (
@@ -210,7 +224,7 @@ export default function SettingsPage() {
                 be blocked from signing in — set phones before enabling.
               </div>
             </div>
-            <Toggle on={twoFAEnabled} onClick={toggle2FA} />
+            <Toggle on={twoFAEnabled} onClick={() => canManage && toggle2FA()} />
           </div>
           {twoFAError && (
             <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 12 }}>
@@ -220,6 +234,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {canViewUsers && (
       <div className="acard">
         <div className="panelhead">
           <Icon name="shield" size={17} />
@@ -263,7 +278,9 @@ export default function SettingsPage() {
                         border: '1px solid var(--border)',
                       }}
                     >
-                      Admin
+                      {a.raw.adminRoleId
+                        ? roleNameById.get(a.raw.adminRoleId) ?? 'Custom role'
+                        : 'Super Admin'}
                     </span>
                   </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
@@ -292,6 +309,7 @@ export default function SettingsPage() {
           (Users → role). Demoting or suspending the last remaining admin is blocked.
         </div>
       </div>
+      )}
     </div>
   )
 }

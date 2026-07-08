@@ -26,6 +26,9 @@ export interface AdminUser {
   email: string
   phone?: string
   role: UserRole
+  // Custom RBAC role assigned to an admin account; absent = built-in Super
+  // Admin (for admins) or not applicable (customers/resellers).
+  adminRoleId?: string
   status: UserStatus
   locale: string
   savedPlayerIds: SavedPlayerId[]
@@ -74,8 +77,15 @@ export function getUser(id: string): Promise<ApiResponse<AdminUserDetail>> {
   return apiClient.get<AdminUserDetail>(`${ADMIN}/${id}`)
 }
 
-export function updateUserRole(id: string, role: UserRole): Promise<ApiResponse<AdminUser>> {
-  return apiClient.put<AdminUser>(`${ADMIN}/${id}/role`, { role })
+/** Set the account role, plus (for admins) the custom RBAC role assignment.
+ *  adminRoleId null/undefined on an admin = built-in Super Admin. Changes that
+ *  grant/revoke admin access require a super-admin session (403 otherwise). */
+export function updateUserRole(
+  id: string,
+  role: UserRole,
+  adminRoleId?: string | null,
+): Promise<ApiResponse<AdminUser>> {
+  return apiClient.put<AdminUser>(`${ADMIN}/${id}/role`, { role, adminRoleId: adminRoleId ?? undefined })
 }
 
 export function updateUserStatus(id: string, status: UserStatus): Promise<ApiResponse<AdminUser>> {

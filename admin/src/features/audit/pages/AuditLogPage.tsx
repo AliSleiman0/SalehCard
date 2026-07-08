@@ -18,6 +18,7 @@ const FILTERS: [string, string][] = [
   ['wallet.adjust', 'Wallet adjustments'],
   ['reseller.balance_adjust', 'Reseller balances'],
   ['user.role_change', 'Role changes'],
+  ['role.update', 'RBAC role edits'],
   ['order.refund', 'Refunds'],
   ['kyc.decision', 'KYC decisions'],
 ]

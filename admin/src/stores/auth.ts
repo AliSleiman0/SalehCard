@@ -36,7 +36,13 @@ interface AuthState {
 // Map the backend auth user onto the admin identity shape (the API user has no
 // `name` field — fall back to the email).
 function toAdminUser(u: AuthUser): AdminUser {
-  return { id: u.id, name: u.name ?? u.email, email: u.email, role: 'admin' }
+  return {
+    id: u.id,
+    name: u.name ?? u.email,
+    email: u.email,
+    role: u.role,
+    permissions: u.permissions ?? [],
+  }
 }
 
 // establishSession accepts a completed auth response, rejecting non-admins, and
@@ -127,3 +133,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: null, isAuthenticated: false, isAdmin: false, twoFactor: null })
   },
 }))
+
+/** Whether a permission set grants perm — the "*" wildcard (super admin) passes
+ *  everything. The single source of truth for the RBAC check. */
+export function hasPerm(permissions: string[] | undefined, perm: string): boolean {
+  return !!permissions && (permissions.includes('*') || permissions.includes(perm))
+}
+
+/**
+ * Reactive permission check for components: subscribes to the logged-in
+ * admin's permission set so gated UI re-renders when the session changes.
+ * `can('orders.manage')`; `can('*')` is true only for super admins.
+ */
+export function useCan(): (perm: string) => boolean {
+  const permissions = useAuthStore((s) => s.user?.permissions)
+  return (perm: string) => hasPerm(permissions, perm)
+}
+
+/** Reactive super-admin check (wildcard permission). */
+export function useIsSuperAdmin(): boolean {
+  return useCan()('*')
+}

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/reseller"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/review"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/role"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
@@ -223,23 +225,62 @@ func (s *Server) Routes() {
 	s.router.Route("/api/admin", func(r chi.Router) {
 		r.Use(auth.AdminOnly(s.cfg.JWTSecret, s.cfg.Env == "development"))
 
-		product.RegisterAdminRoutes(r, s.db, rec, store)
-		code.RegisterAdminRoutes(r, s.db, rec, ntf)
-		dashboard.RegisterAdminRoutes(r, s.db)
-		finance.RegisterAdminRoutes(r, s.db)
-		order.RegisterAdminRoutes(r, s.db, s.cfg, rec, ntf)
-		user.RegisterAdminRoutes(r, s.db, rec, smsSender, s.cfg.BulkSMSMax)
-		reseller.RegisterAdminRoutes(r, s.db, rec)
-		promo.RegisterAdminRoutes(r, s.db)
-		offer.RegisterAdminRoutes(r, s.db)
-		review.RegisterAdminRoutes(r, s.db, rec)
-		wallet.RegisterAdminRoutes(r, s.db, rec, ntf)
-		expense.RegisterAdminRoutes(r, s.db)
-		kyc.RegisterAdminRoutes(r, s.db, rec, ntf)
-		audit.RegisterAdminRoutes(r, s.db)
-		settings.RegisterAdminRoutes(r, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider)
-		payment.RegisterAdminRoutes(r, s.db)
-		bridge.RegisterAdminRoutes(r, bridgeReg.Service, bridgeReg.Store, rec)
+		// RBAC: each module is wrapped in its permission domain — GET/HEAD need
+		// "<domain>.view", mutations need "<domain>.manage" (super admins carry
+		// the "*" wildcard and pass everything). The domain key MUST exist in the
+		// catalog (modules/role/permissions.go): the helper fail-fasts at boot on
+		// a typo, otherwise the module would sit behind a permission string that
+		// no custom role can ever be granted (silent 403 for every limited admin).
+		wrapped := map[string]bool{}
+		domain := func(name string, register func(chi.Router)) {
+			if !role.ValidPermission(name + ".view") {
+				log.Fatalf("server: admin domain %q is not in the RBAC permission catalog (modules/role/permissions.go)", name)
+			}
+			wrapped[name] = true
+			r.Group(func(g chi.Router) {
+				g.Use(auth.RequireDomain(name))
+				register(g)
+			})
+		}
+		defer func() {
+			// Reverse check: every catalog domain must have a module mounted behind
+			// it, or a grantable permission would gate nothing (a role could be
+			// given e.g. payments.manage with no payments routes to authorize).
+			for _, d := range role.Domains {
+				if !wrapped[d.Key] {
+					log.Fatalf("server: RBAC catalog domain %q has no admin routes mounted (modules/role/permissions.go vs server.go)", d.Key)
+				}
+			}
+		}()
+
+		domain("products", func(g chi.Router) { product.RegisterAdminRoutes(g, s.db, rec, store) })
+		domain("inventory", func(g chi.Router) { code.RegisterAdminRoutes(g, s.db, rec) })
+		domain("dashboard", func(g chi.Router) { dashboard.RegisterAdminRoutes(g, s.db) })
+		domain("finance", func(g chi.Router) { finance.RegisterAdminRoutes(g, s.db) })
+		domain("orders", func(g chi.Router) {
+			order.RegisterAdminRoutes(g, s.db, s.cfg, rec, ntf)
+			// resend-code is an order operation (keyed by order id) though its
+			// handler lives in the code module — mount it here so it requires
+			// orders.manage, not inventory.manage.
+			code.RegisterOrderResendRoutes(g, s.db, rec, ntf)
+		})
+		domain("users", func(g chi.Router) { user.RegisterAdminRoutes(g, s.db, rec, smsSender, s.cfg.BulkSMSMax) })
+		domain("resellers", func(g chi.Router) { reseller.RegisterAdminRoutes(g, s.db, rec) })
+		domain("promos", func(g chi.Router) { promo.RegisterAdminRoutes(g, s.db) })
+		domain("offers", func(g chi.Router) { offer.RegisterAdminRoutes(g, s.db) })
+		domain("reviews", func(g chi.Router) { review.RegisterAdminRoutes(g, s.db, rec) })
+		domain("topups", func(g chi.Router) { wallet.RegisterAdminRoutes(g, s.db, rec, ntf) })
+		domain("expenses", func(g chi.Router) { expense.RegisterAdminRoutes(g, s.db) })
+		domain("kyc", func(g chi.Router) { kyc.RegisterAdminRoutes(g, s.db, rec, ntf) })
+		domain("audit", func(g chi.Router) { audit.RegisterAdminRoutes(g, s.db) })
+		domain("settings", func(g chi.Router) { settings.RegisterAdminRoutes(g, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider) })
+		domain("payments", func(g chi.Router) { payment.RegisterAdminRoutes(g, s.db) })
+		domain("bridge", func(g chi.Router) { bridge.RegisterAdminRoutes(g, bridgeReg.Service, bridgeReg.Store, rec) })
+
+		// Role management mounts outside the domain wrapper: listing roles + the
+		// permission catalog is open to every admin (the console needs names to
+		// render assignments), while mutations are super-admin-only internally.
+		role.RegisterAdminRoutes(r, s.db, rec)
 	})
 }
 

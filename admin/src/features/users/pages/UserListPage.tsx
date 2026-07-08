@@ -17,6 +17,7 @@ import {
 } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
 import { money, downloadCsv } from '@/lib/utils'
+import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import { ApiError } from '@/lib/api-client'
 import { useUsers, useBulkUserAction, useBulkSms } from '../hooks/useUsers'
@@ -34,6 +35,8 @@ const ROLES: [string, string][] = [
 export default function UserListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('users.manage')
   const [searchParams] = useSearchParams()
 
   const [role, setRole] = useState<'all' | UserRole>('all')
@@ -154,7 +157,7 @@ export default function UserListPage() {
           </select>
         </div>
 
-        {bulk.some && (
+        {canManage && bulk.some && (
           <div className="bulkbar">
             <Checkbox on onClick={bulk.clear} />
             <span>

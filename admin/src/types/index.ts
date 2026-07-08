@@ -145,6 +145,10 @@ export interface AdminUser {
   name: string
   email: string
   role: UserRole
+  // RBAC permission set resolved by the backend at login/refresh:
+  // "<domain>.view" / "<domain>.manage" entries, or the single wildcard "*"
+  // for a super admin (an admin with no custom role assigned).
+  permissions: string[]
 }
 
 // ---- Locale / theme ----

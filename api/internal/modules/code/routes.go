@@ -13,15 +13,24 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
 // RegisterAdminRoutes mounts the inventory/code admin routes onto r (the
-// /api/admin group, already guarded by AdminOnly). It is fully implemented and
-// extends the product reference slice. rec records lifecycle actions; ntf
-// re-delivers codes to customers on resend.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, ntf notification.Notifier) {
+// /api/admin group, already guarded by AdminOnly + RequireDomain("inventory")).
+// It is fully implemented and extends the product reference slice. rec records
+// lifecycle actions.
+//
+// The two GETs that return RAW code values — the product code list and the
+// single-code lookup — additionally require inventory.manage, not the default
+// inventory.view: the codes are the sellable asset, so a view-only "stock
+// monitor" role must see stock counts (GET /inventory, aggregate only) without
+// being able to exfiltrate the code pool. resend-code is NOT registered here —
+// it is an order operation and lives under the orders domain (see
+// RegisterOrderResendRoutes).
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	repo := NewMongoRepository(db)
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("code: failed to ensure indexes", "error", err)
@@ -32,10 +41,19 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, n
 	r.Get("/inventory", h.Inventory)
 	r.Get("/upload-history", uploadHistoryHandler(repo))
 	r.Post("/products/{id}/codes", h.Upload)
-	r.Get("/products/{id}/codes", h.ListCodes)
+	r.With(auth.RequirePermission("inventory.manage")).Get("/products/{id}/codes", h.ListCodes)
 	r.Put("/products/{id}/stock-threshold", h.SetThreshold)
-	r.Get("/codes/{code}", h.Lookup)
+	r.With(auth.RequirePermission("inventory.manage")).Get("/codes/{code}", h.Lookup)
 	r.Put("/codes/{code}/expire", expireHandler(svc, rec))
+}
+
+// RegisterOrderResendRoutes mounts POST /orders/{id}/resend-code, which
+// re-delivers a customer's already-purchased codes. Although the handler lives
+// in the code module, it is an order-fulfillment action keyed by order id, so
+// the server mounts it inside the orders domain group — it requires
+// orders.manage, not inventory.manage. ntf re-delivers the codes.
+func RegisterOrderResendRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, ntf notification.Notifier) {
+	svc := NewCodeService(NewMongoRepository(db))
 	r.Post("/orders/{id}/resend-code", resendHandler(svc, rec, ntf))
 }
 

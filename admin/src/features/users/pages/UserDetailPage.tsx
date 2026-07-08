@@ -19,8 +19,10 @@ import {
 } from '@/components'
 import { money, relativeTime } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
+import { useCan, useIsSuperAdmin } from '@/stores/auth'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import { useRoles } from '@/features/roles/hooks/useRoles'
 import { useUser, useUpdateUserRole, useUpdateUserStatus, useAdjustWallet, useDeleteUser } from '../hooks/useUsers'
 import { adaptUser } from '../lib/adaptUser'
 import type { AdminUserDetail, UserStatus } from '../api/users'
@@ -35,6 +37,9 @@ export default function UserDetailPage() {
   const { data, isLoading, isError, refetch } = useUser(id)
   const [tab, setTab] = useState<Tab>('overview')
   const [adjOpen, setAdjOpen] = useState(false)
+  // The Order-history tab reads the orders domain — hide it (and its fetch) when
+  // the admin's role lacks orders.view.
+  const canViewOrders = useCan()('orders.view')
 
   const detail = data?.data
   const view = detail ? adaptUser(detail) : null
@@ -100,7 +105,7 @@ export default function UserDetailPage() {
         onChange={setTab}
         items={[
           { k: 'overview', label: 'Overview' },
-          { k: 'orders', label: 'Order history' },
+          ...(canViewOrders ? [{ k: 'orders' as const, label: 'Order history' }] : []),
           { k: 'wallet', label: 'Wallet & cashback' },
           { k: 'ids', label: 'Saved IDs' },
           { k: 'role', label: 'Role & access' },
@@ -259,7 +264,15 @@ export default function UserDetailPage() {
         </div>
       )}
 
-      {tab === 'role' && <RoleTab id={view.id} role={view.role} onSuspend={toggleStatus} suspending={updateStatus.isPending} />}
+      {tab === 'role' && (
+        <RoleTab
+          id={view.id}
+          role={view.role}
+          adminRoleId={detail.adminRoleId ?? null}
+          onSuspend={toggleStatus}
+          suspending={updateStatus.isPending}
+        />
+      )}
 
       {adjOpen && <AdjustModal user={detail} onClose={() => setAdjOpen(false)} />}
     </div>
@@ -333,26 +346,38 @@ function OrdersTab({ email, total }: { email: string; total: number }) {
   )
 }
 
-/** Role management + danger zone. Role changes persist via the admin endpoint. */
+/** Role management + danger zone. Role changes persist via the admin endpoint.
+ *  Granting/revoking admin access — and picking an admin's RBAC role — is
+ *  restricted to super admins (the backend enforces the same with a 403). */
 function RoleTab({
   id,
   role,
+  adminRoleId,
   onSuspend,
   suspending,
 }: {
   id: string
   role: UserRole
+  adminRoleId: string | null
   onSuspend: () => void
   suspending: boolean
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const isSuperAdmin = useIsSuperAdmin()
   const [pending, setPending] = useState<UserRole>(role)
+  // '' = built-in Super Admin (no custom role assigned).
+  const [pendingRoleId, setPendingRoleId] = useState<string>(adminRoleId ?? '')
   const updateRole = useUpdateUserRole(id)
   const del = useDeleteUser(id)
+  // Custom roles for the assignment dropdown (any admin may list them; only
+  // super admins see this control).
+  const { data: rolesRes } = useRoles()
+  const customRoles = rolesRes?.data ?? []
 
-  // Keep the selection in sync if the underlying user role changes (refetch).
+  // Keep the selection in sync if the underlying user changes (refetch).
   useEffect(() => setPending(role), [role])
+  useEffect(() => setPendingRoleId(adminRoleId ?? ''), [adminRoleId])
 
   const remove = () => {
     if (
@@ -367,10 +392,21 @@ function RoleTab({
   // Reseller management is hidden for now, so promotion to reseller is not
   // offered here. Re-add ['reseller', 'Reseller'] to restore it (also un-hide
   // the /resellers nav item + routes).
-  const roles: [UserRole, string][] = [
-    ['customer', 'Customer'],
-    ['admin', 'Admin'],
-  ]
+  // Non-super admins can't grant/revoke admin access, so they only see the
+  // customer chip (role changes involving admin would 403 anyway).
+  const roles: [UserRole, string][] = isSuperAdmin
+    ? [
+        ['customer', 'Customer'],
+        ['admin', 'Admin'],
+      ]
+    : [['customer', 'Customer']]
+
+  const dirty = pending !== role || (pending === 'admin' && pendingRoleId !== (adminRoleId ?? ''))
+  const save = () =>
+    updateRole.mutate({
+      role: pending,
+      adminRoleId: pending === 'admin' && pendingRoleId ? pendingRoleId : null,
+    })
 
   return (
     <div className="formgrid">
@@ -384,16 +420,45 @@ function RoleTab({
             </Chip>
           ))}
         </div>
-        <div className="ahint">Promoting to admin grants full console access.</div>
+        {pending === 'admin' && isSuperAdmin && (
+          <div style={{ marginTop: 14 }}>
+            <label className="alabel">Admin role (permissions)</label>
+            <select
+              className="select"
+              style={{ width: '100%' }}
+              value={pendingRoleId}
+              onChange={(e) => setPendingRoleId(e.target.value)}
+            >
+              <option value="">Super Admin — full access, manages roles &amp; admins</option>
+              {customRoles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                  {r.description ? ` — ${r.description}` : ''}
+                </option>
+              ))}
+            </select>
+            <div className="ahint">
+              Define roles under System → Roles. A permission change applies on the admin's next
+              sign-in or session refresh.
+            </div>
+          </div>
+        )}
+        {!isSuperAdmin && (
+          <div className="ahint">Only a super admin can grant or change admin access.</div>
+        )}
         <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
           <button
             className="abtn primary"
-            disabled={pending === role || updateRole.isPending}
-            onClick={() => updateRole.mutate(pending)}
+            disabled={!dirty || updateRole.isPending}
+            onClick={save}
           >
             <Icon name="check" size={15} /> {t('save')}
           </button>
-          {updateRole.isError && <span style={{ color: 'var(--danger)', fontSize: 12.5 }}>Couldn't update role.</span>}
+          {updateRole.isError && (
+            <span style={{ color: 'var(--danger)', fontSize: 12.5 }}>
+              {updateRole.error instanceof ApiError ? updateRole.error.message : "Couldn't update role."}
+            </span>
+          )}
         </div>
       </div>
       <div className="acard pad">

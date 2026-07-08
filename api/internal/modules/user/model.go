@@ -40,7 +40,15 @@ type User struct {
 	PasswordHash   *string       `bson:"passwordHash"  json:"-"`
 	GoogleID       *string       `bson:"googleId,omitempty" json:"googleId,omitempty"`
 	Role           Role          `bson:"role"          json:"role"`
-	Status         Status        `bson:"status,omitempty" json:"status"`
+	// AdminRoleID references the custom RBAC role (roles collection) assigned to
+	// an admin account. Nil on an admin means built-in Super Admin (all
+	// permissions). Meaningless for customers/resellers.
+	AdminRoleID *bson.ObjectID `bson:"adminRoleId,omitempty" json:"adminRoleId,omitempty"`
+	// Permissions is the resolved RBAC permission set for an admin ("*" = super
+	// admin). Never persisted — populated at token-issue time so auth responses
+	// carry it to the admin console.
+	Permissions []string `bson:"-" json:"permissions,omitempty"`
+	Status      Status   `bson:"status,omitempty" json:"status"`
 	// ResellerTier is the name of the reseller tier (Bronze/Silver/Gold) this
 	// account belongs to. Empty for non-resellers and unassigned resellers.
 	ResellerTier   string        `bson:"resellerTier,omitempty" json:"resellerTier,omitempty"`

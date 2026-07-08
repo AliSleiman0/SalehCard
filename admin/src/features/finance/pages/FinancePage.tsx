@@ -20,6 +20,7 @@ import {
 } from '@/components'
 import { money, downloadCsv, downloadPdf } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
+import { useCan } from '@/stores/auth'
 import { useTransactions, useRevenueSummary } from '../hooks/useFinance'
 import { adaptTx } from '../lib/adaptFinance'
 import { listTransactions, type TxType, type LabelValue, type RevenueSummary } from '../api/finance'
@@ -48,6 +49,9 @@ export default function FinancePage() {
   const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('transactions')
   const [exporting, setExporting] = useState(false)
+  // The USDT queue reuses the top-up endpoints (topups domain) — hide the tab
+  // when the admin's role lacks topups.view.
+  const canViewTopups = useCan()('topups.view')
 
   // Export the full wallet-ledger feed (all pages — the backend caps limit at
   // 100, so page to total). CSV mirrors the transactions table.
@@ -101,13 +105,13 @@ export default function FinancePage() {
         items={[
           { k: 'transactions', label: 'All transactions' },
           { k: 'revenue', label: 'Revenue summary' },
-          { k: 'usdt', label: 'USDT queue' },
+          ...(canViewTopups ? [{ k: 'usdt' as const, label: 'USDT queue' }] : []),
         ]}
       />
 
       {tab === 'transactions' && <TransactionsTab />}
       {tab === 'revenue' && <RevenueTab />}
-      {tab === 'usdt' && <UsdtQueueTab />}
+      {tab === 'usdt' && canViewTopups && <UsdtQueueTab />}
     </div>
   )
 }
@@ -459,6 +463,8 @@ const USDT_FILTERS: [TopUpStatus | '', string][] = [
  *  the customer's note carries the on-chain reference. */
 function UsdtQueueTab() {
   const { t } = useTranslation()
+  // The USDT queue reuses the top-up decision endpoints, so it follows topups.manage.
+  const canManage = useCan()('topups.manage')
   const [status, setStatus] = useState<TopUpStatus | ''>('pending')
   const [page, setPage] = useState(1)
   const [toReject, setToReject] = useState<AdminTopUp | null>(null)
@@ -539,7 +545,7 @@ function UsdtQueueTab() {
                     {r.decidedAt ? ` · ${new Date(r.decidedAt).toLocaleString()}` : ''}
                   </div>
                 )}
-                {r.status === 'pending' && (
+                {canManage && r.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button className="abtn xs ok" disabled={approveM.isPending} onClick={() => approve(r.id)}>
                       <Icon name="check" size={13} /> Verify & credit

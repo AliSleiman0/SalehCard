@@ -45,6 +45,10 @@ const (
 	ActionResellerPriceSet    = "reseller.price_set"
 	ActionResellerPriceDelete = "reseller.price_delete"
 
+	ActionRoleCreate = "role.create"
+	ActionRoleUpdate = "role.update"
+	ActionRoleDelete = "role.delete"
+
 	ActionBridgeDeviceCreate  = "bridge.device_create"
 	ActionBridgeDeviceUpdate  = "bridge.device_update"
 	ActionBridgeDeviceDelete  = "bridge.device_delete"

@@ -13,6 +13,7 @@ import {
   EmptyState,
 } from '@/components'
 import { ApiError } from '@/lib/api-client'
+import { useCan } from '@/stores/auth'
 import { useKyc, useSetKycStatus } from '../hooks/useKyc'
 import { adaptKyc, type KycView } from '../lib/adaptKyc'
 import type { KycStatus } from '../api/kyc'
@@ -26,6 +27,8 @@ const FILTERS: [KycStatus | '', string][] = [
 
 export default function KycPage() {
   const { t } = useTranslation()
+  const can = useCan()
+  const canManage = can('kyc.manage')
   const [searchParams] = useSearchParams()
 
   const [status, setStatus] = useState<KycStatus | ''>('pending')
@@ -140,7 +143,7 @@ export default function KycPage() {
                         </div>
                       )}
                       <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-                        {k.status !== 'approved' && (
+                        {canManage && k.status !== 'approved' && (
                           <button
                             className="abtn xs ok"
                             disabled={setStatusM.isPending}
@@ -149,7 +152,7 @@ export default function KycPage() {
                             <Icon name="check" size={13} /> {t('approve')}
                           </button>
                         )}
-                        {k.status !== 'rejected' && (
+                        {canManage && k.status !== 'rejected' && (
                           <button
                             className="abtn xs danger"
                             disabled={setStatusM.isPending}

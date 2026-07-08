@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Icon } from '@/components'
-import { NAV } from '@/app/nav'
+import { NAV, itemAllowed } from '@/app/nav'
 import { useDashboardStats } from '@/features/dashboard/hooks/useDashboard'
+import { useCan } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 
@@ -16,10 +17,19 @@ export function Sidebar() {
   const { collapsed, toggleCollapsed } = useUiStore()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const can = useCan()
+
+  // RBAC: drop nav items the admin's role cannot view (super-admin-only items
+  // need the wildcard), then drop groups left empty.
+  const visibleNav = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((item) => itemAllowed(item, can)),
+  })).filter((g) => g.items.length > 0)
 
   // Live work-queue badges: shared cache with the dashboard stats query (no extra
-  // request); refreshes on window focus / navigation.
-  const { data: statsRes } = useDashboardStats()
+  // request); refreshes on window focus / navigation. Skipped without
+  // dashboard.view — the stats endpoint would 403.
+  const { data: statsRes } = useDashboardStats({ enabled: can('dashboard.view') })
   const pendingByRoute: Record<string, number | undefined> = {
     '/topups': statsRes?.data?.pendingTopups,
     '/kyc': statsRes?.data?.pendingKyc,
@@ -39,7 +49,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="sb-scroll">
-        {NAV.map((g) => (
+        {visibleNav.map((g) => (
           <div className="sb-group" key={g.group}>
             <div className="sb-grouplabel">{t(g.group)}</div>
             {g.items.map((item) => {

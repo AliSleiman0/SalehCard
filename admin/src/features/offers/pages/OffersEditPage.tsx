@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, Chip, LoadingSpinner, ErrorState } from '@/components'
 import { ApiError } from '@/lib/api-client'
+import { useCan } from '@/stores/auth'
 import { useProducts } from '@/features/products/hooks/useProducts'
 import { useOffer, useCreateOffer, useUpdateOffer } from '../hooks/useOffers'
 import type { OfferInput, DiscountType } from '../api/offers'
@@ -28,11 +29,15 @@ function applyDiscount(type: DiscountType, value: number, original: number): num
 export default function OffersEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('offers.manage')
   const { id } = useParams<{ id: string }>()
   const isNew = !id
 
   const { data, isLoading, isError, refetch } = useOffer(id)
-  const products = useProducts({ limit: 100, available: true })
+  // The product picker reads the products domain; an offers-only role would 403.
+  const canViewProducts = can('products.view')
+  const products = useProducts({ limit: 100, available: true }, { enabled: canViewProducts })
   const create = useCreateOffer()
   const update = useUpdateOffer(id ?? '')
 
@@ -127,9 +132,11 @@ export default function OffersEditPage() {
         <button className="abtn" onClick={() => navigate('/offers')}>
           <Icon name="chevleft" size={15} /> {t('back')}
         </button>
-        <button className="abtn primary" onClick={save} disabled={saving}>
-          <Icon name="check" size={15} /> {t('save')}
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={save} disabled={saving}>
+            <Icon name="check" size={15} /> {t('save')}
+          </button>
+        )}
       </PageHead>
 
       {error && (
@@ -141,24 +148,31 @@ export default function OffersEditPage() {
           <div className="acard pad">
             <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Product &amp; discount</h3>
             <label className="alabel">Product</label>
-            <select
-              className="select"
-              style={{ width: '100%' }}
-              value={productId}
-              disabled={products.isLoading}
-              onChange={(e) => setProductId(e.target.value)}
-            >
-              <option value="">{products.isLoading ? 'Loading products…' : 'Select a product…'}</option>
-              {productList.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title.en} — ${fromPrice(p.variants).toFixed(2)}
-                </option>
-              ))}
-              {/* Keep the edited offer's product selectable even if it isn't on the first page. */}
-              {!isNew && productId && !selected && data?.data?.product && (
-                <option value={productId}>{data.data.product.title.en}</option>
-              )}
-            </select>
+            {!canViewProducts ? (
+              <div className="ahint" style={{ color: 'var(--danger)' }}>
+                Choosing a product needs Products access — ask a super admin to add
+                Products (view) to your role.
+              </div>
+            ) : (
+              <select
+                className="select"
+                style={{ width: '100%' }}
+                value={productId}
+                disabled={products.isLoading}
+                onChange={(e) => setProductId(e.target.value)}
+              >
+                <option value="">{products.isLoading ? 'Loading products…' : 'Select a product…'}</option>
+                {productList.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title.en} — ${fromPrice(p.variants).toFixed(2)}
+                  </option>
+                ))}
+                {/* Keep the edited offer's product selectable even if it isn't on the first page. */}
+                {!isNew && productId && !selected && data?.data?.product && (
+                  <option value={productId}>{data.data.product.title.en}</option>
+                )}
+              </select>
+            )}
 
             <label className="alabel" style={{ marginTop: 16 }}>
               Discount type

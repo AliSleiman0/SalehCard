@@ -40,6 +40,7 @@ func AdminOnly(secret string, devBypass bool) func(http.Handler) http.Handler {
 					UserID: "dev-admin",
 					Email:  "dev@salehcard.local",
 					Role:   "admin",
+					Perms:  []string{PermAll},
 				})
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
@@ -97,6 +98,74 @@ func AuthRequired(secret string) func(http.Handler) http.Handler {
 
 			ctx := context.WithValue(r.Context(), claimsKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// RequireDomain returns middleware enforcing the RBAC permission for one admin
+// domain (e.g. "orders"). It must run after AdminOnly (it reads the Claims that
+// AdminOnly attached). Read requests (GET/HEAD) need "<domain>.view"; everything
+// else needs "<domain>.manage". Super admins (wildcard perm) always pass.
+func RequireDomain(domain string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := ClaimsFromContext(r.Context())
+			if !ok {
+				response.Unauthorized(w, "missing bearer token")
+				return
+			}
+			perm := domain + ".manage"
+			if r.Method == http.MethodGet || r.Method == http.MethodHead {
+				perm = domain + ".view"
+			}
+			if !claims.HasPerm(perm) {
+				response.Forbidden(w, "missing permission: "+perm)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequirePermission returns middleware enforcing one explicit permission,
+// independent of the HTTP method. Use it for routes whose required permission
+// differs from RequireDomain's method mapping — e.g. a GET that returns a
+// sensitive asset (raw codes) and must demand "<domain>.manage" rather than the
+// default "<domain>.view". It composes on top of a domain group (additive): the
+// caller must satisfy both. Must run after AdminOnly.
+func RequirePermission(perm string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := ClaimsFromContext(r.Context())
+			if !ok {
+				response.Unauthorized(w, "missing bearer token")
+				return
+			}
+			if !claims.HasPerm(perm) {
+				response.Forbidden(w, "missing permission: "+perm)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireSuperAdmin returns middleware that only lets super admins (wildcard
+// permission, i.e. admins with no custom role) through. It gates role
+// management, which must never be grantable to a custom role.
+func RequireSuperAdmin() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := ClaimsFromContext(r.Context())
+			if !ok {
+				response.Unauthorized(w, "missing bearer token")
+				return
+			}
+			if !claims.IsSuperAdmin() {
+				response.Forbidden(w, "super admin required")
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

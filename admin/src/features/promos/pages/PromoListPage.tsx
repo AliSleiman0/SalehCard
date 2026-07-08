@@ -11,6 +11,7 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
+import { useCan } from '@/stores/auth'
 import { usePromos, useDeletePromo } from '../hooks/usePromos'
 import { adaptPromo, type PromoView } from '../lib/adaptPromo'
 import type { PromoStatus, PromoType } from '../api/promos'
@@ -24,6 +25,8 @@ const TYPE_BADGE: Record<string, [string, string]> = {
 export default function PromoListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
+  const canManage = can('promos.manage')
   const [searchParams] = useSearchParams()
 
   const [type, setType] = useState<'' | PromoType>('')
@@ -67,9 +70,11 @@ export default function PromoListPage() {
         <button className="abtn" onClick={() => refetch()}>
           <Icon name="refresh" size={15} /> Refresh
         </button>
-        <button className="abtn primary" onClick={() => navigate('/promos/new')}>
-          <Icon name="plus" size={15} /> New promo
-        </button>
+        {canManage && (
+          <button className="abtn primary" onClick={() => navigate('/promos/new')}>
+            <Icon name="plus" size={15} /> New promo
+          </button>
+        )}
       </PageHead>
 
       <div className="acard">
@@ -180,9 +185,11 @@ export default function PromoListPage() {
                             <span className="iact" onClick={() => navigate(`/promos/${p.id}/edit`)}>
                               <Icon name="edit" size={15} />
                             </span>
-                            <span className="iact danger" onClick={() => setToDelete(p)}>
-                              <Icon name="trash" size={15} />
-                            </span>
+                            {canManage && (
+                              <span className="iact danger" onClick={() => setToDelete(p)}>
+                                <Icon name="trash" size={15} />
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>
