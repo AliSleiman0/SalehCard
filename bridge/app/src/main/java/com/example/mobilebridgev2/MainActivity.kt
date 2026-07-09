@@ -31,12 +31,21 @@ import androidx.core.content.ContextCompat
 import com.example.mobilebridgev2.config.DeviceConfigStore
 import com.example.mobilebridgev2.service.BridgeForegroundService
 import com.example.mobilebridgev2.ui.theme.MobileBridgeV2Theme
+import com.example.mobilebridgev2.ussd.AccessibilityUtil
+import com.example.mobilebridgev2.ussd.AlfaUssdAccessibilityService
 
 class MainActivity : ComponentActivity() {
 
     private var permissionStatusMessage by mutableStateOf(
         "Telecom permissions have not been checked"
     )
+
+    // Special-access grants the interactive Alfa-recharge USSD flow depends on. These are not
+    // runtime permissions (they live in Settings), so they're surfaced here as advisory status
+    // rows; the hard gate is the rechargeAlfa preflight, which fails a recharge honestly if the
+    // accessibility service is off.
+    private var accessibilityEnabled by mutableStateOf(false)
+    private var overlayGranted by mutableStateOf(false)
 
     private val permissionLauncher =
         registerForActivityResult(
@@ -105,10 +114,42 @@ class MainActivity : ComponentActivity() {
                             onClick = { checkPermissionsAndStartService() },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Start MobileBridge") }
+
+                        Text(
+                            if (accessibilityEnabled) "Accessibility service: ENABLED"
+                            else "Accessibility service: DISABLED — required for Alfa recharge",
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        Button(
+                            onClick = { startActivity(AccessibilityUtil.openAccessibilitySettings()) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Open Accessibility settings") }
+
+                        Text(
+                            if (overlayGranted) "Display over other apps: GRANTED"
+                            else "Display over other apps: DENIED — needed when screen is off"
+                        )
+                        Button(
+                            onClick = {
+                                startActivity(AccessibilityUtil.openOverlaySettings(this@MainActivity))
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Open overlay settings") }
                     }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshSpecialAccess()
+    }
+
+    private fun refreshSpecialAccess() {
+        accessibilityEnabled =
+            AccessibilityUtil.isServiceEnabled(this, AlfaUssdAccessibilityService::class.java)
+        overlayGranted = AccessibilityUtil.overlayGranted(this)
     }
 
     private fun checkPermissionsAndStartService() {

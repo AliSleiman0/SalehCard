@@ -23,6 +23,12 @@ import android.os.Handler
 import android.os.Looper
 import androidx.annotation.RequiresApi
 import com.example.mobilebridgev2.net.BridgeReporter
+import com.example.mobilebridgev2.ussd.AccessibilityUtil
+import com.example.mobilebridgev2.ussd.AlfaUssdAccessibilityService
+import com.example.mobilebridgev2.ussd.UssdSessionActivity
+import com.example.mobilebridgev2.ussd.UssdSessionCoordinator
+import android.os.PowerManager
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
@@ -785,62 +791,111 @@ object CommandExecutor {
             )
         }
 
-        // Alfa third-party recharge is a USSD dial (*111*{code}*{phone}#), not an
-        // SMS — the same shape as Touch's *300 recharge. sendUssd returns the
-        // operator's synchronous response, which we scan for "fail".
+        // Alfa recharge is an INTERACTIVE USSD session: dialing the menu string
+        // (*111*3*2*{phone}*1*{code}#) lands on a confirmation dialog ("press 1 then YES") that
+        // needs one more in-session input — which the headless TelephonyManager.sendUssdRequest
+        // cannot answer, so it dies as "No USSD reply detected". Instead we dial via ACTION_CALL
+        // to surface the system USSD dialog and let AlfaUssdAccessibilityService drive the
+        // confirm step, then read the operator's terminal reply. This requires the accessibility
+        // service to be enabled on the device.
+        if (!AccessibilityUtil.isServiceEnabled(context, AlfaUssdAccessibilityService::class.java)) {
+            return CommandResultDTO(
+                command.commandId,
+                command.recipientNumber,
+                command.commandType,
+                System.currentTimeMillis(),
+                CommandResultCodes.ALFA_RECHARGE_ACCESSIBILITY_DISABLED,
+                command.amount,
+                null,
+                null,
+                command.provider,
+                null,
+                null,
+                "Accessibility service not enabled; cannot complete interactive recharge"
+            )
+        }
+
+        val subId = ProviderStore.alfaSim!!.subscriptionId
         val ussdCode = ProviderStore.alfaThirdPartyRechargeSmsTemplate
             .replace("{code}", command.cardCode)
             .replace("{phone}", command.recipientNumber)
 
-        val reply = withTimeoutOrNull(30_000L) {
-            sendUssd(
-                context = context,
-                subscriptionId = ProviderStore.alfaSim!!.subscriptionId,
-                ussdCode = ussdCode
+        val deferred = CompletableDeferred<UssdSessionCoordinator.Outcome>()
+        UssdSessionCoordinator.begin(
+            UssdSessionCoordinator.Session(
+                commandId = command.commandId,
+                confirmDigits = listOf("1"),
+                deferred = deferred,
             )
-        } ?: return CommandResultDTO(
-            command.commandId,
-            command.recipientNumber,
-            command.commandType,
-            System.currentTimeMillis(),
-            CommandResultCodes.ALFA_RECHARGE_REPLY_TIMEOUT,
-            command.amount,
-            null,
-            null,
-            command.provider,
-            null,
-            null,
-            "No USSD reply detected"
         )
 
-        if (reply.lowercase().contains("fail")) return CommandResultDTO(
-            command.commandId,
-            command.recipientNumber,
-            command.commandType,
-            System.currentTimeMillis(),
-            CommandResultCodes.ALFA_RECHARGE_PROVIDER_REJECTED,
-            command.amount,
-            null,
-            null,
-            command.provider,
-            null,
-            null,
-            "Recharge rejected by provider: $reply"
+        val powerManager = context.getSystemService(PowerManager::class.java)
+        @Suppress("DEPRECATION")
+        val wakeLock = powerManager?.newWakeLock(
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            "MobileBridge:AlfaUssd"
         )
 
-        return CommandResultDTO(
-            command.commandId,
-            command.recipientNumber,
-            command.commandType,
-            System.currentTimeMillis(),
-            CommandResultCodes.ALFA_RECHARGE_SUCCESS,
-            command.amount,
-            null,
-            null,
-            command.provider,
-            null,
-            null,
-            null
-        )
+        val outcome = try {
+            wakeLock?.acquire(90_000L)
+            val dialTrampoline = Intent(context, UssdSessionActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(UssdSessionActivity.EXTRA_SUB_ID, subId)
+                putExtra(UssdSessionActivity.EXTRA_USSD, ussdCode)
+            }
+            context.startActivity(dialTrampoline)
+            withTimeoutOrNull(60_000L) { deferred.await() }
+        } finally {
+            // No-op if already resolved; otherwise clears the session + finishes the trampoline so
+            // a stuck dialog can never wedge the serial command worker.
+            UssdSessionCoordinator.timeout()
+            if (wakeLock?.isHeld == true) wakeLock.release()
+        }
+
+        val rawReply = (outcome as? UssdSessionCoordinator.Outcome.Terminal)?.rawReply
+        val lower = rawReply?.lowercase() ?: ""
+
+        // Failure patterns are checked FIRST so wording like "recharge failed" can't be caught by
+        // a loose success pattern. An unclassifiable reply is parked for manual review rather than
+        // guessed as success — a false 4000 wrongly completes the order (unsafe), whereas a missed
+        // success is merely a manual queue entry.
+        return when {
+            outcome == null || outcome is UssdSessionCoordinator.Outcome.Timeout ->
+                CommandResultDTO(
+                    command.commandId, command.recipientNumber, command.commandType,
+                    System.currentTimeMillis(), CommandResultCodes.ALFA_RECHARGE_REPLY_TIMEOUT,
+                    command.amount, null, null, command.provider, null, null,
+                    "No interactive USSD reply detected"
+                )
+            outcome is UssdSessionCoordinator.Outcome.Error ->
+                CommandResultDTO(
+                    command.commandId, command.recipientNumber, command.commandType,
+                    System.currentTimeMillis(), CommandResultCodes.ALFA_RECHARGE_DIAL_FAILED,
+                    command.amount, null, null, command.provider, null, null,
+                    "Could not drive USSD dialog: ${outcome.reason}"
+                )
+            ProviderStore.failureMatchPatterns.any { it.isNotBlank() && lower.contains(it.lowercase()) } ||
+                lower.contains("fail") ->
+                CommandResultDTO(
+                    command.commandId, command.recipientNumber, command.commandType,
+                    System.currentTimeMillis(), CommandResultCodes.ALFA_RECHARGE_PROVIDER_REJECTED,
+                    command.amount, null, null, command.provider, null, null,
+                    "Recharge rejected by provider: $rawReply", rawReply
+                )
+            ProviderStore.successMatchPatterns.any { it.isNotBlank() && lower.contains(it.lowercase()) } ->
+                CommandResultDTO(
+                    command.commandId, command.recipientNumber, command.commandType,
+                    System.currentTimeMillis(), CommandResultCodes.ALFA_RECHARGE_SUCCESS,
+                    command.amount, null, null, command.provider, null, null,
+                    null, rawReply
+                )
+            else ->
+                CommandResultDTO(
+                    command.commandId, command.recipientNumber, command.commandType,
+                    System.currentTimeMillis(), CommandResultCodes.ALFA_RECHARGE_REPLY_PARSE_FAILED,
+                    command.amount, null, null, command.provider, null, null,
+                    "Unrecognized operator reply; parked for manual review", rawReply
+                )
+        }
     }
 }

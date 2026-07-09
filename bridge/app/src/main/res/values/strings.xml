@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">MobileBridgeV2</string>
+    <string name="accessibility_service_description">Lets MobileBridge complete interactive Alfa recharge confirmations. Active only while a recharge is in progress; it reads and confirms the operator USSD dialog.</string>
 </resources>
