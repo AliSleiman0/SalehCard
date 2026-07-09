@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Config for AlfaUssdAccessibilityService. packageNames is intentionally left UNSET so the
+  service sees every window during bring-up — the Samsung USSD dialog's rendering package is
+  uncertain (com.android.phone vs com.samsung.android.*). Tighten packageNames once confirmed
+  on-device. The service is still inert unless an Alfa recharge session is active (gated in code).
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="100" />

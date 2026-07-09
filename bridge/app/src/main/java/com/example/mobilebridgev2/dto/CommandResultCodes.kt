@@ -62,6 +62,11 @@ object CommandResultCodes {
     const val ALFA_RECHARGE_REPLY_TIMEOUT = 4021
     const val ALFA_RECHARGE_PROVIDER_REJECTED = 4022
     const val ALFA_RECHARGE_REPLY_PARSE_FAILED = 4023
+    // Interactive-USSD recharge (ACTION_CALL + AccessibilityService) preflight/dial errors.
+    // The accessibility service that drives the confirm dialog is not enabled on the device.
+    const val ALFA_RECHARGE_ACCESSIBILITY_DISABLED = 4024
+    // Could not surface/drive the USSD dialog (no PhoneAccount for the SIM, dial blocked, etc.).
+    const val ALFA_RECHARGE_DIAL_FAILED = 4025
 
 
     /*

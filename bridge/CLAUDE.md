@@ -54,7 +54,12 @@ The real work is in `CommandExecutor`:
 - **TRANSFER_CREDIT** — splits the amount into chunks of ≤3 (`splitAmount`), sends one templated SMS per
   chunk to the operator's short code, and **waits for an SMS reply per chunk** to confirm. Financial state
   (`touchSimBalance`) is only mutated after a confirmed success. Partial completion is a first-class outcome.
-- **RECHARGE_LINE** — `rechargeTouch` uses USSD; `rechargeAlfa` uses SMS + reply wait.
+- **RECHARGE_LINE** — `rechargeTouch` uses a single-shot `sendUssd`. `rechargeAlfa` is
+  **interactive USSD**: Alfa's recharge menu ends on a confirmation dialog that `sendUssdRequest`
+  can't answer, so it dials via `ACTION_CALL` (surfacing the system USSD dialog) and drives the
+  confirm step with `AlfaUssdAccessibilityService` (package `com.example.mobilebridgev2.ussd`),
+  bridged back to the coroutine via `UssdSessionCoordinator`. Requires the accessibility service +
+  "Display over other apps" enabled on the device; captures the operator's reply into `rawReply`.
 - **CHECK-BALANCE** — sends a USSD code, parses balance + validity date out of the reply with a regex
   (`getBalanceFromReply`, expects a `USD <amount> Exp: <dd-mm-yyyy>` line).
 
