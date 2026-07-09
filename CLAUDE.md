@@ -94,6 +94,26 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   outside development without `JWT_SECRET` + `ALLOWED_ORIGINS`. `api/.env` sets
   `ENV=development` and ships a `JWT_SECRET`, so to bypass admin auth in dev run with
   `JWT_SECRET=` empty.
+- **RBAC (admin console)** (`internal/modules/role`, live since 2026-07-08): permissions attach to
+  **custom role entities a super admin manages — not to pages**. A permission is `<domain>.view` /
+  `<domain>.manage` over 17 domains; the catalog in `role/permissions.go` is the single source of
+  truth (served at `GET /api/admin/roles/permissions`), and **manage implies view** (normalized
+  server-side). **Super Admin is implicit**: an admin with `adminRoleId == nil` gets `["*"]` — so
+  every pre-RBAC admin (incl. prod `admin@salehcard.com`) is a super admin with **zero migration**;
+  the `roles` collection holds only custom roles. Perms **ride the JWT** (`Claims.Perms`) + the
+  auth-response `user.permissions`, so role edits take effect on the holder's next refresh/login;
+  missing role at issue time → empty perms (**fail-closed**), resolver wired via `user.WithRolePerms`.
+  Enforcement: `auth.RequireDomain(name)` wraps each module group in `server.go` (GET/HEAD → `.view`,
+  else `.manage`); `auth.RequirePermission(perm)` for method-independent gates (raw-code reads demand
+  `inventory.manage`, resend sits under `orders.manage`); `auth.RequireSuperAdmin()` gates all role
+  CRUD + admin-access granting (**never grantable to a custom role**). LAST_ADMIN guard counts
+  **active super admins** (`CountActiveSuperAdmins`, excludes suspended+deleted). Adding a new admin
+  module = pick a domain key, wrap it with `domain(...)` in `server.go`, add it to `role/permissions.go`
+  + `nav.ts` + the router guard (`server.go`'s `domain()` helper log.Fatals at boot on an unknown key).
+  Frontend: `useCan()` / `useIsSuperAdmin()` (`admin/src/stores/auth.ts`), nav/routes gated via
+  `nav.ts` `domain` + `RequireDomain` + `firstAllowedRoute`, a super-admin-only `/roles` editor, and
+  a role-assignment select in Users → Role & access. **403 no longer force-logs-out** (only 401 does;
+  a 403 on a permless pre-RBAC session logs out to re-mint perms).
 - **Phone-OTP auth** (`internal/modules/user`): `POST /auth/otp/request` + `/auth/otp/verify`
   (find-or-create by phone, optional password-set) + `/auth/login-phone`, alongside email/password.
   Users carry a sparse-unique `phone`; codes live in `otp_codes`. The mobile login offers
