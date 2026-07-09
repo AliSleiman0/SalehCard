@@ -16,10 +16,18 @@ redeploy recipes, open items). Secrets are in the gitignored `DEPLOY-CREDS.local
 (admin login, Atlas URI). Code ships from branch `feat/catalog-migration-browse` (PR #3,
 not yet merged — see [[salehcard-design-port]], [[salehcard-admin-port]]).
 
-**Critical gotcha:** the dev machine is behind a TLS-intercepting corporate proxy that
-breaks Azure CLI/Node SSL. Use `az rest` for Microsoft.Web ops, build+`docker push`
-locally (not `az acr build`), and set `NODE_EXTRA_CA_CERTS`/`REQUESTS_CA_BUNDLE` +
-process-scoped `AZURE_CLI_DISABLE_CONNECTION_VERIFICATION`. Full details in DEPLOYMENT.md.
+**Update (2026-06-27):** CI/CD now exists — `.github/workflows/deploy.yml` auto-deploys
+to Azure on push to `main` (path-filtered, OIDC via managed identity `salehcard-github-oidc`,
+client `8e67393c-…`). **Prod DB migrated Atlas → Azure Cosmos DB for MongoDB (vCore)**
+`docdb-cluster-20260626-2230` (`retrywrites=false`; Atlas pending decommission). Repo renamed
+to **`AliSleiman0/SalehCard`** (capital S/C) — OIDC subjects are case-sensitive. Phone-OTP auth
++ Monty SMS shipped — see [[salehcard-phone-otp-auth]] and `HANDOFF-2026-06-27.md`.
 
-Open: rotate Atlas+admin passwords (exposed in chat), merge PR #3, add CI/CD. See also
-[[salehcard-dev-env]] for the local stack.
+**Critical gotcha:** the dev machine is behind a TLS-intercepting corporate proxy that
+breaks Azure CLI/Node SSL. **Easiest: run `az` in Azure Cloud Shell** (browser, pre-auth,
+no proxy — but it may launch in the wrong tenant; `az login --tenant ce8b637b-…` + set the
+`SalehCard` sub). Locally: `az rest` for Microsoft.Web ops, build+`docker push` (not
+`az acr build`), CA-bundle env vars. Full details in DEPLOYMENT.md.
+
+Open: rotate exposed secrets (Atlas+admin+**Cosmos**+**Monty token**), decommission Atlas,
+register a "SalehCard" Monty sender. See also [[salehcard-dev-env]] for the local stack.
