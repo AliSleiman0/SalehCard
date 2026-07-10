@@ -288,23 +288,44 @@ BEP20 USDT has **18 decimals** on-chain; the adapter normalizes to micro-USDT.
    both wallet dedup indexes with one `$in`-filtered index and re-verify.
    Deploy at low traffic: there is an ms-scale drop→create window on the
    amount-uniqueness index at boot.
-2. Ali creates a free **etherscan.io** account → API key (the V2 multichain
-   API works on the free tier; watcher uses ≤2 calls per 25s tick).
+2. ~~Ali creates a free etherscan.io account → API key~~ **DISCOVERED AT
+   ROLLOUT (2026-07-10): Etherscan's FREE plan does not cover BSC** — chainid
+   56 returns "Free API access is not supported for this chain", and the
+   legacy api.bscscan.com V1 API is fully shut down. The provider to use is
+   **`jsonrpc`** (free public BSC nodes, no key, default endpoints built in;
+   override via `BSC_RPC_ENDPOINTS`). The etherscan adapter is kept for a
+   future paid plan. NOTE: the canonical bsc-dataseed.* public nodes do NOT
+   serve eth_getLogs at all — the built-in defaults (rpc-bsc.48.club +
+   NodeReal's documented public endpoint) were verified live on 2026-07-10
+   with 4,000-block filtered getLogs ranges.
 3. **Confirm the BEP20 address with the client character-for-character**:
    `0x5e0a66cedc7688aab52c87dc02bff97f6575d7dc` (the BSC address he sent
    first, before the TRC20 one). Boot validation catches malformed addresses,
    not wrong-but-valid ones; funds sent to a wrong address are unrecoverable.
 4. Azure App Service app settings on the API:
-   - `USDT_BEP20_PROVIDER=etherscan`  (⚠️ NEVER `stub` in prod — refused at boot)
+   - `USDT_BEP20_PROVIDER=jsonrpc`  (⚠️ NEVER `stub` in prod — refused at
+     boot; an unknown provider name is refused too)
    - `USDT_BEP20_ADDRESS=0x5e0a66cedc7688aab52c87dc02bff97f6575d7dc`
-   - `ETHERSCAN_API_KEY=<key>`
-   - optional: `USDT_BEP20_MIN_CONFIRMATIONS` (default 15 ≈ seconds on BSC)
+   - optional: `BSC_RPC_ENDPOINTS` (CSV; defaults to the official public
+     dataseeds), `USDT_BEP20_MIN_CONFIRMATIONS` (default 15 ≈ seconds on BSC)
+   - `ETHERSCAN_API_KEY` is UNUSED with the jsonrpc provider (removable; only
+     needed if ever switching to a paid etherscan plan)
+   - **State as of 2026-07-10**: address + `provider=etherscan` + a free key
+     were set before the free-tier limitation surfaced — BEP20 is
+     enabled-but-broken (every chain call fails). Flip the provider to
+     `jsonrpc` once the adapter deploys.
 5. Boot check: a SECOND enable line must appear —
-   `payment: on-chain USDT payments enabled (shared-address mode) provider=etherscan network=bep20 address=0x5e0a...`.
-6. Canary: $1 real BEP20 top-up end-to-end (Binance → BEP20 withdrawal):
+   `payment: on-chain USDT payments enabled (shared-address mode) provider=jsonrpc network=bep20 address=0x5e0a...`
+   and the `shared-address transfer list failed` warns must stop.
+6. First ~20 min after the flip = backfill: the scanner walks the open window
+   in 16k-block steps ("scan window truncated by the per-tick chunk cap"
+   warns taper to zero). Any transfers sent during the enabled-but-broken
+   outage still inside the 7-day grace get swept up automatically (settle or
+   land in Unmatched deposits); older ones need manual bscscan reconciliation.
+7. Canary: $1 real BEP20 top-up end-to-end (Binance → BEP20 withdrawal):
    exact salted amount auto-confirms, ledger row `method=usdt_bep20`,
    admin intent row shows a BEP20 badge + bscscan links.
-7. Ops notes: the same Unmatched-deposits queue serves both networks (rows
+8. Ops notes: the same Unmatched-deposits queue serves both networks (rows
    carry the network; attribute/ignore unchanged). The app shows a network
    picker only when BOTH networks are enabled — flipping BEP20 off later
    hides it again (open BEP20 intents keep settling until you also break

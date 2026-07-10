@@ -212,7 +212,9 @@ matrix changes:
     appears in Unmatched deposits with a BEP20 badge + bscscan link;
     Attribute credits the wallet (ledger method `usdt_bep20`); a repeat
     attribute attempt conflicts (no double credit).
-18. BEP20 real-money matrix (prod canary, mirrors items 10–12 on BSC):
+18. BEP20 real-money matrix (prod canary, mirrors items 10–12 on BSC) —
+    run AFTER the provider flip to `jsonrpc` (the etherscan free tier turned
+    out not to cover BSC, so BEP20 was enabled-but-broken until then):
     exact salted payment auto-confirms; base-without-salt lands unmatched;
     duplicate amount after confirm lands unmatched. ~ $0.3-1 Binance BEP20
     withdrawal fee per test; funds land in the CLIENT's BSC wallet.

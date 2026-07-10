@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -32,10 +31,6 @@ const (
 	// seconds of latency against a 25s watcher tick.
 	defaultMinConfirmations = 15
 )
-
-// weiPerMicro scales 18-decimal BEP20 USDT base units down to the 6-decimal
-// micro-USDT unit the payment module works in (10^12).
-var weiPerMicro = big.NewInt(1_000_000_000_000)
 
 // EtherscanConfig configures the Etherscan V2 adapter.
 type EtherscanConfig struct {
@@ -169,24 +164,6 @@ func (e *etherscan) ListTransfers(ctx context.Context, address string, since tim
 		})
 	}
 	return payments, nil
-}
-
-// weiToMicros converts an 18-decimal integer value string into micro-USDT,
-// flooring away sub-micro dust (< 10^12 wei ≈ $0.000001). Flooring — rather
-// than rejecting non-multiples — means a payment carrying stray dust still
-// exact-matches its intent instead of stranding in the reconciliation queue;
-// the value lost is under a millionth of a dollar. big.Int is mandatory:
-// 10,000 USDT is 10^22 base units, past int64.
-func weiToMicros(value string) (int64, bool) {
-	wei, ok := new(big.Int).SetString(value, 10)
-	if !ok || wei.Sign() <= 0 {
-		return 0, false
-	}
-	micros := new(big.Int).Quo(wei, weiPerMicro)
-	if !micros.IsInt64() || micros.Sign() <= 0 {
-		return 0, false
-	}
-	return micros.Int64(), true
 }
 
 // startBlock resolves since into a block number via getblocknobytime

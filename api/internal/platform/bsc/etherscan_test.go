@@ -12,31 +12,6 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/platform/tron"
 )
 
-func TestWeiToMicros(t *testing.T) {
-	cases := []struct {
-		value  string
-		micros int64
-		ok     bool
-	}{
-		{"1000000000000", 1, true},                    // exactly 1 micro
-		{"10000001000000000000", 10_000_001, true},    // 10.000001 USDT — salt digits intact
-		{"10000001000000400321", 10_000_001, true},    // sub-micro dust floors away
-		{"10000000000000000000000", 10_000_000_000, true}, // 10,000 USDT = 1e22 wei > int64
-		{"999999999999", 0, false},                    // below 1 micro → quotient 0
-		{"0", 0, false},
-		{"-1000000000000", 0, false},
-		{"not-a-number", 0, false},
-		// quotient itself past int64 (absurd amount) → rejected, not wrapped
-		{"10000000000000000000000000000000", 0, false},
-	}
-	for _, c := range cases {
-		got, ok := weiToMicros(c.value)
-		if ok != c.ok || got != c.micros {
-			t.Errorf("weiToMicros(%q) = (%d, %v), want (%d, %v)", c.value, got, ok, c.micros, c.ok)
-		}
-	}
-}
-
 // testRow builds a tokentx result row paying `wei` to `to`.
 func testRow(hash, to, contract, wei string, ts int64, confirmations string) map[string]string {
 	return map[string]string{

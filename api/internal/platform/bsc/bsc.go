@@ -1,5 +1,6 @@
 // Package bsc is the BEP20 (BNB Smart Chain) chain-reader adapter set for
-// shared-address USDT deposits. It deliberately reuses the tron package's port
+// shared-address USDT deposits (jsonrpc = free public nodes, etherscan = the
+// paid V2 API, stub = dev). It deliberately reuses the tron package's port
 // types ([tron.TransferLister], [tron.Payment], [tron.AmountHint]) — the
 // payment watcher programs against that port, and BEP20 is shared-address-mode
 // only, so no BSC equivalent of derived addresses or FindPayment exists.
@@ -19,9 +20,12 @@ const USDTContractBSC = "0x55d398326f99059fF775485246999027B3197955"
 
 // Config selects and configures the active BEP20 chain-reader adapter.
 type Config struct {
-	// Provider is one of "etherscan" or "stub" (default "stub" — dev needs
-	// zero chain config; the stub auto-pays after a short delay).
+	// Provider is one of "jsonrpc" (free public BSC nodes, no key),
+	// "etherscan" (V2 multichain API — its free tier does NOT cover BSC, a
+	// paid plan is required) or "stub" (default — dev needs zero chain
+	// config; the stub auto-pays after a short delay).
 	Provider  string
+	JSONRPC   JSONRPCConfig
 	Etherscan EtherscanConfig
 	Stub      tron.StubConfig
 }
@@ -34,6 +38,8 @@ func New(cfg Config) (tron.TransferLister, error) {
 	switch cfg.Provider {
 	case "", "stub":
 		return tron.NewStub(cfg.Stub), nil
+	case "jsonrpc":
+		return newJSONRPC(cfg.JSONRPC)
 	case "etherscan":
 		return newEtherscan(cfg.Etherscan)
 	default:
