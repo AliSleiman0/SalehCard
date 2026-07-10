@@ -76,3 +76,28 @@ func TestDeriveAddressRejectsGarbage(t *testing.T) {
 		t.Fatal("expected an error for a malformed key, got nil")
 	}
 }
+
+func TestValidateAddress(t *testing.T) {
+	valid := []string{
+		"TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH", // derived vector above
+		"TLRaHegyg2grMQqX85nJyCzbdRtvM5nCDn", // real-world shared deposit address
+	}
+	for _, addr := range valid {
+		if err := ValidateAddress(addr); err != nil {
+			t.Errorf("ValidateAddress(%s): unexpected error %v", addr, err)
+		}
+	}
+
+	invalid := map[string]string{
+		"bad checksum":     "TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdX",
+		"eth-style hex":    "0x5e0a66cedc7688aab52c87dc02bff97f6575d7dc",
+		"bitcoin prefix":   "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", // version 0x00, not 0x41
+		"empty":            "",
+		"not base58 chars": "T!!!invalid!!!",
+	}
+	for name, addr := range invalid {
+		if err := ValidateAddress(addr); err == nil {
+			t.Errorf("%s: ValidateAddress(%q) = nil, want error", name, addr)
+		}
+	}
+}

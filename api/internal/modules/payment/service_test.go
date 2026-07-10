@@ -26,16 +26,22 @@ import (
 // fakeStore is an in-memory Store honoring the same atomicity contracts as
 // the Mongo implementation (status preconditions, unique txHash, idempotency).
 type fakeStore struct {
-	mu      sync.Mutex
-	intents map[bson.ObjectID]*Intent
-	seq     int64
-	txSeen  map[string]bool // network|txHash uniqueness
+	mu       sync.Mutex
+	intents  map[bson.ObjectID]*Intent
+	seq      int64
+	saltSeq  int64
+	txSeen   map[string]bool // network|txHash uniqueness
+	deposits map[bson.ObjectID]*Deposit
 
 	failMarkConfirmed int // fail the next N MarkConfirmed calls
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{intents: map[bson.ObjectID]*Intent{}, txSeen: map[string]bool{}}
+	return &fakeStore{
+		intents:  map[bson.ObjectID]*Intent{},
+		txSeen:   map[string]bool{},
+		deposits: map[bson.ObjectID]*Deposit{},
+	}
 }
 
 func (f *fakeStore) Insert(_ context.Context, in *Intent) error {
@@ -44,6 +50,15 @@ func (f *fakeStore) Insert(_ context.Context, in *Intent) error {
 	if in.IdempotencyKey != "" {
 		for _, e := range f.intents {
 			if e.UserID == in.UserID && e.IdempotencyKey == in.IdempotencyKey {
+				return apperrors.ErrConflict
+			}
+		}
+	}
+	// Mirror the unique partial sharedOpen index: no two OPEN shared intents
+	// may expect the same amount.
+	if in.SharedOpen {
+		for _, e := range f.intents {
+			if e.SharedOpen && e.AmountExpectedMicros == in.AmountExpectedMicros {
 				return apperrors.ErrConflict
 			}
 		}
@@ -207,6 +222,126 @@ func (f *fakeStore) NextDerivationIndex(_ context.Context) (uint32, error) {
 	defer f.mu.Unlock()
 	f.seq++
 	return uint32(f.seq - 1), nil
+}
+
+func (f *fakeStore) NextAmountSalt(_ context.Context) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.saltSeq++
+	return 1 + ((f.saltSeq - 1) % saltRange), nil
+}
+
+func (f *fakeStore) ReleaseSharedSlots(_ context.Context, now time.Time, grace time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, in := range f.intents {
+		if in.SharedOpen && in.Status == StatusExpired && in.TxHash == "" && in.ExpiresAt.Before(now.Add(-grace)) {
+			in.SharedOpen = false
+		}
+	}
+	return nil
+}
+
+func (f *fakeStore) FilterKnownTxHashes(_ context.Context, network string, hashes []string) (map[string]bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	known := map[string]bool{}
+	for _, h := range hashes {
+		if f.txSeen[network+"|"+h] {
+			known[h] = true
+		}
+	}
+	return known, nil
+}
+
+func (f *fakeStore) RecordUnmatchedDeposit(_ context.Context, d *Deposit) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, e := range f.deposits {
+		if e.Network == d.Network && e.TxHash == d.TxHash {
+			return nil // idempotent upsert: already recorded
+		}
+	}
+	cp := *d
+	if cp.ID.IsZero() {
+		cp.ID = bson.NewObjectID()
+	}
+	if cp.Status == "" {
+		cp.Status = DepositUnmatched
+	}
+	if cp.SeenAt.IsZero() {
+		cp.SeenAt = time.Now().UTC()
+	}
+	f.deposits[cp.ID] = &cp
+	return nil
+}
+
+func (f *fakeStore) ListDeposits(_ context.Context, status string, _ pagination.Params) ([]*Deposit, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []*Deposit
+	for _, d := range f.deposits {
+		if status == "" || d.Status == status {
+			cp := *d
+			out = append(out, &cp)
+		}
+	}
+	return out, int64(len(out)), nil
+}
+
+func (f *fakeStore) GetDeposit(_ context.Context, id bson.ObjectID) (*Deposit, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.deposits[id]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	cp := *d
+	return &cp, nil
+}
+
+func (f *fakeStore) ClaimDepositAttribution(_ context.Context, id, userID bson.ObjectID, adminRef, note string) (*Deposit, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.deposits[id]
+	if !ok || d.Status != DepositUnmatched {
+		return nil, apperrors.ErrConflict
+	}
+	now := time.Now().UTC()
+	d.Status = DepositCredited
+	d.AttributedUserID = &userID
+	d.AttributedBy = adminRef
+	d.AttributedAt = &now
+	d.Note = note
+	cp := *d
+	return &cp, nil
+}
+
+func (f *fakeStore) RevertDepositAttribution(_ context.Context, id bson.ObjectID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if d, ok := f.deposits[id]; ok && d.Status == DepositCredited {
+		d.Status = DepositUnmatched
+		d.AttributedUserID = nil
+		d.AttributedBy = ""
+		d.AttributedAt = nil
+	}
+	return nil
+}
+
+func (f *fakeStore) MarkDepositIgnored(_ context.Context, id bson.ObjectID, adminRef, note string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.deposits[id]
+	if !ok || d.Status != DepositUnmatched {
+		return apperrors.ErrConflict
+	}
+	now := time.Now().UTC()
+	d.Status = DepositIgnored
+	d.AttributedBy = adminRef
+	d.AttributedAt = &now
+	d.Note = note
+	return nil
 }
 
 func (f *fakeStore) ListAll(_ context.Context, _ IntentFilter, _ pagination.Params) ([]*Intent, int64, error) {
@@ -446,6 +581,9 @@ func TestCreateTopUpIntent(t *testing.T) {
 		if a.Address == "" || a.Address[0] != 'T' {
 			t.Errorf("address not derived: %q", a.Address)
 		}
+		if a.AddressMode != AddressModeDerived || a.SharedOpen {
+			t.Errorf("derived intent not stamped: mode=%q sharedOpen=%v", a.AddressMode, a.SharedOpen)
+		}
 		b, err := e.svc.CreateTopUpIntent(ctx, userA, 25, "")
 		if err != nil {
 			t.Fatalf("second intent: %v", err)
@@ -681,4 +819,229 @@ func TestSettleRetryDoesNotDoubleCredit(t *testing.T) {
 	if got := e.store.get(t, in.ID); got.Status != StatusConfirmed {
 		t.Errorf("status = %s, want confirmed", got.Status)
 	}
+}
+
+// --- shared-address mode -----------------------------------------------------
+
+// testSharedAddr is a valid TRON mainnet address for shared-mode tests.
+const testSharedAddr = "TLRaHegyg2grMQqX85nJyCzbdRtvM5nCDn"
+
+// newSharedTestEnv wires a service in shared-address mode (no xpub).
+func newSharedTestEnv(t *testing.T, cfg Config) *testEnv {
+	t.Helper()
+	cfg.SharedAddress = testSharedAddr
+	e := &testEnv{
+		store:    newFakeStore(),
+		crediter: newFakeCrediter(),
+		settler:  newFakeSettler(),
+		notifier: &fakeNotifier{},
+	}
+	e.svc = NewService(e.store, tron.NewStub(tron.StubConfig{Delay: time.Hour}), e.crediter, e.notifier, cfg)
+	e.svc.SetOrderSettler(e.settler)
+	return e
+}
+
+func TestCreateTopUpIntentShared(t *testing.T) {
+	ctx := context.Background()
+	e := newSharedTestEnv(t, Config{})
+	userID := bson.NewObjectID()
+
+	a, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "")
+	if err != nil {
+		t.Fatalf("CreateTopUpIntent: %v", err)
+	}
+	if a.Address != testSharedAddr || a.AddressMode != AddressModeShared || !a.SharedOpen {
+		t.Errorf("shared intent not stamped: %+v", a)
+	}
+	if a.AmountSaltMicros < 1 || a.AmountSaltMicros > saltRange {
+		t.Errorf("salt %d outside 1..%d", a.AmountSaltMicros, saltRange)
+	}
+	if a.AmountExpectedMicros != 10_000_000+a.AmountSaltMicros {
+		t.Errorf("amount %d != base 10000000 + salt %d", a.AmountExpectedMicros, a.AmountSaltMicros)
+	}
+
+	// Same base amount → same address, DIFFERENT salted total.
+	b, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "")
+	if err != nil {
+		t.Fatalf("second intent: %v", err)
+	}
+	if b.Address != a.Address {
+		t.Error("shared intents should share the deposit address")
+	}
+	if b.AmountExpectedMicros == a.AmountExpectedMicros {
+		t.Error("two open shared intents expect the same amount")
+	}
+}
+
+// TestSharedResaltOnCollision forces the cross-base collision the counter
+// alone cannot prevent: base 10.000000+salt(1) was taken by intent A, and
+// intent B's base 9.999999+salt(2) lands on the same 10_000_001 total — the
+// unique open-amount guard must trip and B must retry with a fresh salt.
+func TestSharedResaltOnCollision(t *testing.T) {
+	ctx := context.Background()
+	e := newSharedTestEnv(t, Config{})
+	userID := bson.NewObjectID()
+
+	a, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "") // salt 1 → 10_000_001
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.AmountExpectedMicros != 10_000_001 {
+		t.Fatalf("precondition: intent A amount = %d, want 10000001", a.AmountExpectedMicros)
+	}
+
+	b, err := e.svc.CreateTopUpIntent(ctx, userID, 9.999999, "") // salt 2 collides → resalt to 3
+	if err != nil {
+		t.Fatalf("resalt should have recovered the collision: %v", err)
+	}
+	if b.AmountExpectedMicros == a.AmountExpectedMicros {
+		t.Errorf("collision not resolved: both intents expect %d", a.AmountExpectedMicros)
+	}
+	if b.AmountExpectedMicros != 9_999_999+b.AmountSaltMicros {
+		t.Errorf("amount %d != base 9999999 + salt %d", b.AmountExpectedMicros, b.AmountSaltMicros)
+	}
+}
+
+func TestEnabledMatrix(t *testing.T) {
+	store, crediter, ntf := newFakeStore(), newFakeCrediter(), &fakeNotifier{}
+	stub := tron.NewStub(tron.StubConfig{Delay: time.Hour})
+
+	cases := []struct {
+		name    string
+		svc     *Service
+		enabled bool
+	}{
+		{"xpub only", NewService(store, stub, crediter, ntf, Config{XPub: testXPub(t)}), true},
+		{"shared address only", NewService(store, stub, crediter, ntf, Config{SharedAddress: testSharedAddr}), true},
+		{"neither", NewService(store, stub, crediter, ntf, Config{}), false},
+		{"nil reader", NewService(store, nil, crediter, ntf, Config{SharedAddress: testSharedAddr}), false},
+	}
+	for _, c := range cases {
+		if got := c.svc.Enabled(); got != c.enabled {
+			t.Errorf("%s: Enabled() = %v, want %v", c.name, got, c.enabled)
+		}
+	}
+}
+
+func seedDeposit(t *testing.T, e *testEnv, txHash string, micros int64) *Deposit {
+	t.Helper()
+	d := &Deposit{
+		Network:      NetworkTRC20,
+		TxHash:       txHash,
+		FromAddress:  "TSender",
+		ToAddress:    testSharedAddr,
+		AmountMicros: micros,
+		BlockTime:    time.Now().UTC(),
+	}
+	if err := e.store.RecordUnmatchedDeposit(context.Background(), d); err != nil {
+		t.Fatalf("seed deposit: %v", err)
+	}
+	list, _, err := e.store.ListDeposits(context.Background(), DepositUnmatched, pagination.Params{Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, got := range list {
+		if got.TxHash == txHash {
+			return got
+		}
+	}
+	t.Fatalf("seeded deposit %s not found", txHash)
+	return nil
+}
+
+func TestAttributeDeposit(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("happy path credits the wallet once", func(t *testing.T) {
+		e := newSharedTestEnv(t, Config{})
+		userID := bson.NewObjectID()
+		d := seedDeposit(t, e, "tx-dep-1", 12_500_000)
+
+		out, err := e.svc.AttributeDeposit(ctx, d.ID, userID, "admin@test", "customer forgot the cents")
+		if err != nil {
+			t.Fatalf("AttributeDeposit: %v", err)
+		}
+		if out.Status != DepositCredited || out.AttributedUserID == nil || *out.AttributedUserID != userID {
+			t.Errorf("deposit after attribution: %+v", out)
+		}
+		if len(e.crediter.calls) != 1 {
+			t.Fatalf("wallet credited %d times, want 1", len(e.crediter.calls))
+		}
+		call := e.crediter.calls[0]
+		if call.UserID != userID || call.Amount != 12.5 || call.Ref != "deposit:tx-dep-1" {
+			t.Errorf("unexpected credit: %+v", call)
+		}
+		if kinds := e.notifier.kinds(); len(kinds) != 1 || kinds[0] != notification.KindPaymentConfirmed {
+			t.Errorf("notifications: %v", kinds)
+		}
+
+		// A second attribution attempt must conflict, not double-credit.
+		if _, err := e.svc.AttributeDeposit(ctx, d.ID, bson.NewObjectID(), "admin2@test", ""); !errors.Is(err, apperrors.ErrConflict) {
+			t.Errorf("second attribution: want ErrConflict, got %v", err)
+		}
+		if len(e.crediter.calls) != 1 {
+			t.Errorf("wallet credited %d times after conflict, want 1", len(e.crediter.calls))
+		}
+	})
+
+	t.Run("wallet failure reverts the claim", func(t *testing.T) {
+		e := newSharedTestEnv(t, Config{})
+		d := seedDeposit(t, e, "tx-dep-2", 5_000_000)
+		e.crediter.failN = 1
+
+		if _, err := e.svc.AttributeDeposit(ctx, d.ID, bson.NewObjectID(), "admin@test", ""); err == nil {
+			t.Fatal("expected the wallet failure to surface")
+		}
+		got, err := e.store.GetDeposit(ctx, d.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != DepositUnmatched {
+			t.Errorf("deposit status = %s after revert, want unmatched", got.Status)
+		}
+
+		// Retry succeeds normally.
+		if _, err := e.svc.AttributeDeposit(ctx, d.ID, bson.NewObjectID(), "admin@test", ""); err != nil {
+			t.Fatalf("retry after revert: %v", err)
+		}
+	})
+
+	t.Run("retry after a credited-but-unreverted crash is idempotent", func(t *testing.T) {
+		e := newSharedTestEnv(t, Config{})
+		userID := bson.NewObjectID()
+		d := seedDeposit(t, e, "tx-dep-3", 7_000_000)
+		// Simulate: a prior attempt credited the wallet, crashed before the
+		// deposit doc update stuck, and an operator reset it to unmatched.
+		e.crediter.byRef["deposit:tx-dep-3"] = true
+
+		out, err := e.svc.AttributeDeposit(ctx, d.ID, userID, "admin@test", "")
+		if err != nil {
+			t.Fatalf("idempotent retry: %v", err)
+		}
+		if out.Status != DepositCredited {
+			t.Errorf("status = %s, want credited", out.Status)
+		}
+		if len(e.crediter.calls) != 0 {
+			t.Errorf("wallet re-credited on a duplicate ref: %+v", e.crediter.calls)
+		}
+	})
+
+	t.Run("ignore blocks later attribution", func(t *testing.T) {
+		e := newSharedTestEnv(t, Config{})
+		d := seedDeposit(t, e, "tx-dep-4", 100)
+
+		if err := e.svc.IgnoreDeposit(ctx, d.ID, "admin@test", "dust"); err != nil {
+			t.Fatalf("IgnoreDeposit: %v", err)
+		}
+		got, err := e.store.GetDeposit(ctx, d.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != DepositIgnored || got.Note != "dust" {
+			t.Errorf("deposit after ignore: %+v", got)
+		}
+		if _, err := e.svc.AttributeDeposit(ctx, d.ID, bson.NewObjectID(), "admin@test", ""); !errors.Is(err, apperrors.ErrConflict) {
+			t.Errorf("attribute after ignore: want ErrConflict, got %v", err)
+		}
+	})
 }

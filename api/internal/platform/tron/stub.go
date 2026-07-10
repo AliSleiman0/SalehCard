@@ -2,6 +2,7 @@ package tron
 
 import (
 	"context"
+	"strconv"
 	"time"
 )
 
@@ -42,4 +43,24 @@ func (s *Stub) FindPayment(_ context.Context, w Watch) (*Payment, error) {
 		AmountMicros: w.ExpectedMicros,
 		BlockTime:    s.now().UTC(),
 	}, nil
+}
+
+// ListTransfers fabricates one payment per elapsed hint (shared-address mode).
+// The TxHash is keyed on the salted amount — unique per open intent since
+// shared-mode amounts are collision-guarded — so the "stub-"+address hash the
+// FindPayment path uses can't collide across intents sharing one address.
+func (s *Stub) ListTransfers(_ context.Context, _ string, _ time.Time, hints []AmountHint) ([]Payment, error) {
+	var out []Payment
+	for _, h := range hints {
+		if s.now().Before(h.CreatedAt.Add(s.delay)) {
+			continue
+		}
+		out = append(out, Payment{
+			TxHash:       "stub-shared-" + strconv.FormatInt(h.AmountMicros, 10),
+			From:         "TStubSenderAddressDoesNotExist000",
+			AmountMicros: h.AmountMicros,
+			BlockTime:    s.now().UTC(),
+		})
+	}
+	return out, nil
 }

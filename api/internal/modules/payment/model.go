@@ -43,6 +43,15 @@ const (
 // additional chains slot in without a schema change.
 const NetworkTRC20 = "trc20"
 
+// Address modes. Derived = a unique HD address per intent (identity = address).
+// Shared = one fixed deposit address for everyone (identity = exact salted
+// amount). Stamped per-intent so flipping the configured mode mid-flight is
+// safe: open intents keep settling under the rules they were created with.
+const (
+	AddressModeDerived = "derived"
+	AddressModeShared  = "shared"
+)
+
 // Settlement outcomes recorded on a confirmed intent.
 const (
 	SettlementWalletTopUp    = "wallet_topup"            // top-up credited
@@ -62,6 +71,17 @@ type Intent struct {
 	Network         string `bson:"network"         json:"network"`
 	Address         string `bson:"address"         json:"address"`
 	DerivationIndex uint32 `bson:"derivationIndex" json:"-"`
+	// AddressMode is AddressModeDerived or AddressModeShared; empty means
+	// legacy derived (documents that predate shared mode).
+	AddressMode string `bson:"addressMode,omitempty" json:"-"`
+	// AmountSaltMicros is the shared-mode disambiguation salt folded into
+	// AmountExpectedMicros (bookkeeping: base = expected - salt).
+	AmountSaltMicros int64 `bson:"amountSaltMicros,omitempty" json:"-"`
+	// SharedOpen marks a shared-mode intent whose amount slot is still
+	// reserved; a unique partial index on (amountExpectedMicros) over these
+	// docs guarantees no two open intents can match the same transfer. Unset
+	// on confirmation and by the watcher once the late-payment grace ends.
+	SharedOpen bool `bson:"sharedOpen,omitempty" json:"-"`
 
 	// Amounts are integer micro-USDT (6 decimals, the TRC20 base unit) so
 	// on-chain matching never touches floats; USD floats exist only at the
@@ -98,6 +118,10 @@ func CanTransition(cur, next IntentStatus) bool {
 	}
 	return false
 }
+
+// IsShared reports whether the intent was created in shared-address mode
+// (empty AddressMode = legacy derived).
+func (in *Intent) IsShared() bool { return in.AddressMode == AddressModeShared }
 
 // MicrosToUSD converts micro-USDT to USD (1 USDT = 1 USD by decision).
 func MicrosToUSD(m int64) float64 { return float64(m) / 1e6 }

@@ -12,6 +12,24 @@ import (
 // tronAddressPrefix is the TRON mainnet address version byte (base58 'T...').
 const tronAddressPrefix = 0x41
 
+// ValidateAddress checks that addr is a well-formed TRON mainnet base58check
+// address (version byte 0x41, 20-byte payload). Used as the boot smoke check
+// for a configured shared deposit address — a typo'd address would silently
+// send customer funds somewhere unrecoverable, so fail fast and loudly.
+func ValidateAddress(addr string) error {
+	payload, version, err := base58.CheckDecode(addr)
+	if err != nil {
+		return fmt.Errorf("tron: invalid address %q: %w", addr, err)
+	}
+	if version != tronAddressPrefix {
+		return fmt.Errorf("tron: address %q is not a TRON mainnet address (version 0x%02x, want 0x41)", addr, version)
+	}
+	if len(payload) != 20 {
+		return fmt.Errorf("tron: address %q has a %d-byte payload, want 20", addr, len(payload))
+	}
+	return nil
+}
+
 // DeriveAddress derives the TRON base58check address for external index i from
 // an account-level xpub. The owner exports the BIP44 account m/44'/195'/0' as
 // an xpub (watch-only — no private key material); we derive the standard

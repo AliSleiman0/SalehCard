@@ -805,7 +805,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get usdtSendExactly =>
-      'Send exactly this amount to the address below:';
+      'Send exactly this amount — every digit matters, or your payment can\'t be matched automatically:';
 
   @override
   String get usdtAmountLabel => 'Amount';

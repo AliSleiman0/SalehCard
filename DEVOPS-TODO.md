@@ -188,9 +188,51 @@ az storage account show-connection-string -n salehcardassets -g salehcard-prod
 
 ## 14. On-chain USDT payments (TRC20) — prod rollout (payment module PR1/PR2)
 
-The feature ships DISABLED (no `USDT_XPUB` app setting → intent creation refuses,
-no watcher runs, `GET /api/v1/payments/config` answers `usdtEnabled:false`). To
-enable in prod, in order:
+The feature ships DISABLED (neither `USDT_XPUB` nor `USDT_ADDRESS` set → intent
+creation refuses, no watcher runs, `GET /api/v1/payments/config` answers
+`usdtEnabled:false`). There are now **two mutually exclusive addressing modes**
+(both set refuses to boot in every env; each open intent is stamped with its
+mode, so flipping between modes mid-flight is safe — open intents keep settling
+under their own rules through the grace window):
+
+- **Shared-address mode** (`USDT_ADDRESS`) — the launch plan: every customer
+  pays ONE fixed address (the owner's real wallet), matched by exact salted
+  amount. No sweep runbook needed (funds land in the owner's wallet directly);
+  transfers matching nothing appear in admin → Payments → Unmatched deposits
+  for manual attribution.
+- **Derived-address mode** (`USDT_XPUB`) — the later upgrade: a unique
+  watch-only address per payment. Needs the offline wallet/xpub ceremony +
+  periodic sweeps.
+
+### 14a. Shared-address go-live (current plan — client's wallet address)
+
+1. Azure App Service app settings on the API:
+   - `USDT_PROVIDER=trongrid`  (⚠️ NEVER `stub` in prod)
+   - `USDT_ADDRESS=TLRaHegyg2grMQqX85nJyCzbdRtvM5nCDn`  (the client's TRC20
+     address — re-verify with him it is EXACTLY this before setting; validated
+     at boot, but validation only catches typos, not a wrong-but-valid address)
+   - `TRONGRID_API_KEY=<key>` (trongrid.io account)
+   - `USDT_XPUB` must remain UNSET (both set refuses to boot)
+2. Confirm **Always On** (watcher is in-process; idle-unload kills it).
+3. Boot check: log must show
+   `payment: on-chain USDT payments enabled (shared-address mode) ... address=TLRa...`.
+4. Index check on Cosmos: `payment_intents` — the old unconditional-unique
+   `address_1` index is dropped + recreated partial (`addressMode:"derived"`)
+   automatically at boot; new unique partial `amountExpectedMicros` (over
+   `sharedOpen`) must exist; new `usdt_deposits` collection (unique
+   `network+txHash`). If the boot log warns the equality partial filter was
+   rejected, the address index fallback is non-unique — acceptable (see
+   repository.go comment).
+5. **Never flip to "neither set"** while payments are open: that disables the
+   watcher entirely and strands open intents. Flip directly between modes.
+6. Ops note: the admin console → Payments → "Unmatched deposits" tab is the
+   reconciliation queue (attribute = credit the customer's wallet; ignore =
+   dust/spam). Customers who round the salted amount land there — expect some.
+
+### 14b. Derived-address upgrade (later, when the client produces an xpub)
+
+Flip `USDT_ADDRESS` → unset, `USDT_XPUB` → set (keep trongrid). No deploy, no
+data migration; open shared intents drain through their grace window. Steps:
 
 1. **Generate the wallet OFFLINE** (owner, never on the server / never in the repo):
    create a fresh mnemonic on a hardware wallet or an offline BIP39 tool, derive the

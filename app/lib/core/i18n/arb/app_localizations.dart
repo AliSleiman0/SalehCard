@@ -1559,7 +1559,7 @@ abstract class AppLocalizations {
   /// No description provided for @usdtSendExactly.
   ///
   /// In en, this message translates to:
-  /// **'Send exactly this amount to the address below:'**
+  /// **'Send exactly this amount — every digit matters, or your payment can\'t be matched automatically:'**
   String get usdtSendExactly;
 
   /// No description provided for @usdtAmountLabel.

@@ -128,6 +128,90 @@ func TestNewUnknownProvider(t *testing.T) {
 	}
 }
 
+func TestTronGridListTransfers(t *testing.T) {
+	now := time.Now()
+
+	t.Run("returns every valid transfer in order", func(t *testing.T) {
+		srv := newTestServer(t, "key123",
+			transferJSON("tx1", "TSender111", testAddr, "10000001", USDTContract, now.UnixMilli()),
+			transferJSON("tx2", "TSender222", testAddr, "10000002", USDTContract, now.UnixMilli()+1),
+			transferJSON("tx3", "TSender333", testAddr, "500", USDTContract, now.UnixMilli()+2),
+		)
+		defer srv.Close()
+		r := newTestReader(t, srv.URL, "key123")
+		lister, ok := r.(TransferLister)
+		if !ok {
+			t.Fatal("trongrid reader does not implement TransferLister")
+		}
+		list, err := lister.ListTransfers(context.Background(), testAddr, now.Add(-time.Hour), nil)
+		if err != nil {
+			t.Fatalf("ListTransfers: %v", err)
+		}
+		if len(list) != 3 {
+			t.Fatalf("got %d transfers, want 3", len(list))
+		}
+		if list[0].TxHash != "tx1" || list[1].TxHash != "tx2" || list[2].TxHash != "tx3" {
+			t.Errorf("unexpected order: %+v", list)
+		}
+		if list[1].AmountMicros != 10_000_002 {
+			t.Errorf("amount = %d, want 10000002", list[1].AmountMicros)
+		}
+	})
+
+	t.Run("defensive re-checks still apply", func(t *testing.T) {
+		srv := newTestServer(t, "",
+			transferJSON("txW", "TSender111", testAddr, "10000001", "TWrongContract0000000000000000000", now.UnixMilli()),
+			transferJSON("txO", testAddr, "TSomeoneElse11111111111111111111", "10000001", USDTContract, now.UnixMilli()),
+			transferJSON("txOK", "TSender111", testAddr, "10000001", USDTContract, now.UnixMilli()),
+		)
+		defer srv.Close()
+		lister := newTestReader(t, srv.URL, "").(TransferLister)
+		list, err := lister.ListTransfers(context.Background(), testAddr, now.Add(-time.Hour), nil)
+		if err != nil {
+			t.Fatalf("ListTransfers: %v", err)
+		}
+		if len(list) != 1 || list[0].TxHash != "txOK" {
+			t.Errorf("want only txOK; got %+v", list)
+		}
+	})
+}
+
+func TestStubListTransfers(t *testing.T) {
+	s := NewStub(StubConfig{Delay: time.Minute})
+	base := time.Now()
+	hints := []AmountHint{
+		{AmountMicros: 10_000_001, CreatedAt: base},
+		{AmountMicros: 10_000_002, CreatedAt: base.Add(45 * time.Second)},
+	}
+
+	// Before either hint's delay elapses: nothing.
+	s.now = func() time.Time { return base.Add(30 * time.Second) }
+	list, err := s.ListTransfers(context.Background(), testAddr, base, hints)
+	if err != nil || len(list) != 0 {
+		t.Fatalf("before delay: want empty; got %+v, %v", list, err)
+	}
+
+	// First hint elapsed, second not yet.
+	s.now = func() time.Time { return base.Add(90 * time.Second) }
+	list, err = s.ListTransfers(context.Background(), testAddr, base, hints)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("one hint elapsed: want 1 transfer; got %+v, %v", list, err)
+	}
+	if list[0].AmountMicros != 10_000_001 || list[0].TxHash != "stub-shared-10000001" {
+		t.Errorf("unexpected transfer: %+v", list[0])
+	}
+
+	// Both elapsed — txHashes must differ per amount (one shared address).
+	s.now = func() time.Time { return base.Add(3 * time.Minute) }
+	list, err = s.ListTransfers(context.Background(), testAddr, base, hints)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("both hints elapsed: want 2 transfers; got %+v, %v", list, err)
+	}
+	if list[0].TxHash == list[1].TxHash {
+		t.Errorf("stub txHashes collide on a shared address: %q", list[0].TxHash)
+	}
+}
+
 func TestStubPaysAfterDelay(t *testing.T) {
 	s := NewStub(StubConfig{Delay: time.Minute})
 	base := time.Now()

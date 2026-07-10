@@ -1,6 +1,8 @@
 package payment
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -9,23 +11,41 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
-// AdminHandler serves the read-only admin payment-intent views. There are no
-// admin actions here by design: settlement is automatic and the money trail
-// lives in the wallet ledger (finance module); this surface exists for
-// support/monitoring (find a customer's deposit, follow the tx on tronscan).
+// AdminHandler serves the admin payment-intent views plus the shared-address
+// reconciliation queue. Intent settlement stays automatic (no admin actions on
+// intents); the only mutations here are on unmatched deposits — transfers to
+// the shared address the watcher couldn't match, which an admin attributes to
+// a customer (wallet credit) or ignores. The users collection is read directly
+// for email→id resolution (the user package imports payment's dependents, so
+// this keeps the graph acyclic — same pattern as wallet/admin.go).
 type AdminHandler struct {
 	intents *mongo.Collection
+	users   *mongo.Collection
+	svc     *Service
+	rec     audit.Recorder
 }
 
 // RegisterAdminRoutes mounts the admin payment routes onto r (the /api/admin
-// group, guarded by AdminOnly).
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
-	h := &AdminHandler{intents: db.Collection("payment_intents")}
+// group, guarded by AdminOnly; RequireDomain maps GET→payments.view and
+// POST→payments.manage).
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, svc *Service, rec audit.Recorder) {
+	h := &AdminHandler{
+		intents: db.Collection("payment_intents"),
+		users:   db.Collection("users"),
+		svc:     svc,
+		rec:     rec,
+	}
 	r.Get("/payments", h.list)
+	r.Get("/payments/deposits", h.listDeposits)
+	r.Post("/payments/deposits/{id}/attribute", h.attributeDeposit)
+	r.Post("/payments/deposits/{id}/ignore", h.ignoreDeposit)
 	r.Get("/payments/{id}", h.get)
 }
 
@@ -43,7 +63,9 @@ type adminIntentView struct {
 	OrderID     string    `json:"orderId,omitempty"`
 	Network     string    `json:"network"`
 	Address     string    `json:"address"`
+	AddressMode string    `json:"addressMode"`
 	AmountUSD   float64   `json:"amountUsd"`
+	SaltUSD     float64   `json:"saltUsd,omitempty"`
 	ReceivedUSD float64   `json:"receivedUsd"`
 	Status      string    `json:"status"`
 	TxHash      string    `json:"txHash,omitempty"`
@@ -64,12 +86,18 @@ type adminIntentRow struct {
 }
 
 func (row *adminIntentRow) view() adminIntentView {
+	mode := row.AddressMode
+	if mode == "" { // documents that predate shared mode
+		mode = AddressModeDerived
+	}
 	v := adminIntentView{
 		ID:          row.ID.Hex(),
 		UserID:      row.UserID.Hex(),
 		Purpose:     row.Purpose,
 		Network:     row.Network,
 		Address:     row.Address,
+		AddressMode: mode,
+		SaltUSD:     MicrosToUSD(row.AmountSaltMicros),
 		AmountUSD:   MicrosToUSD(row.AmountExpectedMicros),
 		ReceivedUSD: MicrosToUSD(row.AmountReceivedMicros),
 		Status:      string(row.Status),
@@ -183,4 +211,128 @@ func (h *AdminHandler) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.OK(w, rows[0].view())
+}
+
+// adminDepositView is a Deposit with USD amounts for the console.
+type adminDepositView struct {
+	*Deposit
+	AmountUSD float64 `json:"amountUsd"`
+}
+
+func depositView(d *Deposit) adminDepositView {
+	return adminDepositView{Deposit: d, AmountUSD: MicrosToUSD(d.AmountMicros)}
+}
+
+// listDeposits handles GET /api/admin/payments/deposits — the shared-address
+// reconciliation queue, newest first, optional status filter.
+func (h *AdminHandler) listDeposits(w http.ResponseWriter, r *http.Request) {
+	p := pagination.ParseParams(r)
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	deposits, total, err := h.svc.ListDeposits(r.Context(), status, p)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	views := make([]adminDepositView, len(deposits))
+	for i, d := range deposits {
+		views[i] = depositView(d)
+	}
+	response.OKWithMeta(w, views, pagination.CalcMeta(p, total))
+}
+
+// attributeDeposit handles POST /api/admin/payments/deposits/{id}/attribute:
+// credit an unmatched deposit to a customer's wallet. body.user is a user id
+// (hex) or an account email, resolved here.
+func (h *AdminHandler) attributeDeposit(w http.ResponseWriter, r *http.Request) {
+	id, err := bson.ObjectIDFromHex(chi.URLParam(r, "id"))
+	if err != nil {
+		response.NotFound(w)
+		return
+	}
+	var body struct {
+		User string `json:"user"`
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.User) == "" {
+		response.BadRequest(w, "user (id or email) is required")
+		return
+	}
+	userID, err := h.resolveUser(r, strings.TrimSpace(body.User))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "USER_NOT_FOUND", "no user matches that id or email")
+		return
+	}
+
+	d, err := h.svc.AttributeDeposit(r.Context(), id, userID, actorLabel(r), strings.TrimSpace(body.Note))
+	if err != nil {
+		if errors.Is(err, apperrors.ErrConflict) {
+			response.Error(w, http.StatusConflict, "DEPOSIT_NOT_UNMATCHED", "this deposit was already attributed or ignored")
+			return
+		}
+		response.InternalError(w)
+		return
+	}
+	h.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionDepositAttribute,
+		TargetType: "usdt_deposit",
+		TargetID:   id.Hex(),
+		Summary: map[string]any{
+			"txHash": d.TxHash, "amountUsd": MicrosToUSD(d.AmountMicros), "userId": userID.Hex(),
+		},
+	})
+	response.OK(w, depositView(d))
+}
+
+// ignoreDeposit handles POST /api/admin/payments/deposits/{id}/ignore.
+func (h *AdminHandler) ignoreDeposit(w http.ResponseWriter, r *http.Request) {
+	id, err := bson.ObjectIDFromHex(chi.URLParam(r, "id"))
+	if err != nil {
+		response.NotFound(w)
+		return
+	}
+	var body struct {
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	if err := h.svc.IgnoreDeposit(r.Context(), id, actorLabel(r), strings.TrimSpace(body.Note)); err != nil {
+		if errors.Is(err, apperrors.ErrConflict) {
+			response.Error(w, http.StatusConflict, "DEPOSIT_NOT_UNMATCHED", "this deposit was already attributed or ignored")
+			return
+		}
+		response.InternalError(w)
+		return
+	}
+	h.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionDepositIgnore,
+		TargetType: "usdt_deposit",
+		TargetID:   id.Hex(),
+	})
+	response.OK(w, map[string]bool{"ignored": true})
+}
+
+// resolveUser turns an id-hex or email into a user ObjectID.
+func (h *AdminHandler) resolveUser(r *http.Request, ref string) (bson.ObjectID, error) {
+	if id, err := bson.ObjectIDFromHex(ref); err == nil {
+		// Verify it exists so a typo'd hex can't credit a phantom account.
+		err := h.users.FindOne(r.Context(), bson.D{{Key: "_id", Value: id}}).Err()
+		return id, err
+	}
+	var doc struct {
+		ID bson.ObjectID `bson:"_id"`
+	}
+	err := h.users.FindOne(r.Context(),
+		bson.D{{Key: "email", Value: strings.ToLower(ref)}},
+	).Decode(&doc)
+	return doc.ID, err
+}
+
+// actorLabel resolves the acting admin for audit rows.
+func actorLabel(r *http.Request) string {
+	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+		return auth.ActorLabel(claims)
+	}
+	return ""
 }

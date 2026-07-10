@@ -14,6 +14,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/tron"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
+	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
 
 const (
@@ -45,10 +46,15 @@ type OrderSettler interface {
 	FailUnpaidOrder(ctx context.Context, orderID bson.ObjectID, reason string) error
 }
 
-// Config tunes the payment module.
+// Config tunes the payment module. Exactly one of XPub / SharedAddress is set
+// when the feature is on (config.Validate enforces this at boot).
 type Config struct {
-	// XPub is the watch-only account key deposit addresses derive from.
+	// XPub is the watch-only account key deposit addresses derive from
+	// (derived mode: one unique address per intent).
 	XPub string
+	// SharedAddress is the single fixed TRC20 deposit address every intent
+	// shares (shared mode: identity = exact salted amount).
+	SharedAddress string
 	// IntentExpiry is how long a customer has to pay (default 30m).
 	IntentExpiry time.Duration
 	// LateGrace is how long after expiry the watcher keeps scanning an unpaid
@@ -89,8 +95,14 @@ func NewService(store Store, reader tron.Reader, wlt topUpCrediter, ntf notifica
 // both services exist (order needs payment first for intent creation).
 func (s *Service) SetOrderSettler(o OrderSettler) { s.orders = o }
 
-// Enabled reports whether on-chain USDT payments are configured.
-func (s *Service) Enabled() bool { return s.cfg.XPub != "" && s.reader != nil }
+// Enabled reports whether on-chain USDT payments are configured (either mode).
+func (s *Service) Enabled() bool {
+	return (s.cfg.XPub != "" || s.cfg.SharedAddress != "") && s.reader != nil
+}
+
+// sharedMode reports whether NEW intents get the shared address (open intents
+// keep the mode stamped on them regardless).
+func (s *Service) sharedMode() bool { return s.cfg.SharedAddress != "" }
 
 // ExpiryMinutes exposes the configured window for the client config endpoint.
 func (s *Service) ExpiryMinutes() int { return int(s.cfg.IntentExpiry / time.Minute) }
@@ -160,6 +172,18 @@ func (s *Service) createIntent(ctx context.Context, in *Intent, amountUSD float6
 		}
 	}
 
+	now := time.Now().UTC()
+	in.Network = NetworkTRC20
+	in.AmountExpectedMicros = USDToMicros(amountUSD)
+	in.Status = StatusPending
+	in.IdempotencyKey = idemKey
+	in.CreatedAt = now
+	in.ExpiresAt = now.Add(s.cfg.IntentExpiry)
+
+	if s.sharedMode() {
+		return s.insertShared(ctx, in)
+	}
+
 	index, err := s.store.NextDerivationIndex(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("payment: derivation index: %w", err)
@@ -170,16 +194,9 @@ func (s *Service) createIntent(ctx context.Context, in *Intent, amountUSD float6
 	if err != nil {
 		return nil, fmt.Errorf("payment: derive address: %w", err)
 	}
-
-	now := time.Now().UTC()
-	in.Network = NetworkTRC20
+	in.AddressMode = AddressModeDerived
 	in.Address = address
 	in.DerivationIndex = index
-	in.AmountExpectedMicros = USDToMicros(amountUSD)
-	in.Status = StatusPending
-	in.IdempotencyKey = idemKey
-	in.CreatedAt = now
-	in.ExpiresAt = now.Add(s.cfg.IntentExpiry)
 
 	if err := s.store.Insert(ctx, in); err != nil {
 		if errors.Is(err, apperrors.ErrConflict) && idemKey != "" {
@@ -191,6 +208,52 @@ func (s *Service) createIntent(ctx context.Context, in *Intent, amountUSD float6
 		return nil, err
 	}
 	return in, nil
+}
+
+// maxSaltAttempts bounds the shared-mode resalt loop. A conflict needs two
+// open intents landing on the same salted total (cross-base collision) — one
+// retry virtually always clears it; three failures means something is wrong.
+const maxSaltAttempts = 3
+
+// insertShared completes intent creation in shared-address mode: identity is
+// the exact salted amount, so the amount must be unique among OPEN shared
+// intents (enforced by the unique partial sharedOpen index; ErrConflict here
+// after the idempotency re-read means an amount collision → resalt and retry).
+func (s *Service) insertShared(ctx context.Context, in *Intent) (*Intent, error) {
+	base := in.AmountExpectedMicros
+	in.AddressMode = AddressModeShared
+	in.Address = s.cfg.SharedAddress
+	in.SharedOpen = true
+
+	for attempt := 0; attempt < maxSaltAttempts; attempt++ {
+		salt, err := s.store.NextAmountSalt(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("payment: amount salt: %w", err)
+		}
+		in.AmountSaltMicros = salt
+		in.AmountExpectedMicros = base + salt
+
+		err = s.store.Insert(ctx, in)
+		if err == nil {
+			return in, nil
+		}
+		if !errors.Is(err, apperrors.ErrConflict) {
+			return nil, err
+		}
+		// A conflict is either the idempotency race (same as derived mode —
+		// return the winner) or an open-amount collision (fall through to a
+		// fresh salt).
+		if in.IdempotencyKey != "" {
+			if existing, ferr := s.store.GetByIdempotencyKey(ctx, in.UserID, in.IdempotencyKey); ferr == nil {
+				return existing, nil
+			}
+		}
+	}
+	return nil, &apperrors.AppError{
+		Code:    "PAYMENT_BUSY",
+		Message: "could not allocate a unique payment amount — please try again",
+		Err:     apperrors.ErrConflict,
+	}
 }
 
 // GetIntent returns an intent, enforcing ownership (a foreign intent is
@@ -339,4 +402,45 @@ func (s *Service) noteSettleFailure(ctx context.Context, in *Intent, step string
 	_ = s.store.IncSettleAttempts(ctx, in.ID)
 	slog.Error("payment: settlement step failed — intent stays confirming and will retry",
 		"intent", in.ID.Hex(), "purpose", in.Purpose, "step", step, "attempts", in.SettleAttempts+1, "error", err)
+}
+
+// ListDeposits returns the shared-address reconciliation queue for admins.
+func (s *Service) ListDeposits(ctx context.Context, status string, p pagination.Params) ([]*Deposit, int64, error) {
+	return s.store.ListDeposits(ctx, status, p)
+}
+
+// AttributeDeposit credits an unmatched shared-address deposit to a customer's
+// wallet (v1 reconciliation: wallet credit only — the customer re-orders from
+// balance). The atomic unmatched→credited claim blocks two admins crediting
+// different users; the wallet credit dedupes on ref "deposit:"+txHash, so a
+// retry after a crash can never double-credit.
+func (s *Service) AttributeDeposit(ctx context.Context, id, userID bson.ObjectID, adminRef, note string) (*Deposit, error) {
+	d, err := s.store.ClaimDepositAttribution(ctx, id, userID, adminRef, note)
+	if err != nil {
+		return nil, err // ErrConflict = already attributed/ignored (or raced)
+	}
+	if _, err := s.topUpIdempotent(ctx, userID, MicrosToUSD(d.AmountMicros), "deposit:"+d.TxHash); err != nil {
+		// Put the deposit back in the queue so the admin can retry.
+		if rerr := s.store.RevertDepositAttribution(ctx, id); rerr != nil {
+			slog.Error("payment: deposit attribution revert failed — deposit stuck credited without a wallet credit",
+				"deposit", id.Hex(), "tx", d.TxHash, "error", rerr)
+		}
+		return nil, err
+	}
+	s.ntf.Notify(ctx, userID, notification.Note{
+		Kind:  notification.KindPaymentConfirmed,
+		Title: "Funds added to your wallet",
+		Body: fmt.Sprintf("A USDT deposit of $%.2f was matched to your account and added to your wallet.",
+			MicrosToUSD(d.AmountMicros)),
+		Data: map[string]string{
+			"txHash": d.TxHash,
+			"amount": fmt.Sprintf("%.2f", MicrosToUSD(d.AmountMicros)),
+		},
+	})
+	return d, nil
+}
+
+// IgnoreDeposit marks an unmatched deposit ignored (dust/spam/unknown sender).
+func (s *Service) IgnoreDeposit(ctx context.Context, id bson.ObjectID, adminRef, note string) error {
+	return s.store.MarkDepositIgnored(ctx, id, adminRef, note)
 }

@@ -23,6 +23,9 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, svc *S
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("payment: failed to ensure indexes", "error", err)
 	}
+	if err := EnsureDepositIndexes(context.Background(), db); err != nil {
+		slog.Warn("payment: failed to ensure deposit indexes", "error", err)
+	}
 	h := NewHandler(svc)
 
 	limiter := ratelimit.New(ratelimit.Config{Provider: cfg.RateLimitProvider}, db)

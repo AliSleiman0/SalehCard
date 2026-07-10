@@ -177,3 +177,26 @@ real USDT + TRX fees):
 8. Rate limits: 11 rapid intent creations from one IP → 429 on the 11th.
 9. Watcher resilience: restart the API mid-pending-intent → intent still
    confirms after boot (first tick runs immediately).
+
+Items 1–9 above assume DERIVED mode (`USDT_XPUB`). For the shared-address
+launch mode (`USDT_ADDRESS`, one fixed address + salted-amount matching), the
+matrix changes:
+
+10. Shared exact payment: two top-up intents with the SAME base amount ($1)
+    from two accounts → both show the shared address with two DIFFERENT
+    amounts (e.g. 1.000001 / 1.000002); send each exactly → both confirm and
+    credit their exact amounts. The app's amount field must show/copy the full
+    salted value (not "1.00").
+11. Shared wrong amount: send the base $1.00 (salt stripped) → intent stays
+    pending until expiry; the transfer appears in admin → Payments →
+    Unmatched deposits; "Attribute" it to the customer → wallet credited
+    (ledger ref `deposit:<txHash>`), customer push received, audit row
+    `payment.deposit_attribute` written. "Ignore" a dust transfer → status
+    ignored, audit row written.
+12. Shared duplicate amount: after intent A confirms, send the SAME amount
+    again → second transfer lands in Unmatched deposits (never double-credits).
+13. Mode flip: with an open shared intent, flip staging to `USDT_XPUB` (unset
+    `USDT_ADDRESS`) and restart → the open shared intent still confirms when
+    paid (per-intent mode stamp), new intents get unique derived addresses.
+14. Both modes set (`USDT_XPUB` + `USDT_ADDRESS`) → the API refuses to boot
+    with a clear error, in dev too.

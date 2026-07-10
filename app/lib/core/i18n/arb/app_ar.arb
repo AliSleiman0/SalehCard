@@ -291,7 +291,7 @@
   "commonDone": "تم",
   "usdtPayLabel": "الدفع بعملة USDT (كريبتو)",
   "usdtDepositTitle": "إرسال USDT",
-  "usdtSendExactly": "أرسل هذا المبلغ بالضبط إلى العنوان أدناه:",
+  "usdtSendExactly": "أرسل هذا المبلغ بالضبط — كل رقم مهم، وإلا لن تتم مطابقة دفعتك تلقائيًا:",
   "usdtAmountLabel": "المبلغ",
   "usdtAmountCopied": "تم نسخ المبلغ",
   "usdtAddressLabel": "عنوان الإيداع على شبكة {network}",
