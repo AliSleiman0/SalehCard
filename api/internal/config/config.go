@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -163,15 +164,20 @@ type Config struct {
 
 	// BEP20 (BSC) second network — additive to the TRC20 mode above and always
 	// shared-address. Setting USDTBEP20Address enables it; USDTBEP20Provider
-	// selects the chain reader: "etherscan" (real chain, Etherscan V2
-	// multichain API) or "stub" (dev).
+	// selects the chain reader: "jsonrpc" (real chain, free public BSC nodes,
+	// no key), "etherscan" (real chain, Etherscan V2 multichain API — its
+	// FREE tier does not cover BSC, a paid plan is required) or "stub" (dev).
 	USDTBEP20Provider string
 	// USDTBEP20Address is the single fixed BEP20 deposit address every BEP20
 	// intent shares.
 	USDTBEP20Address string
 	// USDTBEP20Contract overrides the token contract (default BSC mainnet USDT).
 	USDTBEP20Contract string
-	// EtherscanAPIKey authenticates Etherscan V2 calls (required in prod).
+	// BSCRPCEndpoints are the public BSC JSON-RPC nodes the jsonrpc provider
+	// reads (CSV; defaults to the canonical free BNB Chain dataseeds).
+	BSCRPCEndpoints []string
+	// EtherscanAPIKey authenticates Etherscan V2 calls (etherscan provider
+	// only; the key must belong to a PAID plan for BSC access).
 	EtherscanAPIKey  string
 	EtherscanBaseURL string
 	// USDTBEP20MinConfirmations gates how settled a BSC transfer must be
@@ -311,9 +317,16 @@ func Load() *Config {
 		USDTLateGrace:     getDuration("USDT_LATE_GRACE", 168*time.Hour),
 		USDTStubDelay:     getDuration("USDT_STUB_DELAY", 15*time.Second),
 
-		USDTBEP20Provider:         getEnv("USDT_BEP20_PROVIDER", "stub"),
-		USDTBEP20Address:          os.Getenv("USDT_BEP20_ADDRESS"),
-		USDTBEP20Contract:         os.Getenv("USDT_BEP20_CONTRACT"), // empty → platform/bsc default
+		USDTBEP20Provider: getEnv("USDT_BEP20_PROVIDER", "stub"),
+		USDTBEP20Address:  os.Getenv("USDT_BEP20_ADDRESS"),
+		USDTBEP20Contract: os.Getenv("USDT_BEP20_CONTRACT"), // empty → platform/bsc default
+		// Defaults are the free nodes verified to serve filtered eth_getLogs
+		// over multi-thousand-block ranges (the canonical bsc-dataseed.*
+		// nodes reject getLogs entirely — see platform/bsc/jsonrpc.go).
+		BSCRPCEndpoints: getCSV("BSC_RPC_ENDPOINTS", []string{
+			"https://rpc-bsc.48.club",
+			"https://bsc-mainnet.nodereal.io/v1/64a9df0874fb4a93b9d0a3849de012d3",
+		}),
 		EtherscanAPIKey:           os.Getenv("ETHERSCAN_API_KEY"),
 		EtherscanBaseURL:          getEnv("ETHERSCAN_BASE_URL", "https://api.etherscan.io/v2/api"),
 		USDTBEP20MinConfirmations: getInt("USDT_BEP20_MIN_CONFIRMATIONS", 15),
@@ -425,10 +438,17 @@ func (c *Config) Validate() error {
 		return errors.New("TRONGRID_API_KEY is required when USDT payments are enabled with the trongrid provider")
 	}
 	if c.USDTBEP20Address != "" && c.USDTBEP20Provider == "stub" {
-		return errors.New("USDT_BEP20_PROVIDER=stub would auto-confirm unpaid USDT payments outside development — set USDT_BEP20_PROVIDER=etherscan or unset USDT_BEP20_ADDRESS")
+		return errors.New("USDT_BEP20_PROVIDER=stub would auto-confirm unpaid USDT payments outside development — set USDT_BEP20_PROVIDER=jsonrpc (or etherscan) or unset USDT_BEP20_ADDRESS")
 	}
 	if c.USDTBEP20Address != "" && c.USDTBEP20Provider == "etherscan" && c.EtherscanAPIKey == "" {
 		return errors.New("ETHERSCAN_API_KEY is required when BEP20 USDT payments are enabled with the etherscan provider")
+	}
+	// A typo'd BEP20 provider would otherwise silently disable the network at
+	// boot (server-side degrade) — fail loud instead, since enabling BEP20 is
+	// exactly an env-flip where a typo is likely. (TRC20's USDT_PROVIDER keeps
+	// its historical degrade behavior; changing that is out of scope here.)
+	if c.USDTBEP20Address != "" && c.USDTBEP20Provider != "jsonrpc" && c.USDTBEP20Provider != "etherscan" {
+		return fmt.Errorf("unknown USDT_BEP20_PROVIDER %q — use jsonrpc (free public BSC nodes) or etherscan (paid plan)", c.USDTBEP20Provider)
 	}
 	if c.Bridge.Stub {
 		return errors.New("BRIDGE_STUB auto-completes recharge orders without a real device — unset it outside development")

@@ -334,6 +334,11 @@ func (s *Server) buildPaymentService(ntf notification.Notifier) *payment.Service
 	if bep20Addr != "" {
 		lister, berr := bsc.New(bsc.Config{
 			Provider: s.cfg.USDTBEP20Provider,
+			JSONRPC: bsc.JSONRPCConfig{
+				Endpoints:        s.cfg.BSCRPCEndpoints,
+				Contract:         s.cfg.USDTBEP20Contract,
+				MinConfirmations: int64(s.cfg.USDTBEP20MinConfirmations),
+			},
 			Etherscan: bsc.EtherscanConfig{
 				BaseURL:          s.cfg.EtherscanBaseURL,
 				APIKey:           s.cfg.EtherscanAPIKey,

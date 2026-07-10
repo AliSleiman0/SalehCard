@@ -63,6 +63,23 @@ func TestValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "prod bep20 jsonrpc needs no key",
+			cfg: Config{Env: "production", JWTSecret: "s", AllowedOrigins: "o",
+				USDTBEP20Address: "0xabc", USDTBEP20Provider: "jsonrpc"},
+			wantErr: false,
+		},
+		{
+			name: "prod bep20 unknown provider refused",
+			cfg: Config{Env: "production", JWTSecret: "s", AllowedOrigins: "o",
+				USDTBEP20Address: "0xabc", USDTBEP20Provider: "jsonrcp"},
+			wantErr: true,
+		},
+		{
+			name:    "development allows an unknown bep20 provider",
+			cfg:     Config{Env: "development", USDTBEP20Address: "0xabc", USDTBEP20Provider: "jsonrcp"},
+			wantErr: false,
+		},
+		{
 			name: "prod both networks valid together",
 			cfg: Config{Env: "production", JWTSecret: "s", AllowedOrigins: "o",
 				USDTAddress: "TAddr", USDTProvider: "trongrid", TronGridAPIKey: "k",
