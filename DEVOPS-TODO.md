@@ -264,3 +264,62 @@ data migration; open shared intents drain through their grace window. Steps:
    Each address needs a little TRX for energy/bandwidth to move USDT out; sweep
    periodically, oldest first. The admin `/payments` page + tronscan links show
    every funded address.
+
+## 15. BEP20 (BSC) second USDT network — prod rollout
+
+Ships DARK: prod behavior is byte-identical until the `USDT_BEP20_*` app
+settings are set. BEP20 is **additive** to the TRC20 mode above (independent —
+either can run alone) and is always shared-address mode: customers pick the
+network at payment time; identity is the same exact-salted-amount scheme,
+scoped per network (compound unique index `network+amountExpectedMicros`).
+BEP20 USDT has **18 decimals** on-chain; the adapter normalizes to micro-USDT.
+
+### Rollout order (prod is live — sequence matters)
+
+1. **Deploy the code FIRST with no new env vars.** Verify prod unchanged
+   (TRC20 boot log line still present, watcher running) and the index
+   migrations applied — on Cosmos run `getIndexes()`:
+   - `payment_intents`: `network_1_amountExpectedMicros_1` (unique partial,
+     sharedOpen) EXISTS and the old `amountExpectedMicros_1` is GONE.
+   - `wallet_transactions`: `method_1_ref_1_usdt_bep20` (unique partial,
+     `method:"usdt_bep20"`) EXISTS next to the original `method_1_ref_1`.
+   ⚠️ If the wallet index was rejected, DO NOT flip the env vars — without it
+   BEP20 settlement retries have no double-credit guard. Fallback: replace
+   both wallet dedup indexes with one `$in`-filtered index and re-verify.
+   Deploy at low traffic: there is an ms-scale drop→create window on the
+   amount-uniqueness index at boot.
+2. Ali creates a free **etherscan.io** account → API key (the V2 multichain
+   API works on the free tier; watcher uses ≤2 calls per 25s tick).
+3. **Confirm the BEP20 address with the client character-for-character**:
+   `0x5e0a66cedc7688aab52c87dc02bff97f6575d7dc` (the BSC address he sent
+   first, before the TRC20 one). Boot validation catches malformed addresses,
+   not wrong-but-valid ones; funds sent to a wrong address are unrecoverable.
+4. Azure App Service app settings on the API:
+   - `USDT_BEP20_PROVIDER=etherscan`  (⚠️ NEVER `stub` in prod — refused at boot)
+   - `USDT_BEP20_ADDRESS=0x5e0a66cedc7688aab52c87dc02bff97f6575d7dc`
+   - `ETHERSCAN_API_KEY=<key>`
+   - optional: `USDT_BEP20_MIN_CONFIRMATIONS` (default 15 ≈ seconds on BSC)
+5. Boot check: a SECOND enable line must appear —
+   `payment: on-chain USDT payments enabled (shared-address mode) provider=etherscan network=bep20 address=0x5e0a...`.
+6. Canary: $1 real BEP20 top-up end-to-end (Binance → BEP20 withdrawal):
+   exact salted amount auto-confirms, ledger row `method=usdt_bep20`,
+   admin intent row shows a BEP20 badge + bscscan links.
+7. Ops notes: the same Unmatched-deposits queue serves both networks (rows
+   carry the network; attribute/ignore unchanged). The app shows a network
+   picker only when BOTH networks are enabled — flipping BEP20 off later
+   hides it again (open BEP20 intents keep settling until you also break
+   the lister; avoid flipping while intents are open, same rule as §14a.5).
+
+## 16. Data hygiene — corrupted legacy `qty` field on one product
+
+`Z3x Samsung (Box or Dongle) Activation` (category `gsm-tool`, prod
+`_id` in the `products` collection) has a legacy `inputFields` entry
+`{key:"qty", type:"quantity", constraints:{min:0,max:0}}` — a known
+migration-import corruption shape (see
+`migration/internal/transform/inputfields.go`'s `corrupt()` check). The
+order-service fix that made quantity-type fields authoritative
+(`api/internal/modules/order/service.go`'s `validateQuantityField`)
+treats `{0,0}` as "no real constraint" so this product stays orderable
+today, but the underlying bad data should still be cleaned up via the
+admin product editor — either remove the bogus `qty` field or set a
+real `{min,max}` range. Low urgency (not currently blocking sales).

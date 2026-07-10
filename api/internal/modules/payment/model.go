@@ -39,9 +39,12 @@ const (
 	StatusExpired    IntentStatus = "expired"
 )
 
-// NetworkTRC20 is the only supported network at launch; the field exists so
-// additional chains slot in without a schema change.
-const NetworkTRC20 = "trc20"
+// Supported networks. TRC20 supports both address modes; BEP20 is
+// shared-address only (no BSC xpub derivation exists).
+const (
+	NetworkTRC20 = "trc20"
+	NetworkBEP20 = "bep20"
+)
 
 // Address modes. Derived = a unique HD address per intent (identity = address).
 // Shared = one fixed deposit address for everyone (identity = exact salted

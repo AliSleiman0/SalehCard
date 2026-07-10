@@ -190,22 +190,19 @@ func (w *Watcher) scanDerived(ctx context.Context, intents []*Intent) {
 }
 
 // scanShared amount-matches shared-address intents: one ListTransfers call
-// per address (in practice exactly one) covers every open intent on it.
+// per (network, address) group (in practice one per enabled network) covers
+// every open intent on it. Each network resolves its own transfer lister, so
+// TRC20 and BEP20 scan independently within the same tick.
 func (w *Watcher) scanShared(ctx context.Context, intents []*Intent) {
 	if len(intents) == 0 {
 		return
 	}
-	lister, ok := w.svc.reader.(tron.TransferLister)
-	if !ok { // cannot happen with the built-in adapters
-		slog.Error("payment: chain reader cannot list transfers — shared-address intents cannot settle")
-		return
-	}
 	groups := map[string][]*Intent{}
 	for _, in := range intents {
-		groups[in.Address] = append(groups[in.Address], in)
+		groups[in.Network+"|"+in.Address] = append(groups[in.Network+"|"+in.Address], in)
 	}
 	first := true
-	for addr, group := range groups {
+	for _, group := range groups {
 		if ctx.Err() != nil {
 			return
 		}
@@ -217,16 +214,25 @@ func (w *Watcher) scanShared(ctx context.Context, intents []*Intent) {
 			}
 		}
 		first = false
-		w.scanSharedGroup(ctx, lister, addr, group)
+		network, addr := group[0].Network, group[0].Address
+		lister := w.svc.listerFor(network)
+		if lister == nil {
+			// A network flipped off (or a reader that can't list) with open
+			// intents still in their window — they drain via expiry/grace.
+			slog.Error("payment: no transfer lister for network — its shared-address intents cannot settle",
+				"network", network)
+			continue
+		}
+		w.scanSharedGroup(ctx, lister, network, addr, group)
 	}
 }
 
-// scanSharedGroup matches one shared address's transfers to its open intents.
+// scanSharedGroup matches one network+address's transfers to its open intents.
 // Matching is strict: exact salted amount AND the transfer is not older than
 // the intent (an already-consumed transfer must never match a NEW intent that
 // later reused the amount slot). Everything else lands in the reconciliation
 // queue as an unmatched deposit.
-func (w *Watcher) scanSharedGroup(ctx context.Context, lister tron.TransferLister, addr string, group []*Intent) {
+func (w *Watcher) scanSharedGroup(ctx context.Context, lister tron.TransferLister, network, addr string, group []*Intent) {
 	since := group[0].CreatedAt
 	hints := make([]tron.AmountHint, 0, len(group))
 	byAmount := make(map[int64]*Intent, len(group))
@@ -251,7 +257,7 @@ func (w *Watcher) scanSharedGroup(ctx context.Context, lister tron.TransferListe
 	for i := range transfers {
 		hashes[i] = transfers[i].TxHash
 	}
-	known, err := w.svc.store.FilterKnownTxHashes(ctx, NetworkTRC20, hashes)
+	known, err := w.svc.store.FilterKnownTxHashes(ctx, network, hashes)
 	if err != nil {
 		slog.Error("payment: filter known tx hashes failed", "address", addr, "error", err)
 		return
@@ -273,7 +279,7 @@ func (w *Watcher) scanSharedGroup(ctx context.Context, lister tron.TransferListe
 			continue
 		}
 		if err := w.svc.store.RecordUnmatchedDeposit(ctx, &Deposit{
-			Network:      NetworkTRC20,
+			Network:      network,
 			TxHash:       p.TxHash,
 			FromAddress:  p.From,
 			ToAddress:    addr,
@@ -283,7 +289,7 @@ func (w *Watcher) scanSharedGroup(ctx context.Context, lister tron.TransferListe
 			slog.Error("payment: record unmatched deposit failed", "tx", p.TxHash, "error", err)
 		} else {
 			slog.Info("payment: unmatched shared-address deposit recorded",
-				"tx", p.TxHash, "from", p.From, "amountMicros", p.AmountMicros)
+				"network", network, "tx", p.TxHash, "from", p.From, "amountMicros", p.AmountMicros)
 		}
 	}
 }

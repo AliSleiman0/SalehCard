@@ -39,6 +39,9 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   final _noteController = TextEditingController();
   double? _selectedPreset = 50;
   String _channel = 'whish';
+  // On-chain USDT network pick; empty = the server's default. Only offered
+  // when the config lists more than one network.
+  String _usdtNetwork = '';
 
   @override
   void initState() {
@@ -79,7 +82,10 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       final config = await ref.read(paymentConfigProvider.future);
       if (!mounted) return;
       if (config.usdtEnabled) {
-        await _submitUsdtIntent(amount, l10n);
+        // A stale pick (network no longer offered) falls back to the default.
+        final network =
+            config.networks.contains(_usdtNetwork) ? _usdtNetwork : '';
+        await _submitUsdtIntent(amount, l10n, network);
         return;
       }
     }
@@ -114,10 +120,14 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   }
 
   /// Creates an on-chain USDT top-up intent and pushes the deposit screen.
-  Future<void> _submitUsdtIntent(double amount, AppLocalizations l10n) async {
+  Future<void> _submitUsdtIntent(
+    double amount,
+    AppLocalizations l10n,
+    String network,
+  ) async {
     final intent = await ref
         .read(createTopUpIntentControllerProvider.notifier)
-        .submit(amount, idempotencyKey: newIdempotencyKey());
+        .submit(amount, idempotencyKey: newIdempotencyKey(), network: network);
     if (!mounted) return;
     if (intent != null) {
       context.push('/payments/usdt-deposit', extra: intent);
@@ -151,6 +161,10 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
         ref.watch(createTopUpIntentControllerProvider).submitting;
     final requestsAsync = ref.watch(topUpRequestsProvider);
     final amount = _amount;
+    final paymentConfig = ref.watch(paymentConfigProvider).asData?.value;
+    final usdtNetworks = (paymentConfig?.usdtEnabled ?? false)
+        ? paymentConfig!.networks
+        : const <String>[];
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -224,6 +238,35 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                         ),
                     ],
                   ),
+                  if (_channel == 'usdt' && usdtNetworks.length > 1) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.usdtNetworkLabel,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: colors.text,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final network in usdtNetworks)
+                          _ChannelChip(
+                            label: network.toUpperCase(),
+                            icon: Icons.hub_rounded,
+                            selected: (_usdtNetwork.isEmpty
+                                    ? usdtNetworks.first
+                                    : _usdtNetwork) ==
+                                network,
+                            onTap: () =>
+                                setState(() => _usdtNetwork = network),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   _NoteField(controller: _noteController),
                   const SizedBox(height: 26),

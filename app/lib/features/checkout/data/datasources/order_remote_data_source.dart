@@ -69,6 +69,8 @@ class OrderRemoteDataSource {
       ],
       'currency': input.currency,
       'paymentMethod': input.paymentMethod,
+      if (input.paymentMethod == 'usdt' && input.usdtNetwork.isNotEmpty)
+        'usdtNetwork': input.usdtNetwork,
       if (input.promoCode != null && input.promoCode!.isNotEmpty)
         'promoCode': input.promoCode,
     };

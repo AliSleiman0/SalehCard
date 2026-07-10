@@ -192,11 +192,15 @@ class PlaceOrderInput {
     required this.items,
     required this.paymentMethod,
     this.currency = 'USD',
+    this.usdtNetwork = '',
     this.promoCode,
   });
 
   final List<PlaceOrderLine> items;
   final String paymentMethod; // wallet | card | usdt
   final String currency;
+
+  /// On-chain network for usdt orders (trc20/bep20); empty = server default.
+  final String usdtNetwork;
   final String? promoCode;
 }

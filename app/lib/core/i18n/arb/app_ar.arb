@@ -78,6 +78,14 @@
   "fromLabel": "يبدأ من",
   "chooseAmount": "اختر المبلغ",
   "quantityLabel": "الكمية",
+  "qtyTotalLine": "{count} × {unitPrice} = {total}",
+  "@qtyTotalLine": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "unitPrice": { "type": "String" },
+      "total": { "type": "String" }
+    }
+  },
   "requiredBadge": "مطلوب",
   "ratingsCount": "({count} تقييم)",
   "@ratingsCount": {
@@ -312,5 +320,6 @@
   "usdtConfirmedTitle": "تم تأكيد الدفع",
   "usdtConfirmedBody": "تم تأكيد دفعتك بعملة USDT.",
   "usdtExpiredTitle": "انتهت مهلة الدفع",
-  "usdtExpiredBody": "لم يتم استلام أي دفعة في الوقت المحدد. ابدأ من جديد للحصول على عنوان جديد."
+  "usdtExpiredBody": "لم يتم استلام أي دفعة في الوقت المحدد. ابدأ من جديد للحصول على عنوان جديد.",
+  "usdtNetworkLabel": "الشبكة"
 }

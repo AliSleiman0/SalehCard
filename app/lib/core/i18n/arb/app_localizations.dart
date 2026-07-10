@@ -494,6 +494,12 @@ abstract class AppLocalizations {
   /// **'Quantity'**
   String get quantityLabel;
 
+  /// No description provided for @qtyTotalLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} × {unitPrice} = {total}'**
+  String qtyTotalLine(int count, String unitPrice, String total);
+
   /// No description provided for @requiredBadge.
   ///
   /// In en, this message translates to:
@@ -1633,6 +1639,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No payment was received in time. Start again to get a fresh address.'**
   String get usdtExpiredBody;
+
+  /// No description provided for @usdtNetworkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get usdtNetworkLabel;
 }
 
 class _AppLocalizationsDelegate

@@ -46,15 +46,19 @@ type OrderSettler interface {
 	FailUnpaidOrder(ctx context.Context, orderID bson.ObjectID, reason string) error
 }
 
-// Config tunes the payment module. Exactly one of XPub / SharedAddress is set
-// when the feature is on (config.Validate enforces this at boot).
+// Config tunes the payment module. For TRC20, exactly one of XPub /
+// SharedAddress is set when the network is on (config.Validate enforces this
+// at boot); BEP20 is additive and shared-mode only.
 type Config struct {
 	// XPub is the watch-only account key deposit addresses derive from
-	// (derived mode: one unique address per intent).
+	// (TRC20 derived mode: one unique address per intent).
 	XPub string
-	// SharedAddress is the single fixed TRC20 deposit address every intent
-	// shares (shared mode: identity = exact salted amount).
+	// SharedAddress is the single fixed TRC20 deposit address every TRC20
+	// intent shares (shared mode: identity = exact salted amount).
 	SharedAddress string
+	// BEP20SharedAddress is the single fixed BEP20 (BSC) deposit address;
+	// setting it enables the second network (always shared mode).
+	BEP20SharedAddress string
 	// IntentExpiry is how long a customer has to pay (default 30m).
 	IntentExpiry time.Duration
 	// LateGrace is how long after expiry the watcher keeps scanning an unpaid
@@ -67,15 +71,16 @@ type Config struct {
 // Service orchestrates intent creation and settlement.
 type Service struct {
 	store  Store
-	reader tron.Reader
+	reader tron.Reader        // TRC20 chain reader (both address modes)
+	bep20  tron.TransferLister // BEP20 shared-address lister; nil when the network is off
 	wallet topUpCrediter
 	orders OrderSettler // nil until SetOrderSettler; nil-checked in settle
 	ntf    notification.Notifier
 	cfg    Config
 }
 
-// NewService constructs the payment service.
-func NewService(store Store, reader tron.Reader, wlt topUpCrediter, ntf notification.Notifier, cfg Config) *Service {
+// NewService constructs the payment service. bep20 may be nil (BEP20 off).
+func NewService(store Store, reader tron.Reader, bep20 tron.TransferLister, wlt topUpCrediter, ntf notification.Notifier, cfg Config) *Service {
 	if cfg.IntentExpiry <= 0 {
 		cfg.IntentExpiry = defaultIntentExpiry
 	}
@@ -88,42 +93,109 @@ func NewService(store Store, reader tron.Reader, wlt topUpCrediter, ntf notifica
 	if ntf == nil {
 		ntf = notification.Nop{}
 	}
-	return &Service{store: store, reader: reader, wallet: wlt, ntf: ntf, cfg: cfg}
+	return &Service{store: store, reader: reader, bep20: bep20, wallet: wlt, ntf: ntf, cfg: cfg}
 }
 
 // SetOrderSettler wires the order-fulfillment port. Called once at boot after
 // both services exist (order needs payment first for intent creation).
 func (s *Service) SetOrderSettler(o OrderSettler) { s.orders = o }
 
-// Enabled reports whether on-chain USDT payments are configured (either mode).
-func (s *Service) Enabled() bool {
+// trc20Enabled reports whether the TRC20 network is configured (either mode).
+func (s *Service) trc20Enabled() bool {
 	return (s.cfg.XPub != "" || s.cfg.SharedAddress != "") && s.reader != nil
 }
 
-// sharedMode reports whether NEW intents get the shared address (open intents
-// keep the mode stamped on them regardless).
+// bep20Enabled reports whether the BEP20 network is configured (shared only).
+func (s *Service) bep20Enabled() bool {
+	return s.cfg.BEP20SharedAddress != "" && s.bep20 != nil
+}
+
+// Enabled reports whether on-chain USDT payments are configured on any network.
+func (s *Service) Enabled() bool { return s.trc20Enabled() || s.bep20Enabled() }
+
+// Networks lists the enabled networks, TRC20 first (it doubles as the default
+// for clients that predate network selection).
+func (s *Service) Networks() []string {
+	var out []string
+	if s.trc20Enabled() {
+		out = append(out, NetworkTRC20)
+	}
+	if s.bep20Enabled() {
+		out = append(out, NetworkBEP20)
+	}
+	return out
+}
+
+// DefaultNetwork is what an intent created without an explicit network gets
+// (old-app compatibility). Empty when the feature is off.
+func (s *Service) DefaultNetwork() string {
+	if n := s.Networks(); len(n) > 0 {
+		return n[0]
+	}
+	return ""
+}
+
+// SupportsNetwork reports whether new intents may be created on network.
+func (s *Service) SupportsNetwork(network string) bool {
+	switch network {
+	case NetworkTRC20:
+		return s.trc20Enabled()
+	case NetworkBEP20:
+		return s.bep20Enabled()
+	}
+	return false
+}
+
+// listerFor returns the shared-address transfer lister for network (nil when
+// that network can't list — logged and skipped by the watcher).
+func (s *Service) listerFor(network string) tron.TransferLister {
+	switch network {
+	case NetworkTRC20:
+		if l, ok := s.reader.(tron.TransferLister); ok {
+			return l
+		}
+	case NetworkBEP20:
+		return s.bep20
+	}
+	return nil
+}
+
+// methodForNetwork maps an intent/deposit network to its wallet-ledger method
+// (each method carries its own unique (method, ref) dedup index).
+func methodForNetwork(network string) string {
+	if network == NetworkBEP20 {
+		return "usdt_bep20"
+	}
+	return "usdt_trc20"
+}
+
+// sharedMode reports whether NEW TRC20 intents get the shared address (open
+// intents keep the mode stamped on them regardless).
 func (s *Service) sharedMode() bool { return s.cfg.SharedAddress != "" }
 
 // ExpiryMinutes exposes the configured window for the client config endpoint.
 func (s *Service) ExpiryMinutes() int { return int(s.cfg.IntentExpiry / time.Minute) }
 
-// CreateTopUpIntent opens an on-chain top-up intent for the user.
-func (s *Service) CreateTopUpIntent(ctx context.Context, userID bson.ObjectID, amountUSD float64, idemKey string) (*Intent, error) {
+// CreateTopUpIntent opens an on-chain top-up intent for the user. An empty
+// network means the default (old-app compatibility).
+func (s *Service) CreateTopUpIntent(ctx context.Context, userID bson.ObjectID, amountUSD float64, network, idemKey string) (*Intent, error) {
 	return s.createIntent(ctx, &Intent{
 		UserID:  userID,
 		Purpose: PurposeTopUp,
+		Network: network,
 	}, amountUSD, idemKey)
 }
 
 // CreateOrderIntent opens the payment intent for a just-placed usdt order.
 // PlaceOrder's own Idempotency-Key dedup covers retries at the order level, so
 // the intent derives its key from the order id (one live intent per order).
-func (s *Service) CreateOrderIntent(ctx context.Context, userID, orderID bson.ObjectID, amountUSD float64) (*Intent, error) {
+func (s *Service) CreateOrderIntent(ctx context.Context, userID, orderID bson.ObjectID, amountUSD float64, network string) (*Intent, error) {
 	oid := orderID
 	return s.createIntent(ctx, &Intent{
 		UserID:  userID,
 		Purpose: PurposeOrder,
 		OrderID: &oid,
+		Network: network,
 	}, amountUSD, "order:"+orderID.Hex())
 }
 
@@ -137,6 +209,16 @@ func (s *Service) createIntent(ctx context.Context, in *Intent, amountUSD float6
 	}
 	if amountUSD <= 0 {
 		return nil, &apperrors.AppError{Code: "BAD_REQUEST", Message: "amount must be positive", Err: apperrors.ErrBadRequest}
+	}
+	if in.Network == "" {
+		in.Network = s.DefaultNetwork()
+	}
+	if !s.SupportsNetwork(in.Network) {
+		return nil, &apperrors.AppError{
+			Code:    "BAD_REQUEST",
+			Message: fmt.Sprintf("unsupported payment network %q", in.Network),
+			Err:     apperrors.ErrBadRequest,
+		}
 	}
 	if amountUSD > maxIntentUSD {
 		return nil, &apperrors.AppError{
@@ -173,14 +255,21 @@ func (s *Service) createIntent(ctx context.Context, in *Intent, amountUSD float6
 	}
 
 	now := time.Now().UTC()
-	in.Network = NetworkTRC20
 	in.AmountExpectedMicros = USDToMicros(amountUSD)
 	in.Status = StatusPending
 	in.IdempotencyKey = idemKey
 	in.CreatedAt = now
 	in.ExpiresAt = now.Add(s.cfg.IntentExpiry)
 
+	// BEP20 is shared-mode only; TRC20 shares when configured that way. The
+	// per-network deposit address is decided HERE — insertShared is
+	// address-agnostic.
+	if in.Network == NetworkBEP20 {
+		in.Address = s.cfg.BEP20SharedAddress
+		return s.insertShared(ctx, in)
+	}
 	if s.sharedMode() {
+		in.Address = s.cfg.SharedAddress
 		return s.insertShared(ctx, in)
 	}
 
@@ -215,17 +304,18 @@ func (s *Service) createIntent(ctx context.Context, in *Intent, amountUSD float6
 // retry virtually always clears it; three failures means something is wrong.
 const maxSaltAttempts = 3
 
-// insertShared completes intent creation in shared-address mode: identity is
-// the exact salted amount, so the amount must be unique among OPEN shared
-// intents (enforced by the unique partial sharedOpen index; ErrConflict here
-// after the idempotency re-read means an amount collision → resalt and retry).
+// insertShared completes intent creation in shared-address mode (the caller
+// has set the per-network Address): identity is the exact salted amount, so
+// the amount must be unique among OPEN shared intents on the intent's network
+// (enforced by the unique partial (network, amount) sharedOpen index;
+// ErrConflict here after the idempotency re-read means an amount collision →
+// resalt and retry).
 func (s *Service) insertShared(ctx context.Context, in *Intent) (*Intent, error) {
 	base := in.AmountExpectedMicros
 	in.AddressMode = AddressModeShared
-	in.Address = s.cfg.SharedAddress
 	in.SharedOpen = true
 
-	for attempt := 0; attempt < maxSaltAttempts; attempt++ {
+	for range maxSaltAttempts {
 		salt, err := s.store.NextAmountSalt(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("payment: amount salt: %w", err)
@@ -311,7 +401,7 @@ func (s *Service) settle(ctx context.Context, in *Intent) error {
 			// Over-payment: credit the excess (idempotent by ref, so a crash
 			// after fulfillment retries safely through this same path).
 			if excess := in.AmountReceivedMicros - in.AmountExpectedMicros; excess >= excessCreditMinMicros {
-				if _, cerr := s.topUpIdempotent(ctx, in.UserID, MicrosToUSD(excess), in.ID.Hex()+":excess"); cerr != nil {
+				if _, cerr := s.topUpIdempotent(ctx, in.UserID, MicrosToUSD(excess), methodForNetwork(in.Network), in.ID.Hex()+":excess"); cerr != nil {
 					s.noteSettleFailure(ctx, in, "credit excess", cerr)
 					return cerr
 				}
@@ -361,7 +451,7 @@ func (s *Service) settle(ctx context.Context, in *Intent) error {
 // no reversal: the retry's credit dedupes on ref and only the mark re-runs.
 func (s *Service) creditWallet(ctx context.Context, in *Intent, micros int64, ref, settlement string) error {
 	if micros > 0 { // defensive; claims require amount > 0
-		if _, err := s.topUpIdempotent(ctx, in.UserID, MicrosToUSD(micros), ref); err != nil {
+		if _, err := s.topUpIdempotent(ctx, in.UserID, MicrosToUSD(micros), methodForNetwork(in.Network), ref); err != nil {
 			s.noteSettleFailure(ctx, in, "wallet credit", err)
 			return err
 		}
@@ -375,11 +465,11 @@ func (s *Service) creditWallet(ctx context.Context, in *Intent, micros int64, re
 
 // topUpIdempotent credits via wallet.TopUp, treating a duplicate ledger ref as
 // success: wallet_transactions carries a unique partial index on (method, ref)
-// for usdt_trc20 rows, so a settlement retry that already credited hits the
-// duplicate, TopUp's own compensation reverses the second balance bump, and we
-// proceed as done.
-func (s *Service) topUpIdempotent(ctx context.Context, userID bson.ObjectID, amount float64, ref string) (*wallet.WalletTransaction, error) {
-	tx, err := s.wallet.TopUp(ctx, userID, amount, "usdt_trc20", ref)
+// per on-chain USDT method (usdt_trc20 / usdt_bep20), so a settlement retry
+// that already credited hits the duplicate, TopUp's own compensation reverses
+// the second balance bump, and we proceed as done.
+func (s *Service) topUpIdempotent(ctx context.Context, userID bson.ObjectID, amount float64, method, ref string) (*wallet.WalletTransaction, error) {
+	tx, err := s.wallet.TopUp(ctx, userID, amount, method, ref)
 	if err != nil && mongo.IsDuplicateKeyError(err) {
 		return nil, nil // already credited on a prior attempt
 	}
@@ -419,7 +509,7 @@ func (s *Service) AttributeDeposit(ctx context.Context, id, userID bson.ObjectID
 	if err != nil {
 		return nil, err // ErrConflict = already attributed/ignored (or raced)
 	}
-	if _, err := s.topUpIdempotent(ctx, userID, MicrosToUSD(d.AmountMicros), "deposit:"+d.TxHash); err != nil {
+	if _, err := s.topUpIdempotent(ctx, userID, MicrosToUSD(d.AmountMicros), methodForNetwork(d.Network), "deposit:"+d.TxHash); err != nil {
 		// Put the deposit back in the queue so the admin can retry.
 		if rerr := s.store.RevertDepositAttribution(ctx, id); rerr != nil {
 			slog.Error("payment: deposit attribution revert failed — deposit stuck credited without a wallet credit",

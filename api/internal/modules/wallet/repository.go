@@ -49,9 +49,13 @@ func NewMongoRepository(db *mongo.Database) *MongoRepository {
 	}
 }
 
-// EnsureIndexes creates the indexes the wallet ledger relies on.
+// EnsureIndexes creates the indexes the wallet ledger relies on. Indexes are
+// created ONE BY ONE (not CreateMany): a conflict on one — e.g. a dev DB
+// carrying a same-name method_1_ref_1 with a different partial filter from
+// another branch — must not silently skip the others (the bep20 dedup index
+// is a double-credit guard; boot only warn-logs this error).
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
-	_, err := db.Collection("wallet_transactions").Indexes().CreateMany(ctx, []mongo.IndexModel{
+	models := []mongo.IndexModel{
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}},
 		// One on-chain settlement credit per payment-intent ref: the payment
 		// module's watcher retries settlement until it succeeds, and this
@@ -64,8 +68,26 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 				SetUnique(true).
 				SetPartialFilterExpression(bson.D{{Key: "method", Value: "usdt_trc20"}}),
 		},
-	})
-	return err
+		// Same dedup guard for the BEP20 network's credits. A second index
+		// (not one $in filter) because equality is the partial-filter operator
+		// already proven on the target Cosmos vCore by the index above; same
+		// keys need an explicit distinct name.
+		{
+			Keys: bson.D{{Key: "method", Value: 1}, {Key: "ref", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetName("method_1_ref_1_usdt_bep20").
+				SetPartialFilterExpression(bson.D{{Key: "method", Value: "usdt_bep20"}}),
+		},
+	}
+	col := db.Collection("wallet_transactions")
+	var firstErr error
+	for _, m := range models {
+		if _, err := col.Indexes().CreateOne(ctx, m); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 // Create inserts a ledger row, stamping CreatedAt.

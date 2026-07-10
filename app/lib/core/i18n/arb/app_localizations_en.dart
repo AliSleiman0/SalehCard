@@ -215,6 +215,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quantityLabel => 'Quantity';
 
   @override
+  String qtyTotalLine(int count, String unitPrice, String total) {
+    return '$count × $unitPrice = $total';
+  }
+
+  @override
   String get requiredBadge => 'Required';
 
   @override
@@ -849,4 +854,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get usdtExpiredBody =>
       'No payment was received in time. Start again to get a fresh address.';
+
+  @override
+  String get usdtNetworkLabel => 'Network';
 }

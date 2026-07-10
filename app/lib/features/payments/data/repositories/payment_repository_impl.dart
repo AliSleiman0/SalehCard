@@ -23,11 +23,13 @@ class PaymentRepositoryImpl implements PaymentRepository {
   Future<Either<Failure, PaymentIntent>> createTopUpIntent(
     double amount, {
     required String idempotencyKey,
+    String network = '',
   }) async {
     try {
       final dto = await _remote.createTopUpIntent(
         amount,
         idempotencyKey: idempotencyKey,
+        network: network,
       );
       return Right(dto.toEntity());
     } catch (error) {

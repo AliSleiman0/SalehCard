@@ -130,5 +130,8 @@ type PlaceOrderInput struct {
 	Items         []PlaceOrderItemInput `json:"items"`
 	Currency      string                `json:"currency"`
 	PaymentMethod PaymentMethod         `json:"paymentMethod"`
-	PromoCode     string                `json:"promoCode,omitempty"`
+	// UsdtNetwork picks the on-chain network for a usdt order (trc20/bep20);
+	// empty means the payment module's default (old-app compatibility).
+	UsdtNetwork string `json:"usdtNetwork,omitempty"`
+	PromoCode   string `json:"promoCode,omitempty"`
 }

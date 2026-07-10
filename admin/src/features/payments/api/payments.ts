@@ -110,6 +110,12 @@ export function ignoreDeposit(
   return apiClient.post<{ ignored: boolean }>(`${ADMIN}/deposits/${id}/ignore`, body)
 }
 
-/** Tronscan deep links for a transaction / address (mainnet). */
-export const tronscanTx = (hash: string) => `https://tronscan.org/#/transaction/${hash}`
-export const tronscanAddress = (addr: string) => `https://tronscan.org/#/address/${addr}`
+/** Chain-explorer deep links, network-aware (trc20 → Tronscan, bep20 → BscScan). */
+export const explorerTx = (network: string, hash: string) =>
+  network === 'bep20'
+    ? `https://bscscan.com/tx/${hash}`
+    : `https://tronscan.org/#/transaction/${hash}`
+export const explorerAddress = (network: string, addr: string) =>
+  network === 'bep20'
+    ? `https://bscscan.com/address/${addr}`
+    : `https://tronscan.org/#/address/${addr}`

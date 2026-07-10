@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,16 +18,29 @@ import (
 // fakeUSDT is the order module's view of the payment service (usdtIntents port).
 type fakeUSDT struct {
 	enabled   bool
+	networks  []string // SupportsNetwork allowlist; nil = only trc20
 	createErr error
 	intents   map[bson.ObjectID]*payment.Intent // keyed by orderID
 	created   []bson.ObjectID
+	networkIn []string // networks passed to CreateOrderIntent, in order
 }
 
 func (f *fakeUSDT) Enabled() bool { return f.enabled }
 
-func (f *fakeUSDT) CreateOrderIntent(_ context.Context, userID, orderID bson.ObjectID, amountUSD float64) (*payment.Intent, error) {
+func (f *fakeUSDT) SupportsNetwork(network string) bool {
+	nets := f.networks
+	if nets == nil {
+		nets = []string{payment.NetworkTRC20}
+	}
+	return slices.Contains(nets, network)
+}
+
+func (f *fakeUSDT) CreateOrderIntent(_ context.Context, userID, orderID bson.ObjectID, amountUSD float64, network string) (*payment.Intent, error) {
 	if f.createErr != nil {
 		return nil, f.createErr
+	}
+	if network == "" {
+		network = payment.NetworkTRC20
 	}
 	oid := orderID
 	in := &payment.Intent{
@@ -34,7 +48,7 @@ func (f *fakeUSDT) CreateOrderIntent(_ context.Context, userID, orderID bson.Obj
 		UserID:               userID,
 		Purpose:              payment.PurposeOrder,
 		OrderID:              &oid,
-		Network:              payment.NetworkTRC20,
+		Network:              network,
 		Address:              "TDepositAddrForOrder0000000000000",
 		AmountExpectedMicros: payment.USDToMicros(amountUSD),
 		Status:               payment.StatusPending,
@@ -44,6 +58,7 @@ func (f *fakeUSDT) CreateOrderIntent(_ context.Context, userID, orderID bson.Obj
 	}
 	f.intents[orderID] = in
 	f.created = append(f.created, orderID)
+	f.networkIn = append(f.networkIn, network)
 	return in, nil
 }
 
@@ -110,6 +125,55 @@ func assertUnavailable(t *testing.T, err error) {
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
 	assert.Equal(t, "PAYMENT_METHOD_UNAVAILABLE", appErr.Code)
+}
+
+func TestPlaceOrder_USDT_NetworkThreadThrough(t *testing.T) {
+	p := codeProduct(10, nil)
+
+	t.Run("explicit bep20 reaches the intent", func(t *testing.T) {
+		codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+		svc, _ := newSUT(p, codeSvc, &fakeWalletSvc{balance: 0})
+		fu := &fakeUSDT{enabled: true, networks: []string{payment.NetworkTRC20, payment.NetworkBEP20}}
+		svc.usdt = fu
+
+		order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+			Items: []PlaceOrderItemInput{itemFor(p, 1)}, PaymentMethod: PaymentMethodUSDT,
+			UsdtNetwork: payment.NetworkBEP20,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, OrderStatusPending, order.Status)
+		require.Len(t, fu.networkIn, 1)
+		assert.Equal(t, payment.NetworkBEP20, fu.networkIn[0])
+	})
+
+	t.Run("unsupported network rejected before the order is persisted", func(t *testing.T) {
+		codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+		svc, repo := newSUT(p, codeSvc, &fakeWalletSvc{balance: 0})
+		svc.usdt = &fakeUSDT{enabled: true} // trc20 only
+
+		_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+			Items: []PlaceOrderItemInput{itemFor(p, 1)}, PaymentMethod: PaymentMethodUSDT,
+			UsdtNetwork: payment.NetworkBEP20,
+		})
+		var appErr *apperrors.AppError
+		require.ErrorAs(t, err, &appErr)
+		assert.Equal(t, "BAD_REQUEST", appErr.Code)
+		assert.Empty(t, repo.byID, "a bad network must not create an order row")
+	})
+
+	t.Run("empty network passes through as default", func(t *testing.T) {
+		codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
+		svc, _ := newSUT(p, codeSvc, &fakeWalletSvc{balance: 0})
+		fu := &fakeUSDT{enabled: true}
+		svc.usdt = fu
+
+		_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+			Items: []PlaceOrderItemInput{itemFor(p, 1)}, PaymentMethod: PaymentMethodUSDT,
+		})
+		require.NoError(t, err)
+		require.Len(t, fu.networkIn, 1)
+		assert.Equal(t, payment.NetworkTRC20, fu.networkIn[0], "fake defaults empty to trc20")
+	})
 }
 
 func TestPlaceOrder_USDT_IntentCreateFailureMarksOrderFailed(t *testing.T) {

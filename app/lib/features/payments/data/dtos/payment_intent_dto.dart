@@ -64,23 +64,34 @@ class PaymentConfigDto {
   const PaymentConfigDto({
     this.usdtEnabled = false,
     this.network = 'trc20',
+    this.networks = const [],
     this.expiryMinutes = 30,
   });
 
   final bool usdtEnabled;
   final String network;
+  final List<String> networks;
   final int expiryMinutes;
 
-  factory PaymentConfigDto.fromJson(Map<String, dynamic> json) =>
-      PaymentConfigDto(
-        usdtEnabled: json['usdtEnabled'] as bool? ?? false,
-        network: json['network'] as String? ?? 'trc20',
-        expiryMinutes: (json['expiryMinutes'] as num?)?.toInt() ?? 30,
-      );
+  factory PaymentConfigDto.fromJson(Map<String, dynamic> json) {
+    final network = json['network'] as String? ?? 'trc20';
+    return PaymentConfigDto(
+      usdtEnabled: json['usdtEnabled'] as bool? ?? false,
+      network: network,
+      // Servers that predate multi-network omit the list — fall back to the
+      // single default network.
+      networks: (json['networks'] as List<dynamic>?)
+              ?.whereType<String>()
+              .toList() ??
+          [network],
+      expiryMinutes: (json['expiryMinutes'] as num?)?.toInt() ?? 30,
+    );
+  }
 
   PaymentConfig toEntity() => PaymentConfig(
         usdtEnabled: usdtEnabled,
         network: network,
+        networks: networks.isEmpty ? [network] : networks,
         expiryMinutes: expiryMinutes,
       );
 }

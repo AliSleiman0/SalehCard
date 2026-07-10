@@ -160,6 +160,23 @@ type Config struct {
 	USDTLateGrace time.Duration
 	// USDTStubDelay is the stub reader's auto-pay delay (dev only).
 	USDTStubDelay time.Duration
+
+	// BEP20 (BSC) second network — additive to the TRC20 mode above and always
+	// shared-address. Setting USDTBEP20Address enables it; USDTBEP20Provider
+	// selects the chain reader: "etherscan" (real chain, Etherscan V2
+	// multichain API) or "stub" (dev).
+	USDTBEP20Provider string
+	// USDTBEP20Address is the single fixed BEP20 deposit address every BEP20
+	// intent shares.
+	USDTBEP20Address string
+	// USDTBEP20Contract overrides the token contract (default BSC mainnet USDT).
+	USDTBEP20Contract string
+	// EtherscanAPIKey authenticates Etherscan V2 calls (required in prod).
+	EtherscanAPIKey  string
+	EtherscanBaseURL string
+	// USDTBEP20MinConfirmations gates how settled a BSC transfer must be
+	// before it counts (default 15 ≈ seconds).
+	USDTBEP20MinConfirmations int
 	// Rate limiting on payment-intent creation (burns HD addresses) and status
 	// polling (the app polls every ~7s ≈ 9/min; 60 leaves headroom).
 	RateLimitPaymentCreateMax    int
@@ -294,6 +311,13 @@ func Load() *Config {
 		USDTLateGrace:     getDuration("USDT_LATE_GRACE", 168*time.Hour),
 		USDTStubDelay:     getDuration("USDT_STUB_DELAY", 15*time.Second),
 
+		USDTBEP20Provider:         getEnv("USDT_BEP20_PROVIDER", "stub"),
+		USDTBEP20Address:          os.Getenv("USDT_BEP20_ADDRESS"),
+		USDTBEP20Contract:         os.Getenv("USDT_BEP20_CONTRACT"), // empty → platform/bsc default
+		EtherscanAPIKey:           os.Getenv("ETHERSCAN_API_KEY"),
+		EtherscanBaseURL:          getEnv("ETHERSCAN_BASE_URL", "https://api.etherscan.io/v2/api"),
+		USDTBEP20MinConfirmations: getInt("USDT_BEP20_MIN_CONFIRMATIONS", 15),
+
 		RateLimitPaymentCreateMax:    getInt("RATE_LIMIT_PAYMENT_CREATE_MAX", 10),
 		RateLimitPaymentCreateWindow: getDuration("RATE_LIMIT_PAYMENT_CREATE_WINDOW", time.Minute),
 		RateLimitPaymentPollMax:      getInt("RATE_LIMIT_PAYMENT_POLL_MAX", 60),
@@ -399,6 +423,12 @@ func (c *Config) Validate() error {
 	}
 	if c.USDTProvider == "trongrid" && usdtOn && c.TronGridAPIKey == "" {
 		return errors.New("TRONGRID_API_KEY is required when USDT payments are enabled with the trongrid provider")
+	}
+	if c.USDTBEP20Address != "" && c.USDTBEP20Provider == "stub" {
+		return errors.New("USDT_BEP20_PROVIDER=stub would auto-confirm unpaid USDT payments outside development — set USDT_BEP20_PROVIDER=etherscan or unset USDT_BEP20_ADDRESS")
+	}
+	if c.USDTBEP20Address != "" && c.USDTBEP20Provider == "etherscan" && c.EtherscanAPIKey == "" {
+		return errors.New("ETHERSCAN_API_KEY is required when BEP20 USDT payments are enabled with the etherscan provider")
 	}
 	if c.Bridge.Stub {
 		return errors.New("BRIDGE_STUB auto-completes recharge orders without a real device — unset it outside development")

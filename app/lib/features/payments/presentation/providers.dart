@@ -49,15 +49,18 @@ class CreateTopUpIntentController extends Notifier<CreateTopUpIntentState> {
 
   /// Creates an on-chain top-up intent. Returns it on success (the caller then
   /// navigates to the deposit screen), or `null` on failure (via [state]).
+  /// An empty [network] lets the server pick its default.
   Future<PaymentIntent?> submit(
     double amount, {
     required String idempotencyKey,
+    String network = '',
   }) async {
     if (state.submitting) return null;
     state = const CreateTopUpIntentState(submitting: true);
     final result = await ref.read(paymentRepositoryProvider).createTopUpIntent(
           amount,
           idempotencyKey: idempotencyKey,
+          network: network,
         );
     return result.match(
       (failure) {

@@ -10,6 +10,7 @@ abstract class PaymentRepository {
   Future<Either<Failure, PaymentIntent>> createTopUpIntent(
     double amount, {
     required String idempotencyKey,
+    String network = '',
   });
 
   Future<Either<Failure, PaymentIntent>> getIntent(String id);

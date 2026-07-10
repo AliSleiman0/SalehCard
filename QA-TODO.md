@@ -200,3 +200,19 @@ matrix changes:
     paid (per-intent mode stamp), new intents get unique derived addresses.
 14. Both modes set (`USDT_XPUB` + `USDT_ADDRESS`) → the API refuses to boot
     with a clear error, in dev too.
+15. BEP20 second network (stub e2e, dev): enable both networks
+    (`USDT_ADDRESS` + `USDT_BEP20_ADDRESS`, both providers stub) → top-up
+    screen and checkout show a TRC20/BEP20 picker; a BEP20 top-up shows the
+    0x address + salted amount and auto-confirms; a BEP20 order fulfills;
+    same base amount open on both networks settles each side correctly.
+16. BEP20 picker hidden when single-network: TRC20-only config → no picker
+    anywhere, flows byte-identical to today. Old-app compat: POST
+    /payments/usdt/topup-intents WITHOUT `network` → trc20 intent.
+17. BEP20 unmatched deposit: send a wrong amount to the BEP20 address →
+    appears in Unmatched deposits with a BEP20 badge + bscscan link;
+    Attribute credits the wallet (ledger method `usdt_bep20`); a repeat
+    attribute attempt conflicts (no double credit).
+18. BEP20 real-money matrix (prod canary, mirrors items 10–12 on BSC):
+    exact salted payment auto-confirms; base-without-salt lands unmatched;
+    duplicate amount after confirm lands unmatched. ~ $0.3-1 Binance BEP20
+    withdrawal fee per test; funds land in the CLIENT's BSC wallet.
