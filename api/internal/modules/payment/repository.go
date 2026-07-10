@@ -119,6 +119,10 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	// BEFORE CreateMany, or the options conflict fails the whole batch and
 	// silently skips the other new indexes (routes.go only warn-logs).
 	_ = col.Indexes().DropOne(ctx, "address_1")
+	// One-time migration for multi-network shared mode: the open-amount
+	// uniqueness guard was originally global; it is now compound with network
+	// so the same salted amount may be open on TRC20 and BEP20 at once.
+	_ = col.Indexes().DropOne(ctx, "amountExpectedMicros_1")
 
 	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
@@ -140,12 +144,14 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 				SetUnique(true).
 				SetPartialFilterExpression(bson.D{{Key: "addressMode", Value: AddressModeDerived}}),
 		},
-		// Shared-mode collision guard: no two OPEN shared intents may expect
-		// the same amount — exact-amount matching is only unambiguous under
-		// this invariant. $exists is the same partial-filter operator the
-		// other partial indexes here already rely on.
+		// Shared-mode collision guard: no two OPEN shared intents ON THE SAME
+		// NETWORK may expect the same amount — exact-amount matching is only
+		// unambiguous under this invariant, and each network's transfers are
+		// matched against its own intents only. $exists is the same
+		// partial-filter operator the other partial indexes here already rely
+		// on.
 		{
-			Keys: bson.D{{Key: "amountExpectedMicros", Value: 1}},
+			Keys: bson.D{{Key: "network", Value: 1}, {Key: "amountExpectedMicros", Value: 1}},
 			Options: options.Index().
 				SetUnique(true).
 				SetPartialFilterExpression(bson.D{{Key: "sharedOpen", Value: bson.D{{Key: "$exists", Value: true}}}}),

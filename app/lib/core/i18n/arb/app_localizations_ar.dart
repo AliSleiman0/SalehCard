@@ -212,6 +212,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get quantityLabel => 'الكمية';
 
   @override
+  String qtyTotalLine(int count, String unitPrice, String total) {
+    return '$count × $unitPrice = $total';
+  }
+
+  @override
   String get requiredBadge => 'مطلوب';
 
   @override
@@ -847,4 +852,7 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get usdtExpiredBody =>
       'لم يتم استلام أي دفعة في الوقت المحدد. ابدأ من جديد للحصول على عنوان جديد.';
+
+  @override
+  String get usdtNetworkLabel => 'الشبكة';
 }

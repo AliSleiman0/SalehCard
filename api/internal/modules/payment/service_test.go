@@ -54,11 +54,11 @@ func (f *fakeStore) Insert(_ context.Context, in *Intent) error {
 			}
 		}
 	}
-	// Mirror the unique partial sharedOpen index: no two OPEN shared intents
-	// may expect the same amount.
+	// Mirror the unique partial (network, sharedOpen) index: no two OPEN
+	// shared intents ON THE SAME NETWORK may expect the same amount.
 	if in.SharedOpen {
 		for _, e := range f.intents {
-			if e.SharedOpen && e.AmountExpectedMicros == in.AmountExpectedMicros {
+			if e.SharedOpen && e.Network == in.Network && e.AmountExpectedMicros == in.AmountExpectedMicros {
 				return apperrors.ErrConflict
 			}
 		}
@@ -495,7 +495,7 @@ func newTestEnv(t *testing.T, cfg Config) *testEnv {
 		settler:  newFakeSettler(),
 		notifier: &fakeNotifier{},
 	}
-	e.svc = NewService(e.store, tron.NewStub(tron.StubConfig{Delay: time.Hour}), e.crediter, e.notifier, cfg)
+	e.svc = NewService(e.store, tron.NewStub(tron.StubConfig{Delay: time.Hour}), nil, e.crediter, e.notifier, cfg)
 	e.svc.SetOrderSettler(e.settler)
 	return e
 }
@@ -506,7 +506,7 @@ func (e *testEnv) claimedOrderIntent(t *testing.T, expectedMicros, receivedMicro
 	t.Helper()
 	userID := bson.NewObjectID()
 	orderID := bson.NewObjectID()
-	in, err := e.svc.CreateOrderIntent(context.Background(), userID, orderID, MicrosToUSD(expectedMicros))
+	in, err := e.svc.CreateOrderIntent(context.Background(), userID, orderID, MicrosToUSD(expectedMicros), "")
 	if err != nil {
 		t.Fatalf("CreateOrderIntent: %v", err)
 	}
@@ -568,7 +568,7 @@ func TestCreateTopUpIntent(t *testing.T) {
 	t.Run("happy path derives a unique address per intent", func(t *testing.T) {
 		e := newTestEnv(t, Config{})
 		userA := bson.NewObjectID()
-		a, err := e.svc.CreateTopUpIntent(ctx, userA, 25, "")
+		a, err := e.svc.CreateTopUpIntent(ctx, userA, 25, "", "")
 		if err != nil {
 			t.Fatalf("CreateTopUpIntent: %v", err)
 		}
@@ -584,7 +584,7 @@ func TestCreateTopUpIntent(t *testing.T) {
 		if a.AddressMode != AddressModeDerived || a.SharedOpen {
 			t.Errorf("derived intent not stamped: mode=%q sharedOpen=%v", a.AddressMode, a.SharedOpen)
 		}
-		b, err := e.svc.CreateTopUpIntent(ctx, userA, 25, "")
+		b, err := e.svc.CreateTopUpIntent(ctx, userA, 25, "", "")
 		if err != nil {
 			t.Fatalf("second intent: %v", err)
 		}
@@ -595,8 +595,8 @@ func TestCreateTopUpIntent(t *testing.T) {
 
 	t.Run("disabled service refuses", func(t *testing.T) {
 		e := &testEnv{store: newFakeStore(), crediter: newFakeCrediter(), notifier: &fakeNotifier{}}
-		e.svc = NewService(e.store, tron.NewStub(tron.StubConfig{}), e.crediter, e.notifier, Config{XPub: ""})
-		_, err := e.svc.CreateTopUpIntent(ctx, bson.NewObjectID(), 25, "")
+		e.svc = NewService(e.store, tron.NewStub(tron.StubConfig{}), nil, e.crediter, e.notifier, Config{XPub: ""})
+		_, err := e.svc.CreateTopUpIntent(ctx, bson.NewObjectID(), 25, "", "")
 		var appErr *apperrors.AppError
 		if !errors.As(err, &appErr) || appErr.Code != "PAYMENT_METHOD_UNAVAILABLE" {
 			t.Fatalf("want PAYMENT_METHOD_UNAVAILABLE, got %v", err)
@@ -606,7 +606,7 @@ func TestCreateTopUpIntent(t *testing.T) {
 	t.Run("amount bounds", func(t *testing.T) {
 		e := newTestEnv(t, Config{})
 		for _, amount := range []float64{0, -5, maxIntentUSD + 1} {
-			if _, err := e.svc.CreateTopUpIntent(ctx, bson.NewObjectID(), amount, ""); err == nil {
+			if _, err := e.svc.CreateTopUpIntent(ctx, bson.NewObjectID(), amount, "", ""); err == nil {
 				t.Errorf("amount %v accepted", amount)
 			}
 		}
@@ -615,11 +615,11 @@ func TestCreateTopUpIntent(t *testing.T) {
 	t.Run("idempotency key replays the same intent", func(t *testing.T) {
 		e := newTestEnv(t, Config{})
 		userID := bson.NewObjectID()
-		a, err := e.svc.CreateTopUpIntent(ctx, userID, 25, "key-1")
+		a, err := e.svc.CreateTopUpIntent(ctx, userID, 25, "", "key-1")
 		if err != nil {
 			t.Fatal(err)
 		}
-		b, err := e.svc.CreateTopUpIntent(ctx, userID, 25, "key-1")
+		b, err := e.svc.CreateTopUpIntent(ctx, userID, 25, "", "key-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -632,11 +632,11 @@ func TestCreateTopUpIntent(t *testing.T) {
 		e := newTestEnv(t, Config{MaxPending: 2})
 		userID := bson.NewObjectID()
 		for i := range 2 {
-			if _, err := e.svc.CreateTopUpIntent(ctx, userID, 10, fmt.Sprintf("k%d", i)); err != nil {
+			if _, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "", fmt.Sprintf("k%d", i)); err != nil {
 				t.Fatal(err)
 			}
 		}
-		_, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "k-final")
+		_, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "", "k-final")
 		var appErr *apperrors.AppError
 		if !errors.As(err, &appErr) || appErr.Code != "TOO_MANY_PENDING" {
 			t.Fatalf("want TOO_MANY_PENDING, got %v", err)
@@ -647,7 +647,7 @@ func TestCreateTopUpIntent(t *testing.T) {
 func TestGetIntentOwnership(t *testing.T) {
 	e := newTestEnv(t, Config{})
 	owner := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), owner, 25, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), owner, 25, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -662,7 +662,7 @@ func TestGetIntentOwnership(t *testing.T) {
 func TestSettleTopUp(t *testing.T) {
 	e := newTestEnv(t, Config{})
 	userID := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), userID, 25, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), userID, 25, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -794,7 +794,7 @@ func TestSettleOrder(t *testing.T) {
 func TestSettleRetryDoesNotDoubleCredit(t *testing.T) {
 	e := newTestEnv(t, Config{})
 	userID := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), userID, 25, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), userID, 25, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -826,6 +826,9 @@ func TestSettleRetryDoesNotDoubleCredit(t *testing.T) {
 // testSharedAddr is a valid TRON mainnet address for shared-mode tests.
 const testSharedAddr = "TLRaHegyg2grMQqX85nJyCzbdRtvM5nCDn"
 
+// testBEP20Addr is a valid BSC address for second-network tests.
+const testBEP20Addr = "0x5e0a66cedc7688aab52c87dc02bff97f6575d7dc"
+
 // newSharedTestEnv wires a service in shared-address mode (no xpub).
 func newSharedTestEnv(t *testing.T, cfg Config) *testEnv {
 	t.Helper()
@@ -836,7 +839,7 @@ func newSharedTestEnv(t *testing.T, cfg Config) *testEnv {
 		settler:  newFakeSettler(),
 		notifier: &fakeNotifier{},
 	}
-	e.svc = NewService(e.store, tron.NewStub(tron.StubConfig{Delay: time.Hour}), e.crediter, e.notifier, cfg)
+	e.svc = NewService(e.store, tron.NewStub(tron.StubConfig{Delay: time.Hour}), nil, e.crediter, e.notifier, cfg)
 	e.svc.SetOrderSettler(e.settler)
 	return e
 }
@@ -846,7 +849,7 @@ func TestCreateTopUpIntentShared(t *testing.T) {
 	e := newSharedTestEnv(t, Config{})
 	userID := bson.NewObjectID()
 
-	a, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "")
+	a, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "", "")
 	if err != nil {
 		t.Fatalf("CreateTopUpIntent: %v", err)
 	}
@@ -861,7 +864,7 @@ func TestCreateTopUpIntentShared(t *testing.T) {
 	}
 
 	// Same base amount → same address, DIFFERENT salted total.
-	b, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "")
+	b, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "", "")
 	if err != nil {
 		t.Fatalf("second intent: %v", err)
 	}
@@ -882,7 +885,7 @@ func TestSharedResaltOnCollision(t *testing.T) {
 	e := newSharedTestEnv(t, Config{})
 	userID := bson.NewObjectID()
 
-	a, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "") // salt 1 → 10_000_001
+	a, err := e.svc.CreateTopUpIntent(ctx, userID, 10, "", "") // salt 1 → 10_000_001
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -890,7 +893,7 @@ func TestSharedResaltOnCollision(t *testing.T) {
 		t.Fatalf("precondition: intent A amount = %d, want 10000001", a.AmountExpectedMicros)
 	}
 
-	b, err := e.svc.CreateTopUpIntent(ctx, userID, 9.999999, "") // salt 2 collides → resalt to 3
+	b, err := e.svc.CreateTopUpIntent(ctx, userID, 9.999999, "", "") // salt 2 collides → resalt to 3
 	if err != nil {
 		t.Fatalf("resalt should have recovered the collision: %v", err)
 	}
@@ -907,18 +910,33 @@ func TestEnabledMatrix(t *testing.T) {
 	stub := tron.NewStub(tron.StubConfig{Delay: time.Hour})
 
 	cases := []struct {
-		name    string
-		svc     *Service
-		enabled bool
+		name     string
+		svc      *Service
+		enabled  bool
+		networks []string
 	}{
-		{"xpub only", NewService(store, stub, crediter, ntf, Config{XPub: testXPub(t)}), true},
-		{"shared address only", NewService(store, stub, crediter, ntf, Config{SharedAddress: testSharedAddr}), true},
-		{"neither", NewService(store, stub, crediter, ntf, Config{}), false},
-		{"nil reader", NewService(store, nil, crediter, ntf, Config{SharedAddress: testSharedAddr}), false},
+		{"xpub only", NewService(store, stub, nil, crediter, ntf, Config{XPub: testXPub(t)}), true, []string{NetworkTRC20}},
+		{"shared address only", NewService(store, stub, nil, crediter, ntf, Config{SharedAddress: testSharedAddr}), true, []string{NetworkTRC20}},
+		{"neither", NewService(store, stub, nil, crediter, ntf, Config{}), false, nil},
+		{"nil reader", NewService(store, nil, nil, crediter, ntf, Config{SharedAddress: testSharedAddr}), false, nil},
+		{"bep20 only", NewService(store, nil, stub, crediter, ntf, Config{BEP20SharedAddress: testBEP20Addr}), true, []string{NetworkBEP20}},
+		{"bep20 address without lister", NewService(store, stub, nil, crediter, ntf, Config{BEP20SharedAddress: testBEP20Addr}), false, nil},
+		{"both networks", NewService(store, stub, stub, crediter, ntf, Config{SharedAddress: testSharedAddr, BEP20SharedAddress: testBEP20Addr}), true, []string{NetworkTRC20, NetworkBEP20}},
 	}
 	for _, c := range cases {
 		if got := c.svc.Enabled(); got != c.enabled {
 			t.Errorf("%s: Enabled() = %v, want %v", c.name, got, c.enabled)
+		}
+		got := c.svc.Networks()
+		if len(got) != len(c.networks) {
+			t.Errorf("%s: Networks() = %v, want %v", c.name, got, c.networks)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.networks[i] {
+				t.Errorf("%s: Networks() = %v, want %v", c.name, got, c.networks)
+				break
+			}
 		}
 	}
 }
@@ -1044,4 +1062,155 @@ func TestAttributeDeposit(t *testing.T) {
 			t.Errorf("attribute after ignore: want ErrConflict, got %v", err)
 		}
 	})
+}
+
+// --- BEP20 second network ------------------------------------------------
+
+// newDualNetworkTestEnv wires a service with BOTH shared networks enabled
+// (the same stub serves as TRC20 reader and BEP20 lister).
+func newDualNetworkTestEnv(t *testing.T) *testEnv {
+	t.Helper()
+	e := &testEnv{
+		store:    newFakeStore(),
+		crediter: newFakeCrediter(),
+		settler:  newFakeSettler(),
+		notifier: &fakeNotifier{},
+	}
+	stub := tron.NewStub(tron.StubConfig{Delay: time.Hour})
+	e.svc = NewService(e.store, stub, stub, e.crediter, e.notifier,
+		Config{SharedAddress: testSharedAddr, BEP20SharedAddress: testBEP20Addr})
+	e.svc.SetOrderSettler(e.settler)
+	return e
+}
+
+func TestCreateTopUpIntentBEP20(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("bep20 intent gets the BEP20 address, shared mode, salt", func(t *testing.T) {
+		e := newDualNetworkTestEnv(t)
+		in, err := e.svc.CreateTopUpIntent(ctx, bson.NewObjectID(), 10, NetworkBEP20, "")
+		if err != nil {
+			t.Fatalf("CreateTopUpIntent: %v", err)
+		}
+		if in.Network != NetworkBEP20 || in.Address != testBEP20Addr || in.AddressMode != AddressModeShared || !in.SharedOpen {
+			t.Errorf("bep20 intent not stamped: %+v", in)
+		}
+		if in.AmountSaltMicros < 1 || in.AmountSaltMicros > saltRange {
+			t.Errorf("salt %d outside 1..%d", in.AmountSaltMicros, saltRange)
+		}
+		if in.AmountExpectedMicros != 10_000_000+in.AmountSaltMicros {
+			t.Errorf("amount %d != base 10000000 + salt %d", in.AmountExpectedMicros, in.AmountSaltMicros)
+		}
+	})
+
+	t.Run("empty network defaults to trc20 with the TRC20 address", func(t *testing.T) {
+		e := newDualNetworkTestEnv(t)
+		in, err := e.svc.CreateTopUpIntent(ctx, bson.NewObjectID(), 10, "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if in.Network != NetworkTRC20 || in.Address != testSharedAddr {
+			t.Errorf("default network intent: %+v", in)
+		}
+	})
+
+	t.Run("unsupported network refused", func(t *testing.T) {
+		e := newDualNetworkTestEnv(t)
+		_, err := e.svc.CreateTopUpIntent(ctx, bson.NewObjectID(), 10, "erc20", "")
+		var appErr *apperrors.AppError
+		if !errors.As(err, &appErr) || appErr.Code != "BAD_REQUEST" {
+			t.Fatalf("want BAD_REQUEST, got %v", err)
+		}
+	})
+
+	t.Run("bep20 refused when only trc20 is configured", func(t *testing.T) {
+		e := newSharedTestEnv(t, Config{})
+		_, err := e.svc.CreateTopUpIntent(ctx, bson.NewObjectID(), 10, NetworkBEP20, "")
+		var appErr *apperrors.AppError
+		if !errors.As(err, &appErr) || appErr.Code != "BAD_REQUEST" {
+			t.Fatalf("want BAD_REQUEST, got %v", err)
+		}
+	})
+}
+
+// TestSharedAmountUniquenessIsPerNetwork mirrors the compound
+// (network, amountExpectedMicros) index semantics: the same open salted amount
+// may coexist across networks but not within one.
+func TestSharedAmountUniquenessIsPerNetwork(t *testing.T) {
+	f := newFakeStore()
+	mk := func(network string, amount int64) *Intent {
+		return &Intent{
+			UserID: bson.NewObjectID(), Purpose: PurposeTopUp, Network: network,
+			AddressMode: AddressModeShared, SharedOpen: true,
+			AmountExpectedMicros: amount, Status: StatusPending,
+		}
+	}
+	if err := f.Insert(context.Background(), mk(NetworkTRC20, 10_000_001)); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Insert(context.Background(), mk(NetworkBEP20, 10_000_001)); err != nil {
+		t.Errorf("same amount on the OTHER network must be allowed: %v", err)
+	}
+	if err := f.Insert(context.Background(), mk(NetworkBEP20, 10_000_001)); !errors.Is(err, apperrors.ErrConflict) {
+		t.Errorf("same amount on the SAME network must conflict, got %v", err)
+	}
+}
+
+// TestBEP20SettleUsesBEP20Method: a settled BEP20 top-up must land in the
+// ledger under usdt_bep20 (its own dedup index), not usdt_trc20.
+func TestBEP20SettleUsesBEP20Method(t *testing.T) {
+	ctx := context.Background()
+	e := newDualNetworkTestEnv(t)
+	userID := bson.NewObjectID()
+	in, err := e.svc.CreateTopUpIntent(ctx, userID, 25, NetworkBEP20, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := e.store.ClaimPaymentSeen(ctx, in.ID, "0xdeadbeef", "0xSender", in.AmountExpectedMicros)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.settle(ctx, claimed); err != nil {
+		t.Fatalf("settle: %v", err)
+	}
+	if len(e.crediter.calls) != 1 || e.crediter.calls[0].Method != "usdt_bep20" {
+		t.Errorf("credits: %+v, want one usdt_bep20 credit", e.crediter.calls)
+	}
+	if got := e.store.get(t, in.ID); got.Status != StatusConfirmed || got.Settlement != SettlementWalletTopUp {
+		t.Errorf("intent after settle: %+v", got)
+	}
+}
+
+// TestAttributeDepositBEP20: attributing a bep20 unmatched deposit credits
+// under the bep20 ledger method.
+func TestAttributeDepositBEP20(t *testing.T) {
+	ctx := context.Background()
+	e := newDualNetworkTestEnv(t)
+	userID := bson.NewObjectID()
+	d := &Deposit{
+		Network:      NetworkBEP20,
+		TxHash:       "0xstray",
+		FromAddress:  "0xSender",
+		ToAddress:    testBEP20Addr,
+		AmountMicros: 3_000_000,
+		BlockTime:    time.Now().UTC(),
+	}
+	if err := e.store.RecordUnmatchedDeposit(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	list, _, err := e.store.ListDeposits(ctx, DepositUnmatched, pagination.Params{Limit: 10})
+	if err != nil || len(list) != 1 {
+		t.Fatalf("seed: %v, %d deposits", err, len(list))
+	}
+	out, err := e.svc.AttributeDeposit(ctx, list[0].ID, userID, "admin@test", "")
+	if err != nil {
+		t.Fatalf("AttributeDeposit: %v", err)
+	}
+	if out.Status != DepositCredited {
+		t.Errorf("status = %s, want credited", out.Status)
+	}
+	if len(e.crediter.calls) != 1 || e.crediter.calls[0].Method != "usdt_bep20" ||
+		e.crediter.calls[0].Ref != "deposit:0xstray" {
+		t.Errorf("credits: %+v", e.crediter.calls)
+	}
 }

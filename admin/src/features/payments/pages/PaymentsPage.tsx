@@ -20,8 +20,8 @@ import {
   useIgnoreDeposit,
 } from '../hooks/usePayments'
 import {
-  tronscanAddress,
-  tronscanTx,
+  explorerAddress,
+  explorerTx,
   type PaymentIntentStatus,
   type PaymentPurpose,
   type DepositStatus,
@@ -187,11 +187,11 @@ function IntentsView() {
                   style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: 12.5 }}
                   className="faint"
                 >
-                  <a href={tronscanAddress(r.address)} target="_blank" rel="noreferrer" title={r.address}>
+                  <a href={explorerAddress(r.network, r.address)} target="_blank" rel="noreferrer" title={r.address}>
                     {short(r.address)} ↗
                   </a>
                   {r.txHash && (
-                    <a href={tronscanTx(r.txHash)} target="_blank" rel="noreferrer" title={r.txHash}>
+                    <a href={explorerTx(r.network, r.txHash)} target="_blank" rel="noreferrer" title={r.txHash}>
                       tx {short(r.txHash)} ↗
                     </a>
                   )}
@@ -287,7 +287,7 @@ function DepositsView() {
                   style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: 12.5, alignItems: 'center' }}
                   className="faint"
                 >
-                  <a href={tronscanTx(d.txHash)} target="_blank" rel="noreferrer" title={d.txHash}>
+                  <a href={explorerTx(d.network, d.txHash)} target="_blank" rel="noreferrer" title={d.txHash}>
                     tx {short(d.txHash)} ↗
                   </a>
                   <span title={d.fromAddress}>from {short(d.fromAddress)}</span>

@@ -78,6 +78,14 @@
   "fromLabel": "from",
   "chooseAmount": "Choose amount",
   "quantityLabel": "Quantity",
+  "qtyTotalLine": "{count} × {unitPrice} = {total}",
+  "@qtyTotalLine": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "unitPrice": { "type": "String" },
+      "total": { "type": "String" }
+    }
+  },
   "requiredBadge": "Required",
   "ratingsCount": "({count} ratings)",
   "@ratingsCount": {
@@ -312,5 +320,6 @@
   "usdtConfirmedTitle": "Payment confirmed",
   "usdtConfirmedBody": "Your USDT payment was confirmed.",
   "usdtExpiredTitle": "Payment window expired",
-  "usdtExpiredBody": "No payment was received in time. Start again to get a fresh address."
+  "usdtExpiredBody": "No payment was received in time. Start again to get a fresh address.",
+  "usdtNetworkLabel": "Network"
 }

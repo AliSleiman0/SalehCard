@@ -79,7 +79,7 @@ func newWatcherEnv(t *testing.T, cfg Config) (*testEnv, *fakeReader, *Watcher) {
 		notifier: &fakeNotifier{},
 	}
 	reader := newFakeReader()
-	e.svc = NewService(e.store, reader, e.crediter, e.notifier, cfg)
+	e.svc = NewService(e.store, reader, nil, e.crediter, e.notifier, cfg)
 	e.svc.SetOrderSettler(e.settler)
 	return e, reader, NewWatcher(e.svc, time.Minute)
 }
@@ -95,7 +95,7 @@ func newSharedWatcherEnv(t *testing.T, cfg Config) (*testEnv, *fakeReader, *Watc
 		notifier: &fakeNotifier{},
 	}
 	reader := newFakeReader()
-	e.svc = NewService(e.store, reader, e.crediter, e.notifier, cfg)
+	e.svc = NewService(e.store, reader, nil, e.crediter, e.notifier, cfg)
 	e.svc.SetOrderSettler(e.settler)
 	return e, reader, NewWatcher(e.svc, time.Minute)
 }
@@ -113,7 +113,7 @@ func unmatchedCount(t *testing.T, e *testEnv) int {
 func TestWatcherTickScanClaimSettle(t *testing.T) {
 	e, reader, w := newWatcherEnv(t, Config{})
 	userID := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), userID, 25, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), userID, 25, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestWatcherTickScanClaimSettle(t *testing.T) {
 func TestWatcherExpiryFailsOrderIntent(t *testing.T) {
 	e, _, w := newWatcherEnv(t, Config{IntentExpiry: time.Nanosecond})
 	userID, orderID := bson.NewObjectID(), bson.NewObjectID()
-	in, err := e.svc.CreateOrderIntent(context.Background(), userID, orderID, 50)
+	in, err := e.svc.CreateOrderIntent(context.Background(), userID, orderID, 50, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestWatcherExpiryFailsOrderIntent(t *testing.T) {
 func TestWatcherLatePaymentCreditsWallet(t *testing.T) {
 	e, reader, w := newWatcherEnv(t, Config{IntentExpiry: time.Nanosecond})
 	userID, orderID := bson.NewObjectID(), bson.NewObjectID()
-	in, err := e.svc.CreateOrderIntent(context.Background(), userID, orderID, 50)
+	in, err := e.svc.CreateOrderIntent(context.Background(), userID, orderID, 50, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,11 +196,11 @@ func TestWatcherLatePaymentCreditsWallet(t *testing.T) {
 func TestWatcherReaderErrorDoesNotAbortTick(t *testing.T) {
 	e, reader, w := newWatcherEnv(t, Config{})
 	u := bson.NewObjectID()
-	broken, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "k1")
+	broken, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	healthy, err := e.svc.CreateTopUpIntent(context.Background(), u, 20, "k2")
+	healthy, err := e.svc.CreateTopUpIntent(context.Background(), u, 20, "", "k2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestWatcherReaderErrorDoesNotAbortTick(t *testing.T) {
 func TestWatcherRetriesStuckSettlement(t *testing.T) {
 	e, reader, w := newWatcherEnv(t, Config{})
 	userID := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), userID, 25, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), userID, 25, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,11 +247,11 @@ func TestWatcherRetriesStuckSettlement(t *testing.T) {
 func TestWatcherDuplicateTxHashClaimConflict(t *testing.T) {
 	e, reader, w := newWatcherEnv(t, Config{})
 	u := bson.NewObjectID()
-	a, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "ka")
+	a, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "ka")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "kb")
+	b, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "kb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,11 +282,11 @@ func TestWatcherSharedExactMatchSettles(t *testing.T) {
 	e, reader, w := newSharedWatcherEnv(t, Config{})
 	u := bson.NewObjectID()
 	// Two intents with the SAME base amount — distinguished only by salt.
-	a, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "ka")
+	a, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "ka")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "kb")
+	b, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "kb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +313,7 @@ func TestWatcherSharedExactMatchSettles(t *testing.T) {
 func TestWatcherSharedNonMatchingGoesUnmatched(t *testing.T) {
 	e, reader, w := newSharedWatcherEnv(t, Config{})
 	u := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestWatcherSharedNonMatchingGoesUnmatched(t *testing.T) {
 func TestWatcherSharedDuplicateEqualTransfer(t *testing.T) {
 	e, reader, w := newSharedWatcherEnv(t, Config{})
 	u := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestWatcherSharedDuplicateEqualTransfer(t *testing.T) {
 func TestWatcherSharedLatePaymentCreditsWallet(t *testing.T) {
 	e, reader, w := newSharedWatcherEnv(t, Config{IntentExpiry: time.Nanosecond})
 	u, orderID := bson.NewObjectID(), bson.NewObjectID()
-	in, err := e.svc.CreateOrderIntent(context.Background(), u, orderID, 50)
+	in, err := e.svc.CreateOrderIntent(context.Background(), u, orderID, 50, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +401,7 @@ func TestWatcherSharedLatePaymentCreditsWallet(t *testing.T) {
 func TestWatcherSharedBlockTimeGuard(t *testing.T) {
 	e, reader, w := newSharedWatcherEnv(t, Config{})
 	u := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +424,7 @@ func TestWatcherMixedModesInOneTick(t *testing.T) {
 	e, reader, w := newSharedWatcherEnv(t, Config{})
 	u := bson.NewObjectID()
 
-	shared, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "ks")
+	shared, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "ks")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +462,7 @@ func TestWatcherMixedModesInOneTick(t *testing.T) {
 func TestWatcherReleasesSharedSlotsAfterGrace(t *testing.T) {
 	e, _, w := newSharedWatcherEnv(t, Config{IntentExpiry: time.Nanosecond, LateGrace: time.Nanosecond})
 	u := bson.NewObjectID()
-	in, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "")
+	in, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,5 +480,121 @@ func TestWatcherReleasesSharedSlotsAfterGrace(t *testing.T) {
 	}
 	if got.SharedOpen {
 		t.Error("amount slot still reserved after the grace window ended")
+	}
+}
+
+// --- BEP20 second network ------------------------------------------------
+
+// newDualWatcherEnv wires a watcher over a service with both shared networks
+// on; the one fakeReader serves both (transfers are keyed by address, and each
+// network has its own address).
+func newDualWatcherEnv(t *testing.T, cfg Config) (*testEnv, *fakeReader, *Watcher) {
+	t.Helper()
+	cfg.SharedAddress = testSharedAddr
+	cfg.BEP20SharedAddress = testBEP20Addr
+	e := &testEnv{
+		store:    newFakeStore(),
+		crediter: newFakeCrediter(),
+		settler:  newFakeSettler(),
+		notifier: &fakeNotifier{},
+	}
+	reader := newFakeReader()
+	e.svc = NewService(e.store, reader, reader, e.crediter, e.notifier, cfg)
+	e.svc.SetOrderSettler(e.settler)
+	return e, reader, NewWatcher(e.svc, time.Minute)
+}
+
+// TestWatcherMixedNetworkTick: one tick settles a TRC20 and a BEP20 shared
+// intent independently, each under its own ledger method.
+func TestWatcherMixedNetworkTick(t *testing.T) {
+	e, reader, w := newDualWatcherEnv(t, Config{})
+	u := bson.NewObjectID()
+	trc, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, NetworkTRC20, "kt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bep, err := e.svc.CreateTopUpIntent(context.Background(), u, 20, NetworkBEP20, "kb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	reader.transfer(testSharedAddr, "tx-trc", trc.AmountExpectedMicros, now)
+	reader.transfer(testBEP20Addr, "0xtx-bep", bep.AmountExpectedMicros, now)
+
+	w.tick(context.Background())
+
+	gotTrc := e.store.get(t, trc.ID)
+	if gotTrc.Status != StatusConfirmed || gotTrc.TxHash != "tx-trc" {
+		t.Errorf("trc20 intent after tick: %+v", gotTrc)
+	}
+	gotBep := e.store.get(t, bep.ID)
+	if gotBep.Status != StatusConfirmed || gotBep.TxHash != "0xtx-bep" {
+		t.Errorf("bep20 intent after tick: %+v", gotBep)
+	}
+	methods := map[string]bool{}
+	for _, c := range e.crediter.calls {
+		methods[c.Method] = true
+	}
+	if !methods["usdt_trc20"] || !methods["usdt_bep20"] || len(e.crediter.calls) != 2 {
+		t.Errorf("credits: %+v", e.crediter.calls)
+	}
+}
+
+// TestWatcherBEP20UnmatchedDeposit: a BEP20 transfer matching no intent is
+// recorded in the reconciliation queue under its own network.
+func TestWatcherBEP20UnmatchedDeposit(t *testing.T) {
+	e, reader, w := newDualWatcherEnv(t, Config{})
+	u := bson.NewObjectID()
+	if _, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, NetworkBEP20, ""); err != nil {
+		t.Fatal(err)
+	}
+	reader.transfer(testBEP20Addr, "0xstray", 5_000_000, time.Now().UTC()) // matches nothing
+
+	w.tick(context.Background())
+
+	list, _, err := e.store.ListDeposits(context.Background(), DepositUnmatched, pagination.Params{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Network != NetworkBEP20 || list[0].TxHash != "0xstray" || list[0].ToAddress != testBEP20Addr {
+		t.Errorf("unmatched deposits: %+v", list)
+	}
+}
+
+// TestWatcherSameAmountAcrossNetworks: the same salted total open on BOTH
+// networks at once (allowed by the per-network uniqueness) — each chain's
+// transfer settles its own intent, never the other's.
+func TestWatcherSameAmountAcrossNetworks(t *testing.T) {
+	e, reader, w := newDualWatcherEnv(t, Config{})
+	u := bson.NewObjectID()
+	// Global salt counter: trc20 gets salt 1 (base 10.000000 → 10_000_001),
+	// bep20 gets salt 2 (base 9.999999 → 10_000_001) — identical totals.
+	trc, err := e.svc.CreateTopUpIntent(context.Background(), u, 10, NetworkTRC20, "kt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bep, err := e.svc.CreateTopUpIntent(context.Background(), u, 9.999999, NetworkBEP20, "kb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trc.AmountExpectedMicros != bep.AmountExpectedMicros {
+		t.Fatalf("precondition: totals differ (%d vs %d)", trc.AmountExpectedMicros, bep.AmountExpectedMicros)
+	}
+	now := time.Now().UTC()
+	reader.transfer(testSharedAddr, "tx-trc", trc.AmountExpectedMicros, now)
+	reader.transfer(testBEP20Addr, "0xtx-bep", bep.AmountExpectedMicros, now)
+
+	w.tick(context.Background())
+
+	gotTrc := e.store.get(t, trc.ID)
+	gotBep := e.store.get(t, bep.ID)
+	if gotTrc.Status != StatusConfirmed || gotTrc.TxHash != "tx-trc" {
+		t.Errorf("trc20 intent matched wrong transfer: %+v", gotTrc)
+	}
+	if gotBep.Status != StatusConfirmed || gotBep.TxHash != "0xtx-bep" {
+		t.Errorf("bep20 intent matched wrong transfer: %+v", gotBep)
+	}
+	if n := unmatchedCount(t, e); n != 0 {
+		t.Errorf("unmatched deposits = %d, want 0", n)
 	}
 }

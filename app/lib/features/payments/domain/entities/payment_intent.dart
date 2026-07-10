@@ -74,10 +74,17 @@ class PaymentConfig {
   const PaymentConfig({
     required this.usdtEnabled,
     this.network = 'trc20',
+    this.networks = const ['trc20'],
     this.expiryMinutes = 30,
   });
 
   final bool usdtEnabled;
+
+  /// The default network (what an intent gets when none is picked).
   final String network;
+
+  /// Every enabled network; a picker is shown only when there is more than one.
+  final List<String> networks;
+
   final int expiryMinutes;
 }

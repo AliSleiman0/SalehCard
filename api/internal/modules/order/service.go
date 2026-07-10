@@ -74,7 +74,8 @@ type loyaltyAwarder interface {
 // interface, which *OrderService implements (FulfillPaidOrder/FailUnpaidOrder).
 type usdtIntents interface {
 	Enabled() bool
-	CreateOrderIntent(ctx context.Context, userID, orderID bson.ObjectID, amountUSD float64) (*payment.Intent, error)
+	SupportsNetwork(network string) bool
+	CreateOrderIntent(ctx context.Context, userID, orderID bson.ObjectID, amountUSD float64, network string) (*payment.Intent, error)
 	GetActiveOrderIntent(ctx context.Context, orderID bson.ObjectID) (*payment.Intent, error)
 }
 
@@ -143,11 +144,15 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	switch input.PaymentMethod {
 	case PaymentMethodWallet:
 	case PaymentMethodUSDT:
-		// On-chain USDT is accepted only when the payment module is enabled
-		// (USDT_XPUB set). It settles asynchronously — see the intent branch
-		// after the order is persisted.
+		// On-chain USDT is accepted only when the payment module is enabled.
+		// It settles asynchronously — see the intent branch after the order is
+		// persisted. An explicit network must be validated HERE, before the
+		// order row exists, so a bad value never creates a failed order.
 		if s.usdt == nil || !s.usdt.Enabled() {
 			return nil, unavailablePaymentMethod()
+		}
+		if input.UsdtNetwork != "" && !s.usdt.SupportsNetwork(input.UsdtNetwork) {
+			return nil, badRequest("unsupported USDT payment network")
 		}
 	case PaymentMethodCard:
 		// Card is accepted only when a gateway provider is configured
@@ -334,7 +339,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	//     Promo redemption is likewise deferred to fulfillment. (A zero-total
 	//     order needs no payment, so it falls through to instant fulfillment.)
 	if order.PaymentMethod == PaymentMethodUSDT && total > 0 {
-		if _, err := s.usdt.CreateOrderIntent(ctx, userID, order.ID, total); err != nil {
+		if _, err := s.usdt.CreateOrderIntent(ctx, userID, order.ID, total, input.UsdtNetwork); err != nil {
 			_ = s.repo.UpdateStatus(ctx, order.ID, OrderStatusFailed)
 			return nil, err
 		}

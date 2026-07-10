@@ -38,6 +38,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/bsc"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/tron"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
@@ -326,12 +327,43 @@ func (s *Server) buildPaymentService(ntf notification.Notifier) *payment.Service
 				"provider", s.cfg.USDTProvider, "network", payment.NetworkTRC20, "address", shared)
 		}
 	}
+	// BEP20 second network (always shared mode). Misconfiguration disables
+	// BEP20 only — TRC20 keeps running.
+	var bep20 tron.TransferLister
+	bep20Addr := s.cfg.USDTBEP20Address
+	if bep20Addr != "" {
+		lister, berr := bsc.New(bsc.Config{
+			Provider: s.cfg.USDTBEP20Provider,
+			Etherscan: bsc.EtherscanConfig{
+				BaseURL:          s.cfg.EtherscanBaseURL,
+				APIKey:           s.cfg.EtherscanAPIKey,
+				Contract:         s.cfg.USDTBEP20Contract,
+				MinConfirmations: int64(s.cfg.USDTBEP20MinConfirmations),
+			},
+			Stub: tron.StubConfig{Delay: s.cfg.USDTStubDelay},
+		})
+		verr := bsc.ValidateAddress(bep20Addr)
+		switch {
+		case berr != nil:
+			slog.Error("payment: BEP20 chain provider misconfigured — BEP20 USDT payments disabled",
+				"provider", s.cfg.USDTBEP20Provider, "error", berr)
+			bep20Addr = ""
+		case verr != nil:
+			slog.Error("payment: USDT_BEP20_ADDRESS is invalid — BEP20 USDT payments disabled", "error", verr)
+			bep20Addr = ""
+		default:
+			bep20 = lister
+			slog.Info("payment: on-chain USDT payments enabled (shared-address mode)",
+				"provider", s.cfg.USDTBEP20Provider, "network", payment.NetworkBEP20, "address", bep20Addr)
+		}
+	}
 	wsvc := wallet.NewWalletService(wallet.NewMongoRepository(s.db), nil)
-	return payment.NewService(payment.NewMongoStore(s.db), reader, wsvc, ntf, payment.Config{
-		XPub:          xpub,
-		SharedAddress: shared,
-		IntentExpiry:  s.cfg.USDTIntentExpiry,
-		LateGrace:     s.cfg.USDTLateGrace,
+	return payment.NewService(payment.NewMongoStore(s.db), reader, bep20, wsvc, ntf, payment.Config{
+		XPub:               xpub,
+		SharedAddress:      shared,
+		BEP20SharedAddress: bep20Addr,
+		IntentExpiry:       s.cfg.USDTIntentExpiry,
+		LateGrace:          s.cfg.USDTLateGrace,
 	})
 }
 

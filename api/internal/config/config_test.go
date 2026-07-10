@@ -33,6 +33,47 @@ func TestValidate(t *testing.T) {
 			cfg:     Config{Env: "staging"},
 			wantErr: true,
 		},
+		{
+			name:    "both TRC20 modes set refuses even in development",
+			cfg:     Config{Env: "development", USDTXPub: "xpub...", USDTAddress: "TAddr"},
+			wantErr: true,
+		},
+		{
+			name: "prod trc20 with trongrid + key is valid",
+			cfg: Config{Env: "production", JWTSecret: "s", AllowedOrigins: "o",
+				USDTAddress: "TAddr", USDTProvider: "trongrid", TronGridAPIKey: "k"},
+			wantErr: false,
+		},
+		{
+			name: "prod bep20 stub refused",
+			cfg: Config{Env: "production", JWTSecret: "s", AllowedOrigins: "o",
+				USDTBEP20Address: "0xabc", USDTBEP20Provider: "stub"},
+			wantErr: true,
+		},
+		{
+			name: "prod bep20 etherscan without key refused",
+			cfg: Config{Env: "production", JWTSecret: "s", AllowedOrigins: "o",
+				USDTBEP20Address: "0xabc", USDTBEP20Provider: "etherscan"},
+			wantErr: true,
+		},
+		{
+			name: "prod bep20-only with etherscan + key is valid",
+			cfg: Config{Env: "production", JWTSecret: "s", AllowedOrigins: "o",
+				USDTBEP20Address: "0xabc", USDTBEP20Provider: "etherscan", EtherscanAPIKey: "k"},
+			wantErr: false,
+		},
+		{
+			name: "prod both networks valid together",
+			cfg: Config{Env: "production", JWTSecret: "s", AllowedOrigins: "o",
+				USDTAddress: "TAddr", USDTProvider: "trongrid", TronGridAPIKey: "k",
+				USDTBEP20Address: "0xabc", USDTBEP20Provider: "etherscan", EtherscanAPIKey: "k2"},
+			wantErr: false,
+		},
+		{
+			name:    "development allows bep20 stub",
+			cfg:     Config{Env: "development", USDTBEP20Address: "0xabc", USDTBEP20Provider: "stub"},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

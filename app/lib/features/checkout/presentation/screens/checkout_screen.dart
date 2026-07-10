@@ -45,6 +45,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   // Selected payment method: wallet, or usdt (on-chain) when the backend has
   // USDT payments enabled. Card stays disabled until a real gateway exists.
   String _payment = 'wallet';
+  // On-chain USDT network pick; empty = the server's default. Only offered
+  // when the config lists more than one network.
+  String _usdtNetwork = '';
 
   @override
   void initState() {
@@ -110,8 +113,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     // USDT (on-chain) is offered only when the backend has it enabled. It does
     // not draw on the wallet, so it also unblocks an insufficient-balance CTA.
-    final usdtEnabled =
-        ref.watch(paymentConfigProvider).asData?.value.usdtEnabled ?? false;
+    final paymentConfig = ref.watch(paymentConfigProvider).asData?.value;
+    final usdtEnabled = paymentConfig?.usdtEnabled ?? false;
+    final usdtNetworks =
+        usdtEnabled ? paymentConfig!.networks : const <String>[];
     final payingWithUsdt = _payment == 'usdt';
     final ctaBlocked = walletInsufficient && !payingWithUsdt;
 
@@ -155,8 +160,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         walletInsufficient: walletInsufficient,
                         selected: _payment,
                         usdtEnabled: usdtEnabled,
+                        usdtNetworks: usdtNetworks,
+                        selectedNetwork: _usdtNetwork.isEmpty
+                            ? (usdtNetworks.isEmpty ? '' : usdtNetworks.first)
+                            : _usdtNetwork,
                         onSelect: (method) =>
                             setState(() => _payment = method),
+                        onSelectNetwork: (network) =>
+                            setState(() => _usdtNetwork = network),
                         l10n: l10n,
                       ),
                       const SizedBox(height: 18),
@@ -310,11 +321,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ));
     }
 
+    // A stale network pick (no longer offered) falls back to the server default.
+    final paymentConfig = ref.read(paymentConfigProvider).asData?.value;
+    final usdtNetwork = _payment == 'usdt' &&
+            (paymentConfig?.networks.contains(_usdtNetwork) ?? false)
+        ? _usdtNetwork
+        : '';
     final order =
         await ref.read(placeOrderControllerProvider.notifier).submit(
               PlaceOrderInput(
                 items: lines,
                 paymentMethod: _payment,
+                usdtNetwork: usdtNetwork,
                 promoCode:
                     _promo.text.trim().isEmpty ? null : _promo.text.trim(),
               ),
@@ -596,7 +614,10 @@ class _PaymentSelector extends StatelessWidget {
     required this.walletInsufficient,
     required this.selected,
     required this.usdtEnabled,
+    required this.usdtNetworks,
+    required this.selectedNetwork,
     required this.onSelect,
+    required this.onSelectNetwork,
     required this.l10n,
   });
 
@@ -604,7 +625,10 @@ class _PaymentSelector extends StatelessWidget {
   final bool walletInsufficient;
   final String selected;
   final bool usdtEnabled;
+  final List<String> usdtNetworks;
+  final String selectedNetwork;
   final ValueChanged<String> onSelect;
+  final ValueChanged<String> onSelectNetwork;
   final AppLocalizations l10n;
 
   @override
@@ -634,9 +658,26 @@ class _PaymentSelector extends StatelessWidget {
             icon: Icons.currency_bitcoin_rounded,
             iconColor: AppTokens.brand1,
             title: l10n.usdtPayLabel,
-            subtitle: 'TRC20',
+            subtitle: selectedNetwork.isEmpty
+                ? 'TRC20'
+                : selectedNetwork.toUpperCase(),
             onTap: () => onSelect('usdt'),
           ),
+          if (selected == 'usdt' && usdtNetworks.length > 1) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final network in usdtNetworks)
+                  _NetworkChip(
+                    label: network.toUpperCase(),
+                    selected: selectedNetwork == network,
+                    onTap: () => onSelectNetwork(network),
+                  ),
+              ],
+            ),
+          ],
         ],
         if (showTopUp) ...[
           const SizedBox(height: 12),
@@ -659,6 +700,46 @@ class _PaymentSelector extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// A selectable USDT network chip (shown under the USDT row when the backend
+/// offers more than one network).
+class _NetworkChip extends StatelessWidget {
+  const _NetworkChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: selected ? AppTokens.brandGradient : null,
+          color: selected ? null : colors.surface,
+          border: selected ? null : Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(AppTokens.rMd),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: selected ? Colors.white : colors.text,
+          ),
+        ),
+      ),
     );
   }
 }

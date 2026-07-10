@@ -65,9 +65,12 @@ func NewIntentView(in *Intent) IntentView {
 	return v
 }
 
-// topUpIntentInput is the body of POST /payments/usdt/topup-intents.
+// topUpIntentInput is the body of POST /payments/usdt/topup-intents. Network
+// is optional — clients that predate network selection omit it and get the
+// default (TRC20 when enabled).
 type topUpIntentInput struct {
-	Amount float64 `json:"amount"`
+	Amount  float64 `json:"amount"`
+	Network string  `json:"network"`
 }
 
 // CreateTopUpIntent handles POST /api/v1/payments/usdt/topup-intents. The
@@ -82,7 +85,7 @@ func (h *Handler) CreateTopUpIntent(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "invalid request body")
 		return
 	}
-	intent, err := h.svc.CreateTopUpIntent(r.Context(), userID, in.Amount, r.Header.Get("Idempotency-Key"))
+	intent, err := h.svc.CreateTopUpIntent(r.Context(), userID, in.Amount, in.Network, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		writePaymentError(w, err)
 		return
@@ -109,18 +112,22 @@ func (h *Handler) GetIntent(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, NewIntentView(intent))
 }
 
-// configView is the payload of GET /api/v1/payments/config.
+// configView is the payload of GET /api/v1/payments/config. Network (the
+// default) is kept for clients that predate multi-network; Networks is the
+// full list a picker offers.
 type configView struct {
-	USDTEnabled   bool   `json:"usdtEnabled"`
-	Network       string `json:"network"`
-	ExpiryMinutes int    `json:"expiryMinutes"`
+	USDTEnabled   bool     `json:"usdtEnabled"`
+	Network       string   `json:"network"`
+	Networks      []string `json:"networks"`
+	ExpiryMinutes int      `json:"expiryMinutes"`
 }
 
 // GetConfig handles GET /api/v1/payments/config — the client feature gate.
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, configView{
 		USDTEnabled:   h.svc.Enabled(),
-		Network:       NetworkTRC20,
+		Network:       h.svc.DefaultNetwork(),
+		Networks:      h.svc.Networks(),
 		ExpiryMinutes: h.svc.ExpiryMinutes(),
 	})
 }

@@ -15,14 +15,16 @@ class PaymentRemoteDataSource {
   }
 
   /// POST /payments/usdt/topup-intents → a new pending on-chain top-up intent.
-  /// [idempotencyKey] dedupes retries of the same attempt.
+  /// [idempotencyKey] dedupes retries of the same attempt; an empty [network]
+  /// lets the server pick its default.
   Future<PaymentIntentDto> createTopUpIntent(
     double amount, {
     required String idempotencyKey,
+    String network = '',
   }) async {
     final response = await _dio.post<dynamic>(
       '/payments/usdt/topup-intents',
-      data: {'amount': amount},
+      data: {'amount': amount, if (network.isNotEmpty) 'network': network},
       options: Options(headers: {'Idempotency-Key': idempotencyKey}),
     );
     return PaymentIntentDto.fromJson(unwrap(response) as Map<String, dynamic>);
