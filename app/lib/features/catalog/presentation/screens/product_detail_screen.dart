@@ -38,6 +38,7 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   int _variantIndex = 0;
   int _qty = 1;
+  bool _qtyInitialized = false;
   final _field = TextEditingController();
 
   // Purchase-time ID verification (only used for products configured for it).
@@ -146,12 +147,38 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     final selected = hasVariants ? variants[index] : null;
     final unitPrice =
         selected?.effectivePrice ?? product.offerFromPrice ?? product.fromPrice ?? 0;
+
+    // The legacy "quantity"-type field (if any) is a read-only echo of the
+    // real qty stepper below, not a second editable input — exclude it from
+    // the generic dynamic-input preview, but use its constraints to bound the
+    // stepper (a {min:0,max:0} constraint is a known legacy-import corruption
+    // shape, not a real bound, and is treated the same as "absent").
+    final nonQuantityFields =
+        product.inputFields.where((f) => f.type != 'quantity').toList();
+    InputField? quantityField;
+    for (final f in product.inputFields) {
+      if (f.type == 'quantity') {
+        quantityField = f;
+        break;
+      }
+    }
+    final qMin = quantityField?.constraints?.min;
+    final qMax = quantityField?.constraints?.max;
+    final hasRealQtyBounds =
+        qMin != null && qMax != null && !(qMin == 0 && qMax == 0);
+    final qtyMin = hasRealQtyBounds ? qMin.round() : _defaultQtyMin;
+    final qtyMax = hasRealQtyBounds ? qMax.round() : _defaultQtyMax;
+    if (!_qtyInitialized) {
+      _qty = qtyMin;
+      _qtyInitialized = true;
+    }
+
     final total = unitPrice * _qty;
     final tint = ProductChip.tintFor(product.id.hashCode.abs());
     final title = product.title.resolve(localeCode);
     final needsInput =
-        product.fulfillmentType != 'code' && product.inputFields.isNotEmpty;
-    final firstField = needsInput ? product.inputFields.first : null;
+        product.fulfillmentType != 'code' && nonQuantityFields.isNotEmpty;
+    final firstField = needsInput ? nonQuantityFields.first : null;
     // Purchase-time ID verification only kicks in when the product is configured
     // for it AND has a field to type the ID into.
     final verifyActive = product.requiresIdVerification && firstField != null;
@@ -275,10 +302,26 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   ),
                   _QtyStepper(
                     qty: _qty,
+                    min: qtyMin,
+                    max: qtyMax,
                     onChanged: (v) => setState(() => _qty = v),
                   ),
                 ],
               ),
+              if (_qty > 1) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    l10n.qtyTotalLine(_qty, formatUsd(unitPrice), formatUsd(total)),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: colors.textDim,
+                    ),
+                  ),
+                ),
+              ],
               if (firstField != null) ...[
                 const SizedBox(height: 22),
                 DynamicInputField(
@@ -748,24 +791,27 @@ class _DenomChips extends StatelessWidget {
 }
 
 /// Quantity control with a minus/plus button around an **editable** number
-/// field. Typed values are constrained to digits and clamped to
-/// [_qtyMin].._qtyMax (empty is tolerated while typing, then normalized to
-/// [_qtyMin] on blur/submit).
+/// field. Typed values are constrained to digits and clamped to [min]..[max]
+/// (empty is tolerated while typing, then normalized to [min] on blur/submit).
 class _QtyStepper extends StatefulWidget {
   const _QtyStepper({
     required this.qty,
     required this.onChanged,
+    this.min = _defaultQtyMin,
+    this.max = _defaultQtyMax,
   });
 
   final int qty;
   final ValueChanged<int> onChanged;
+  final int min;
+  final int max;
 
   @override
   State<_QtyStepper> createState() => _QtyStepperState();
 }
 
-const int _qtyMin = 1;
-const int _qtyMax = 1000;
+const int _defaultQtyMin = 1;
+const int _defaultQtyMax = 1000;
 
 class _QtyStepperState extends State<_QtyStepper> {
   late final TextEditingController _controller;
@@ -800,13 +846,13 @@ class _QtyStepperState extends State<_QtyStepper> {
     if (!_focus.hasFocus) _normalize();
   }
 
-  void _emit(int value) => widget.onChanged(value.clamp(_qtyMin, _qtyMax));
+  void _emit(int value) => widget.onChanged(value.clamp(widget.min, widget.max));
 
   void _onTextChanged(String raw) {
     if (raw.isEmpty) return; // allow clearing while typing
     final parsed = int.tryParse(raw);
     if (parsed == null) return;
-    final clamped = parsed.clamp(_qtyMin, _qtyMax);
+    final clamped = parsed.clamp(widget.min, widget.max);
     if ('$clamped' != raw) {
       _controller.value = TextEditingValue(
         text: '$clamped',
@@ -817,8 +863,8 @@ class _QtyStepperState extends State<_QtyStepper> {
   }
 
   void _normalize() {
-    final clamped =
-        (int.tryParse(_controller.text) ?? _qtyMin).clamp(_qtyMin, _qtyMax);
+    final clamped = (int.tryParse(_controller.text) ?? widget.min)
+        .clamp(widget.min, widget.max);
     if ('$clamped' != _controller.text) _controller.text = '$clamped';
     widget.onChanged(clamped);
   }

@@ -13,6 +13,8 @@ import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/money_row.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../catalog/domain/entities/product.dart';
+import '../../../checkout/presentation/providers.dart';
 import '../../domain/entities/cart_item.dart';
 import '../controllers/cart_controller.dart';
 
@@ -31,6 +33,8 @@ class CartScreen extends ConsumerWidget {
     final localeCode = ref.watch(localeControllerProvider).languageCode;
     final balance =
         ref.watch(authControllerProvider).user?.walletBalance ?? 0;
+    final products = ref.watch(checkoutProductsProvider).asData?.value ??
+        const <String, Product>{};
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -73,6 +77,7 @@ class CartScreen extends ConsumerWidget {
                           padding: const EdgeInsets.only(bottom: 12),
                           child: _CartRow(
                             item: item,
+                            product: products[item.productId],
                             localeCode: localeCode,
                             onSetQty: (v) => ref
                                 .read(cartControllerProvider.notifier)
@@ -99,12 +104,16 @@ class CartScreen extends ConsumerWidget {
 class _CartRow extends StatelessWidget {
   const _CartRow({
     required this.item,
+    required this.product,
     required this.localeCode,
     required this.onSetQty,
     required this.onRemove,
   });
 
   final CartItem item;
+  // May be null while the product fetch is still loading — the stepper just
+  // falls back to its default bounds until it resolves.
+  final Product? product;
   final String localeCode;
   final ValueChanged<int> onSetQty;
   final VoidCallback onRemove;
@@ -114,6 +123,22 @@ class _CartRow extends StatelessWidget {
     final colors = context.colors;
     final name = item.title.resolve(localeCode);
     final tint = ProductChip.tintFor(item.productId.hashCode.abs());
+
+    InputField? quantityField;
+    for (final f in product?.inputFields ?? const <InputField>[]) {
+      if (f.type == 'quantity') {
+        quantityField = f;
+        break;
+      }
+    }
+    final qMin = quantityField?.constraints?.min;
+    final qMax = quantityField?.constraints?.max;
+    // A {min:0,max:0} constraint is a known legacy-import corruption shape,
+    // not a real bound — treat it the same as "absent".
+    final hasRealQtyBounds =
+        qMin != null && qMax != null && !(qMin == 0 && qMax == 0);
+    final qtyMin = hasRealQtyBounds ? qMin.round() : _defaultQtyMin;
+    final qtyMax = hasRealQtyBounds ? qMax.round() : _defaultQtyMax;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -182,7 +207,12 @@ class _CartRow extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _MiniStepper(qty: item.qty, onChanged: onSetQty),
+                    _MiniStepper(
+                      qty: item.qty,
+                      min: qtyMin,
+                      max: qtyMax,
+                      onChanged: onSetQty,
+                    ),
                     if (item.hasOffer)
                       StruckPriceRow(
                         original: item.originalLineTotal,
@@ -208,23 +238,27 @@ class _CartRow extends StatelessWidget {
 
 /// Compact quantity control with an **editable** number field between the
 /// minus/plus buttons. Typed values are digits-only and clamped to
-/// [_qtyMin].._qtyMax; an empty field is normalized to [_qtyMin] on blur/submit.
-/// Use the row's X button to remove a line — the minus button stops at [_qtyMin].
+/// [min]..[max]; an empty field is normalized to [min] on blur/submit.
+/// Use the row's X button to remove a line — the minus button stops at [min].
 class _MiniStepper extends StatefulWidget {
   const _MiniStepper({
     required this.qty,
     required this.onChanged,
+    this.min = _defaultQtyMin,
+    this.max = _defaultQtyMax,
   });
 
   final int qty;
   final ValueChanged<int> onChanged;
+  final int min;
+  final int max;
 
   @override
   State<_MiniStepper> createState() => _MiniStepperState();
 }
 
-const int _qtyMin = 1;
-const int _qtyMax = 1000;
+const int _defaultQtyMin = 1;
+const int _defaultQtyMax = 1000;
 
 class _MiniStepperState extends State<_MiniStepper> {
   late final TextEditingController _controller;
@@ -257,13 +291,13 @@ class _MiniStepperState extends State<_MiniStepper> {
     if (!_focus.hasFocus) _normalize();
   }
 
-  void _emit(int value) => widget.onChanged(value.clamp(_qtyMin, _qtyMax));
+  void _emit(int value) => widget.onChanged(value.clamp(widget.min, widget.max));
 
   void _onTextChanged(String raw) {
     if (raw.isEmpty) return; // allow clearing while typing
     final parsed = int.tryParse(raw);
     if (parsed == null) return;
-    final clamped = parsed.clamp(_qtyMin, _qtyMax);
+    final clamped = parsed.clamp(widget.min, widget.max);
     if ('$clamped' != raw) {
       _controller.value = TextEditingValue(
         text: '$clamped',
@@ -274,8 +308,8 @@ class _MiniStepperState extends State<_MiniStepper> {
   }
 
   void _normalize() {
-    final clamped =
-        (int.tryParse(_controller.text) ?? _qtyMin).clamp(_qtyMin, _qtyMax);
+    final clamped = (int.tryParse(_controller.text) ?? widget.min)
+        .clamp(widget.min, widget.max);
     if ('$clamped' != _controller.text) _controller.text = '$clamped';
     widget.onChanged(clamped);
   }

@@ -666,6 +666,70 @@ func TestPlaceOrder_CreditGoesProcessing(t *testing.T) {
 	assert.Equal(t, 0, codeSvc.claimCalls) // no codes claimed for credit
 }
 
+// TestPlaceOrder_RejectsQtyOutOfRange covers a product whose legacy
+// "quantity" input field carries a real minimum-purchase bound — the order
+// must be rejected server-side rather than silently accepted at a quantity
+// below what the product spec allows.
+func TestPlaceOrder_RejectsQtyOutOfRange(t *testing.T) {
+	p := creditProduct(10)
+	min, max := 30.0, 5000.0
+	p.InputFields = []product.InputField{
+		{Key: "qty", Label: product.I18nLabel{En: "Enter Quantity"}, Type: product.InputFieldQuantity,
+			Constraints: &product.InputFieldConstraints{Min: &min, Max: &max}},
+	}
+	codeSvc := &fakeCodeSvc{available: map[string]int{}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, repo := newSUT(p, codeSvc, walletSvc)
+
+	item := itemFor(p, 5) // below the product's minimum of 30
+	item.PlayerID = "player-1"
+	_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{item},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, apperrors.ErrBadRequest))
+	assert.Len(t, repo.byID, 0) // nothing persisted for a rejected order
+}
+
+// TestPlaceOrder_OverridesQuantityFieldValue is the direct regression test
+// for the checkout bug: a customer typing an unrelated value into the legacy
+// "Enter Quantity" box must not change what they're charged, and the value
+// persisted on the order for that field must reflect the real quantity.
+func TestPlaceOrder_OverridesQuantityFieldValue(t *testing.T) {
+	p := creditProduct(10)
+	p.InputFields = []product.InputField{
+		{Key: "id", Label: product.I18nLabel{En: "ID"}, Type: product.InputFieldText},
+		{Key: "qty", Label: product.I18nLabel{En: "Enter Quantity"}, Type: product.InputFieldQuantity},
+	}
+	codeSvc := &fakeCodeSvc{available: map[string]int{}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUT(p, codeSvc, walletSvc)
+
+	item := itemFor(p, 3)
+	item.PlayerID = "player-1"
+	item.Fields = []OrderFieldInput{
+		{Key: "id", Value: "28472"},
+		{Key: "qty", Value: "999"}, // bogus value typed by the customer
+	}
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{item},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 30.0, order.Total) // 10 * 3, never affected by the qty field's typed value
+
+	require.Len(t, order.Items, 1)
+	var qtyField *OrderField
+	for i := range order.Items[0].Fields {
+		if order.Items[0].Fields[i].Key == "qty" {
+			qtyField = &order.Items[0].Fields[i]
+		}
+	}
+	require.NotNil(t, qtyField, "qty field must be present even though the client value is discarded")
+	assert.Equal(t, "3", qtyField.Value)
+}
+
 func TestPlaceOrder_RejectsUnverifiedUser(t *testing.T) {
 	p := codeProduct(10, nil)
 	codeSvc := &fakeCodeSvc{available: map[string]int{p.ID.Hex(): 5}}
