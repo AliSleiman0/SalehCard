@@ -291,7 +291,7 @@
   "commonDone": "Done",
   "usdtPayLabel": "Pay with USDT (crypto)",
   "usdtDepositTitle": "Send USDT",
-  "usdtSendExactly": "Send exactly this amount to the address below:",
+  "usdtSendExactly": "Send exactly this amount — every digit matters, or your payment can't be matched automatically:",
   "usdtAmountLabel": "Amount",
   "usdtAmountCopied": "Amount copied",
   "usdtAddressLabel": "{network} deposit address",

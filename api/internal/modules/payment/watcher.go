@@ -58,15 +58,26 @@ func (w *Watcher) Run(ctx context.Context) {
 }
 
 // tick runs one full pass: expire overdue intents, retry stuck settlements,
-// scan the chain for new payments. Exported-for-test via watcher_test.go; all
-// per-intent errors are logged and never abort the pass.
+// release stale shared amount slots, scan the chain for new payments.
+// Exported-for-test via watcher_test.go; all per-intent errors are logged and
+// never abort the pass.
 func (w *Watcher) tick(ctx context.Context) {
 	tickCtx, cancel := context.WithTimeout(ctx, w.tickBudget())
 	defer cancel()
 
 	w.sweepExpired(tickCtx)
 	w.retrySettlements(tickCtx)
+	w.releaseSharedSlots(tickCtx)
 	w.scanChain(tickCtx)
+}
+
+// releaseSharedSlots frees the amount slots of shared intents whose
+// late-payment grace ended — the amount becomes reusable exactly when the
+// scan stops matching it.
+func (w *Watcher) releaseSharedSlots(ctx context.Context) {
+	if err := w.svc.store.ReleaseSharedSlots(ctx, time.Now().UTC(), w.svc.cfg.LateGrace); err != nil {
+		slog.Error("payment: release shared slots failed", "error", err)
+	}
 }
 
 // tickBudget bounds one pass so a slow chain provider can't overlap ticks.
@@ -126,8 +137,10 @@ func (w *Watcher) retrySettlements(ctx context.Context) {
 	}
 }
 
-// scanChain polls the chain reader for every watchable intent and claims +
-// settles any observed payment.
+// scanChain polls the chain for every watchable intent and claims + settles
+// any observed payment. Intents are partitioned by their stamped address mode
+// — derived ones poll their unique address, shared ones amount-match against
+// one transfer listing per shared address — so a mid-flight mode flip is safe.
 func (w *Watcher) scanChain(ctx context.Context) {
 	now := time.Now().UTC()
 	watchable, err := w.svc.store.ListWatchable(ctx, now, w.svc.cfg.LateGrace, perTickLimit)
@@ -135,7 +148,21 @@ func (w *Watcher) scanChain(ctx context.Context) {
 		slog.Error("payment: list watchable failed", "error", err)
 		return
 	}
-	for i, in := range watchable {
+	var derived, shared []*Intent
+	for _, in := range watchable {
+		if in.IsShared() {
+			shared = append(shared, in)
+		} else {
+			derived = append(derived, in)
+		}
+	}
+	w.scanDerived(ctx, derived)
+	w.scanShared(ctx, shared)
+}
+
+// scanDerived is the per-address poll: one FindPayment call per intent.
+func (w *Watcher) scanDerived(ctx context.Context, intents []*Intent) {
+	for i, in := range intents {
 		if ctx.Err() != nil {
 			return
 		}
@@ -158,17 +185,122 @@ func (w *Watcher) scanChain(ctx context.Context) {
 		if p == nil || p.AmountMicros <= 0 {
 			continue
 		}
-		claimed, err := w.svc.store.ClaimPaymentSeen(ctx, in.ID, p.TxHash, p.From, p.AmountMicros)
-		if err != nil {
-			if !errors.Is(err, apperrors.ErrConflict) { // conflict = another claim won / tx already recorded
-				slog.Error("payment: claim failed", "intent", in.ID.Hex(), "tx", p.TxHash, "error", err)
+		w.claimAndSettle(ctx, in, p)
+	}
+}
+
+// scanShared amount-matches shared-address intents: one ListTransfers call
+// per address (in practice exactly one) covers every open intent on it.
+func (w *Watcher) scanShared(ctx context.Context, intents []*Intent) {
+	if len(intents) == 0 {
+		return
+	}
+	lister, ok := w.svc.reader.(tron.TransferLister)
+	if !ok { // cannot happen with the built-in adapters
+		slog.Error("payment: chain reader cannot list transfers — shared-address intents cannot settle")
+		return
+	}
+	groups := map[string][]*Intent{}
+	for _, in := range intents {
+		groups[in.Address] = append(groups[in.Address], in)
+	}
+	first := true
+	for addr, group := range groups {
+		if ctx.Err() != nil {
+			return
+		}
+		if !first {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(chainCallGap):
 			}
+		}
+		first = false
+		w.scanSharedGroup(ctx, lister, addr, group)
+	}
+}
+
+// scanSharedGroup matches one shared address's transfers to its open intents.
+// Matching is strict: exact salted amount AND the transfer is not older than
+// the intent (an already-consumed transfer must never match a NEW intent that
+// later reused the amount slot). Everything else lands in the reconciliation
+// queue as an unmatched deposit.
+func (w *Watcher) scanSharedGroup(ctx context.Context, lister tron.TransferLister, addr string, group []*Intent) {
+	since := group[0].CreatedAt
+	hints := make([]tron.AmountHint, 0, len(group))
+	byAmount := make(map[int64]*Intent, len(group))
+	for _, in := range group {
+		if in.CreatedAt.Before(since) {
+			since = in.CreatedAt
+		}
+		hints = append(hints, tron.AmountHint{AmountMicros: in.AmountExpectedMicros, CreatedAt: in.CreatedAt})
+		byAmount[in.AmountExpectedMicros] = in
+	}
+
+	transfers, err := lister.ListTransfers(ctx, addr, since, hints)
+	if err != nil {
+		slog.Warn("payment: shared-address transfer list failed", "address", addr, "error", err)
+		return
+	}
+	if len(transfers) == 0 {
+		return
+	}
+
+	hashes := make([]string, len(transfers))
+	for i := range transfers {
+		hashes[i] = transfers[i].TxHash
+	}
+	known, err := w.svc.store.FilterKnownTxHashes(ctx, NetworkTRC20, hashes)
+	if err != nil {
+		slog.Error("payment: filter known tx hashes failed", "address", addr, "error", err)
+		return
+	}
+
+	for i := range transfers {
+		if ctx.Err() != nil {
+			return
+		}
+		p := &transfers[i]
+		if known[p.TxHash] || p.AmountMicros <= 0 {
 			continue
 		}
-		slog.Info("payment: on-chain payment claimed",
-			"intent", claimed.ID.Hex(), "purpose", claimed.Purpose, "tx", p.TxHash, "receivedMicros", p.AmountMicros)
-		if err := w.svc.settle(ctx, claimed); err != nil {
-			continue // stays confirming; retried next tick
+		if in, ok := byAmount[p.AmountMicros]; ok && !p.BlockTime.Before(in.CreatedAt) {
+			// Remove the intent from the map first: a second equal transfer
+			// in this same tick must go to the unmatched queue, not re-claim.
+			delete(byAmount, p.AmountMicros)
+			w.claimAndSettle(ctx, in, p)
+			continue
 		}
+		if err := w.svc.store.RecordUnmatchedDeposit(ctx, &Deposit{
+			Network:      NetworkTRC20,
+			TxHash:       p.TxHash,
+			FromAddress:  p.From,
+			ToAddress:    addr,
+			AmountMicros: p.AmountMicros,
+			BlockTime:    p.BlockTime,
+		}); err != nil {
+			slog.Error("payment: record unmatched deposit failed", "tx", p.TxHash, "error", err)
+		} else {
+			slog.Info("payment: unmatched shared-address deposit recorded",
+				"tx", p.TxHash, "from", p.From, "amountMicros", p.AmountMicros)
+		}
+	}
+}
+
+// claimAndSettle is the shared tail of both scan paths: atomically claim the
+// observed transfer onto the intent, then settle.
+func (w *Watcher) claimAndSettle(ctx context.Context, in *Intent, p *tron.Payment) {
+	claimed, err := w.svc.store.ClaimPaymentSeen(ctx, in.ID, p.TxHash, p.From, p.AmountMicros)
+	if err != nil {
+		if !errors.Is(err, apperrors.ErrConflict) { // conflict = another claim won / tx already recorded
+			slog.Error("payment: claim failed", "intent", in.ID.Hex(), "tx", p.TxHash, "error", err)
+		}
+		return
+	}
+	slog.Info("payment: on-chain payment claimed",
+		"intent", claimed.ID.Hex(), "purpose", claimed.Purpose, "tx", p.TxHash, "receivedMicros", p.AmountMicros)
+	if err := w.svc.settle(ctx, claimed); err != nil {
+		return // stays confirming; retried next tick
 	}
 }

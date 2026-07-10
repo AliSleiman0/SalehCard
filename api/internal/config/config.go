@@ -134,12 +134,18 @@ type Config struct {
 	FulfillmentMockID int
 
 	// On-chain USDT payments (payment module + platform/tron). The feature is
-	// enabled iff USDTXPub is set; USDTProvider selects the chain reader:
-	// "trongrid" (real chain) or "stub" (dev — auto-pays after USDTStubDelay).
+	// enabled iff exactly one of USDTXPub / USDTAddress is set; USDTProvider
+	// selects the chain reader: "trongrid" (real chain) or "stub" (dev —
+	// auto-pays after USDTStubDelay).
 	USDTProvider string
 	// USDTXPub is the watch-only BIP44 account key (m/44'/195'/0') deposit
-	// addresses derive from. The mnemonic/xprv never touches the server.
+	// addresses derive from (derived mode: one unique address per intent).
+	// The mnemonic/xprv never touches the server.
 	USDTXPub string
+	// USDTAddress is a single fixed TRC20 deposit address every intent shares
+	// (shared mode: payments are matched by exact salted amount instead of by
+	// address; unmatched transfers go to the admin reconciliation queue).
+	USDTAddress string
 	// USDTContract overrides the token contract (default mainnet USDT).
 	USDTContract string
 	// TronGridAPIKey raises the TronGrid rate limit (required in prod).
@@ -279,6 +285,7 @@ func Load() *Config {
 
 		USDTProvider:      getEnv("USDT_PROVIDER", "stub"),
 		USDTXPub:          os.Getenv("USDT_XPUB"),
+		USDTAddress:       os.Getenv("USDT_ADDRESS"),
 		USDTContract:      os.Getenv("USDT_CONTRACT"), // empty → platform/tron default
 		TronGridAPIKey:    os.Getenv("TRONGRID_API_KEY"),
 		TronGridBaseURL:   getEnv("TRONGRID_BASE_URL", "https://api.trongrid.io"),
@@ -372,6 +379,12 @@ func getBool(key string, defaultVal bool) bool {
 // development: an empty JWT_SECRET would disable admin auth entirely, and an
 // empty ALLOWED_ORIGINS leaves CORS misconfigured for the deployed SPAs.
 func (c *Config) Validate() error {
+	// An ambiguous USDT addressing mode is a config bug in EVERY env — the two
+	// modes are mutually exclusive by design, so refuse before the dev bypass.
+	usdtOn := c.USDTXPub != "" || c.USDTAddress != ""
+	if c.USDTXPub != "" && c.USDTAddress != "" {
+		return errors.New("set exactly one of USDT_XPUB (derived addresses) / USDT_ADDRESS (shared address) — not both")
+	}
 	if c.Env == "development" {
 		return nil
 	}
@@ -381,10 +394,10 @@ func (c *Config) Validate() error {
 	if c.AllowedOrigins == "" {
 		return errors.New("ALLOWED_ORIGINS is required when ENV is not development")
 	}
-	if c.USDTXPub != "" && c.USDTProvider == "stub" {
-		return errors.New("USDT_PROVIDER=stub would auto-confirm unpaid USDT payments outside development — set USDT_PROVIDER=trongrid or unset USDT_XPUB")
+	if usdtOn && c.USDTProvider == "stub" {
+		return errors.New("USDT_PROVIDER=stub would auto-confirm unpaid USDT payments outside development — set USDT_PROVIDER=trongrid or unset USDT_XPUB/USDT_ADDRESS")
 	}
-	if c.USDTProvider == "trongrid" && c.USDTXPub != "" && c.TronGridAPIKey == "" {
+	if c.USDTProvider == "trongrid" && usdtOn && c.TronGridAPIKey == "" {
 		return errors.New("TRONGRID_API_KEY is required when USDT payments are enabled with the trongrid provider")
 	}
 	if c.Bridge.Stub {

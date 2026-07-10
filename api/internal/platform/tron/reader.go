@@ -32,3 +32,19 @@ type Watch struct {
 type Reader interface {
 	FindPayment(ctx context.Context, w Watch) (*Payment, error)
 }
+
+// AmountHint tells list-capable adapters what the watcher is expecting on a
+// shared address (one open intent's salted amount + creation time). The stub
+// fabricates one transfer per elapsed hint; real chain adapters ignore hints.
+type AmountHint struct {
+	AmountMicros int64
+	CreatedAt    time.Time
+}
+
+// TransferLister is the shared-address port: all confirmed inbound USDT
+// transfers into address at or after since, oldest first. Both built-in
+// adapters implement it; the watcher type-asserts it only when shared-mode
+// intents exist in the scan set.
+type TransferLister interface {
+	ListTransfers(ctx context.Context, address string, since time.Time, hints []AmountHint) ([]Payment, error)
+}

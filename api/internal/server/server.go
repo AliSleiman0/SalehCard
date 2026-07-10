@@ -274,7 +274,7 @@ func (s *Server) Routes() {
 		domain("kyc", func(g chi.Router) { kyc.RegisterAdminRoutes(g, s.db, rec, ntf) })
 		domain("audit", func(g chi.Router) { audit.RegisterAdminRoutes(g, s.db) })
 		domain("settings", func(g chi.Router) { settings.RegisterAdminRoutes(g, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider) })
-		domain("payments", func(g chi.Router) { payment.RegisterAdminRoutes(g, s.db) })
+		domain("payments", func(g chi.Router) { payment.RegisterAdminRoutes(g, s.db, paySvc, rec) })
 		domain("bridge", func(g chi.Router) { bridge.RegisterAdminRoutes(g, bridgeReg.Service, bridgeReg.Store, rec) })
 
 		// Role management mounts outside the domain wrapper: listing roles + the
@@ -285,11 +285,13 @@ func (s *Server) Routes() {
 }
 
 // buildPaymentService constructs the USDT payment service. Misconfiguration
-// (bad provider name, invalid xpub) logs and degrades to a disabled service —
-// the store still serves reads, but no new intents can be created and no
-// watcher runs. config.Validate separately refuses stub+xpub outside dev.
+// (bad provider name, invalid xpub, malformed shared address) logs and
+// degrades to a disabled service — the store still serves reads, but no new
+// intents can be created and no watcher runs. config.Validate separately
+// refuses stub+enabled outside dev and both-modes-set in every env.
 func (s *Server) buildPaymentService(ntf notification.Notifier) *payment.Service {
 	xpub := s.cfg.USDTXPub
+	shared := s.cfg.USDTAddress
 	reader, err := tron.New(tron.Config{
 		Provider: s.cfg.USDTProvider,
 		TronGrid: tron.TronGridConfig{
@@ -301,24 +303,35 @@ func (s *Server) buildPaymentService(ntf notification.Notifier) *payment.Service
 	})
 	if err != nil {
 		slog.Error("payment: chain provider misconfigured — USDT payments disabled", "provider", s.cfg.USDTProvider, "error", err)
-		reader, xpub = nil, ""
+		reader, xpub, shared = nil, "", ""
 	}
+	// Startup smoke-checks: a bad key/address should surface in the boot log,
+	// not on the first customer intent (a typo'd shared address would send
+	// customer funds somewhere unrecoverable).
 	if xpub != "" {
-		// Startup smoke-check: a bad xpub should surface in the boot log, not
-		// on the first customer intent.
 		if addr, derr := tron.DeriveAddress(xpub, 0); derr != nil {
 			slog.Error("payment: USDT_XPUB is invalid — USDT payments disabled", "error", derr)
 			xpub = ""
 		} else {
-			slog.Info("payment: on-chain USDT payments enabled",
+			slog.Info("payment: on-chain USDT payments enabled (derived-address mode)",
 				"provider", s.cfg.USDTProvider, "network", payment.NetworkTRC20, "address0", addr)
+		}
+	}
+	if shared != "" {
+		if verr := tron.ValidateAddress(shared); verr != nil {
+			slog.Error("payment: USDT_ADDRESS is invalid — USDT payments disabled", "error", verr)
+			shared = ""
+		} else {
+			slog.Info("payment: on-chain USDT payments enabled (shared-address mode)",
+				"provider", s.cfg.USDTProvider, "network", payment.NetworkTRC20, "address", shared)
 		}
 	}
 	wsvc := wallet.NewWalletService(wallet.NewMongoRepository(s.db), nil)
 	return payment.NewService(payment.NewMongoStore(s.db), reader, wsvc, ntf, payment.Config{
-		XPub:         xpub,
-		IntentExpiry: s.cfg.USDTIntentExpiry,
-		LateGrace:    s.cfg.USDTLateGrace,
+		XPub:          xpub,
+		SharedAddress: shared,
+		IntentExpiry:  s.cfg.USDTIntentExpiry,
+		LateGrace:     s.cfg.USDTLateGrace,
 	})
 }
 

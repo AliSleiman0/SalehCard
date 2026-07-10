@@ -42,6 +42,9 @@ const (
 	ActionCodeExpire         = "code.expire"
 	ActionCodeResend         = "order.resend_code"
 
+	ActionDepositAttribute = "payment.deposit_attribute"
+	ActionDepositIgnore    = "payment.deposit_ignore"
+
 	ActionResellerPriceSet    = "reseller.price_set"
 	ActionResellerPriceDelete = "reseller.price_delete"
 

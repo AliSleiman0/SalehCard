@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
@@ -164,8 +165,8 @@ class _UsdtDepositScreenState extends ConsumerState<UsdtDepositScreen>
           const SizedBox(height: 8),
           _CopyField(
             label: l10n.usdtAmountLabel,
-            value: intent.amountUsd.toStringAsFixed(2),
-            display: '${intent.amountUsd.toStringAsFixed(2)} USDT',
+            value: formatUsdtAmount(intent.amountUsd),
+            display: '${formatUsdtAmount(intent.amountUsd)} USDT',
             copiedMsg: l10n.usdtAmountCopied,
           ),
           const SizedBox(height: 12),

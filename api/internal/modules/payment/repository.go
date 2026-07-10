@@ -18,6 +18,16 @@ import (
 // address even without transactions).
 const derivationCounterID = "usdt_trc20_deriv_index"
 
+// saltCounterID is the counters document behind shared-mode amount salts
+// (same atomic $inc pattern as the derivation index).
+const saltCounterID = "usdt_shared_amount_salt"
+
+// saltRange bounds the shared-mode salt to 1..saltRange micros (≤ $0.009999 —
+// deliberately below the settle path's excessCreditMinMicros so a salt can
+// never trip the excess-credit branch). Never 0, so a shared expected amount
+// is never round and a stray round-number deposit can't accidentally match.
+const saltRange = 9999
+
 // IntentFilter narrows the admin listing.
 type IntentFilter struct {
 	Status  string
@@ -58,13 +68,33 @@ type Store interface {
 
 	// NextDerivationIndex hands out the next HD address index.
 	NextDerivationIndex(ctx context.Context) (uint32, error)
+	// NextAmountSalt hands out the next shared-mode amount salt (1..saltRange
+	// micros, cycling).
+	NextAmountSalt(ctx context.Context) (int64, error)
+	// ReleaseSharedSlots frees the amount slots of shared intents that
+	// expired unpaid and are past the late-payment grace — the moment the
+	// watcher stops matching them, their amount becomes reusable.
+	ReleaseSharedSlots(ctx context.Context, now time.Time, grace time.Duration) error
+	// FilterKnownTxHashes reports which of hashes are already recorded on an
+	// intent (the shared scan's already-consumed filter).
+	FilterKnownTxHashes(ctx context.Context, network string, hashes []string) (map[string]bool, error)
+
+	// Unmatched shared-address deposits (reconciliation queue) — deposits.go.
+	RecordUnmatchedDeposit(ctx context.Context, d *Deposit) error
+	ListDeposits(ctx context.Context, status string, p pagination.Params) ([]*Deposit, int64, error)
+	GetDeposit(ctx context.Context, id bson.ObjectID) (*Deposit, error)
+	ClaimDepositAttribution(ctx context.Context, id, userID bson.ObjectID, adminRef, note string) (*Deposit, error)
+	RevertDepositAttribution(ctx context.Context, id bson.ObjectID) error
+	MarkDepositIgnored(ctx context.Context, id bson.ObjectID, adminRef, note string) error
 
 	ListAll(ctx context.Context, f IntentFilter, p pagination.Params) ([]*Intent, int64, error)
 }
 
-// MongoStore is the MongoDB-backed Store over payment_intents (+ counters).
+// MongoStore is the MongoDB-backed Store over payment_intents + usdt_deposits
+// (+ counters).
 type MongoStore struct {
 	col      *mongo.Collection
+	deposits *mongo.Collection
 	counters *mongo.Collection
 }
 
@@ -72,6 +102,7 @@ type MongoStore struct {
 func NewMongoStore(db *mongo.Database) *MongoStore {
 	return &MongoStore{
 		col:      db.Collection("payment_intents"),
+		deposits: db.Collection("usdt_deposits"),
 		counters: db.Collection("counters"),
 	}
 }
@@ -80,16 +111,45 @@ func NewMongoStore(db *mongo.Database) *MongoStore {
 // (network, txHash) index is the double-credit guard: one observed transfer
 // can be recorded on exactly one intent, ever.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
-	_, err := db.Collection("payment_intents").Indexes().CreateMany(ctx, []mongo.IndexModel{
+	col := db.Collection("payment_intents")
+
+	// One-time migration for shared-address mode: the original unconditional
+	// unique index on address can't survive every shared intent carrying the
+	// same address. Drop it (best-effort — fresh deployments never had it)
+	// BEFORE CreateMany, or the options conflict fails the whole batch and
+	// silently skips the other new indexes (routes.go only warn-logs).
+	_ = col.Indexes().DropOne(ctx, "address_1")
+
+	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{{Key: "network", Value: 1}, {Key: "txHash", Value: 1}},
 			Options: options.Index().
 				SetUnique(true).
 				SetPartialFilterExpression(bson.D{{Key: "txHash", Value: bson.D{{Key: "$exists", Value: true}}}}),
 		},
-		// Every intent owns its derived address; a duplicate would mean a
-		// derivation-counter bug, so fail loudly at insert.
-		{Keys: bson.D{{Key: "address", Value: 1}}, Options: options.Index().SetUnique(true)},
+		// Every derived-mode intent owns its address; a duplicate would mean a
+		// derivation-counter bug, so fail loudly at insert. Scoped to
+		// addressMode:"derived" (new inserts always stamp it) — legacy docs
+		// fall outside, which is fine: their uniqueness is historical fact and
+		// the index is only a tripwire for future counter bugs. If the target
+		// Mongo rejects the equality partial filter, this index is the only
+		// casualty (derived uniqueness still holds via the atomic counter).
+		{
+			Keys: bson.D{{Key: "address", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.D{{Key: "addressMode", Value: AddressModeDerived}}),
+		},
+		// Shared-mode collision guard: no two OPEN shared intents may expect
+		// the same amount — exact-amount matching is only unambiguous under
+		// this invariant. $exists is the same partial-filter operator the
+		// other partial indexes here already rely on.
+		{
+			Keys: bson.D{{Key: "amountExpectedMicros", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.D{{Key: "sharedOpen", Value: bson.D{{Key: "$exists", Value: true}}}}),
+		},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "expiresAt", Value: 1}}},
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}},
 		{
@@ -251,17 +311,21 @@ func (s *MongoStore) ClaimPaymentSeen(ctx context.Context, id bson.ObjectID, txH
 	return &in, nil
 }
 
-// MarkConfirmed finalizes a confirming intent.
+// MarkConfirmed finalizes a confirming intent, releasing its shared-mode
+// amount slot (the $unset is a no-op for derived intents).
 func (s *MongoStore) MarkConfirmed(ctx context.Context, id bson.ObjectID, settlement string) error {
 	now := time.Now().UTC()
 	res, err := s.col.UpdateOne(ctx,
 		bson.D{{Key: "_id", Value: id}, {Key: "status", Value: StatusConfirming}},
-		bson.D{{Key: "$set", Value: bson.D{
-			{Key: "status", Value: StatusConfirmed},
-			{Key: "settlement", Value: settlement},
-			{Key: "confirmedAt", Value: now},
-			{Key: "updatedAt", Value: now},
-		}}},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "status", Value: StatusConfirmed},
+				{Key: "settlement", Value: settlement},
+				{Key: "confirmedAt", Value: now},
+				{Key: "updatedAt", Value: now},
+			}},
+			{Key: "$unset", Value: bson.D{{Key: "sharedOpen", Value: ""}}},
+		},
 	)
 	if err != nil {
 		return err
@@ -310,18 +374,87 @@ func (s *MongoStore) ExpireOne(ctx context.Context, id bson.ObjectID, now time.T
 
 // NextDerivationIndex atomically hands out the next HD index (0-based).
 func (s *MongoStore) NextDerivationIndex(ctx context.Context) (uint32, error) {
+	seq, err := s.nextCounter(ctx, derivationCounterID)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(seq - 1), nil // post-inc seq 1 → index 0
+}
+
+// NextAmountSalt atomically hands out the next shared-mode amount salt,
+// cycling 1..saltRange (never 0 — see saltRange).
+func (s *MongoStore) NextAmountSalt(ctx context.Context) (int64, error) {
+	seq, err := s.nextCounter(ctx, saltCounterID)
+	if err != nil {
+		return 0, err
+	}
+	return 1 + ((seq - 1) % saltRange), nil
+}
+
+// nextCounter is the shared atomic $inc over one counters document.
+func (s *MongoStore) nextCounter(ctx context.Context, id string) (int64, error) {
 	var doc struct {
 		Seq int64 `bson:"seq"`
 	}
 	err := s.counters.FindOneAndUpdate(ctx,
-		bson.D{{Key: "_id", Value: derivationCounterID}},
+		bson.D{{Key: "_id", Value: id}},
 		bson.D{{Key: "$inc", Value: bson.D{{Key: "seq", Value: 1}}}},
 		options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
 	).Decode(&doc)
 	if err != nil {
 		return 0, err
 	}
-	return uint32(doc.Seq - 1), nil // post-inc seq 1 → index 0
+	return doc.Seq, nil
+}
+
+// ReleaseSharedSlots frees the amount slots of shared intents that expired
+// unpaid and whose late-payment grace has ended — matching stops and the
+// amount becomes reusable at the same moment. Without this, every expired
+// $10 intent would burn one of the 9999 salt slots for that base forever.
+func (s *MongoStore) ReleaseSharedSlots(ctx context.Context, now time.Time, grace time.Duration) error {
+	_, err := s.col.UpdateMany(ctx,
+		bson.D{
+			{Key: "sharedOpen", Value: bson.D{{Key: "$exists", Value: true}}},
+			{Key: "status", Value: StatusExpired},
+			{Key: "txHash", Value: bson.D{{Key: "$exists", Value: false}}},
+			{Key: "expiresAt", Value: bson.D{{Key: "$lt", Value: now.Add(-grace)}}},
+		},
+		bson.D{
+			{Key: "$unset", Value: bson.D{{Key: "sharedOpen", Value: ""}}},
+			{Key: "$set", Value: bson.D{{Key: "updatedAt", Value: time.Now().UTC()}}},
+		},
+	)
+	return err
+}
+
+// FilterKnownTxHashes reports which of hashes are already recorded on any
+// intent — the shared scan uses it to skip transfers consumed on a prior tick.
+func (s *MongoStore) FilterKnownTxHashes(ctx context.Context, network string, hashes []string) (map[string]bool, error) {
+	known := make(map[string]bool, len(hashes))
+	if len(hashes) == 0 {
+		return known, nil
+	}
+	cur, err := s.col.Find(ctx,
+		bson.D{
+			{Key: "network", Value: network},
+			{Key: "txHash", Value: bson.D{{Key: "$in", Value: hashes}}},
+		},
+		options.Find().SetProjection(bson.D{{Key: "txHash", Value: 1}}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var docs []struct {
+		TxHash string `bson:"txHash"`
+	}
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	for _, d := range docs {
+		known[d.TxHash] = true
+	}
+	return known, nil
 }
 
 // ListAll returns the paginated admin view, newest first.

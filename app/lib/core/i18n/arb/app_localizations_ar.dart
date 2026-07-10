@@ -802,7 +802,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get usdtDepositTitle => 'إرسال USDT';
 
   @override
-  String get usdtSendExactly => 'أرسل هذا المبلغ بالضبط إلى العنوان أدناه:';
+  String get usdtSendExactly =>
+      'أرسل هذا المبلغ بالضبط — كل رقم مهم، وإلا لن تتم مطابقة دفعتك تلقائيًا:';
 
   @override
   String get usdtAmountLabel => 'المبلغ';
