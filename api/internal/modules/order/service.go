@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -259,6 +260,9 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 				return nil, badRequest("this recharge denomination is missing its amount")
 			}
 		}
+		if err := validateQuantityField(p, in.Qty); err != nil {
+			return nil, err
+		}
 		items = append(items, OrderItem{
 			ProductID:           p.ID,
 			VariantID:           variant.ID,
@@ -272,7 +276,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			FulfillmentProvider: p.FulfillmentProvider,
 			PlayerID:            in.PlayerID,
 			Recipient:           in.Recipient,
-			Fields:              resolveOrderFields(p, in.Fields),
+			Fields:              resolveOrderFields(p, in.Fields, in.Qty),
 		})
 		subtotal += price * float64(in.Qty)
 	}
@@ -750,22 +754,58 @@ func findVariant(p *product.Product, variantID string) (product.Variant, bool) {
 // server-resolved labels (from the product's InputFields spec — client labels
 // are never trusted). Fields with an empty value, an unknown key, or a spec
 // marked Sensitive (spec §3.2) are dropped, so sensitive values are never
-// persisted on the order.
-func resolveOrderFields(p *product.Product, in []OrderFieldInput) []OrderField {
-	if len(in) == 0 || len(p.InputFields) == 0 {
+// persisted on the order. A quantity-type field's value is never trusted from
+// the client either — it's always overridden with the line's real qty (and
+// always emitted, even if the client sent nothing for it), so the operator
+// fulfilling the order sees the quantity that was actually paid for.
+func resolveOrderFields(p *product.Product, in []OrderFieldInput, qty int) []OrderField {
+	if len(p.InputFields) == 0 {
 		return nil
 	}
-	spec := make(map[string]product.InputField, len(p.InputFields))
-	for _, f := range p.InputFields {
-		spec[f.Key] = f
+	values := make(map[string]string, len(in))
+	for _, f := range in {
+		values[f.Key] = f.Value
 	}
 	var out []OrderField
-	for _, f := range in {
-		def, ok := spec[f.Key]
-		if !ok || def.Sensitive || strings.TrimSpace(f.Value) == "" {
+	for _, def := range p.InputFields {
+		if def.Sensitive {
 			continue
 		}
-		out = append(out, OrderField{Key: f.Key, Label: def.Label, Value: f.Value})
+		if def.Type == product.InputFieldQuantity {
+			out = append(out, OrderField{Key: def.Key, Label: def.Label, Value: strconv.Itoa(qty)})
+			continue
+		}
+		v := strings.TrimSpace(values[def.Key])
+		if v == "" {
+			continue
+		}
+		out = append(out, OrderField{Key: def.Key, Label: def.Label, Value: v})
 	}
 	return out
+}
+
+// validateQuantityField rejects an order line whose qty falls outside the
+// bounds of its product's quantity-type input field (if any) — a legacy
+// minimum/maximum purchase quantity that must actually be honored now that
+// the field's value is derived from qty rather than freely typed. A
+// {min:0,max:0} constraint is a known legacy-import corruption shape
+// (migration/internal/transform/inputfields.go's corrupt() case), not a real
+// bound, and is treated as unconstrained.
+func validateQuantityField(p *product.Product, qty int) error {
+	for _, def := range p.InputFields {
+		if def.Type != product.InputFieldQuantity || def.Constraints == nil {
+			continue
+		}
+		min, max := def.Constraints.Min, def.Constraints.Max
+		if min == nil || max == nil {
+			continue
+		}
+		if *min == 0 && *max == 0 {
+			continue // known corrupt shape — not a real constraint
+		}
+		if float64(qty) < *min || float64(qty) > *max {
+			return badRequest(fmt.Sprintf("quantity must be between %g and %g for this product", *min, *max))
+		}
+	}
+	return nil
 }

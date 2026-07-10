@@ -494,6 +494,12 @@ abstract class AppLocalizations {
   /// **'Quantity'**
   String get quantityLabel;
 
+  /// No description provided for @qtyTotalLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} × {unitPrice} = {total}'**
+  String qtyTotalLine(int count, String unitPrice, String total);
+
   /// No description provided for @requiredBadge.
   ///
   /// In en, this message translates to:

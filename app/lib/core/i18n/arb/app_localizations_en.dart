@@ -215,6 +215,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quantityLabel => 'Quantity';
 
   @override
+  String qtyTotalLine(int count, String unitPrice, String total) {
+    return '$count × $unitPrice = $total';
+  }
+
+  @override
   String get requiredBadge => 'Required';
 
   @override

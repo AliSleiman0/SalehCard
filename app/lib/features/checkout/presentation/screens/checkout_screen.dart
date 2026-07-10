@@ -186,11 +186,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     AppColors colors,
   ) {
     final products = productsAsync.asData?.value ?? const <String, Product>{};
+    // The legacy "quantity"-type field (if any) is a read-only echo of the
+    // cart's real qty, not an editable delivery-detail input — the product
+    // page's stepper is the only place quantity is chosen.
     final needing = [
       for (final item in items)
         if ((products[item.productId]?.fulfillmentType ?? item.fulfillmentType) !=
                 'code' &&
-            (products[item.productId]?.inputFields.isNotEmpty ?? false))
+            (products[item.productId]?.inputFields
+                    .any((f) => f.type != 'quantity') ??
+                false))
           item,
     ];
     if (needing.isEmpty) return const [];
@@ -204,6 +209,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     ];
     for (final item in needing) {
       final product = products[item.productId]!;
+      final fields =
+          product.inputFields.where((f) => f.type != 'quantity').toList();
       if (showTitles) {
         widgets.add(Padding(
           padding: const EdgeInsets.only(top: 14),
@@ -214,8 +221,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   color: colors.textDim)),
         ));
       }
-      for (var i = 0; i < product.inputFields.length; i++) {
-        final field = product.inputFields[i];
+      for (var i = 0; i < fields.length; i++) {
+        final field = fields[i];
         final key = '${item.key}|${field.key}';
         final initial = i == 0 ? (item.playerId ?? '') : '';
         widgets.add(Padding(
@@ -250,6 +257,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final product = products[item.productId];
       if (product == null || product.fulfillmentType == 'code') continue;
       for (final field in product.inputFields) {
+        if (field.type == 'quantity') continue; // server derives this from qty
         final key = '${item.key}|${field.key}';
         final value = _valueFor(key, field).trim();
         if (value.isEmpty) {
@@ -272,7 +280,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final lines = <PlaceOrderLine>[];
     for (final item in items) {
       final product = products[item.productId];
-      final fields = product?.inputFields ?? const <InputField>[];
+      // Exclude the legacy "quantity"-type field — it's not customer-editable
+      // data; the server derives its value from the line's real qty.
+      final fields = (product?.inputFields ?? const <InputField>[])
+          .where((f) => f.type != 'quantity')
+          .toList();
       String? playerId;
       OrderRecipient? recipient;
       var fieldList = const <PlaceOrderField>[];

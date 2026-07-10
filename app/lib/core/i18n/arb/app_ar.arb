@@ -78,6 +78,14 @@
   "fromLabel": "يبدأ من",
   "chooseAmount": "اختر المبلغ",
   "quantityLabel": "الكمية",
+  "qtyTotalLine": "{count} × {unitPrice} = {total}",
+  "@qtyTotalLine": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "unitPrice": { "type": "String" },
+      "total": { "type": "String" }
+    }
+  },
   "requiredBadge": "مطلوب",
   "ratingsCount": "({count} تقييم)",
   "@ratingsCount": {
