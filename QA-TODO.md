@@ -218,3 +218,35 @@ matrix changes:
     exact salted payment auto-confirms; base-without-salt lands unmatched;
     duplicate amount after confirm lands unmatched. ~ $0.3-1 Binance BEP20
     withdrawal fee per test; funds land in the CLIENT's BSC wallet.
+
+## Reseller go-live (2026-07-11, PRs #72 + un-hide PR)
+
+Seed gives tiers Bronze 5% / Silver 8% / Gold 12% and resellers
+`gamehub.store@salehcard.local` (Gold) / `topup.pro@…` (Silver) /
+`blocked.reseller@…` (suspended), password `password123`.
+
+1. Catalog pricing (already API-verified in dev on 2026-07-11; re-check in the
+   app): login as the Gold reseller → product detail shows struck retail +
+   reseller price (0.88×), NO sale badge; anonymous/customer sees retail +
+   normal offers.
+2. Displayed == charged: place a wallet order as the reseller → order item
+   price, order total, and the wallet ledger debit all equal the browsed
+   price exactly (API-verified: 4.4 displayed → 4.4 charged → −4.4 ledger).
+3. Auth transitions: browse logged-out, then login as reseller → prices flip
+   without an app restart; logout → retail returns (provider invalidation).
+4. Offers tab: reseller sees the empty state; customer sees live offers.
+   Reseller checkout on an offer-bearing product charges the reseller price,
+   not the offer price.
+5. Admin flows: promote a customer → Reseller (role picker), they appear in
+   `/resellers`; assign a tier; balance-adjust credit + debit (ledger rows +
+   audit entries); tier CRUD incl. duplicate-name 409; non-super admin with
+   `users.manage`+`resellers.manage` can do all of it, `resellers` domain
+   hidden without the perms.
+6. Per-reseller custom price set via `POST /api/admin/resellers/{id}/prices`
+   (API-only for now — BL-15) shows on the reseller's next catalog read and
+   wins when lowest (API-verified in dev).
+7. Web (legacy): customer login → no agent-dashboard sidebar link, `/reseller`
+   redirects to `/dashboard`, no footer agent link; reseller login → link +
+   dashboard render.
+8. BL-9 chip (carried): the reseller's top-up request shows the amber
+   **reseller** chip in `/topups`.

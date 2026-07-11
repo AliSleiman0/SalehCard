@@ -2,6 +2,12 @@
 
 *Lead architect's consolidated assessment. Synthesized from per-subsystem gap analyses and a codebase survey (8 area surveys + 9 subsystem gap analyses), grounded against the authoritative spec at `salehcard-migration-decisions.md` (Sections 1–14). Generated 2026-06-21.*
 
+> **Historical snapshot (2026-06-21) — many rows are now stale.** Reseller
+> management, wallet admin, settings, order admin (refund/manual completion,
+> fulfillment modes), and the admin console have since been fully implemented;
+> see `CLAUDE.md` + `BACKLOG.md` for the current state. Kept for the original
+> gap analysis, not as a status report.
+
 ---
 
 ## 1. Executive summary

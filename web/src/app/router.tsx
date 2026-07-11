@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Layout from './Layout'
-import { RequireAuth, RedirectIfAuthed } from './RequireAuth'
+import { RequireAuth, RequireReseller, RedirectIfAuthed } from './RequireAuth'
 
 const HomePage = lazy(() => import('@/features/catalog/pages/HomePage'))
 const CategoryPage = lazy(() => import('@/features/catalog/pages/CategoryPage'))
@@ -106,9 +106,9 @@ export default function AppRouter() {
           <Route
             path="/reseller"
             element={
-              <RequireAuth>
+              <RequireReseller>
                 <ResellerDashboardPage />
-              </RequireAuth>
+              </RequireReseller>
             }
           />
         </Route>

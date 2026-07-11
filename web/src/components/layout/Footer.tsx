@@ -53,9 +53,9 @@ export function Footer() {
             <a className="small muted clickable" onClick={() => navigate('/orders')}>
               {t('order_history')}
             </a>
-            <a className="small muted clickable" onClick={() => navigate('/reseller')}>
-              {t('become_agent')}
-            </a>
+            {/* The "agent portal" link was removed: reseller onboarding is
+                admin-managed, and /reseller is role-gated (RequireReseller) —
+                for a non-reseller the link would just bounce to /dashboard. */}
           </div>
         </div>
       </div>

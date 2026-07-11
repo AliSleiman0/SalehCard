@@ -165,5 +165,7 @@ No query invalidation (sending SMS doesn't change the user list), same as before
 
 ## Out of scope / do not touch
 - Do **not** delete `platform/email` or its config fields (dormant seam kept intentionally).
-- Do **not** un-hide the reseller admin surface (deferred by the client).
+- ~~Do **not** un-hide the reseller admin surface (deferred by the client).~~
+  *(Deferral lifted 2026-07-11 — the reseller surface is live: nav + routes +
+  role option restored as part of the reseller go-live.)*
 - Do **not** build filter-based recipient selection — ids-only, mirroring the current flow.

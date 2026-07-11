@@ -59,16 +59,23 @@ top-up KPIs. Use them to fix mistakes or make back-office ledger corrections, no
 to fund a wallet as a matter of course.
 
 ### Reseller Pricing
-Resellers are priced at checkout as the **lowest** of three candidates
-(`order/service.go` `resellerPrice`):
+Resellers are priced as the **lowest** of four candidates
+(`product.ResellerUnitPrice` — `api/internal/modules/product/pricing.go`, the
+single rule shared by checkout **and** the catalog):
 1. **Retail** — `variant.price`.
 2. **Tier margin** — `retail * (1 - ResellerTier.MarginPercent/100)`, resolved from
    the buyer's assigned tier via `reseller.MarginForUser`. A blank/unknown tier or a
    lookup error means no margin (retail), never a failed order.
 3. **Per-variant override** — the optional `variant.resellerPrice` set on the product.
+4. **Per-reseller custom price** — a `reseller_prices` row for this buyer + variant
+   (`/api/admin/resellers/{id}/prices`), the most specific layer.
 
-Sale offers do **not** stack on reseller pricing (they apply to retail buyers only).
-`MarginPercent` was display-only before this; it is now enforced at order time.
+The catalog serves reseller prices too: `GET /api/v1/products*` runs behind
+`auth.Optional`, and a caller whose JWT carries role `reseller` gets their price
+overlaid on the transient `variants[].offerPrice` (no product-level `offer`, so
+no sale badge) — the browsed price always equals the charged price. Sale offers
+do **not** stack on reseller pricing (they apply to retail buyers only; resellers
+also get an empty `GET /api/v1/offers`).
 
 ## Frontend Conventions
 
@@ -141,11 +148,9 @@ A **separate** Vite + React + TS app (port **5174**) for the internal team — p
 - **Fulfillment color-coding** is consistent everywhere via `<FfBadge>`: blue = `code`, green = `account_credit` (`credit`), orange = `transfer`.
 
 ### What is wired vs mock
-- **Wired to the Go API:** `products` (list/create/edit/delete/bulk + category dropdowns from catalog-distinct facets), `inventory` (code stock, bulk upload, threshold config, code audit, **upload history**), the **dashboard** (every figure — revenue/orders/active-users/wallet KPIs + sparklines, charts, fulfillment, low-stock, system health), and **settings → admin-users** table (`/api/admin/users?role=admin`).
-- **Mock-driven (with `// TODO` + a `ComingSoonNote` banner):** orders, resellers, finance, promos, reviews, and the remaining settings store-config forms. Mock data lives in `lib/mock/demo.ts` (ported from the prototype's `data.js`).
+- **The admin console is fully API-wired** — no mock data file remains (`lib/mock/demo.ts` is deleted). This section originally tracked the port from the prototype; see `admin/BACKLOG.md` for the current wired-vs-missing split.
 
 ### Admin backend (`/api`)
 - `internal/platform/auth/middleware.go` → `AdminOnly(secret)` guards the `/api/admin` group: requires `role == "admin"` on the JWT; **bypasses with a synthetic admin in dev when `JWT_SECRET` is empty** (logs a one-time warning), enforces when a secret is set.
-- **Fully implemented:** product admin CRUD + bulk + category facets (`internal/modules/product/admin.go`), the inventory/code module incl. upload-history (`internal/modules/code/`, `GET /api/admin/upload-history` backed by the `upload_batches` collection), dashboard (`internal/modules/dashboard/`), and the admin user list (`internal/modules/user/admin.go`, `GET /api/admin/users`).
-- **Stubbed (501) with the full route map:** the remaining areas register `RegisterAdminRoutes(r, db)` returning `response.Stub("…")` — `reseller`, `settings`, and any others not yet filled in. Fill these in following the existing module pattern (model → repository → service → handler).
+- **All admin areas are fully implemented** — most recently reseller management (tiers, tier assignment, balance adjust, per-reseller price overrides — `internal/modules/reseller/`) and settings (`app_settings` singleton). `response.Stub` remains the scaffolding convention for future areas: register `RegisterAdminRoutes(r, db)` returning `response.Stub("…")`, then fill in following the module pattern (model → repository → service → handler).
 - All admin routes are wired in `internal/server/server.go` under `r.Route("/api/admin", …)`.
