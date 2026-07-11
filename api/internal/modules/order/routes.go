@@ -34,6 +34,9 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("order: failed to ensure indexes", "error", err)
 	}
+	// Deliberately option-less (no offer/reseller enrichment): PlaceOrder
+	// re-prices from raw variant.Price and applies offer/reseller pricing
+	// itself — an enriched service here could silently double-discount.
 	products := product.NewProductService(product.NewMongoRepository(db))
 	codes := code.NewService(db)
 	wlt := wallet.NewService(db)

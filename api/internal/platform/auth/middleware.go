@@ -102,6 +102,31 @@ func AuthRequired(secret string) func(http.Handler) http.Handler {
 	}
 }
 
+// Optional returns middleware that identifies — but never requires — the
+// caller: when the request carries a valid (non-expired) Bearer token with a
+// user id, the verified Claims are attached to the request context exactly as
+// AuthRequired would, so ClaimsFromContext/UserIDFromContext work downstream.
+// A missing, malformed, expired, or user-id-less token (e.g. a pending 2FA
+// challenge token — same rejection rule as AuthRequired) simply proceeds
+// anonymously. Use it on public routes whose response is personalized when a
+// valid session exists (reseller catalog pricing); it also stamps
+// "Vary: Authorization" since the response body now varies by caller identity,
+// so a future shared cache never serves a personalized body to the public.
+func Optional(secret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("Vary", "Authorization")
+			if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
+				token := strings.TrimPrefix(header, "Bearer ")
+				if claims, err := VerifyToken(secret, token); err == nil && claims.UserID != "" {
+					r = r.WithContext(context.WithValue(r.Context(), claimsKey, claims))
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // RequireDomain returns middleware enforcing the RBAC permission for one admin
 // domain (e.g. "orders"). It must run after AdminOnly (it reads the Claims that
 // AdminOnly attached). Read requests (GET/HEAD) need "<domain>.view"; everything

@@ -6,6 +6,7 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/network/providers.dart';
 import '../../../../core/push/push_service.dart';
 import '../../../../core/storage/token_store.dart';
+import '../../../catalog/presentation/providers.dart';
 import '../../domain/entities/user.dart';
 import '../providers.dart';
 
@@ -44,6 +45,15 @@ class AuthController extends Notifier<AuthState> {
   void setAuthenticated(User user) {
     state = AuthState(AuthStatus.authenticated, user: user);
     unawaited(ref.read(pushServiceProvider).register());
+    _invalidateCatalog();
+  }
+
+  /// Catalog prices are personalized server-side (resellers see their own
+  /// pricing), so cached product reads from before an auth transition are
+  /// stale — refetch on login, logout, and session expiry.
+  void _invalidateCatalog() {
+    ref.invalidate(catalogProductsProvider);
+    ref.invalidate(productDetailProvider);
   }
 
   /// Real email/password sign-in: stores the JWT (via the repository) and sets
@@ -103,6 +113,7 @@ class AuthController extends Notifier<AuthState> {
   /// there is not guaranteed — clear defensively on explicit logout).
   void onSessionExpired() {
     state = const AuthState(AuthStatus.unauthenticated);
+    _invalidateCatalog();
   }
 
   Future<void> logout() async {
@@ -111,6 +122,7 @@ class AuthController extends Notifier<AuthState> {
     await ref.read(pushServiceProvider).unregister();
     await ref.read(authRepositoryProvider).logout();
     state = const AuthState(AuthStatus.unauthenticated);
+    _invalidateCatalog();
   }
 }
 

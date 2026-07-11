@@ -225,8 +225,10 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		if isReseller {
 			// Resellers pay the lowest of retail, the tier-margin price, the
 			// per-variant global override, and any per-reseller custom price.
-			// Offers don't stack on top of reseller pricing.
-			price = resellerPrice(variant, resellerMargin, resellerCustom)
+			// Offers don't stack on top of reseller pricing. The formula is
+			// shared with the catalog's reseller enrichment so displayed price
+			// always equals charged price.
+			price = product.ResellerUnitPrice(variant, resellerMargin, resellerCustom)
 		} else if s.offers != nil {
 			// Honor a live sale-price offer on the retail price. Absence of an
 			// offer (ErrNotFound) leaves the price unchanged.
@@ -721,28 +723,6 @@ func (s *OrderService) GetOrder(ctx context.Context, userID, id bson.ObjectID) (
 // ListOrders returns the caller's order history, newest first.
 func (s *OrderService) ListOrders(ctx context.Context, userID bson.ObjectID) ([]*Order, error) {
 	return s.repo.FindByUserID(ctx, userID)
-}
-
-// resellerPrice computes the price a reseller pays for a variant: the lowest of
-// retail, the tier-margin price (retail * (1 - margin%/100)), the per-variant
-// global reseller override, and a per-reseller custom price. margin (percent)
-// and custom (variantId → price) are preloaded once per order by PlaceOrder.
-func resellerPrice(v product.Variant, marginPct float64, custom map[string]float64) float64 {
-	price := v.Price
-	if marginPct > 0 && marginPct < 100 {
-		if marginPrice := v.Price * (1 - marginPct/100); marginPrice < price {
-			price = marginPrice
-		}
-	}
-	if v.ResellerPrice != nil && *v.ResellerPrice < price {
-		price = *v.ResellerPrice
-	}
-	if custom != nil {
-		if cp, ok := custom[v.ID.Hex()]; ok && cp < price {
-			price = cp
-		}
-	}
-	return price
 }
 
 // findVariant locates a variant by hex id within a product.
