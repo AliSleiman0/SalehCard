@@ -17,7 +17,14 @@ import { money, downloadCsv } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useUsers } from '@/features/users/hooks/useUsers'
 import { adaptUser } from '@/features/users/lib/adaptUser'
-import { useResellers, useTiers, useUpdateTier, usePromoteToReseller } from '../hooks/useResellers'
+import {
+  useResellers,
+  useTiers,
+  useCreateTier,
+  useUpdateTier,
+  useDeleteTier,
+  usePromoteToReseller,
+} from '../hooks/useResellers'
 import { adaptReseller, tierColor } from '../lib/adaptReseller'
 import { listResellers, type ResellerStatus, type TierDef, type AdminReseller } from '../api/resellers'
 
@@ -32,6 +39,7 @@ export default function ResellerListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [page, setPage] = useState(1)
   const [editTier, setEditTier] = useState<TierDef | null>(null)
+  const [creating, setCreating] = useState(false)
   const [adding, setAdding] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -118,43 +126,65 @@ export default function ResellerListPage() {
         {tiersQuery.isLoading ? (
           <LoadingSpinner />
         ) : (
-          tiers.map((tn) => {
-            const tc = tierColor(tn.name)
-            return (
-              <div className="acard pad" key={tn.id} style={{ borderColor: tc + '55' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                  <span
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 9,
-                      background: tc + '22',
-                      color: tc,
-                      display: 'grid',
-                      placeItems: 'center',
-                    }}
-                  >
-                    <Icon name="shield" size={16} />
-                  </span>
-                  <b style={{ fontSize: 15 }}>{tn.name}</b>
-                  <span className="faint" style={{ marginInlineStart: 'auto', fontSize: 12.5 }}>
-                    {tn.count} agents
-                  </span>
-                </div>
-                <div>
-                  <div className="faint" style={{ fontSize: 11.5, fontWeight: 700 }}>
-                    Discount
+          <>
+            {tiers.map((tn) => {
+              const tc = tierColor(tn.name)
+              return (
+                <div className="acard pad" key={tn.id} style={{ borderColor: tc + '55' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+                    <span
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 9,
+                        background: tc + '22',
+                        color: tc,
+                        display: 'grid',
+                        placeItems: 'center',
+                      }}
+                    >
+                      <Icon name="shield" size={16} />
+                    </span>
+                    <b style={{ fontSize: 15 }}>{tn.name}</b>
+                    <span className="faint" style={{ marginInlineStart: 'auto', fontSize: 12.5 }}>
+                      {tn.count} agents
+                    </span>
                   </div>
-                  <div className="num" style={{ fontSize: 19, fontWeight: 800, color: tc }}>
-                    {tn.marginPercent}%
+                  <div>
+                    <div className="faint" style={{ fontSize: 11.5, fontWeight: 700 }}>
+                      Discount
+                    </div>
+                    <div className="num" style={{ fontSize: 19, fontWeight: 800, color: tc }}>
+                      {tn.marginPercent}%
+                    </div>
                   </div>
+                  <button className="abtn xs" style={{ width: '100%', marginTop: 12 }} onClick={() => setEditTier(tn)}>
+                    <Icon name="edit" size={13} /> Edit tier
+                  </button>
                 </div>
-                <button className="abtn xs" style={{ width: '100%', marginTop: 12 }} onClick={() => setEditTier(tn)}>
-                  <Icon name="edit" size={13} /> Edit tier
-                </button>
-              </div>
-            )
-          })
+              )
+            })}
+            {/* Always rendered — the only way to create the first tier. */}
+            <button
+              className="acard pad"
+              onClick={() => setCreating(true)}
+              style={{
+                border: '1px dashed var(--border)',
+                background: 'transparent',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                minHeight: 132,
+                color: 'var(--muted)',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="plus" size={20} />
+              <b style={{ fontSize: 13.5 }}>{tiers.length === 0 ? 'Create your first tier' : 'New tier'}</b>
+            </button>
+          </>
         )}
       </div>
 
@@ -273,7 +303,8 @@ export default function ResellerListPage() {
         )}
       </div>
 
-      {editTier && <TierEditModal tier={editTier} onClose={() => setEditTier(null)} />}
+      {creating && <TierModal tier={null} onClose={() => setCreating(false)} />}
+      {editTier && <TierModal tier={editTier} onClose={() => setEditTier(null)} />}
       {adding && <AddResellerModal tiers={tiers} onClose={() => setAdding(false)} />}
     </div>
   )
@@ -367,13 +398,20 @@ function AddResellerModal({ tiers, onClose }: { tiers: TierDef[]; onClose: () =>
   )
 }
 
-/** Edit a tier definition's margin. */
-function TierEditModal({ tier, onClose }: { tier: TierDef; onClose: () => void }) {
+/** Create or edit a tier definition (name + margin). Pass tier=null to create.
+ *  In edit mode it also offers delete (resellers on a removed tier fall back to
+ *  retail — the backend treats an unknown tier as no margin). */
+function TierModal({ tier, onClose }: { tier: TierDef | null; onClose: () => void }) {
   const { t } = useTranslation()
-  const [name, setName] = useState(tier.name)
-  const [margin, setMargin] = useState(String(tier.marginPercent))
+  const [name, setName] = useState(tier?.name ?? '')
+  const [margin, setMargin] = useState(tier ? String(tier.marginPercent) : '')
   const [error, setError] = useState('')
+  const create = useCreateTier()
   const update = useUpdateTier()
+  const del = useDeleteTier()
+  const busy = create.isPending || update.isPending || del.isPending
+
+  const fail = (e: unknown) => setError(e instanceof ApiError ? e.message : 'Something went wrong.')
 
   const save = () => {
     const m = Number(margin)
@@ -386,21 +424,37 @@ function TierEditModal({ tier, onClose }: { tier: TierDef; onClose: () => void }
       return
     }
     setError('')
-    update.mutate(
-      { id: tier.id, input: { name: name.trim(), marginPercent: m } },
-      {
-        onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Update failed.'),
-      },
-    )
+    const input = { name: name.trim(), marginPercent: m }
+    const opts = { onSuccess: onClose, onError: fail }
+    if (tier) update.mutate({ id: tier.id, input }, opts)
+    else create.mutate(input, opts)
+  }
+
+  const remove = () => {
+    if (!tier) return
+    const warn =
+      tier.count > 0
+        ? `Delete the ${tier.name} tier? ${tier.count} reseller(s) are on it and will fall back to retail pricing until reassigned.`
+        : `Delete the ${tier.name} tier?`
+    if (!window.confirm(warn)) return
+    setError('')
+    del.mutate(tier.id, { onSuccess: onClose, onError: fail })
   }
 
   return (
     <Modal onClose={onClose} maxWidth={420}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>Edit {tier.name} tier</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>
+          {tier ? `Edit ${tier.name} tier` : 'New tier'}
+        </h3>
         <label className="alabel">Name</label>
-        <input className="afield" value={name} onChange={(e) => setName(e.target.value)} />
+        <input
+          className="afield"
+          placeholder="e.g. Gold"
+          value={name}
+          autoFocus={!tier}
+          onChange={(e) => setName(e.target.value)}
+        />
         <label className="alabel" style={{ marginTop: 14 }}>
           Discount / margin (%)
         </label>
@@ -410,17 +464,30 @@ function TierEditModal({ tier, onClose }: { tier: TierDef; onClose: () => void }
           min="0"
           max="100"
           step="0.5"
+          placeholder="e.g. 10"
           value={margin}
           onChange={(e) => setMargin(e.target.value)}
         />
+        <div className="ahint" style={{ marginTop: 8 }}>
+          Resellers on this tier pay this % below retail on every product.
+        </div>
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
-        <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
-          <button className="abtn" onClick={onClose} disabled={update.isPending}>
-            {t('cancel')}
-          </button>
-          <button className="abtn primary" onClick={save} disabled={update.isPending}>
-            <Icon name="check" size={15} /> {t('save')}
-          </button>
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            {tier && (
+              <button className="abtn danger" onClick={remove} disabled={busy}>
+                <Icon name="trash" size={15} /> {t('delete')}
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="abtn" onClick={onClose} disabled={busy}>
+              {t('cancel')}
+            </button>
+            <button className="abtn primary" onClick={save} disabled={busy}>
+              <Icon name="check" size={15} /> {t('save')}
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
