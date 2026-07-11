@@ -25,6 +25,26 @@ class InsufficientFundsFailure extends Failure {
   const InsufficientFundsFailure(super.message);
 }
 
+/// Account deletion refused: the wallet still holds a balance.
+class WalletNotEmptyFailure extends Failure {
+  const WalletNotEmptyFailure(super.message);
+}
+
+/// Account deletion refused: orders are still pending/processing.
+class OrdersInFlightFailure extends Failure {
+  const OrdersInFlightFailure(super.message);
+}
+
+/// Account deletion refused: a payment intent is still open.
+class PaymentsPendingFailure extends Failure {
+  const PaymentsPendingFailure(super.message);
+}
+
+/// Account deletion refused: a wallet top-up awaits an admin decision.
+class TopUpsPendingFailure extends Failure {
+  const TopUpsPendingFailure(super.message);
+}
+
 class ServerFailure extends Failure {
   const ServerFailure(this.code, String message, [this.statusCode])
       : super(message);
@@ -79,6 +99,14 @@ Failure _fromCode(String code, String message, int? status) {
       return OutOfStockFailure(message);
     case 'INSUFFICIENT_FUNDS':
       return InsufficientFundsFailure(message);
+    case 'WALLET_NOT_EMPTY':
+      return WalletNotEmptyFailure(message);
+    case 'ORDERS_IN_FLIGHT':
+      return OrdersInFlightFailure(message);
+    case 'PAYMENTS_PENDING':
+      return PaymentsPendingFailure(message);
+    case 'TOPUPS_PENDING':
+      return TopUpsPendingFailure(message);
     default:
       return ServerFailure(code, message, status);
   }

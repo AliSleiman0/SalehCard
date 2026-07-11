@@ -34,6 +34,14 @@ Credentials → the auto-created Android key → Application restrictions →
 signing SHA-1 (and debug SHA-1 for dev builds). This also moots the
 GitGuardian flag on PR #27.
 
+**Update 2026-07-11 (Play Store hardening):** the release signing config is now
+in-repo and the upload keystore exists after the WP1 manual step
+(`PLAYSTORE-SUBMISSION.md` §7.1). Add BOTH the **upload-key SHA-1** and the
+**Play App Signing SHA-1** (Play Console → Setup → App signing, available after
+the first upload) to this API-key restriction **and** to the Firebase Android
+app (`salehcard-app` → Project settings → Android app) — Play re-signs the AAB,
+so the restricted key + FCM need the Play cert, not just the upload cert.
+
 ## 4. Service-account key custody ✅ DONE 2026-07-05
 
 Both key files moved out of Downloads to `C:\Users\user\.salehcard-secrets\`
@@ -53,10 +61,17 @@ support should be confirmed: check App Service Log Stream at startup for any
 
 The mobile app has **no CI/CD** — api/web/admin deploy on push to `main`, the
 app ships manually. Before launch decide + set up:
-- Release signing config (`app/android` keystore — none exists yet; debug-signed only).
-- Distribution channel: Play Console (needs account + review) vs direct APK.
+- ✅ Release signing config **shipped in-repo 2026-07-11**
+  (`app/android/app/build.gradle.kts` loads the gitignored `key.properties`; no
+  debug fallback — a release build without the keystore fails loudly). The
+  keystore itself is generated manually; keystore location + creds live in the
+  gitignored `DEPLOY-CREDS.local.md` (backup in `C:\Users\user\.salehcard-secrets\`).
+- ✅ Distribution channel decided: **Play Console** (internal → closed testing
+  first). The full Console-side playbook is `PLAYSTORE-SUBMISSION.md`; readiness
+  status in `PLAYSTORE-READINESS.md`.
 - Note: push notifications require the shipped app build to include the
-  BL-11 code + real `firebase_options.dart` (already on `main`).
+  BL-11 code + real `firebase_options.dart` (already on `main`) — plus
+  `google-services.json` (item 3 update) and the e2e check in item 19.
 
 ## 7. CI workflow action bumps (low priority) ✅ DONE 2026-07-05 (pending commit)
 
@@ -369,3 +384,27 @@ follows.
 6. The customer APK needs no rebuild for pricing (server-side), but the
    provider-invalidation fix rides the next app release — until then a
    freshly-promoted reseller should restart the app once after login.
+
+## 18. Set the real support email in prod admin Settings (Play Store hardening)
+
+The public legal pages served by the API (`/privacy`, `/delete-account` — live
+once the account-deletion/legal-pages PR deploys) render the support email from
+`app_settings.supportEmail` (admin console → Settings). Until it is set in prod,
+**the pages fall back to the `support@salehcard.com` placeholder** — set the
+real mailbox before the Play listing goes live, and use the same address as the
+listing's contact email (`PLAYSTORE-SUBMISSION.md` §4). Verify: open
+`https://salehcard-api.azurewebsites.net/privacy` and check the contact section
+updates without a restart.
+
+## 19. Push e2e validation on a Play-signed release build (Play Store hardening)
+
+The FCM Gradle wiring shipped 2026-07-11 (`com.google.gms.google-services`
+plugin in `app/android/settings.gradle.kts` + app `build.gradle.kts`), but
+`google-services.json` is still a Firebase-console download (item 3 update), and
+**Play App Signing re-signs the AAB with a different cert** — so push against a
+locally built AAB proves nothing about the store build. Before claiming push in
+the listing: install a **Play-delivered build** (internal testing track),
+trigger any business event (e.g. approve a top-up), and confirm a tray
+notification arrives on the device. If the GMS plugin misbehaves under the new
+AGP, the guarded FlutterFire programmatic init is the fallback — the e2e check
+is required either way.

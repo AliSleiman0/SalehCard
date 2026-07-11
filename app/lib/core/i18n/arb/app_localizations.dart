@@ -1645,6 +1645,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Network'**
   String get usdtNetworkLabel;
+
+  /// No description provided for @privacyPolicyMenuLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get privacyPolicyMenuLabel;
+
+  /// No description provided for @deleteAccountMenuLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccountMenuLabel;
+
+  /// No description provided for @deleteAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account?'**
+  String get deleteAccountTitle;
+
+  /// No description provided for @deleteAccountWarnPermanent.
+  ///
+  /// In en, this message translates to:
+  /// **'This is permanent — your account can\'t be recovered, and you\'ll be signed out on all devices.'**
+  String get deleteAccountWarnPermanent;
+
+  /// No description provided for @deleteAccountWarnKycDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Your identity (ID) photos are permanently deleted.'**
+  String get deleteAccountWarnKycDeleted;
+
+  /// No description provided for @deleteAccountWarnOrdersKept.
+  ///
+  /// In en, this message translates to:
+  /// **'Past orders are kept anonymized, as required for accounting.'**
+  String get deleteAccountWarnOrdersKept;
+
+  /// No description provided for @deleteAccountWarnWalletEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Your wallet must be empty before you can delete your account.'**
+  String get deleteAccountWarnWalletEmpty;
+
+  /// No description provided for @deleteAccountConfirmPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'To confirm, type \"{word}\" below.'**
+  String deleteAccountConfirmPrompt(String word);
+
+  /// No description provided for @deleteAccountConfirmWord.
+  ///
+  /// In en, this message translates to:
+  /// **'DELETE'**
+  String get deleteAccountConfirmWord;
+
+  /// No description provided for @deleteAccountCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get deleteAccountCta;
+
+  /// No description provided for @deleteAccountWalletNotEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Your wallet still has a balance. Spend or use it first, then try again.'**
+  String get deleteAccountWalletNotEmpty;
+
+  /// No description provided for @deleteAccountOrdersInFlight.
+  ///
+  /// In en, this message translates to:
+  /// **'You have orders still being processed. Please wait until they finish, then try again.'**
+  String get deleteAccountOrdersInFlight;
+
+  /// No description provided for @deleteAccountPaymentsPending.
+  ///
+  /// In en, this message translates to:
+  /// **'You have a payment in progress. Please wait until it completes or expires, then try again.'**
+  String get deleteAccountPaymentsPending;
+
+  /// No description provided for @deleteAccountTopUpsPending.
+  ///
+  /// In en, this message translates to:
+  /// **'You have a wallet top-up awaiting approval. Please wait for its decision, then try again.'**
+  String get deleteAccountTopUpsPending;
 }
 
 class _AppLocalizationsDelegate

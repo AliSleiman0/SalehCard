@@ -321,5 +321,23 @@
   "usdtConfirmedBody": "تم تأكيد دفعتك بعملة USDT.",
   "usdtExpiredTitle": "انتهت مهلة الدفع",
   "usdtExpiredBody": "لم يتم استلام أي دفعة في الوقت المحدد. ابدأ من جديد للحصول على عنوان جديد.",
-  "usdtNetworkLabel": "الشبكة"
+  "usdtNetworkLabel": "الشبكة",
+
+  "privacyPolicyMenuLabel": "سياسة الخصوصية",
+  "deleteAccountMenuLabel": "حذف الحساب",
+  "deleteAccountTitle": "حذف حسابك؟",
+  "deleteAccountWarnPermanent": "هذا الإجراء نهائي — لا يمكن استعادة حسابك، وسيتم تسجيل خروجك من جميع الأجهزة.",
+  "deleteAccountWarnKycDeleted": "تُحذف صور هويتك (مستندات التحقق) نهائياً.",
+  "deleteAccountWarnOrdersKept": "تُحفظ طلباتك السابقة بصورة مجهولة الهوية وفق المتطلبات المحاسبية.",
+  "deleteAccountWarnWalletEmpty": "يجب أن تكون محفظتك فارغة قبل حذف حسابك.",
+  "deleteAccountConfirmPrompt": "للتأكيد، اكتب \"{word}\" أدناه.",
+  "@deleteAccountConfirmPrompt": {
+    "placeholders": { "word": { "type": "String" } }
+  },
+  "deleteAccountConfirmWord": "حذف",
+  "deleteAccountCta": "حذف حسابي",
+  "deleteAccountWalletNotEmpty": "لا يزال في محفظتك رصيد. استخدمه أولاً ثم حاول مرة أخرى.",
+  "deleteAccountOrdersInFlight": "لديك طلبات قيد المعالجة. يرجى الانتظار حتى اكتمالها ثم المحاولة مرة أخرى.",
+  "deleteAccountPaymentsPending": "لديك عملية دفع قيد التنفيذ. يرجى الانتظار حتى اكتمالها أو انتهاء مهلتها ثم المحاولة مرة أخرى.",
+  "deleteAccountTopUpsPending": "لديك طلب شحن للمحفظة بانتظار الموافقة. يرجى انتظار البتّ فيه ثم المحاولة مرة أخرى."
 }

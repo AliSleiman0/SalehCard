@@ -1,7 +1,34 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Firebase (FCM) native wiring. google-services.json comes from the Firebase
+// console (ops step — see DEVOPS-TODO.md); the google-services plugin hard-fails
+// the build when the file is missing, so only apply it once it exists. Until
+// then push still works via FlutterFire's programmatic init (firebase_options.dart).
+if (file("google-services.json").exists()) {
+    pluginManager.apply("com.google.gms.google-services")
+} else {
+    logger.warn(
+        "google-services.json not found in android/app — skipping the " +
+            "com.google.gms.google-services plugin (FCM uses the programmatic FlutterFire init)."
+    )
+}
+
+// Release signing: the upload keystore path + passwords live in the gitignored
+// android/key.properties (see DEPLOY-CREDS.local.md). Debug builds don't need it.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+} else {
+    logger.warn(
+        "android/key.properties not found — release builds will fail; see DEPLOY-CREDS.local.md"
+    )
 }
 
 android {
@@ -15,7 +42,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.salehcard.salehcard_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -25,11 +51,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storeFile = (keystoreProperties["storeFile"] as String?)?.let { file(it) }
+            storePassword = keystoreProperties["storePassword"] as String?
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // No debug fallback: without key.properties the storeFile stays null
+            // and the release build fails loudly at :app:validateSigningRelease.
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

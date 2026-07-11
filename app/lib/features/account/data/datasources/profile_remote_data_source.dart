@@ -35,4 +35,11 @@ class ProfileRemoteDataSource {
     final response = await _dio.patch<dynamic>('/users/me', data: data);
     return UserDto.fromJson(unwrap(response) as Map<String, dynamic>);
   }
+
+  /// DELETE /users/me → permanently deletes (anonymizes) the account. The
+  /// server rejects it while the wallet holds a balance or orders/payments are
+  /// in flight (409s, surfaced as typed [Failure]s by the repository).
+  Future<void> deleteMe() async {
+    await _dio.delete<dynamic>('/users/me');
+  }
 }

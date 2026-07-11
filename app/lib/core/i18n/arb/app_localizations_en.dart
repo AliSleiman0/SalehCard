@@ -857,4 +857,56 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get usdtNetworkLabel => 'Network';
+
+  @override
+  String get privacyPolicyMenuLabel => 'Privacy policy';
+
+  @override
+  String get deleteAccountMenuLabel => 'Delete account';
+
+  @override
+  String get deleteAccountTitle => 'Delete your account?';
+
+  @override
+  String get deleteAccountWarnPermanent =>
+      'This is permanent — your account can\'t be recovered, and you\'ll be signed out on all devices.';
+
+  @override
+  String get deleteAccountWarnKycDeleted =>
+      'Your identity (ID) photos are permanently deleted.';
+
+  @override
+  String get deleteAccountWarnOrdersKept =>
+      'Past orders are kept anonymized, as required for accounting.';
+
+  @override
+  String get deleteAccountWarnWalletEmpty =>
+      'Your wallet must be empty before you can delete your account.';
+
+  @override
+  String deleteAccountConfirmPrompt(String word) {
+    return 'To confirm, type \"$word\" below.';
+  }
+
+  @override
+  String get deleteAccountConfirmWord => 'DELETE';
+
+  @override
+  String get deleteAccountCta => 'Delete my account';
+
+  @override
+  String get deleteAccountWalletNotEmpty =>
+      'Your wallet still has a balance. Spend or use it first, then try again.';
+
+  @override
+  String get deleteAccountOrdersInFlight =>
+      'You have orders still being processed. Please wait until they finish, then try again.';
+
+  @override
+  String get deleteAccountPaymentsPending =>
+      'You have a payment in progress. Please wait until it completes or expires, then try again.';
+
+  @override
+  String get deleteAccountTopUpsPending =>
+      'You have a wallet top-up awaiting approval. Please wait for its decision, then try again.';
 }

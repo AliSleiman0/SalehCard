@@ -8,6 +8,7 @@ import '../../auth/presentation/controllers/auth_controller.dart';
 import '../data/datasources/profile_remote_data_source.dart';
 import '../data/repositories/profile_repository_impl.dart';
 import '../domain/repositories/profile_repository.dart';
+import '../domain/usecases/delete_account.dart';
 import '../domain/usecases/get_profile.dart';
 import '../domain/usecases/update_profile.dart';
 
@@ -27,6 +28,10 @@ final getProfileUseCaseProvider = Provider<GetProfile>(
 
 final updateProfileUseCaseProvider = Provider<UpdateProfile>(
   (ref) => UpdateProfile(ref.watch(profileRepositoryProvider)),
+);
+
+final deleteAccountUseCaseProvider = Provider<DeleteAccount>(
+  (ref) => DeleteAccount(ref.watch(profileRepositoryProvider)),
 );
 
 /// The authenticated user's profile (`GET /users/me`). Throws the [Failure] so
@@ -77,3 +82,42 @@ class ProfileController extends Notifier<ProfileEditState> {
 final profileControllerProvider =
     NotifierProvider<ProfileController, ProfileEditState>(
         ProfileController.new);
+
+/// Submit state for the destructive delete-account flow.
+class DeleteAccountState {
+  const DeleteAccountState({this.submitting = false, this.failure});
+
+  final bool submitting;
+  final Failure? failure;
+}
+
+class DeleteAccountController extends Notifier<DeleteAccountState> {
+  @override
+  DeleteAccountState build() => const DeleteAccountState();
+
+  /// Deletes the account via `DELETE /users/me`. Returns `true` on success —
+  /// the sheet pops itself and then signs out via the auth controller (the UI
+  /// must go first: logout flips the router to /login) — or `false` on failure
+  /// (surfaced via [state] so the sheet stays open with an inline error).
+  Future<bool> submit() async {
+    if (state.submitting) return false;
+    state = const DeleteAccountState(submitting: true);
+    final result = await ref.read(deleteAccountUseCaseProvider).call();
+    return result.match(
+      (failure) {
+        state = DeleteAccountState(failure: failure);
+        return false;
+      },
+      (_) {
+        state = const DeleteAccountState();
+        return true;
+      },
+    );
+  }
+
+  void reset() => state = const DeleteAccountState();
+}
+
+final deleteAccountControllerProvider =
+    NotifierProvider<DeleteAccountController, DeleteAccountState>(
+        DeleteAccountController.new);

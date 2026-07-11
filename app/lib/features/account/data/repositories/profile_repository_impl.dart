@@ -36,4 +36,14 @@ class ProfileRepositoryImpl implements ProfileRepository {
       return Left(mapError(error));
     }
   }
+
+  @override
+  Future<Either<Failure, Unit>> deleteAccount() async {
+    try {
+      await _remote.deleteMe();
+      return const Right(unit);
+    } catch (error) {
+      return Left(mapError(error));
+    }
+  }
 }

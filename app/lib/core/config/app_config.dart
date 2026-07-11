@@ -13,6 +13,14 @@ class AppConfig {
     defaultValue: 'http://192.168.10.170:8090/api/v1',
   );
 
+  /// Origin serving the public legal pages — the same host as the API, derived
+  /// by stripping the versioned `/api/v1` suffix from [apiBaseUrl].
+  static final String legalBaseUrl =
+      apiBaseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '');
+
+  /// The public (bilingual) privacy-policy page, opened in an external browser.
+  static final String privacyUrl = '$legalBaseUrl/privacy';
+
   /// Header value identifying this native client to the backend so it returns
   /// the refresh token in the JSON body (browsers use the httpOnly cookie).
   static const String clientHeaderName = 'X-Client';

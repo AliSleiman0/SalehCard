@@ -855,4 +855,56 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get usdtNetworkLabel => 'الشبكة';
+
+  @override
+  String get privacyPolicyMenuLabel => 'سياسة الخصوصية';
+
+  @override
+  String get deleteAccountMenuLabel => 'حذف الحساب';
+
+  @override
+  String get deleteAccountTitle => 'حذف حسابك؟';
+
+  @override
+  String get deleteAccountWarnPermanent =>
+      'هذا الإجراء نهائي — لا يمكن استعادة حسابك، وسيتم تسجيل خروجك من جميع الأجهزة.';
+
+  @override
+  String get deleteAccountWarnKycDeleted =>
+      'تُحذف صور هويتك (مستندات التحقق) نهائياً.';
+
+  @override
+  String get deleteAccountWarnOrdersKept =>
+      'تُحفظ طلباتك السابقة بصورة مجهولة الهوية وفق المتطلبات المحاسبية.';
+
+  @override
+  String get deleteAccountWarnWalletEmpty =>
+      'يجب أن تكون محفظتك فارغة قبل حذف حسابك.';
+
+  @override
+  String deleteAccountConfirmPrompt(String word) {
+    return 'للتأكيد، اكتب \"$word\" أدناه.';
+  }
+
+  @override
+  String get deleteAccountConfirmWord => 'حذف';
+
+  @override
+  String get deleteAccountCta => 'حذف حسابي';
+
+  @override
+  String get deleteAccountWalletNotEmpty =>
+      'لا يزال في محفظتك رصيد. استخدمه أولاً ثم حاول مرة أخرى.';
+
+  @override
+  String get deleteAccountOrdersInFlight =>
+      'لديك طلبات قيد المعالجة. يرجى الانتظار حتى اكتمالها ثم المحاولة مرة أخرى.';
+
+  @override
+  String get deleteAccountPaymentsPending =>
+      'لديك عملية دفع قيد التنفيذ. يرجى الانتظار حتى اكتمالها أو انتهاء مهلتها ثم المحاولة مرة أخرى.';
+
+  @override
+  String get deleteAccountTopUpsPending =>
+      'لديك طلب شحن للمحفظة بانتظار الموافقة. يرجى انتظار البتّ فيه ثم المحاولة مرة أخرى.';
 }

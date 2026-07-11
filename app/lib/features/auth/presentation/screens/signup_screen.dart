@@ -1,8 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/config/app_config.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
@@ -307,12 +310,31 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   }
 }
 
-/// Legal text with an underlined magenta "terms and conditions" link.
-class _LegalLine extends StatelessWidget {
+/// Legal text with an underlined magenta "terms and conditions" link that
+/// opens the public privacy/terms page in an external browser. Stateful so the
+/// span's [TapGestureRecognizer] is disposed with the widget.
+class _LegalLine extends StatefulWidget {
   const _LegalLine({required this.prefix, required this.link});
 
   final String prefix;
   final String link;
+
+  @override
+  State<_LegalLine> createState() => _LegalLineState();
+}
+
+class _LegalLineState extends State<_LegalLine> {
+  late final TapGestureRecognizer _linkRecognizer = TapGestureRecognizer()
+    ..onTap = () => launchUrl(
+          Uri.parse(AppConfig.privacyUrl),
+          mode: LaunchMode.externalApplication,
+        );
+
+  @override
+  void dispose() {
+    _linkRecognizer.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -323,11 +345,12 @@ class _LegalLine extends StatelessWidget {
         TextSpan(
           children: [
             TextSpan(
-              text: prefix,
+              text: widget.prefix,
               style: TextStyle(fontSize: 12.5, height: 1.55, color: faint),
             ),
             TextSpan(
-              text: link,
+              text: widget.link,
+              recognizer: _linkRecognizer,
               style: const TextStyle(
                 fontSize: 12.5,
                 color: AppTokens.brand2,

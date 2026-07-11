@@ -253,3 +253,37 @@ Seed gives tiers Bronze 5% / Silver 8% / Gold 12% and resellers
    dashboard render.
 8. BL-9 chip (carried): the reseller's top-up request shows the amber
    **reseller** chip in `/topups`.
+
+## Play Store hardening — account deletion + legal pages (2026-07-12)
+
+Shipped on green static gates only (worktree `playstore-hardening`); run before
+submitting to Play.
+
+1. **In-app account deletion e2e** (Flutter vs local API, EN **and** AR/RTL):
+   menu → Delete account → two-stage sheet (explainer → type-to-confirm,
+   `DELETE` / `حذف`) → success lands on `/login`; re-login with the deleted
+   phone/email fails; Mongo doc anonymized (status `deleted`, email/phone/
+   name/savedPlayerIds gone); `kyc_submissions` row + local `uploads/kyc/*`
+   files gone; refresh token 401s; the same phone can re-register fresh.
+2. **All four 409 guard paths** render their localized message and keep the
+   sheet open: non-zero wallet (`WALLET_NOT_EMPTY`), in-flight order
+   (`ORDERS_IN_FLIGHT`), open USDT intent (`PAYMENTS_PENDING`), pending
+   top-up request (`TOPUPS_PENDING`).
+3. **Lingering-token lockout**: after deletion, replaying the old access token
+   against `POST /wallet/topups`, `POST /kyc`, `POST /reviews`,
+   `POST /products/{id}/verify-account` → 401 (`auth.RequireActive`); a
+   suspended account gets 403 `ACCOUNT_SUSPENDED` on the same routes and
+   **cannot** self-delete (403).
+4. **Legal pages in a real browser**: `/privacy` + `/delete-account` — anchor
+   language toggle, Arabic section renders RTL, footer email = fallback until
+   Settings → Store & support is saved, then reflects the change without an
+   API restart; admin card save round-trips.
+5. **Cleartext manifest split**: merged-manifest dump (Android Studio or
+   `aapt2`) shows `usesCleartextTraffic=true` in the **debug** APK only,
+   absent in release; release build against the prod HTTPS API works.
+6. **Release signing** (once the keystore exists): `flutter build appbundle`
+   with `key.properties` → `keytool -printcert -jarfile` shows the upload
+   cert (NOT `androiddebugkey`); without `key.properties` the release build
+   fails at `:app:validateSigningRelease` while debug builds still work.
+7. **Push on a release build**: FCM delivery on a Play-signed AAB after
+   `google-services.json` + SHA-1s land (DEVOPS-TODO #19).
