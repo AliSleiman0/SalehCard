@@ -62,6 +62,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 
 	r.Route("/api/v1/orders", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
+		r.Use(auth.RequireActive(db))
 		r.Post("/", h.PlaceOrder)
 		r.Get("/", h.ListOrders)
 		r.Get("/{id}", h.GetOrder)

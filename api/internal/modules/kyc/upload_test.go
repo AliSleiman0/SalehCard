@@ -17,12 +17,15 @@ import (
 	"testing"
 )
 
-// fakeStorage records Upload calls and returns canned URLs; when err is set,
-// every Upload fails (the store-outage path).
+// fakeStorage records Upload/Delete calls and returns canned URLs; when err is
+// set, every Upload fails (the store-outage path); when delErr is set, every
+// Delete fails (the purge-abort path).
 type fakeStorage struct {
-	mu   sync.Mutex
-	keys []string
-	err  error
+	mu      sync.Mutex
+	keys    []string
+	deleted []string
+	err     error
+	delErr  error
 }
 
 func (f *fakeStorage) Upload(_ context.Context, key, _ string, _ []byte) (string, error) {
@@ -33,6 +36,16 @@ func (f *fakeStorage) Upload(_ context.Context, key, _ string, _ []byte) (string
 	}
 	f.keys = append(f.keys, key)
 	return "http://cdn.test/uploads/" + key, nil
+}
+
+func (f *fakeStorage) Delete(_ context.Context, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.delErr != nil {
+		return f.delErr
+	}
+	f.deleted = append(f.deleted, key)
+	return nil
 }
 
 // jpegBytes encodes a tiny opaque JPEG the imaging pipeline accepts.

@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/role"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
@@ -19,8 +20,9 @@ import (
 
 // RegisterRoutes wires the customer-facing auth + profile routes onto r.
 // These are public (outside the /api/admin group); /users/* is guarded by
-// AuthRequired.
-func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
+// AuthRequired. rec logs self-deletions to the admin audit trail; ports are
+// the cross-module dependencies of account deletion (see DeletionPorts).
+func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, rec audit.Recorder, ports DeletionPorts) {
 	repo := NewMongoRepository(db)
 	refreshRepo := NewMongoRefreshRepository(db)
 	otpRepo := NewMongoOTPRepository(db)
@@ -72,8 +74,10 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 				return nil, err
 			}
 			return rl.Permissions, nil
-		}))
+		}),
+		WithDeletionPorts(ports))
 	h := NewHandler(svc, cfg.CookieSecure, cfg.RefreshTokenTTL)
+	h.rec = rec
 
 	// Per-IP rate limiting on the public auth endpoints (RealIP upstream gives the
 	// true client IP). A general cap on all auth calls + a tighter cap on OTP
@@ -87,6 +91,11 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 	authLimit := ratelimit.Middleware(limiter, cfg.RateLimitAuthMax, cfg.RateLimitAuthWindow, ratelimit.ClientIP)
 	otpLimit := ratelimit.Middleware(limiter, cfg.RateLimitOTPMax, cfg.RateLimitOTPWindow, func(req *http.Request) string {
 		return "otp:" + ratelimit.ClientIP(req)
+	})
+	// Account deletion shares the general auth cap under its own key, so a
+	// burst of delete calls cannot crowd out (or hide behind) login traffic.
+	deleteLimit := ratelimit.Middleware(limiter, cfg.RateLimitAuthMax, cfg.RateLimitAuthWindow, func(req *http.Request) string {
+		return "acctdel:" + ratelimit.ClientIP(req)
 	})
 
 	r.Route("/api/v1/auth", func(r chi.Router) {
@@ -106,5 +115,6 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
 		r.Get("/me", h.GetProfile)
 		r.Patch("/me", h.UpdateProfile)
+		r.With(deleteLimit).Delete("/me", h.DeleteMe)
 	})
 }

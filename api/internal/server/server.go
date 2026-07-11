@@ -98,6 +98,12 @@ func (s *Server) Routes() {
 
 	s.router.Get("/health", s.handleHealth)
 
+	// Public legal pages (Play Store listing + in-app links). Bilingual static
+	// HTML with the admin-configurable support email injected per request.
+	pages := newLegalPages(settings.NewMongoRepository(s.db))
+	s.router.Get("/privacy", pages.privacy)
+	s.router.Get("/delete-account", pages.deleteAccount)
+
 	// Blob storage for product images (POST /api/admin/products/images) and
 	// customer KYC document photos (POST /api/v1/kyc/documents).
 	// Falls open to the dev local adapter on Azure misconfig, mirroring the
@@ -139,8 +145,23 @@ func (s *Server) Routes() {
 	// Offers listing (storefront Offers tab; sale-price deals) — AuthRequired.
 	offer.RegisterRoutes(s.router, s.db, s.cfg)
 
+	// Admin audit-log recorder. Constructed here (rather than with the admin
+	// group below) because customer self-deletion also records to it.
+	rec := audit.NewRecorder(s.db)
+
 	// Customer auth + profile (public; /users/* guarded by AuthRequired).
-	user.RegisterRoutes(s.router, s.db, s.cfg)
+	// Account deletion (DELETE /users/me) reaches across modules through
+	// narrow ports: guard counts from order/payment, the KYC purge (which also
+	// deletes document blobs from the shared store), and device-token cleanup.
+	// Second repo constructions, like offerCat above — EnsureIndexes still runs
+	// in each module's own RegisterRoutes.
+	user.RegisterRoutes(s.router, s.db, s.cfg, rec, user.DeletionPorts{
+		Orders:   order.NewMongoRepository(s.db.Collection("orders")),
+		Payments: payment.NewMongoStore(s.db),
+		TopUps:   wallet.NewTopUpRepo(s.db),
+		KYC:      kyc.NewPurger(kyc.NewMongoRepository(s.db.Collection("kyc_submissions"), s.db.Collection("users")), store),
+		Tokens:   notification.NewMongoRepository(s.db.Collection("notifications"), s.db.Collection("device_tokens")),
+	})
 
 	// Customer-facing notifications are fanned out through the notifier: an
 	// inbox row plus a best-effort push via the configured provider (log in dev).
@@ -220,9 +241,9 @@ func (s *Server) Routes() {
 
 	// Admin route group — every /api/admin/* route requires an `admin` JWT role
 	// (AdminOnly bypasses only in development when no JWT secret is configured).
-	// Mutating admin actions are recorded to the audit log via rec; customer-
-	// visible outcomes (order/top-up/KYC decisions) also notify via ntf.
-	rec := audit.NewRecorder(s.db)
+	// Mutating admin actions are recorded to the audit log via rec (constructed
+	// above, shared with customer self-deletion); customer-visible outcomes
+	// (order/top-up/KYC decisions) also notify via ntf.
 	s.router.Route("/api/admin", func(r chi.Router) {
 		r.Use(auth.AdminOnly(s.cfg.JWTSecret, s.cfg.Env == "development"))
 

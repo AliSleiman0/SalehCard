@@ -41,6 +41,11 @@ type Repository interface {
 	BulkUpdateStatus(ctx context.Context, ids []bson.ObjectID, status Status) (int64, error)
 	// SoftDelete anonymizes an account in place (status=deleted, PII unset).
 	SoftDelete(ctx context.Context, id bson.ObjectID) (*User, error)
+	// SoftDeleteSelf is SoftDelete for the customer self-service path: it also
+	// unsets the customer-facing PII (name, saved game IDs) and only matches a
+	// live, zero-balance account — ErrNotFound signals the account was already
+	// deleted or has since been credited (caller re-fetches to tell them apart).
+	SoftDeleteSelf(ctx context.Context, id bson.ObjectID) (*User, error)
 	UpdateResellerTier(ctx context.Context, id bson.ObjectID, tier string) (*User, error)
 	// CountActiveSuperAdmins counts non-suspended super admins — admins with no
 	// custom RBAC role (the last-super-admin demotion/suspension guard).
@@ -428,6 +433,52 @@ func (r *MongoRepository) SoftDelete(ctx context.Context, id bson.ObjectID) (*Us
 				// not keep an adminRoleId, or role.CountAssigned would count it and
 				// block deletion of an otherwise-unused role forever.
 				{Key: "adminRoleId", Value: ""},
+			}},
+		},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&u)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
+// SoftDeleteSelf performs the customer self-deletion flavor of SoftDelete: the
+// same anonymizing update plus the customer-facing PII (name, saved game IDs),
+// guarded so it only fires on a live account whose wallet holds nothing. The
+// balance filter closes the race where a credit (top-up approval, USDT watcher)
+// lands between the service's guard check and this write; $not/$gt keeps
+// legacy documents with no walletBalance field matching. Suspended is excluded
+// too — deletion frees the unique email/phone indexes, which would let a
+// banned person re-register — so a suspension racing in mid-request still
+// blocks. ErrNotFound means the filter missed — already deleted, suspended, or
+// credited since the guard — and the caller re-fetches to disambiguate.
+func (r *MongoRepository) SoftDeleteSelf(ctx context.Context, id bson.ObjectID) (*User, error) {
+	now := time.Now().UTC()
+	var u User
+	err := r.collection.FindOneAndUpdate(ctx,
+		bson.D{
+			{Key: "_id", Value: id},
+			{Key: "status", Value: bson.D{{Key: "$nin", Value: bson.A{StatusDeleted, StatusSuspended}}}},
+			{Key: "walletBalance", Value: bson.D{{Key: "$not", Value: bson.D{{Key: "$gt", Value: 0}}}}},
+		},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "status", Value: StatusDeleted},
+				{Key: "deletedAt", Value: now},
+				{Key: "updatedAt", Value: now},
+			}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "email", Value: ""},
+				{Key: "phone", Value: ""},
+				{Key: "passwordHash", Value: ""},
+				{Key: "googleId", Value: ""},
+				{Key: "adminRoleId", Value: ""},
+				{Key: "name", Value: ""},
+				{Key: "savedPlayerIds", Value: ""},
 			}},
 		},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),

@@ -66,7 +66,9 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, offers
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
 		// Authenticated + rate-limited: resolve a game player ID to its nickname
-		// before purchase.
-		r.With(auth.AuthRequired(cfg.JWTSecret), verifyLimit).Post("/{id}/verify-account", h.VerifyAccount)
+		// before purchase. RequireActive too — each call is a billed third-party
+		// request, so a suspended/deleted account's lingering token must not
+		// keep burning it.
+		r.With(auth.AuthRequired(cfg.JWTSecret), auth.RequireActive(db), verifyLimit).Post("/{id}/verify-account", h.VerifyAccount)
 	})
 }

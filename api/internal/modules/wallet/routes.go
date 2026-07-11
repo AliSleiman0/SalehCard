@@ -26,6 +26,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 
 	r.Route("/api/v1/wallet", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
+		r.Use(auth.RequireActive(db))
 		r.Get("/", h.GetWallet)
 		r.Post("/topups", h.TopUp)
 		r.Get("/topups", h.ListTopUps)

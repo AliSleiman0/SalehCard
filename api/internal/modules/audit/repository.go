@@ -115,8 +115,11 @@ func NewRecorder(db *mongo.Database) Recorder {
 
 // Record fills the actor (from the request JWT claims) and timestamp, then
 // persists the entry. Failures are logged, never propagated — see Recorder.
+// A pre-set actor wins over the claims: customer self-deletion uses this so
+// the permanent audit row never stores the email/phone the same request just
+// erased from the user document.
 func (rec *recorder) Record(ctx context.Context, e Entry) {
-	if claims, ok := auth.ClaimsFromContext(ctx); ok {
+	if claims, ok := auth.ClaimsFromContext(ctx); ok && e.ActorID == "" && e.ActorEmail == "" {
 		e.ActorID = claims.UserID
 		// Keep real emails intact; fall back to phone/user-id only when empty so a
 		// phone-only admin never records a blank actor.

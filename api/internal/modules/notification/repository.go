@@ -160,3 +160,15 @@ func (r *MongoRepository) DeleteTokenValue(ctx context.Context, token string) er
 	_, err := r.tokens.DeleteOne(ctx, bson.D{{Key: "token", Value: token}})
 	return err
 }
+
+// DeleteAllForUser removes every device token registered to userID (account
+// deletion — a dead account must not keep pushable devices), returning the
+// number of tokens removed. A concrete-repo method, consumed by the user
+// module through its own DeviceTokenPurger port.
+func (r *MongoRepository) DeleteAllForUser(ctx context.Context, userID bson.ObjectID) (int64, error) {
+	res, err := r.tokens.DeleteMany(ctx, bson.D{{Key: "userId", Value: userID}})
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
+}

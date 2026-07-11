@@ -10,10 +10,10 @@ import { useCan } from '@/stores/auth'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 
 // The persisted surfaces here are the admin-accounts list (backed by
-// /api/admin/users?role=admin) and the Loyalty program knobs (backed by
-// /api/admin/settings). Other store config (gateways, notification thresholds)
-// still has no admin form — those fields exist on the settings doc but aren't
-// edited here yet.
+// /api/admin/users?role=admin) and the Store & support + Loyalty program knobs
+// (backed by /api/admin/settings). Other store config (gateways, notification
+// thresholds) still has no admin form — those fields exist on the settings doc
+// but aren't edited here yet.
 export default function SettingsPage() {
   const { t } = useTranslation()
   const can = useCan()
@@ -31,9 +31,14 @@ export default function SettingsPage() {
   const { data: rolesRes } = useRoles()
   const roleNameById = new Map((rolesRes?.data ?? []).map((r) => [r.id, r.name]))
 
-  // --- Loyalty program ------------------------------------------------------
+  // --- Store & support ------------------------------------------------------
   const { data: settingsRes, isLoading: settingsLoading } = useSettings()
   const update = useUpdateSettings()
+  const [supportEmail, setSupportEmail] = useState('')
+  const [supportError, setSupportError] = useState<string | null>(null)
+  const [supportSaved, setSupportSaved] = useState(false)
+
+  // --- Loyalty program ------------------------------------------------------
   const [loyaltyEnabled, setLoyaltyEnabled] = useState(true)
   const [earnRate, setEarnRate] = useState('5')
   const [loyaltyError, setLoyaltyError] = useState<string | null>(null)
@@ -48,6 +53,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const s = settingsRes?.data
     if (!s) return
+    setSupportEmail(s.supportEmail)
     setLoyaltyEnabled(s.loyaltyEnabled)
     setEarnRate(String(s.loyaltyEarnUsdPerPoint))
     setTwoFAEnabled(s.adminSmsTwoFactorEnabled)
@@ -68,6 +74,19 @@ export default function SettingsPage() {
           setTwoFAEnabled(!next)
           setTwoFAError(e instanceof ApiError ? e.message : 'Could not update the two-factor setting.')
         },
+      },
+    )
+  }
+
+  function saveSupport() {
+    setSupportError(null)
+    setSupportSaved(false)
+    update.mutate(
+      { supportEmail: supportEmail.trim() },
+      {
+        onSuccess: () => setSupportSaved(true),
+        onError: (e) =>
+          setSupportError(e instanceof ApiError ? e.message : 'Could not save the support email.'),
       },
     )
   }
@@ -95,8 +114,45 @@ export default function SettingsPage() {
       <PageHead
         crumbs={[t('grp_system'), t('nav_settings')]}
         title={t('nav_settings')}
-        sub="Loyalty program and admin accounts"
+        sub="Store contact, loyalty program and admin accounts"
       />
+
+      <div className="acard" style={{ marginBottom: 18 }}>
+        <div className="panelhead">
+          <Icon name="bag" size={17} />
+          <h3>Store & support</h3>
+        </div>
+        <div className="pad">
+          <div className="g2">
+            <div>
+              <label className="alabel">Support email</label>
+              <input
+                className="afield"
+                type="email"
+                placeholder="support@salehcard.com"
+                value={supportEmail}
+                onChange={(e) => setSupportEmail(e.target.value)}
+              />
+              <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
+                Shown on the public privacy-policy and account-deletion pages.
+              </div>
+            </div>
+          </div>
+          {supportError && (
+            <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 14 }}>
+              {supportError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>
+            <button className="abtn primary" onClick={saveSupport} disabled={update.isPending || settingsLoading || !canManage}>
+              <Icon name="check" size={15} /> {t('save')}
+            </button>
+            {supportSaved && !update.isPending && (
+              <span className="muted" style={{ fontSize: 12.5 }}>Saved.</span>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="acard" style={{ marginBottom: 18 }}>
         <div className="panelhead">

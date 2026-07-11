@@ -197,6 +197,22 @@ func (f *fakeUserRepo) SoftDelete(_ context.Context, id bson.ObjectID) (*User, e
 	return u, nil
 }
 
+func (f *fakeUserRepo) SoftDeleteSelf(_ context.Context, id bson.ObjectID) (*User, error) {
+	u, ok := f.byID[id]
+	if !ok || u.Status == StatusDeleted || u.Status == StatusSuspended || u.WalletBalance > 0 {
+		return nil, apperrors.ErrNotFound // mirror the Mongo filter miss
+	}
+	u.Status = StatusDeleted
+	now := time.Now().UTC()
+	u.DeletedAt = &now
+	u.Email = ""
+	u.Phone = nil
+	u.PasswordHash = nil
+	u.Name = ""
+	u.SavedPlayerIDs = nil
+	return u, nil
+}
+
 // fakeOTPRepo is a single-record-per-phone in-memory OTPRepository.
 type fakeOTPRepo struct {
 	byPhone map[string]*OtpCode

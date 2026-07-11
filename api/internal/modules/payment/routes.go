@@ -43,6 +43,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, svc *S
 
 	r.Route("/api/v1/payments", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
+		r.Use(auth.RequireActive(db))
 		r.Get("/config", h.GetConfig)
 		r.With(createLimit).Post("/usdt/topup-intents", h.CreateTopUpIntent)
 		r.With(pollLimit).Get("/intents/{id}", h.GetIntent)

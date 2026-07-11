@@ -39,6 +39,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, store 
 
 	r.Route("/api/v1/kyc", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
+		r.Use(auth.RequireActive(db))
 		r.Post("/", h.Submit)
 		r.Get("/me", h.GetMe)
 		r.With(uploadLimit).Post("/documents", h.UploadDocument)

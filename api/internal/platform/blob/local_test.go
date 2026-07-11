@@ -78,6 +78,35 @@ func TestLocalStorage_Upload(t *testing.T) {
 	}
 }
 
+func TestLocalStorage_Delete(t *testing.T) {
+	dir := t.TempDir()
+	s := NewLocal(LocalConfig{Dir: dir})
+
+	const key = "kyc/doc.jpg"
+	if _, err := s.Upload(context.Background(), key, "image/jpeg", []byte("x")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	if err := s.Delete(context.Background(), key); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "kyc", "doc.jpg")); !os.IsNotExist(err) {
+		t.Fatalf("file still present after Delete (stat err = %v)", err)
+	}
+
+	// Idempotent: deleting the same key again must succeed, not error.
+	if err := s.Delete(context.Background(), key); err != nil {
+		t.Fatalf("second Delete = %v, want nil (idempotent)", err)
+	}
+}
+
+func TestLocalStorage_Delete_MissingIsNil(t *testing.T) {
+	s := NewLocal(LocalConfig{Dir: t.TempDir()})
+	if err := s.Delete(context.Background(), "kyc/never-existed.jpg"); err != nil {
+		t.Fatalf("Delete of a missing key = %v, want nil", err)
+	}
+}
+
 func TestLocalStorage_Upload_DefaultDir(t *testing.T) {
 	// NewLocal with an empty Dir falls back to defaultUploadsDir; assert the
 	// infallible ctor yields a usable adapter (write into a temp cwd-free path

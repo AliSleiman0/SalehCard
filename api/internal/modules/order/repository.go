@@ -381,6 +381,17 @@ func (r *MongoRepository) CountByStatus(ctx context.Context, status OrderStatus)
 	return r.collection.CountDocuments(ctx, bson.D{{Key: "status", Value: status}})
 }
 
+// CountInFlightByUser counts a user's orders still in flight (pending or
+// processing) — the account-deletion guard: an account with undelivered work
+// cannot delete itself out from under fulfillment. A concrete-repo method,
+// consumed by the user module through its own OrderGuard port.
+func (r *MongoRepository) CountInFlightByUser(ctx context.Context, userID bson.ObjectID) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.D{
+		{Key: "userId", Value: userID},
+		{Key: "status", Value: bson.D{{Key: "$in", Value: bson.A{OrderStatusPending, OrderStatusProcessing}}}},
+	})
+}
+
 // CountPendingTransfers counts money-transfer orders awaiting manual completion
 // (status processing with a transfer line item). Both transfer and
 // account_credit orders park in `processing`, so a plain status count would

@@ -38,6 +38,14 @@ func isSuspended(u *User) bool {
 	return u.Status == StatusSuspended
 }
 
+// isDeleted reports whether an account has been soft-deleted (anonymized).
+// Auth call sites check isSuspended before isDeleted so a suspended account
+// keeps its explicit 403 ACCOUNT_SUSPENDED, while a deleted one gets a plain
+// 401 — deletion is never revealed to a lingering credential/token holder.
+func isDeleted(u *User) bool {
+	return u.Status == StatusDeleted
+}
+
 // e164 matches a normalized international phone number.
 var e164 = regexp.MustCompile(`^\+[1-9]\d{6,14}$`)
 
@@ -63,6 +71,9 @@ type Service interface {
 	Logout(ctx context.Context, rawToken string) error
 	GetProfile(ctx context.Context, id bson.ObjectID) (*User, error)
 	UpdateProfile(ctx context.Context, id bson.ObjectID, input UpdateProfileInput) (*User, error)
+	// DeleteAccount permanently retires the caller's own account (see
+	// delete.go); hadKyc reports whether a KYC submission was purged with it.
+	DeleteAccount(ctx context.Context, id bson.ObjectID) (hadKyc bool, err error)
 }
 
 // settingsSource reads the app-settings singleton (kept narrow so the service can
@@ -88,6 +99,9 @@ type UserService struct {
 	// permission set at token-issue time. Nil => admins with a custom role get no
 	// permissions (fail-closed); super admins (nil AdminRoleID) are unaffected.
 	rolePerms func(ctx context.Context, roleID bson.ObjectID) ([]string, error)
+	// deletion holds the cross-module ports account deletion depends on (via
+	// WithDeletionPorts). Unwired ports => DeleteAccount fails closed.
+	deletion DeletionPorts
 }
 
 // UserServiceOption configures optional UserService dependencies.
@@ -181,6 +195,9 @@ func (s *UserService) Login(ctx context.Context, input LoginInput) (*AuthResult,
 	if isSuspended(user) {
 		return nil, ErrAccountSuspended
 	}
+	if isDeleted(user) {
+		return nil, apperrors.ErrUnauthorized
+	}
 	return s.completeLogin(ctx, user)
 }
 
@@ -207,6 +224,9 @@ func (s *UserService) LoginByPhone(ctx context.Context, input PhoneLoginInput) (
 	}
 	if isSuspended(user) {
 		return nil, ErrAccountSuspended
+	}
+	if isDeleted(user) {
+		return nil, apperrors.ErrUnauthorized
 	}
 	return s.completeLogin(ctx, user)
 }
@@ -278,6 +298,9 @@ func (s *UserService) VerifyOTP(ctx context.Context, input VerifyOTPInput) (*Aut
 	if isSuspended(user) {
 		return nil, ErrAccountSuspended
 	}
+	if isDeleted(user) {
+		return nil, apperrors.ErrUnauthorized
+	}
 
 	// Optionally set a password (signup flow) when the account has none yet.
 	if input.Password != "" && user.PasswordHash == nil {
@@ -324,6 +347,9 @@ func (s *UserService) Refresh(ctx context.Context, rawToken string) (*AuthResult
 	if isSuspended(user) {
 		return nil, ErrAccountSuspended
 	}
+	if isDeleted(user) {
+		return nil, apperrors.ErrUnauthorized
+	}
 
 	// Rotate: revoke the consumed token before minting a replacement.
 	if err := s.refresh.Revoke(ctx, rec.ID); err != nil {
@@ -350,7 +376,15 @@ func (s *UserService) Logout(ctx context.Context, rawToken string) error {
 
 // GetProfile returns the user identified by id.
 func (s *UserService) GetProfile(ctx context.Context, id bson.ObjectID) (*User, error) {
-	return s.repo.FindByID(ctx, id)
+	user, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// An access token can outlive a self-deletion; never serve the anonymized doc.
+	if isDeleted(user) {
+		return nil, apperrors.ErrUnauthorized
+	}
+	return user, nil
 }
 
 // UpdateProfile applies the supplied mutable fields and returns the updated user.
@@ -358,6 +392,10 @@ func (s *UserService) UpdateProfile(ctx context.Context, id bson.ObjectID, input
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	// An access token can outlive a self-deletion; never mutate the anonymized doc.
+	if isDeleted(user) {
+		return nil, apperrors.ErrUnauthorized
 	}
 	if input.Locale != nil {
 		user.Locale = *input.Locale
@@ -577,6 +615,9 @@ func (s *UserService) userFromPendingToken(ctx context.Context, pendingToken str
 	}
 	if isSuspended(user) {
 		return nil, ErrAccountSuspended
+	}
+	if isDeleted(user) {
+		return nil, apperrors.ErrUnauthorized
 	}
 	return user, nil
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -33,6 +34,9 @@ type Handler struct {
 	service    Service
 	secure     bool
 	refreshTTL time.Duration
+	// rec records customer self-deletions to the admin audit log (the actor is
+	// the customer, from the request claims). Nil-safe: nil skips recording.
+	rec audit.Recorder
 }
 
 // NewHandler constructs a Handler. secure marks the refresh cookie Secure
@@ -224,6 +228,36 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.OK(w, user)
+}
+
+// DeleteMe handles DELETE /api/v1/users/me — customer self-service account
+// deletion (Play Store requirement). Guard refusals surface as 409/403
+// AppErrors via writeAuthError; success is idempotent.
+func (h *Handler) DeleteMe(w http.ResponseWriter, r *http.Request) {
+	id, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		response.Unauthorized(w, "authentication required")
+		return
+	}
+	hadKyc, err := h.service.DeleteAccount(r.Context(), id)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	if h.rec != nil {
+		// Actor pre-set to the bare user id: the recorder must NOT fall back to
+		// the claims, which still carry the email/phone this request just erased
+		// — an audit row is forever. No PII in the summary either.
+		h.rec.Record(r.Context(), audit.Entry{
+			ActorID:    id.Hex(),
+			ActorEmail: "customer (self-deleted)",
+			Action:     audit.ActionUserSelfDelete,
+			TargetType: "user",
+			TargetID:   id.Hex(),
+			Summary:    map[string]any{"hadKyc": hadKyc},
+		})
+	}
+	response.OK(w, map[string]bool{"deleted": true})
 }
 
 // writeAuth sets the rotated refresh cookie and writes the AuthResponse body.
