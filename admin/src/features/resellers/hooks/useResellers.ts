@@ -9,9 +9,13 @@ import {
   createTier,
   updateTier,
   deleteTier,
+  listResellerPrices,
+  setResellerPrice,
+  deleteResellerPrice,
   type ResellerListParams,
   type BalanceAdjustInput,
   type TierInput,
+  type ResellerPriceInput,
 } from '../api/resellers'
 
 export function useResellers(params: ResellerListParams = {}) {
@@ -58,6 +62,31 @@ export function useAdjustResellerBalance(id: string) {
       qc.invalidateQueries({ queryKey: ['admin', 'resellers'] })
       qc.invalidateQueries({ queryKey: ['admin', 'reseller', id] })
     },
+  })
+}
+
+/** The reseller's per-variant custom price rows (the most specific pricing layer). */
+export function useResellerPrices(id: string | undefined) {
+  return useQuery({
+    queryKey: ['admin', 'reseller-prices', id],
+    queryFn: () => listResellerPrices(id!),
+    enabled: !!id,
+  })
+}
+
+export function useSetResellerPrice(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: ResellerPriceInput) => setResellerPrice(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'reseller-prices', id] }),
+  })
+}
+
+export function useDeleteResellerPrice(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (variantId: string) => deleteResellerPrice(id, variantId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'reseller-prices', id] }),
   })
 }
 

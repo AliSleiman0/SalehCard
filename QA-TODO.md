@@ -242,9 +242,12 @@ Seed gives tiers Bronze 5% / Silver 8% / Gold 12% and resellers
    audit entries); tier CRUD incl. duplicate-name 409; non-super admin with
    `users.manage`+`resellers.manage` can do all of it, `resellers` domain
    hidden without the perms.
-6. Per-reseller custom price set via `POST /api/admin/resellers/{id}/prices`
-   (API-only for now — BL-15) shows on the reseller's next catalog read and
-   wins when lowest (API-verified in dev).
+6. Per-reseller custom price via the reseller detail **Pricing tab** ("This
+   reseller" column): set one below the tier price → Effective drops to it and
+   the reseller's next catalog read shows it (backend leg API-verified in
+   dev); clear the field → reverts to tier pricing. The "Global override"
+   column is read-only here (edited in the product editor) and the product's
+   global price stays untouched by the flow.
 7. Web (legacy): customer login → no agent-dashboard sidebar link, `/reseller`
    redirects to `/dashboard`, no footer agent link; reseller login → link +
    dashboard render.

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { adaptReseller } from './adaptReseller'
+import type { Variant } from '@/types'
+import { adaptReseller, effectivePrice } from './adaptReseller'
 import type { AdminReseller } from '../api/resellers'
 
 function makeReseller(overrides: Partial<AdminReseller> = {}): AdminReseller {
@@ -48,5 +49,49 @@ describe('adaptReseller', () => {
 
   it('formats the join date as "Mon YYYY"', () => {
     expect(adaptReseller(makeReseller()).joined).toBe('Mar 2025')
+  })
+})
+
+// Mirrors the backend rule (product.ResellerUnitPrice) — the cases below match
+// api/internal/modules/product/pricing_test.go.
+describe('effectivePrice', () => {
+  const variant = (price: number, resellerPrice?: number): Variant => ({
+    id: 'v1',
+    denomination: 'Default',
+    price,
+    resellerPrice,
+  })
+
+  it('returns retail with no inputs', () => {
+    expect(effectivePrice(variant(100), 0)).toBe(100)
+  })
+
+  it('applies the tier margin', () => {
+    expect(effectivePrice(variant(100), 12)).toBeCloseTo(88)
+  })
+
+  it('ignores out-of-range margins', () => {
+    expect(effectivePrice(variant(100), 100)).toBe(100)
+    expect(effectivePrice(variant(100), -5)).toBe(100)
+  })
+
+  it('lets the global override win when lowest', () => {
+    expect(effectivePrice(variant(100, 80), 12)).toBe(80)
+  })
+
+  it('keeps the margin price when the global override is higher', () => {
+    expect(effectivePrice(variant(100, 95), 12)).toBeCloseTo(88)
+  })
+
+  it('lets the custom price win when lowest', () => {
+    expect(effectivePrice(variant(100, 80), 12, 75)).toBe(75)
+  })
+
+  it('keeps the lower layer when the custom price is higher', () => {
+    expect(effectivePrice(variant(100), 12, 90)).toBeCloseTo(88)
+  })
+
+  it('never exceeds retail', () => {
+    expect(effectivePrice(variant(100, 150), 0, 120)).toBe(100)
   })
 })

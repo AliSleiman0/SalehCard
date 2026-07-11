@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Icon,
   PageHead,
@@ -21,15 +20,17 @@ import { ApiError } from '@/lib/api-client'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import { useProducts } from '@/features/products/hooks/useProducts'
-import { updateProduct } from '@/features/products/api/products'
-import type { Product, Variant } from '@/types'
+import type { Variant } from '@/types'
 import {
   useReseller,
   useTiers,
   useUpdateResellerTier,
   useAdjustResellerBalance,
+  useResellerPrices,
+  useSetResellerPrice,
+  useDeleteResellerPrice,
 } from '../hooks/useResellers'
-import { adaptReseller, tierColor } from '../lib/adaptReseller'
+import { adaptReseller, effectivePrice, tierColor } from '../lib/adaptReseller'
 
 type Tab = 'overview' | 'balance' | 'pricing' | 'orders'
 
@@ -145,7 +146,7 @@ export default function ResellerDetailPage() {
 
       {tab === 'balance' && <BalanceTab id={view.id} balance={view.balance} transactions={detail.transactions} />}
 
-      {tab === 'pricing' && <PricingTab margin={view.margin} />}
+      {tab === 'pricing' && <PricingTab id={view.id} margin={view.margin} />}
 
       {tab === 'orders' && <OrdersTab email={view.email} total={view.orders} />}
     </div>
@@ -320,61 +321,56 @@ function BalanceTab({
   )
 }
 
-/** Effective reseller price = the lowest of retail, the tier-margin price, and
- *  any explicit per-variant override (mirrors the backend order pricing). */
-function effectivePrice(v: Variant, margin: number): number {
-  let p = v.price
-  if (margin > 0 && margin < 100) p = Math.min(p, v.price * (1 - margin / 100))
-  if (v.resellerPrice != null) p = Math.min(p, v.resellerPrice)
-  return p
-}
-
-/** Pricing rules — a read-mostly effective-price table for this reseller's tier,
- *  with inline editing of each variant's per-product reseller-price override
- *  (persisted via the product-update endpoint; no new backend). */
-function PricingTab({ margin }: { margin: number }) {
+/** Pricing rules — the effective-price table for this reseller. The inline
+ *  editor sets THIS reseller's per-variant custom price (the /prices endpoints,
+ *  the most specific pricing layer); the global per-variant override is shown
+ *  read-only and lives in the product editor. */
+function PricingTab({ id, margin }: { id: string; margin: number }) {
   const { t } = useTranslation()
-  const qc = useQueryClient()
   const { data, isLoading, isError, refetch } = useProducts({ limit: 100 })
+  const prices = useResellerPrices(id)
   const products = data?.data ?? []
+  const custom = new Map((prices.data?.data ?? []).map((p) => [p.variantId, p.price]))
   const [edit, setEdit] = useState<{ variantId: string } | null>(null)
   const [value, setValue] = useState('')
   const [error, setError] = useState('')
+  const setPrice = useSetResellerPrice(id)
+  const clearPrice = useDeleteResellerPrice(id)
 
-  const save = useMutation({
-    mutationFn: ({ product, variantId, price }: { product: Product; variantId: string; price?: number }) =>
-      updateProduct(product.id, {
-        variants: product.variants.map((v) => ({
-          denomination: v.denomination,
-          price: v.price,
-          resellerPrice: v.id === variantId ? price : v.resellerPrice,
-        })),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'products'] })
-      setEdit(null)
-      setError('')
-    },
-    onError: (e) => setError(e instanceof ApiError ? e.message : t('rd_update_failed')),
-  })
+  const done = () => {
+    setEdit(null)
+    setError('')
+  }
+  const fail = (e: unknown) => setError(e instanceof ApiError ? e.message : t('rd_update_failed'))
 
   const startEdit = (v: Variant) => {
     setEdit({ variantId: v.id })
-    setValue(v.resellerPrice != null ? String(v.resellerPrice) : '')
+    setValue(custom.has(v.id) ? String(custom.get(v.id)) : '')
     setError('')
   }
-  const commit = (product: Product, variantId: string) => {
+  const commit = (productId: string, variantId: string) => {
     const raw = value.trim()
-    const price = raw === '' ? undefined : Number(raw)
-    if (price !== undefined && (!Number.isFinite(price) || price < 0)) {
+    if (raw === '') {
+      // Clearing: remove this reseller's custom row (idempotent server-side).
+      if (!custom.has(variantId)) {
+        done()
+        return
+      }
+      clearPrice.mutate(variantId, { onSuccess: done, onError: fail })
+      return
+    }
+    const price = Number(raw)
+    if (!Number.isFinite(price) || price < 0) {
       setError(t('rd_err_valid_price'))
       return
     }
-    save.mutate({ product, variantId, price })
+    setPrice.mutate({ productId, variantId, price }, { onSuccess: done, onError: fail })
   }
+  const saving = setPrice.isPending || clearPrice.isPending
 
-  if (isLoading) return <LoadingSpinner />
+  if (isLoading || prices.isLoading) return <LoadingSpinner />
   if (isError) return <ErrorState message={t('rd_load_products_error')} onRetry={() => refetch()} />
+  if (prices.isError) return <ErrorState message={t('rd_load_products_error')} onRetry={() => prices.refetch()} />
 
   return (
     <div className="acard">
@@ -397,6 +393,7 @@ function PricingTab({ margin }: { margin: number }) {
                 <th>{t('col_retail')}</th>
                 <th>{t('col_tier_margin')}</th>
                 <th>{t('col_override')}</th>
+                <th>{t('col_custom')}</th>
                 <th>{t('col_effective')}</th>
                 <th></th>
               </tr>
@@ -406,6 +403,7 @@ function PricingTab({ margin }: { margin: number }) {
                 p.variants.map((v) => {
                   const marginPrice = margin > 0 && margin < 100 ? v.price * (1 - margin / 100) : v.price
                   const editing = edit?.variantId === v.id
+                  const customPrice = custom.get(v.id)
                   return (
                     <tr key={v.id}>
                       <td>
@@ -414,6 +412,9 @@ function PricingTab({ margin }: { margin: number }) {
                       <td className="muted">{v.denomination}</td>
                       <td className="num">{money(v.price)}</td>
                       <td className="num muted">{money(marginPrice)}</td>
+                      <td className="num muted">
+                        {v.resellerPrice != null ? money(v.resellerPrice) : <span className="faint">—</span>}
+                      </td>
                       <td className="num">
                         {editing ? (
                           <input
@@ -427,20 +428,20 @@ function PricingTab({ margin }: { margin: number }) {
                             onChange={(e) => setValue(e.target.value)}
                             style={{ width: 90, padding: '4px 8px' }}
                           />
-                        ) : v.resellerPrice != null ? (
-                          money(v.resellerPrice)
+                        ) : customPrice != null ? (
+                          money(customPrice)
                         ) : (
                           <span className="faint">—</span>
                         )}
                       </td>
-                      <td className="num strong">{money(effectivePrice(v, margin))}</td>
+                      <td className="num strong">{money(effectivePrice(v, margin, customPrice))}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         {editing ? (
                           <div className="row-actions">
-                            <button className="abtn xs primary" disabled={save.isPending} onClick={() => commit(p, v.id)}>
+                            <button className="abtn xs primary" disabled={saving} onClick={() => commit(p.id, v.id)}>
                               <Icon name="check" size={13} />
                             </button>
-                            <button className="abtn xs" disabled={save.isPending} onClick={() => setEdit(null)}>
+                            <button className="abtn xs" disabled={saving} onClick={() => setEdit(null)}>
                               <Icon name="x" size={13} />
                             </button>
                           </div>

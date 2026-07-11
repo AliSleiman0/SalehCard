@@ -160,12 +160,13 @@ on-chain USDT `txHash` field, and a toast system.
 - Code lifecycle: re-deliver/resend a lost code, mark codes expired.
 - Rate limiting on auth/OTP endpoints (also protects Monty SMS spend).
 - Granular admin roles (Super admin / Editor / Viewer) — flat `admin` today.
-- **Per-reseller price table admin UI** (deferred from BL-14): the backend
-  (`/api/admin/resellers/{id}/prices`, `reseller_prices`) is live and enforced
-  at checkout + catalog, but the reseller detail page's Pricing tab edits the
-  **global** `variant.resellerPrice` via updateProduct, not the per-reseller
-  rows — known, accepted for go-live (per-reseller prices are settable via the
-  API only).
+- ✅ **Per-reseller price table admin UI** (deferred from BL-14, shipped
+  2026-07-11): the reseller detail Pricing tab now edits **this reseller's**
+  custom price via `/api/admin/resellers/{id}/prices` (a "This reseller"
+  column; empty commit clears the row). The global `variant.resellerPrice`
+  column is read-only there — it is edited in the product editor, its proper
+  home (previously the tab silently changed the global price for every
+  reseller).
 
 ---
 
