@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
@@ -295,6 +296,167 @@ func TestProductService_FindByID_OfferLookupErrorDegradesGracefully(t *testing.T
 	require.NoError(t, err) // lookup failure does not surface to the caller
 	assert.Nil(t, p.Offer)  // just no enrichment
 	assert.Nil(t, p.Variants[0].OfferPrice)
+}
+
+// ---------------------------------------------------------------------------
+// Reseller-enrichment tests
+// ---------------------------------------------------------------------------
+
+// fakeResellerPricing implements product.ResellerPricing for enrichment tests.
+type fakeResellerPricing struct {
+	margin    float64
+	custom    map[string]float64
+	marginErr error
+	customErr error
+}
+
+func (f *fakeResellerPricing) MarginForUser(_ context.Context, _ bson.ObjectID) (float64, error) {
+	return f.margin, f.marginErr
+}
+
+func (f *fakeResellerPricing) PricesForUser(_ context.Context, _ bson.ObjectID) (map[string]float64, error) {
+	if f.customErr != nil {
+		return nil, f.customErr
+	}
+	return f.custom, nil
+}
+
+// resellerCtx returns a context carrying reseller claims, as auth.Optional
+// attaches on the catalog routes.
+func resellerCtx() context.Context {
+	return auth.ContextWithClaims(context.Background(), &auth.Claims{
+		UserID: bson.NewObjectID().Hex(),
+		Role:   "reseller",
+	})
+}
+
+func TestProductService_FindByID_ResellerTierMargin(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 100, 50)}}
+	svc := product.NewProductService(repo,
+		product.WithResellerPricing(&fakeResellerPricing{margin: 12}))
+
+	p, err := svc.FindByID(resellerCtx(), id.Hex())
+	require.NoError(t, err)
+
+	assert.Nil(t, p.Offer) // no sale badge for reseller pricing
+	require.NotNil(t, p.Variants[0].OfferPrice)
+	assert.InDelta(t, 88.0, *p.Variants[0].OfferPrice, 1e-9)
+	require.NotNil(t, p.Variants[1].OfferPrice)
+	assert.InDelta(t, 44.0, *p.Variants[1].OfferPrice, 1e-9)
+}
+
+func TestProductService_FindByID_ResellerCustomPriceWins(t *testing.T) {
+	id := bson.NewObjectID()
+	prod := productWithVariants(id, 100)
+	repo := &mockRepo{products: []product.Product{prod}}
+	svc := product.NewProductService(repo,
+		product.WithResellerPricing(&fakeResellerPricing{
+			margin: 12,
+			custom: map[string]float64{prod.Variants[0].ID.Hex(): 75},
+		}))
+
+	p, err := svc.FindByID(resellerCtx(), id.Hex())
+	require.NoError(t, err)
+	require.NotNil(t, p.Variants[0].OfferPrice)
+	assert.InDelta(t, 75.0, *p.Variants[0].OfferPrice, 1e-9) // custom beats the 88 margin price
+}
+
+func TestProductService_FindByID_ResellerAtRetailNoOverlay(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 100)}}
+	svc := product.NewProductService(repo,
+		product.WithResellerPricing(&fakeResellerPricing{margin: 0})) // no tier → retail
+
+	p, err := svc.FindByID(resellerCtx(), id.Hex())
+	require.NoError(t, err)
+	assert.Nil(t, p.Variants[0].OfferPrice) // not strictly below retail → no struck price
+}
+
+func TestProductService_FindByID_ResellerSuppressesOffers(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 100)}}
+	offers := &fakeOfferLookup{discounts: map[string]product.Discount{
+		id.Hex(): {Type: "percent", Value: 50}, // a live retail sale
+	}}
+	svc := product.NewProductService(repo,
+		product.WithOffers(offers),
+		product.WithResellerPricing(&fakeResellerPricing{margin: 12}))
+
+	// Reseller: sees only reseller pricing — the offer never applies (it doesn't
+	// stack at checkout either).
+	p, err := svc.FindByID(resellerCtx(), id.Hex())
+	require.NoError(t, err)
+	assert.Nil(t, p.Offer)
+	require.NotNil(t, p.Variants[0].OfferPrice)
+	assert.InDelta(t, 88.0, *p.Variants[0].OfferPrice, 1e-9)
+
+	// Anonymous: the offer path is untouched.
+	p, err = svc.FindByID(context.Background(), id.Hex())
+	require.NoError(t, err)
+	require.NotNil(t, p.Offer)
+	assert.InDelta(t, 50.0, *p.Variants[0].OfferPrice, 1e-9)
+}
+
+func TestProductService_FindByID_CustomerGetsOfferPathNotResellerPath(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 100)}}
+	svc := product.NewProductService(repo,
+		product.WithOffers(&fakeOfferLookup{discounts: map[string]product.Discount{}}),
+		product.WithResellerPricing(&fakeResellerPricing{margin: 50}))
+
+	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
+		UserID: bson.NewObjectID().Hex(),
+		Role:   "customer",
+	})
+	p, err := svc.FindByID(ctx, id.Hex())
+	require.NoError(t, err)
+	assert.Nil(t, p.Offer)
+	assert.Nil(t, p.Variants[0].OfferPrice) // reseller margin never leaks to customers
+}
+
+func TestProductService_FindByID_ResellerLookupErrorDegrades(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 100)}}
+	svc := product.NewProductService(repo,
+		product.WithResellerPricing(&fakeResellerPricing{
+			marginErr: errors.New("tier store down"),
+			customErr: errors.New("price store down"),
+		}))
+
+	p, err := svc.FindByID(resellerCtx(), id.Hex())
+	require.NoError(t, err) // degraded, never failed
+	assert.Nil(t, p.Variants[0].OfferPrice)
+}
+
+func TestProductService_FindByID_ResellerNilPortNoop(t *testing.T) {
+	id := bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{productWithVariants(id, 100)}}
+	svc := product.NewProductService(repo) // no reseller port wired
+
+	p, err := svc.FindByID(resellerCtx(), id.Hex())
+	require.NoError(t, err)
+	assert.Nil(t, p.Variants[0].OfferPrice)
+}
+
+func TestProductService_List_ResellerEnrichesEach(t *testing.T) {
+	id1, id2 := bson.NewObjectID(), bson.NewObjectID()
+	repo := &mockRepo{products: []product.Product{
+		productWithVariants(id1, 10),
+		productWithVariants(id2, 50),
+	}}
+	svc := product.NewProductService(repo,
+		product.WithResellerPricing(&fakeResellerPricing{margin: 10}))
+
+	ps, _, err := svc.FindAll(resellerCtx(), product.ListFilter{}, pagination.Params{Page: 1, Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, ps, 2)
+	require.NotNil(t, ps[0].Variants[0].OfferPrice)
+	assert.InDelta(t, 9.0, *ps[0].Variants[0].OfferPrice, 1e-9)
+	require.NotNil(t, ps[1].Variants[0].OfferPrice)
+	assert.InDelta(t, 45.0, *ps[1].Variants[0].OfferPrice, 1e-9)
+	assert.Nil(t, ps[0].Offer)
+	assert.Nil(t, ps[1].Offer)
 }
 
 // ---------------------------------------------------------------------------

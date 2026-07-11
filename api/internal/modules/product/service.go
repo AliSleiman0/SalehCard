@@ -5,6 +5,9 @@ import (
 	"log/slog"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
@@ -36,10 +39,22 @@ type OfferLookup interface {
 	LiveDiscountsFor(ctx context.Context, ids []string, now time.Time) (map[string]Discount, error)
 }
 
+// ResellerPricing is the narrow port the catalog uses to price variants for a
+// reseller caller — the buyer's tier margin plus their per-variant custom
+// prices, preloaded once per request. It is satisfied directly by
+// reseller.MongoRepository (same shape as the order module's resellerPricing
+// port) and wired in routes.go, keeping product decoupled from the reseller
+// module.
+type ResellerPricing interface {
+	MarginForUser(ctx context.Context, userID bson.ObjectID) (float64, error)
+	PricesForUser(ctx context.Context, userID bson.ObjectID) (map[string]float64, error)
+}
+
 // ProductService is the concrete implementation of Service.
 type ProductService struct {
-	repo   Repository
-	offers OfferLookup // optional; nil disables offer enrichment
+	repo      Repository
+	offers    OfferLookup     // optional; nil disables offer enrichment
+	resellers ResellerPricing // optional; nil disables reseller catalog pricing
 }
 
 // ServiceOption configures a ProductService.
@@ -48,6 +63,12 @@ type ServiceOption func(*ProductService)
 // WithOffers enables live-offer price enrichment on catalog reads.
 func WithOffers(o OfferLookup) ServiceOption {
 	return func(s *ProductService) { s.offers = o }
+}
+
+// WithResellerPricing enables reseller price enrichment on catalog reads for
+// callers whose context claims carry role "reseller".
+func WithResellerPricing(rp ResellerPricing) ServiceOption {
+	return func(s *ProductService) { s.resellers = rp }
 }
 
 // NewProductService constructs a ProductService backed by the given repository.
@@ -84,13 +105,67 @@ func (s *ProductService) FindByID(ctx context.Context, id string) (*Product, err
 	return p, nil
 }
 
-// enrich overlays live-offer sale prices onto the given products in place: a
-// product-level Offer block plus a per-variant OfferPrice. It is best-effort —
-// a lookup failure logs and leaves the products at their base price (mirrors how
-// the order engine tolerates an offer-lookup miss). Order pricing is unaffected;
-// these are transient response-only fields.
+// enrich overlays caller-appropriate pricing onto the given products in place.
+// A reseller caller (role "reseller" in the context claims, attached by
+// auth.Optional on the catalog routes) gets reseller pricing; everyone else
+// gets live-offer enrichment. The two never combine — sale offers don't stack
+// on reseller pricing, exactly as at checkout (order.PlaceOrder). Order
+// pricing is unaffected; these are transient response-only fields.
 func (s *ProductService) enrich(ctx context.Context, ps []*Product) {
-	if s.offers == nil || len(ps) == 0 {
+	if len(ps) == 0 {
+		return
+	}
+	if claims, ok := auth.ClaimsFromContext(ctx); ok && claims.Role == "reseller" {
+		s.enrichReseller(ctx, ps)
+		return
+	}
+	s.enrichOffers(ctx, ps)
+}
+
+// enrichReseller overlays the exact checkout price for the calling reseller
+// onto Variant.OfferPrice (only when strictly below retail, so clients render
+// a struck retail price) and leaves Product.Offer nil (no sale badge). It is
+// best-effort — a lookup failure logs and degrades to the remaining pricing
+// layers, mirroring order.PlaceOrder's tolerance — and shares
+// ResellerUnitPrice with checkout so the displayed price always equals the
+// charged price.
+func (s *ProductService) enrichReseller(ctx context.Context, ps []*Product) {
+	if s.resellers == nil {
+		return
+	}
+	userID, ok := auth.UserIDFromContext(ctx)
+	if !ok {
+		return
+	}
+	var margin float64
+	var custom map[string]float64
+	if pct, err := s.resellers.MarginForUser(ctx, userID); err != nil {
+		slog.Warn("product: reseller margin lookup failed", "user", userID.Hex(), "error", err)
+	} else {
+		margin = pct
+	}
+	if m, err := s.resellers.PricesForUser(ctx, userID); err != nil {
+		slog.Warn("product: reseller custom-price lookup failed", "user", userID.Hex(), "error", err)
+	} else {
+		custom = m
+	}
+	for _, p := range ps {
+		for i := range p.Variants {
+			v := &p.Variants[i]
+			if rp := ResellerUnitPrice(*v, margin, custom); rp < v.Price {
+				price := rp
+				v.OfferPrice = &price
+			}
+		}
+	}
+}
+
+// enrichOffers overlays live-offer sale prices onto the given products in
+// place: a product-level Offer block plus a per-variant OfferPrice. It is
+// best-effort — a lookup failure logs and leaves the products at their base
+// price (mirrors how the order engine tolerates an offer-lookup miss).
+func (s *ProductService) enrichOffers(ctx context.Context, ps []*Product) {
+	if s.offers == nil {
 		return
 	}
 	ids := make([]string, len(ps))

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -35,8 +36,14 @@ type publicOffer struct {
 
 // List handles GET /api/v1/offers — every live offer joined with its product.
 // Offers whose product is missing or unavailable are skipped so the storefront
-// never shows a deal it can't fulfil.
+// never shows a deal it can't fulfil. Resellers get an empty list: sale offers
+// don't stack on reseller pricing (order.PlaceOrder ignores them), so
+// advertising retail deals a reseller can't buy at those prices would mislead.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	if claims, ok := auth.ClaimsFromContext(r.Context()); ok && claims.Role == "reseller" {
+		response.OK(w, []publicOffer{})
+		return
+	}
 	offers, err := h.repo.ListLive(r.Context(), time.Now().UTC())
 	if err != nil {
 		response.InternalError(w)

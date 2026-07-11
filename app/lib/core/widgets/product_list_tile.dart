@@ -22,7 +22,9 @@ class ProductListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final price = product.fromPrice;
+    // Prefer the discounted "from" price (live offer, or the caller's reseller
+    // pricing — both arrive on the same overlay field) over plain retail.
+    final price = product.offerFromPrice ?? product.fromPrice;
     final name = product.title.resolve(localeCode);
     final image = product.thumbUrl;
     return InkWell(
