@@ -54,6 +54,25 @@ export interface TierInput {
   marginPercent: number
 }
 
+/** A per-reseller price override for one product variant — the most specific
+ *  pricing layer (beats retail, the tier margin, and the global per-variant
+ *  reseller price). One row per (reseller, variant); the API upserts. */
+export interface ResellerPrice {
+  id: string
+  userId: string
+  productId?: string
+  variantId: string
+  price: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ResellerPriceInput {
+  productId: string
+  variantId: string
+  price: number
+}
+
 const RESELLERS = '/api/admin/resellers'
 const TIERS = '/api/admin/reseller-tiers'
 
@@ -83,6 +102,18 @@ export function adjustResellerBalance(
   input: BalanceAdjustInput,
 ): Promise<ApiResponse<{ walletBalance: number }>> {
   return apiClient.post<{ walletBalance: number }>(`${RESELLERS}/${id}/balance-adjust`, input)
+}
+
+export function listResellerPrices(id: string): Promise<ApiResponse<ResellerPrice[]>> {
+  return apiClient.get<ResellerPrice[]>(`${RESELLERS}/${id}/prices`)
+}
+
+export function setResellerPrice(id: string, input: ResellerPriceInput): Promise<ApiResponse<ResellerPrice>> {
+  return apiClient.post<ResellerPrice>(`${RESELLERS}/${id}/prices`, input)
+}
+
+export function deleteResellerPrice(id: string, variantId: string): Promise<ApiResponse<{ deleted: boolean }>> {
+  return apiClient.delete<{ deleted: boolean }>(`${RESELLERS}/${id}/prices/${variantId}`)
 }
 
 export function listTiers(): Promise<ApiResponse<TierDef[]>> {

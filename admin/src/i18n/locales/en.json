@@ -139,7 +139,8 @@
   "col_variant": "Variant",
   "col_retail": "Retail",
   "col_tier_margin": "Tier margin",
-  "col_override": "Override",
+  "col_override": "Global override",
+  "col_custom": "This reseller",
   "col_effective": "Effective",
   "col_order": "Order",
 
@@ -187,7 +188,7 @@
   "rd_err_valid_price": "Enter a valid price, or clear it to remove the override.",
   "rd_load_products_error": "Couldn't load products.",
   "rd_effective_pricing": "Effective pricing ({{margin}}% tier margin)",
-  "rd_pricing_hint": "Resellers pay the lowest of retail, the tier-margin price, and any per-variant override below.",
+  "rd_pricing_hint": "This reseller pays the lowest of: retail, the tier-margin price, the global per-variant override (edited in the product editor), and the “This reseller” custom price. The pencil edits the custom price for this reseller only; leave it empty to clear.",
   "rd_no_products": "No products yet",
   "rd_ph_none": "none",
   "rd_completed_count": "{{total}} completed",

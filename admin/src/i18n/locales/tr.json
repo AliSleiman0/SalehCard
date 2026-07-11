@@ -139,7 +139,8 @@
   "col_variant": "Varyant",
   "col_retail": "Perakende",
   "col_tier_margin": "Kademe marjı",
-  "col_override": "Özel fiyat",
+  "col_override": "Genel özel fiyat",
+  "col_custom": "Bu bayi",
   "col_effective": "Geçerli",
   "col_order": "Sipariş",
 
@@ -187,7 +188,7 @@
   "rd_err_valid_price": "Geçerli bir fiyat girin veya özel fiyatı kaldırmak için temizleyin.",
   "rd_load_products_error": "Ürünler yüklenemedi.",
   "rd_effective_pricing": "Geçerli fiyatlandırma (%{{margin}} kademe marjı)",
-  "rd_pricing_hint": "Bayiler; perakende, kademe marjı fiyatı ve aşağıdaki varyant başına özel fiyatın en düşüğünü öder.",
+  "rd_pricing_hint": "Bu bayi; perakende, kademe marjı fiyatı, genel varyant fiyatı (ürün düzenleyicisinde değiştirilir) ve “Bu bayi” özel fiyatının en düşüğünü öder. Kalem yalnızca bu bayinin özel fiyatını düzenler; temizlemek için boş bırakın.",
   "rd_no_products": "Henüz ürün yok",
   "rd_ph_none": "yok",
   "rd_completed_count": "{{total}} tamamlandı",
