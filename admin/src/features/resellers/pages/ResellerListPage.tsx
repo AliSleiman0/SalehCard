@@ -326,9 +326,12 @@ function AddResellerModal({ tiers, onClose }: { tiers: TierDef[]; onClose: () =>
     return () => clearTimeout(timer)
   }, [q])
 
-  // Only non-resellers are candidates for promotion.
+  // Only customers are promotable. Whitelisting customers (rather than just
+  // excluding resellers) keeps admins out of the results — promoting an admin
+  // here would demote them to reseller and can lock them out of the console
+  // (esp. with SMS-2FA on a single admin phone).
   const { data, isFetching } = useUsers({ q: debounced, limit: 8 })
-  const candidates = (data?.data ?? []).map(adaptUser).filter((u) => u.role !== 'reseller')
+  const candidates = (data?.data ?? []).map(adaptUser).filter((u) => u.role === 'customer')
 
   const submit = () => {
     if (!selectedId) {
