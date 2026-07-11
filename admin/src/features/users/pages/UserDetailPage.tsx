@@ -389,17 +389,19 @@ function RoleTab({
     del.mutate(undefined, { onSuccess: () => navigate('/users') })
   }
 
-  // Reseller management is hidden for now, so promotion to reseller is not
-  // offered here. Re-add ['reseller', 'Reseller'] to restore it (also un-hide
-  // the /resellers nav item + routes).
-  // Non-super admins can't grant/revoke admin access, so they only see the
-  // customer chip (role changes involving admin would 403 anyway).
+  // Non-super admins can't grant/revoke admin access, so they don't see the
+  // Admin chip (role changes involving admin would 403 anyway). Promotion
+  // between customer and reseller only needs users.manage.
   const roles: [UserRole, string][] = isSuperAdmin
     ? [
         ['customer', 'Customer'],
+        ['reseller', 'Reseller'],
         ['admin', 'Admin'],
       ]
-    : [['customer', 'Customer']]
+    : [
+        ['customer', 'Customer'],
+        ['reseller', 'Reseller'],
+      ]
 
   const dirty = pending !== role || (pending === 'admin' && pendingRoleId !== (adminRoleId ?? ''))
   const save = () =>

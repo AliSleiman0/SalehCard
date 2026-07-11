@@ -72,11 +72,11 @@ orders (`adaptOrder.ts` already computes the status label).
 
 ### ✅ BL-7 Remove remaining mock data from live web pages
 `web/src/lib/mock/demo.ts` is still imported by: `DashboardPage.tsx` (fake
-cashback tile + saved-players grid), `ResellerDashboardPage.tsx` (entire page
-mock, "Bulk order" CTA is a toast no-op — hide the route or wire it),
-`SavedIDsPage.tsx`, `ProductDetailPage.tsx` (fake reviews/related products),
-`Header.tsx`. Wire to real endpoints where they exist (saved player IDs and
-reviews exist in the API) or remove the sections.
+cashback tile + saved-players grid), `ResellerDashboardPage.tsx` (since wired
+to real wallet/orders/catalog hooks and role-gated to `role=reseller`,
+2026-07-11), `SavedIDsPage.tsx`, `ProductDetailPage.tsx` (fake reviews/related
+products), `Header.tsx`. Wire to real endpoints where they exist (saved player
+IDs and reviews exist in the API) or remove the sections.
 
 ### ✅ BL-8 Admin order-detail edges
 - Add an inline "Mark completed" button on the account-credit card
@@ -103,9 +103,9 @@ reviews exist in the API) or remove the sections.
 - Phone-only admins produce blank actor attribution in the audit log and
   top-up decisions (JWT claims carry only email) — add phone to `auth.Claims`
   or fall back to UserID display.
-- `ResellerTier.BalanceLimit` is editable but never enforced — either enforce
-  it (balance-adjust + top-up approval for reseller users) or remove the field
-  from the tier editor.
+- `ResellerTier.BalanceLimit` is editable but never enforced — resolved: the
+  field was removed entirely (model/CRUD/seed/tests + tier editor; see
+  HANDOFF-2026-07-02-p1p2-complete.md).
 
 ## P3 — Decide, then build or hide
 
@@ -160,6 +160,12 @@ on-chain USDT `txHash` field, and a toast system.
 - Code lifecycle: re-deliver/resend a lost code, mark codes expired.
 - Rate limiting on auth/OTP endpoints (also protects Monty SMS spend).
 - Granular admin roles (Super admin / Editor / Viewer) — flat `admin` today.
+- **Per-reseller price table admin UI** (deferred from BL-14): the backend
+  (`/api/admin/resellers/{id}/prices`, `reseller_prices`) is live and enforced
+  at checkout + catalog, but the reseller detail page's Pricing tab edits the
+  **global** `variant.resellerPrice` via updateProduct, not the per-reseller
+  rows — known, accepted for go-live (per-reseller prices are settable via the
+  API only).
 
 ---
 

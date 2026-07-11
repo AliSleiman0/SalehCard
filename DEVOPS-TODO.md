@@ -344,3 +344,28 @@ treats `{0,0}` as "no real constraint" so this product stays orderable
 today, but the underlying bad data should still be cleaned up via the
 admin product editor — either remove the bogus `qty` field or set a
 real `{min,max}` range. Low urgency (not currently blocking sales).
+
+## 17. Reseller go-live — prod ops (after the pricing + un-hide PRs deploy)
+
+Order matters: the pricing PR (#72, api+app) merges first so the catalog is
+reseller-aware before anyone can be promoted; the un-hide PR (admin+web+docs)
+follows.
+
+1. After PR #72 deploys: smoke `GET /api/v1/products` anonymously — response
+   shape unchanged (no `offerPrice` leakage without a reseller token).
+2. After the un-hide PR deploys: the admin console shows the **Resellers** nav
+   item for super admins. Grant `resellers.view`/`resellers.manage` to any
+   custom roles that need it (`/roles`).
+3. Create the real tier definitions in prod (admin → Resellers → tier editor).
+   **Business decision required first: tier names + margin percents** — the
+   dev seed's Bronze 5 / Silver 8 / Gold 12 are placeholders, not policy.
+   Note: during a live sale a reseller can pay MORE than a retail customer
+   (offers never stack on reseller pricing) — set margins with that in mind.
+4. Promote the first real reseller (Users → detail → Role & access →
+   Reseller), assign their tier, and have them verify in the app: catalog
+   shows their price; a small real order charges exactly the displayed price.
+5. Their first top-up request should show the amber reseller chip in
+   `/topups` (QA-TODO "Reseller go-live" §8).
+6. The customer APK needs no rebuild for pricing (server-side), but the
+   provider-invalidation fix rides the next app release — until then a
+   freshly-promoted reseller should restart the app once after login.

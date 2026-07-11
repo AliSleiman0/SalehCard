@@ -13,11 +13,8 @@ const OrderListPage = lazy(() => import('@/features/orders/pages/OrderListPage')
 const OrderDetailPage = lazy(() => import('@/features/orders/pages/OrderDetailPage'))
 const UserListPage = lazy(() => import('@/features/users/pages/UserListPage'))
 const UserDetailPage = lazy(() => import('@/features/users/pages/UserDetailPage'))
-// Reseller management is hidden for now (dormant, not deleted). Re-enable these
-// imports + the two routes below, the /resellers nav item, and the "Reseller"
-// role option in UserDetailPage to restore the feature.
-// const ResellerListPage = lazy(() => import('@/features/resellers/pages/ResellerListPage'))
-// const ResellerDetailPage = lazy(() => import('@/features/resellers/pages/ResellerDetailPage'))
+const ResellerListPage = lazy(() => import('@/features/resellers/pages/ResellerListPage'))
+const ResellerDetailPage = lazy(() => import('@/features/resellers/pages/ResellerDetailPage'))
 const FinancePage = lazy(() => import('@/features/finance/pages/FinancePage'))
 const TopupsPage = lazy(() => import('@/features/topups/pages/TopupsPage'))
 const PaymentsPage = lazy(() => import('@/features/payments/pages/PaymentsPage'))
@@ -63,9 +60,8 @@ export default function AppRouter() {
         <Route path="/bridge" element={guard('bridge', <BridgePage />)} />
         <Route path="/users" element={guard('users', <UserListPage />)} />
         <Route path="/users/:id" element={guard('users', <UserDetailPage />)} />
-        {/* Reseller routes hidden for now — see the commented imports above. */}
-        {/* <Route path="/resellers" element={guard('resellers', <ResellerListPage />)} /> */}
-        {/* <Route path="/resellers/:id" element={guard('resellers', <ResellerDetailPage />)} /> */}
+        <Route path="/resellers" element={guard('resellers', <ResellerListPage />)} />
+        <Route path="/resellers/:id" element={guard('resellers', <ResellerDetailPage />)} />
         <Route path="/finance" element={guard('finance', <FinancePage />)} />
         <Route path="/topups" element={guard('topups', <TopupsPage />)} />
         <Route path="/payments" element={guard('payments', <PaymentsPage />)} />

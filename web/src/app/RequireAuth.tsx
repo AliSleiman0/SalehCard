@@ -18,6 +18,21 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+// RequireReseller gates the agent dashboard: RequireAuth plus a role check —
+// only accounts an admin promoted to role=reseller may enter; everyone else is
+// sent to their normal dashboard. (setUser stores user and isAuthenticated
+// together, so user is always populated once hydrated+authenticated.)
+export function RequireReseller({ children }: { children: ReactNode }) {
+  const hydrated = useAuthStore((s) => s.hydrated)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const user = useAuthStore((s) => s.user)
+
+  if (!hydrated) return hydrating
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (user?.role !== 'reseller') return <Navigate to="/dashboard" replace />
+  return <>{children}</>
+}
+
 // RedirectIfAuthed sends already-authenticated users away from /login & /register.
 export function RedirectIfAuthed({ children }: { children: ReactNode }) {
   const hydrated = useAuthStore((s) => s.hydrated)

@@ -60,17 +60,20 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
           {it.l}
         </a>
       ))}
-      <a
-        className={active === 'reseller' ? 'on' : ''}
-        onClick={() => {
-          useUiStore.getState().setAgent(true)
-          navigate('/reseller')
-        }}
-        style={{ color: 'var(--agent)' }}
-      >
-        <Icon name="shield" size={18} />
-        {t('agent_dash')}
-      </a>
+      {/* The agent dashboard is reseller-only (route is gated by RequireReseller). */}
+      {user?.role === 'reseller' && (
+        <a
+          className={active === 'reseller' ? 'on' : ''}
+          onClick={() => {
+            useUiStore.getState().setAgent(true)
+            navigate('/reseller')
+          }}
+          style={{ color: 'var(--agent)' }}
+        >
+          <Icon name="shield" size={18} />
+          {t('agent_dash')}
+        </a>
+      )}
       <a
         onClick={() => {
           logout.mutate(undefined, { onSuccess: () => navigate('/') })
