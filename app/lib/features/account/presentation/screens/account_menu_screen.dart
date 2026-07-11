@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/config/app_config.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../widgets/delete_account_sheet.dart';
 
 /// Menu / settings tab — foundation version: language + theme toggles and
 /// logout. Expanded into the full designed menu + profile in the Account session.
@@ -67,6 +70,16 @@ class AccountMenuScreen extends ConsumerWidget {
           ),
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: Text(l10n.privacyPolicyMenuLabel),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => launchUrl(
+              Uri.parse(AppConfig.privacyUrl),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.translate_rounded),
             title: Text(l10n.languageToggle),
             onTap: () =>
@@ -86,6 +99,14 @@ class AccountMenuScreen extends ConsumerWidget {
             title: Text(l10n.logout,
                 style: const TextStyle(color: Color(0xFFFF4D6D))),
             onTap: () => ref.read(authControllerProvider.notifier).logout(),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.delete_forever_outlined,
+                color: Color(0xFFFF4D6D)),
+            title: Text(l10n.deleteAccountMenuLabel,
+                style: const TextStyle(color: Color(0xFFFF4D6D))),
+            onTap: () => showDeleteAccountSheet(context),
           ),
         ],
       ),

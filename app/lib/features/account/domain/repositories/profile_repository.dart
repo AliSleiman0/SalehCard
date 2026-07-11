@@ -14,4 +14,7 @@ abstract interface class ProfileRepository {
     String? locale,
     List<SavedPlayerId>? savedPlayerIds,
   });
+
+  /// Permanently deletes the authenticated account (`DELETE /users/me`).
+  Future<Either<Failure, Unit>> deleteAccount();
 }

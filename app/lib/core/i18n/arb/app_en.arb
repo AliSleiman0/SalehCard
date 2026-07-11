@@ -321,5 +321,23 @@
   "usdtConfirmedBody": "Your USDT payment was confirmed.",
   "usdtExpiredTitle": "Payment window expired",
   "usdtExpiredBody": "No payment was received in time. Start again to get a fresh address.",
-  "usdtNetworkLabel": "Network"
+  "usdtNetworkLabel": "Network",
+
+  "privacyPolicyMenuLabel": "Privacy policy",
+  "deleteAccountMenuLabel": "Delete account",
+  "deleteAccountTitle": "Delete your account?",
+  "deleteAccountWarnPermanent": "This is permanent — your account can't be recovered, and you'll be signed out on all devices.",
+  "deleteAccountWarnKycDeleted": "Your identity (ID) photos are permanently deleted.",
+  "deleteAccountWarnOrdersKept": "Past orders are kept anonymized, as required for accounting.",
+  "deleteAccountWarnWalletEmpty": "Your wallet must be empty before you can delete your account.",
+  "deleteAccountConfirmPrompt": "To confirm, type \"{word}\" below.",
+  "@deleteAccountConfirmPrompt": {
+    "placeholders": { "word": { "type": "String" } }
+  },
+  "deleteAccountConfirmWord": "DELETE",
+  "deleteAccountCta": "Delete my account",
+  "deleteAccountWalletNotEmpty": "Your wallet still has a balance. Spend or use it first, then try again.",
+  "deleteAccountOrdersInFlight": "You have orders still being processed. Please wait until they finish, then try again.",
+  "deleteAccountPaymentsPending": "You have a payment in progress. Please wait until it completes or expires, then try again.",
+  "deleteAccountTopUpsPending": "You have a wallet top-up awaiting approval. Please wait for its decision, then try again."
 }
