@@ -2,7 +2,9 @@ package blob
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,4 +52,22 @@ func (l *LocalStorage) Upload(_ context.Context, key, _ string, data []byte) (st
 		return "", fmt.Errorf("local storage: write: %w", err)
 	}
 	return l.publicBase + "/uploads/" + key, nil
+}
+
+// Delete removes <dir>/key. A file that does not exist is treated as success
+// (idempotent per the [Storage] contract) but logged: beyond a benign retry,
+// it can mean the server fell open from Azure to this adapter and is
+// "deleting" blobs that really live (and survive) in the Azure container —
+// worth noticing when the delete backs a privacy promise. Empty parent
+// directories are left behind — harmless, the next upload reuses them.
+func (l *LocalStorage) Delete(_ context.Context, key string) error {
+	path := filepath.Join(l.dir, filepath.FromSlash(key))
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			slog.Warn("local storage: delete of a file this adapter never stored", "key", key)
+			return nil
+		}
+		return fmt.Errorf("local storage: delete: %w", err)
+	}
+	return nil
 }

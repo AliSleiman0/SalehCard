@@ -29,6 +29,9 @@ type Repository interface {
 	List(ctx context.Context, f Filter, p pagination.Params) ([]Row, int64, error)
 	UpdateStatus(ctx context.Context, id bson.ObjectID, status, reason, reviewedBy string) (*Submission, error)
 	CountPending(ctx context.Context) (int64, error)
+	// DeleteByUserID permanently removes the user's submission (account
+	// deletion), returning the deleted document or ErrNotFound when none exists.
+	DeleteByUserID(ctx context.Context, userID bson.ObjectID) (*Submission, error)
 }
 
 // Filter narrows an admin submission listing. Zero-valued fields are ignored.
@@ -245,6 +248,21 @@ func (r *MongoRepository) UpdateStatus(ctx context.Context, id bson.ObjectID, st
 // CountPending counts submissions awaiting moderation (dashboard metric).
 func (r *MongoRepository) CountPending(ctx context.Context) (int64, error) {
 	return r.collection.CountDocuments(ctx, bson.D{{Key: "status", Value: StatusPending}})
+}
+
+// DeleteByUserID permanently removes the user's submission in one atomic
+// FindOneAndDelete, returning the deleted document (its photo URLs feed the
+// blob purge) or ErrNotFound when the user has none.
+func (r *MongoRepository) DeleteByUserID(ctx context.Context, userID bson.ObjectID) (*Submission, error) {
+	var s Submission
+	err := r.collection.FindOneAndDelete(ctx, bson.D{{Key: "userId", Value: userID}}).Decode(&s)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &s, nil
 }
 
 // contactOf derives a display contact from an account's email or phone.

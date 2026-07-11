@@ -248,6 +248,19 @@ func (s *MongoStore) CountOpenForUser(ctx context.Context, userID bson.ObjectID)
 	})
 }
 
+// CountOpenByUser counts the user's open intents — pending AND confirming —
+// for the account-deletion guard. Distinct from CountOpenForUser (the
+// pending-only intent-creation spam guard): a confirming intent is a claimed
+// payment about to credit the wallet, so it must block deletion too. A
+// concrete-repo method, consumed by the user module through its own
+// PaymentGuard port.
+func (s *MongoStore) CountOpenByUser(ctx context.Context, userID bson.ObjectID) (int64, error) {
+	return s.col.CountDocuments(ctx, bson.D{
+		{Key: "userId", Value: userID},
+		{Key: "status", Value: bson.D{{Key: "$in", Value: []IntentStatus{StatusPending, StatusConfirming}}}},
+	})
+}
+
 // ListWatchable implements the watcher's scan set: pending intents plus
 // expired-but-unpaid ones still within grace.
 func (s *MongoStore) ListWatchable(ctx context.Context, now time.Time, grace time.Duration, limit int) ([]*Intent, error) {

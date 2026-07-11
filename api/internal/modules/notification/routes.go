@@ -22,6 +22,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config) {
 
 	r.Route("/api/v1/notifications", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
+		r.Use(auth.RequireActive(db))
 		r.Get("/", h.List)
 		r.Get("/unread-count", h.UnreadCount)
 		r.Post("/read-all", h.ReadAll)

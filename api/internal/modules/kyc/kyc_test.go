@@ -65,6 +65,15 @@ func (f *fakeRepo) UpdateStatus(context.Context, bson.ObjectID, string, string, 
 
 func (f *fakeRepo) CountPending(context.Context) (int64, error) { return 0, nil }
 
+func (f *fakeRepo) DeleteByUserID(_ context.Context, userID bson.ObjectID) (*Submission, error) {
+	s, ok := f.byUser[userID]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	delete(f.byUser, userID)
+	return s, nil
+}
+
 func validInput() SubmitInput {
 	return SubmitInput{
 		FullName:         "Jane Doe",

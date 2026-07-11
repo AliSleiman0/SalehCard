@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 )
 
 // AzureStorage uploads to an Azure Blob Storage container over a connection
@@ -55,4 +56,17 @@ func (a *AzureStorage) Upload(ctx context.Context, key, contentType string, data
 	}
 	base.Path = fmt.Sprintf("/%s/%s", a.container, key)
 	return base.String(), nil
+}
+
+// Delete removes the blob at key. A blob that does not exist is treated as
+// success (idempotent per the [Storage] contract), so purge retries never fail
+// on already-deleted objects.
+func (a *AzureStorage) Delete(ctx context.Context, key string) error {
+	if _, err := a.client.DeleteBlob(ctx, a.container, key, nil); err != nil {
+		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			return nil
+		}
+		return fmt.Errorf("azure: delete: %w", err)
+	}
+	return nil
 }

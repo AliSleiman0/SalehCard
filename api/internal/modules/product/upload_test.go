@@ -37,6 +37,10 @@ func (f *fakeStorage) Upload(_ context.Context, key, _ string, _ []byte) (string
 	return "http://cdn.test/uploads/" + key, nil
 }
 
+// Delete satisfies the blob.Storage port; the product upload handler never
+// deletes (replaced blobs are intentionally orphaned in v1).
+func (f *fakeStorage) Delete(context.Context, string) error { return nil }
+
 // fakeRecorder captures the audit entries the handler records.
 type fakeRecorder struct {
 	mu      sync.Mutex

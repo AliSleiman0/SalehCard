@@ -15,6 +15,10 @@ import (
 // publicly-reachable URL.
 type Storage interface {
 	Upload(ctx context.Context, key, contentType string, data []byte) (url string, err error)
+	// Delete removes the object stored under key. It is idempotent: deleting
+	// an object that does not exist returns nil, so retries and double-deletes
+	// are always safe.
+	Delete(ctx context.Context, key string) error
 }
 
 // Config selects and configures the active storage adapter.
