@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '@/components'
@@ -6,6 +7,7 @@ import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useLogout } from '@/features/auth/hooks/useLogout'
 import { displayName, initials } from '@/features/auth/userDisplay'
+import { DeleteAccountModal } from './DeleteAccountModal'
 
 type SidebarKey = 'dashboard' | 'wallet' | 'orders' | 'savedids' | 'reseller'
 
@@ -21,6 +23,7 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const logout = useLogout()
+  const [delOpen, setDelOpen] = useState(false)
   const closeDrawer = () => useUiStore.getState().setAcctDrawer(false)
   const items: { v: Exclude<SidebarKey, 'reseller'>; icon: IconName; l: string }[] = [
     { v: 'dashboard', icon: 'home', l: t('dashboard') },
@@ -82,6 +85,11 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
         <Icon name="arrow" size={18} />
         {t('sign_out')}
       </a>
+      <a style={{ color: 'var(--danger)' }} onClick={() => setDelOpen(true)}>
+        <Icon name="trash" size={18} />
+        {t('delete_account')}
+      </a>
+      <DeleteAccountModal open={delOpen} onClose={() => setDelOpen(false)} />
     </aside>
   )
 }

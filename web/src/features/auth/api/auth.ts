@@ -64,6 +64,12 @@ export async function logout(): Promise<ApiResponse<{ success: boolean }>> {
   return apiClient.post<{ success: boolean }>('/api/v1/auth/logout')
 }
 
+// deleteAccount self-deletes the current user (server anonymizes + revokes all
+// sessions). Returns 200 {deleted:true}; 409 on money/orders still in flight.
+export async function deleteAccount(): Promise<ApiResponse<{ deleted: boolean }>> {
+  return apiClient.delete<{ deleted: boolean }>('/api/v1/users/me')
+}
+
 export async function fetchMe(): Promise<ApiResponse<User>> {
   return apiClient.get<User>('/api/v1/users/me')
 }
