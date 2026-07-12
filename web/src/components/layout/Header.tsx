@@ -13,6 +13,7 @@ import { fmtPrice } from '@/lib/utils'
 import { initials } from '@/features/auth/userDisplay'
 import { useCategories } from '@/features/catalog/hooks/useCategories'
 import { adaptRootCategory } from '@/features/catalog/lib/adaptCategory'
+import { useUnreadCount } from '@/features/notifications/hooks/useUnreadCount'
 
 export function Header() {
   const { t } = useTranslation()
@@ -29,6 +30,7 @@ export function Header() {
     .sort((a, b) => a.order - b.order)
   const [menu, setMenu] = useState(false)
   const [search, setSearch] = useState('')
+  const unread = useUnreadCount().data ?? 0
 
   const submitSearch = () => {
     const q = search.trim()
@@ -102,6 +104,13 @@ export function Header() {
             </button>
             {menu && <ControlsMenu />}
           </div>
+
+          {isAuthenticated && (
+            <button className="icon-btn" onClick={() => navigate('/notifications')} title={t('notifications')}>
+              <Icon name="bell" size={19} />
+              {unread > 0 && <span className="cart-count num">{unread > 9 ? '9+' : unread}</span>}
+            </button>
+          )}
 
           <button className="icon-btn" onClick={() => navigate('/cart')}>
             <Icon name="cart" size={19} />

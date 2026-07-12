@@ -22,6 +22,7 @@ const KycFormPage = lazy(() => import('@/features/kyc/pages/KycFormPage'))
 const SearchPage = lazy(() => import('@/features/catalog/pages/SearchPage'))
 const OffersPage = lazy(() => import('@/features/offers/pages/OffersPage'))
 const UsdtDepositPage = lazy(() => import('@/features/payments/pages/UsdtDepositPage'))
+const NotificationsPage = lazy(() => import('@/features/notifications/pages/NotificationsPage'))
 
 const fallback = (
   <div className="flex items-center justify-center h-screen">Loading...</div>
@@ -122,6 +123,14 @@ export default function AppRouter() {
             element={
               <RequireAuth>
                 <UsdtDepositPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <RequireAuth>
+                <NotificationsPage />
               </RequireAuth>
             }
           />
