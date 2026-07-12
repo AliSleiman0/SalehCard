@@ -24,15 +24,19 @@ confirm a tray push actually arrives on a device (needs an app build with
 Applied in the same settings batch as item 1 (one restart). Dashboard "today"
 KPIs now bucket on Beirut time.
 
-## 3. Restrict the Firebase Android API key
+## 3. Restrict the Firebase Android API key ✅ DONE 2026-07-12
 
 `app/lib/firebase_options.dart` commits the Android client key
 (`AIzaSy…AuUsQ`) — an identifier, not a secret, but it should be locked to the
-app. Google Cloud console (project `salehcard-app`) → APIs & Services →
-Credentials → the auto-created Android key → Application restrictions →
-**Android apps** → add package `com.salehcard.salehcard_app` + the release
-signing SHA-1 (and debug SHA-1 for dev builds). This also moots the
-GitGuardian flag on PR #27.
+app. Applied via `gcloud services api-keys update` (key uid
+`406142c0-8556-403e-a84f-15427c52119a`, project `salehcard-app`): Application
+restriction = **Android apps**, package `com.salehcard.salehcard_app`, with two
+SHA-1s — debug `8C:D4:52:…:1F:F6` + upload `A1:AF:3B:…:6F:AB`. All 27 existing
+API targets preserved. Moots the GitGuardian flag on PR #27.
+- ⚠️ **TODO at step 4 (Play launch):** add the **Play App Signing** SHA-1 to this
+  same key, or Play-Store-distributed installs (re-signed by Google) get their
+  Google/Firebase API calls rejected. Command:
+  `gcloud services api-keys update 406142c0-8556-403e-a84f-15427c52119a --project=salehcard-app --allowed-application=sha1_fingerprint=<PLAY_SHA1>,package_name=com.salehcard.salehcard_app --allowed-application=... (re-pass debug+upload too, update replaces the android list)`.
 
 **Update 2026-07-11 (Play Store hardening):** the release signing config is now
 in-repo and the upload keystore exists after the WP1 manual step

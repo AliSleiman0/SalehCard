@@ -19,6 +19,8 @@
 //	code-clear <value>        Delete the code with this exact value, e.g. a burned/duplicate
 //	                          PIN (DRY RUN; pass --apply; re-mirrors affected product stock)
 //	order <id>                Show an order summary (status, total, user, items)
+//	intents [N]               Show the N most recent USDT payment intents (default 20, read-only)
+//	deposits [N]              Show the N most recent on-chain USDT deposits seen by the watcher (default 20)
 //
 // Examples:
 //
@@ -32,12 +34,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	mongoplatform "github.com/AliSleiman0/salehcard/api/internal/platform/mongo"
@@ -55,6 +59,8 @@ Commands:
   code <value>              Find a single code by exact value: product/status/order (read-only)
   code-clear <value>        Delete the code with this exact value (DRY RUN unless --apply)
   order <id>                Order summary (read-only)
+  intents [N]               N most recent USDT payment intents (default 20, read-only)
+  deposits [N]              N most recent on-chain USDT deposits the watcher saw (default 20, read-only)
 `
 
 // mask hides all but the last 4 characters of a code/PIN value.
@@ -131,6 +137,10 @@ func main() {
 	case "order":
 		mustArg(args, "order <id>")
 		cmdOrder(ctx, db, args[0])
+	case "intents":
+		cmdIntents(ctx, db, optInt(args, 20))
+	case "deposits":
+		cmdDeposits(ctx, db, optInt(args, 20))
 	default:
 		fmt.Printf("unknown command %q\n\n%s", cmd, usage)
 		os.Exit(2)
@@ -140,6 +150,85 @@ func main() {
 func mustArg(args []string, form string) {
 	if len(args) < 1 {
 		log.Fatalf("usage: %s", form)
+	}
+}
+
+// optInt reads an optional positive integer first arg, else def.
+func optInt(args []string, def int) int {
+	if len(args) < 1 {
+		return def
+	}
+	n, err := strconv.Atoi(args[0])
+	if err != nil || n <= 0 {
+		return def
+	}
+	return n
+}
+
+// usd6 renders a micro-USDT (6-decimal) integer as a USD amount.
+func usd6(v any) string {
+	switch n := v.(type) {
+	case int64:
+		return fmt.Sprintf("%.6f", float64(n)/1e6)
+	case int32:
+		return fmt.Sprintf("%.6f", float64(n)/1e6)
+	case float64:
+		return fmt.Sprintf("%.6f", n/1e6)
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// cmdIntents prints the most recent USDT payment intents (read-only), newest
+// first — the exact detail the USDT "not received" debug needs: network,
+// status, expected vs received amount, address, txHash, timestamps.
+func cmdIntents(ctx context.Context, db *mongo.Database, n int) {
+	opt := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}).SetLimit(int64(n))
+	cur, err := db.Collection("payment_intents").Find(ctx, bson.D{}, opt)
+	if err != nil {
+		log.Fatalf("intents find: %v", err)
+	}
+	var intents []bson.M
+	if err := cur.All(ctx, &intents); err != nil {
+		log.Fatalf("intents decode: %v", err)
+	}
+	fmt.Printf("%d most-recent payment intent(s) (newest first):\n", len(intents))
+	for _, in := range intents {
+		fmt.Printf("\n  _id=%v  purpose=%v  status=%v  network=%v  mode=%v\n",
+			in["_id"], in["purpose"], in["status"], in["network"], in["addressMode"])
+		fmt.Printf("    expected=%s USDT  received=%s USDT  sharedOpen=%v\n",
+			usd6(in["amountExpectedMicros"]), usd6(in["amountReceivedMicros"]), in["sharedOpen"])
+		fmt.Printf("    address=%v\n", in["address"])
+		fmt.Printf("    txHash=%v  from=%v  settlement=%v\n", in["txHash"], in["fromAddress"], in["settlement"])
+		fmt.Printf("    createdAt=%v  expiresAt=%v  confirmedAt=%v  userId=%v  orderId=%v\n",
+			in["createdAt"], in["expiresAt"], in["confirmedAt"], in["userId"], in["orderId"])
+	}
+	if len(intents) == 0 {
+		fmt.Printf("  (none — no payment intents have ever been created)\n")
+	}
+}
+
+// cmdDeposits prints the most recent on-chain USDT deposits the watcher
+// recorded (usdt_deposits), newest first — including unmatched ones.
+func cmdDeposits(ctx context.Context, db *mongo.Database, n int) {
+	opt := options.Find().SetSort(bson.D{{Key: "seenAt", Value: -1}}).SetLimit(int64(n))
+	cur, err := db.Collection("usdt_deposits").Find(ctx, bson.D{}, opt)
+	if err != nil {
+		log.Fatalf("deposits find: %v", err)
+	}
+	var deps []bson.M
+	if err := cur.All(ctx, &deps); err != nil {
+		log.Fatalf("deposits decode: %v", err)
+	}
+	fmt.Printf("%d most-recent on-chain deposit(s) seen by the watcher (newest first):\n", len(deps))
+	for _, d := range deps {
+		fmt.Printf("\n  network=%v  amount=%s USDT  status=%v\n", d["network"], usd6(d["amountMicros"]), d["status"])
+		fmt.Printf("    to=%v  from=%v\n", d["toAddress"], d["fromAddress"])
+		fmt.Printf("    txHash=%v  attributedUserId=%v\n", d["txHash"], d["attributedUserId"])
+		fmt.Printf("    blockTime=%v  seenAt=%v\n", d["blockTime"], d["seenAt"])
+	}
+	if len(deps) == 0 {
+		fmt.Printf("  (none — the watcher has recorded zero on-chain deposits)\n")
 	}
 }
 

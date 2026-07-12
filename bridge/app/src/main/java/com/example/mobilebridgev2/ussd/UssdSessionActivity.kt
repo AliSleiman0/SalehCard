@@ -4,7 +4,6 @@ import android.app.Activity
 import android.app.KeyguardManager
 import android.os.Bundle
 import android.view.WindowManager
-import com.example.mobilebridgev2.net.BridgeReporter
 
 /**
  * Transparent, no-UI trampoline that exists for two reasons the bridge service can't do from
@@ -12,9 +11,8 @@ import com.example.mobilebridgev2.net.BridgeReporter
  *  1) Wake the screen and dismiss the (insecure) keyguard so the system USSD dialog actually
  *     renders — with the screen off it never draws and the AccessibilityService has nothing to
  *     drive. The dedicated bridge phone has NO secure lock, so requestDismissKeyguard clears it.
- *  2) Provide a real Activity context to fire ACTION_CALL, and a foreground window the USSD
- *     dialog stacks on top of, keeping the screen alive (FLAG_KEEP_SCREEN_ON) for the whole
- *     session.
+ *  2) Provide a real foreground context to place the USSD call, and a window the USSD dialog
+ *     stacks on top of, keeping the screen alive (FLAG_KEEP_SCREEN_ON) for the whole session.
  *
  * It stays alive until [UssdSessionCoordinator] clears the session (via the onFinish hook),
  * then finishes itself.
@@ -54,18 +52,10 @@ class UssdSessionActivity : Activity() {
             return
         }
 
-        val dialIntent = UssdDialer.buildDialIntent(this, subId, ussd)
-        if (dialIntent == null) {
-            UssdSessionCoordinator.fail("Could not resolve Alfa SIM phone account")
-            return
-        }
-
-        try {
-            session.phase = UssdSessionCoordinator.Phase.AWAITING_PROMPT
-            startActivity(dialIntent)
-        } catch (e: Exception) {
-            BridgeReporter.log("WARN", "ACTION_CALL failed: ${e.message}")
-            UssdSessionCoordinator.fail("Dial failed: ${e.message}")
+        session.phase = UssdSessionCoordinator.Phase.AWAITING_PROMPT
+        val placed = UssdDialer.placeUssdCall(this, subId, ussd)
+        if (!placed) {
+            UssdSessionCoordinator.fail("Could not place USSD call on the Alfa SIM")
         }
     }
 

@@ -168,6 +168,30 @@ on-chain USDT `txHash` field, and a toast system.
   home (previously the tab silently changed the global price for every
   reseller).
 
+### BL-16 Fee-free Binance-native USDT payments (enhancement)
+**Why:** The on-chain USDT watcher only sees payments that actually touch the
+chain. A Binance user paying to a Binance **deposit** address triggers a **free,
+instant, OFF-CHAIN internal transfer** (Txid literally reads "Off-chain Transfer",
+0 fee) that no chain watcher can ever see — this was the 2026-07-11 "payments not
+received" incident (root cause proven; see memory `salehcard-usdt-onchain-payments`).
+The current fix is a **non-custodial receiving address** so every payment is
+on-chain — but that forces the customer to pay Binance's **~1.5 USDT withdrawal
+fee + 5 USDT minimum**, which is costly for small purchases. This item is the
+cheaper alternative: **accept the free internal transfer and confirm it by reading
+Binance instead of the chain.** Bonus: internal transfers preserve the *exact*
+amount (no fee deducted), so amount-salt matching is actually cleaner off-chain.
+**Two build options (decide first):**
+- **Read-only Binance deposit-history API** on the receiving account (Enable-Reading
+  key only, IP-locked to NAT egress `52.157.69.89`; poll deposit history, match by
+  exact salted amount). Keeps today's pay-to-address UX + a normal account. ⚠️ First
+  verify Binance's deposit-history endpoint actually surfaces auto-routed internal
+  transfers with a matchable amount + id — unconfirmed.
+- **Binance Pay merchant** (purpose-built: free/instant for the customer, webhook
+  auto-confirm, no API-key sharing). Needs a Binance **Merchant** account (business
+  KYB) — heavier onboarding, best long-term.
+**Open question carried forward:** whose Binance account is the receiver long-term
+(client's vs a business account we control) — decides key custody + merchant feasibility.
+
 ---
 
 ## Recently completed (context)

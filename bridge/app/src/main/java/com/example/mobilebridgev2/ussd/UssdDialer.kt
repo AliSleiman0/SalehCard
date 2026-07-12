@@ -2,34 +2,48 @@ package com.example.mobilebridgev2.ussd
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import com.example.mobilebridgev2.ProviderStore
 import com.example.mobilebridgev2.net.BridgeReporter
 
 /**
- * Builds the `ACTION_CALL` intent that surfaces the system USSD dialog on a SPECIFIC dual-SIM
- * subscription. Targeting the right SIM matters: dialing a recharge USSD on the wrong SIM
- * mis-charges the other line, so we resolve the Alfa SIM's PhoneAccountHandle explicitly and
- * refuse to fall back to the default SIM.
+ * Places the USSD call that surfaces the system USSD dialog on a SPECIFIC dual-SIM subscription.
+ * Targeting the right SIM matters: dialing a recharge USSD on the wrong SIM mis-charges the other
+ * line, so we resolve the Alfa SIM's PhoneAccountHandle explicitly and refuse to fall back to the
+ * default SIM.
+ *
+ * Uses [TelecomManager.placeCall] rather than an `ACTION_CALL` intent: CALL is placed by the
+ * Telecom system service, not by an Activity in the dialer package, so intent resolution either
+ * pops a "Complete action using…" chooser (multiple tel handlers) or fails with "no Activity
+ * found" when pinned to the dialer package. placeCall goes straight through Telecom — no chooser,
+ * no Activity resolution — and honours the PhoneAccountHandle.
  */
 object UssdDialer {
 
     /**
-     * Builds an `ACTION_CALL` intent for [ussd] on the SIM identified by [subId], or null if the
-     * SIM's PhoneAccountHandle can't be resolved (caller must then fail the command).
+     * Places [ussd] as a call on the SIM identified by [subId], surfacing the USSD dialog for the
+     * accessibility service to drive. Returns false if the SIM's PhoneAccountHandle can't be
+     * resolved or the call can't be placed (caller must then fail the command).
      */
-    fun buildDialIntent(context: Context, subId: Int, ussd: String): Intent? {
-        val handle = resolvePhoneAccountHandle(context, subId) ?: return null
-        // Uri.parse strips '#' as a fragment delimiter — a dropped '#' turns the USSD into a
-        // plain call to the digits, so pre-encode it to %23.
-        val encoded = ussd.replace("#", Uri.encode("#"))
-        val uri = Uri.parse("tel:$encoded")
-        return Intent(Intent.ACTION_CALL, uri).apply {
-            putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, handle)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    @SuppressLint("MissingPermission")
+    fun placeUssdCall(context: Context, subId: Int, ussd: String): Boolean {
+        val telecom = context.getSystemService(TelecomManager::class.java) ?: return false
+        val handle = resolvePhoneAccountHandle(context, subId) ?: return false
+        // Build the tel: URI via fromParts so '#' is preserved in the scheme-specific part
+        // (Uri.parse would treat '#' as a fragment delimiter and drop the USSD tail).
+        val uri = Uri.fromParts("tel", ussd, null)
+        val extras = Bundle().apply {
+            putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, handle)
+        }
+        return try {
+            telecom.placeCall(uri, extras)
+            true
+        } catch (e: Exception) {
+            BridgeReporter.log("WARN", "placeCall failed: ${e.message}")
+            false
         }
     }
 
