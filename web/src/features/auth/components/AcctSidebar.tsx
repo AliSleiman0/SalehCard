@@ -50,6 +50,17 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
           </span>
         </div>
       </div>
+      {/* Explicit path back into the storefront — the account chrome otherwise
+          only links to account destinations. */}
+      <a
+        onClick={() => {
+          closeDrawer()
+          navigate('/')
+        }}
+      >
+        <Icon name="grid" size={18} />
+        {t('browse_store')}
+      </a>
       {items.map((it) => (
         <a
           key={it.v}

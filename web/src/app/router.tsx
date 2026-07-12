@@ -4,6 +4,7 @@ import Layout from './Layout'
 import { RequireAuth, RequireReseller, RedirectIfAuthed } from './RequireAuth'
 
 const HomePage = lazy(() => import('@/features/catalog/pages/HomePage'))
+const CategoriesPage = lazy(() => import('@/features/catalog/pages/CategoriesPage'))
 const CategoryPage = lazy(() => import('@/features/catalog/pages/CategoryPage'))
 const ProductDetailPage = lazy(() => import('@/features/catalog/pages/ProductDetailPage'))
 const CartPage = lazy(() => import('@/features/cart/pages/CartPage'))
@@ -34,6 +35,7 @@ export default function AppRouter() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/search" element={<SearchPage />} />

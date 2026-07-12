@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Icon, ImageArt, LoadingSpinner, ErrorState, EmptyState } from '@/components'
+import { Icon, LoadingSpinner, ErrorState, EmptyState } from '@/components'
 import { fmtPrice } from '@/lib/utils'
 import { fromPrice } from '@/lib/pricing'
 import { useCurrencyStore } from '@/stores/currency'
@@ -8,30 +8,11 @@ import { useLocaleStore } from '@/stores/locale'
 import { useProducts } from '../hooks/useProducts'
 import { useCategories } from '../hooks/useCategories'
 import { adaptProduct } from '../lib/adaptProduct'
-import { adaptRootCategory, type ViewCategory } from '../lib/adaptCategory'
+import { adaptRootCategory } from '../lib/adaptCategory'
 import { ProductCard } from '../components/ProductCard'
 import { ProductGrid } from '../components/ProductGrid'
+import { CategoryTile } from '../components/CategoryTile'
 import { KycBanner } from '@/features/kyc/components/KycBanner'
-
-function CategoryTile({ c }: { c: ViewCategory }) {
-  const navigate = useNavigate()
-  return (
-    <div className="cattile hover-pop" onClick={() => navigate('/category/' + c.key)}>
-      <ImageArt
-        art={c.art}
-        word={c.name}
-        sub={c.count !== undefined ? `${c.count}+` : ''}
-        h={120}
-        radius={0}
-        wordSize={22}
-      />
-      <div className="cap">
-        <div style={{ fontWeight: 800, fontSize: 15 }}>{c.name}</div>
-        <div className="tiny faint">{c.tag}</div>
-      </div>
-    </div>
-  )
-}
 
 function SectionHead({ title, onMore }: { title: string; onMore?: () => void }) {
   const { t } = useTranslation()
@@ -83,13 +64,13 @@ export default function HomePage() {
           </h1>
           <p style={{ maxWidth: 440, opacity: 0.9, marginBottom: 26, fontSize: 16 }}>{t('hero_sub')}</p>
           <div className="row" style={{ gap: 12 }}>
-            <button className="btn btn-cyan btn-lg" onClick={() => navigate('/category/games')}>
+            <button className="btn btn-cyan btn-lg" onClick={() => navigate('/categories')}>
               {t('hero_cta')} <Icon name="arrow" size={18} />
             </button>
             <button
               className="btn btn-lg"
               style={{ background: 'rgba(255,255,255,.14)', color: '#fff' }}
-              onClick={() => navigate(firstId ? '/product/' + firstId : '/category/games')}
+              onClick={() => navigate(firstId ? '/product/' + firstId : '/categories')}
             >
               {t('hero_cta2')}
             </button>
@@ -168,7 +149,7 @@ export default function HomePage() {
 
       {/* best sellers */}
       <section className="section">
-        <SectionHead title={t('best')} onMore={() => navigate('/category/games')} />
+        <SectionHead title={t('best')} onMore={() => navigate('/categories')} />
         {query.isLoading ? (
           <LoadingSpinner />
         ) : query.isError ? (
@@ -219,7 +200,7 @@ export default function HomePage() {
       {/* featured grid */}
       {products.length > 0 && (
         <section className="section">
-          <SectionHead title={t('featured')} onMore={() => navigate('/category/giftcards')} />
+          <SectionHead title={t('featured')} onMore={() => navigate('/categories')} />
           <ProductGrid products={products.slice(0, 4)} />
         </section>
       )}

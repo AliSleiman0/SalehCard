@@ -44,8 +44,9 @@ export function Header() {
   }, [])
 
   const onCat = pathname.startsWith('/category/') ? pathname.split('/')[2] : null
-  const showCatNav =
-    pathname === '/' || pathname.startsWith('/category') || pathname === '/offers'
+  // The category bar is a persistent browse affordance on every page except the
+  // focused auth screens, so the store is always reachable (incl. the dashboard).
+  const showCatNav = pathname !== '/login' && pathname !== '/register'
   const onAcctPage = ['/dashboard', '/wallet', '/orders', '/saved-ids'].some((p) =>
     pathname.startsWith(p),
   )
@@ -82,6 +83,14 @@ export function Header() {
         </div>
 
         <div className="header-right">
+          <button
+            className="icon-btn mobile-only"
+            onClick={() => navigate('/search')}
+            title={t('search_ph')}
+          >
+            <Icon name="search" size={19} />
+          </button>
+
           {isAuthenticated && (
             <div className="wallet-pill desktop-only" onClick={() => navigate('/wallet')}>
               <span className="dot-grad">
@@ -129,15 +138,12 @@ export function Header() {
       {showCatNav && (
         <div className="wrap">
           <nav className="catnav">
-            {isAuthenticated && (
-              <a
-                className={pathname === '/offers' ? 'on' : ''}
-                style={{ color: 'var(--danger)', fontWeight: 800 }}
-                onClick={() => navigate('/offers')}
-              >
-                {t('offers_nav')}
-              </a>
-            )}
+            <a
+              className={pathname.startsWith('/categories') ? 'on' : ''}
+              onClick={() => navigate('/categories')}
+            >
+              {t('nav_shop')}
+            </a>
             {cats.map((c) => (
               <a
                 key={c.key}
@@ -147,6 +153,15 @@ export function Header() {
                 {c.name}
               </a>
             ))}
+            {isAuthenticated && (
+              <a
+                className={pathname === '/offers' ? 'on' : ''}
+                style={{ color: 'var(--danger)', fontWeight: 800 }}
+                onClick={() => navigate('/offers')}
+              >
+                {t('offers_nav')}
+              </a>
+            )}
           </nav>
         </div>
       )}
