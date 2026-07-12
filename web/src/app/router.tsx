@@ -17,6 +17,8 @@ const OrdersPage = lazy(() => import('@/features/orders/pages/OrdersPage'))
 const OrderDetailPage = lazy(() => import('@/features/orders/pages/OrderDetailPage'))
 const SavedIDsPage = lazy(() => import('@/features/auth/pages/SavedIDsPage'))
 const ResellerDashboardPage = lazy(() => import('@/features/reseller/pages/ResellerDashboardPage'))
+const KycPage = lazy(() => import('@/features/kyc/pages/KycPage'))
+const KycFormPage = lazy(() => import('@/features/kyc/pages/KycFormPage'))
 
 const fallback = (
   <div className="flex items-center justify-center h-screen">Loading...</div>
@@ -100,6 +102,22 @@ export default function AppRouter() {
             element={
               <RequireAuth>
                 <SavedIDsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/kyc"
+            element={
+              <RequireAuth>
+                <KycPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/kyc/submit"
+            element={
+              <RequireAuth>
+                <KycFormPage />
               </RequireAuth>
             }
           />

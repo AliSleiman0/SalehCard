@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import { KycBanner } from '@/features/kyc/components/KycBanner'
 import { fmtPrice } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -31,6 +32,7 @@ export default function DashboardPage() {
       <div className="cols-acct">
         <AcctSidebar active="dashboard" />
         <div className="col" style={{ gap: 24 }}>
+          <KycBanner />
           <div className="statgrid">
             <div className="stat bigbal">
               <span className="eyebrow" style={{ color: 'rgba(255,255,255,.8)' }}>

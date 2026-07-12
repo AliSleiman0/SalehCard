@@ -14,6 +14,8 @@ import { useCurrencyStore } from '@/stores/currency'
 import { useUiStore } from '@/stores/ui'
 import { useLocaleStore } from '@/stores/locale'
 import { useWallet } from '@/features/wallet/hooks/useWallet'
+import { useKycProfile } from '@/features/kyc/hooks/useKycProfile'
+import { KycGate } from '@/features/kyc/components/KycGate'
 import { usePlaceOrder, OrderError } from '@/features/orders/hooks/usePlaceOrder'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import type { PlaceOrderInput, Product } from '@/types'
@@ -30,7 +32,13 @@ export default function CheckoutPage() {
   const locale = useLocaleStore((s) => s.locale)
   const agent = useUiStore((s) => s.agent)
   const walletQuery = useWallet()
+  const kycQuery = useKycProfile()
   const placeOrder = usePlaceOrder()
+
+  // Block checkout until verified. Fail open on loading/error — the server still
+  // enforces KYC_REQUIRED at POST /orders.
+  const kycStatus = kycQuery.data?.status
+  const kycBlocked = !!kycStatus && kycStatus !== 'verified'
 
   const balance = walletQuery.data?.balance ?? 0
   const sub = cartItems.reduce((s, x) => s + x.price * x.qty, 0)
@@ -123,7 +131,8 @@ export default function CheckoutPage() {
         },
         onError: (err) => {
           if (err instanceof OrderError && err.code === 'KYC_REQUIRED') {
-            toast('Identity verification is required — please verify in the SalehCard app.', 'user')
+            toast(t('kyc_required_toast'), 'user')
+            navigate('/kyc')
             return
           }
           toast(err.message || t('failed_title'), 'user')
@@ -169,6 +178,7 @@ export default function CheckoutPage() {
       </h1>
       <div className="cols2">
         <div className="col" style={{ gap: 22 }}>
+          {kycBlocked && kycStatus && <KycGate status={kycStatus} />}
           {/* methods */}
           <Panel>
             <div className="label" style={{ marginBottom: 14 }}>
@@ -299,7 +309,7 @@ export default function CheckoutPage() {
             size="lg"
             block
             onClick={pay}
-            disabled={insufficient || placing}
+            disabled={insufficient || placing || kycBlocked}
           >
             <Icon name="shield" size={18} />
             {placing ? t('processing') : t('place_order')}

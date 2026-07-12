@@ -11,6 +11,7 @@ import { adaptProduct } from '../lib/adaptProduct'
 import { adaptRootCategory, type ViewCategory } from '../lib/adaptCategory'
 import { ProductCard } from '../components/ProductCard'
 import { ProductGrid } from '../components/ProductGrid'
+import { KycBanner } from '@/features/kyc/components/KycBanner'
 
 function CategoryTile({ c }: { c: ViewCategory }) {
   const navigate = useNavigate()
@@ -71,6 +72,7 @@ export default function HomePage() {
 
   return (
     <div className="wrap">
+      <KycBanner />
       {/* hero */}
       <section className="hero">
         <div className="hero-card">
