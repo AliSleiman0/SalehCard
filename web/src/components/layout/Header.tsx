@@ -28,6 +28,12 @@ export function Header() {
     .map((c) => adaptRootCategory(c, locale))
     .sort((a, b) => a.order - b.order)
   const [menu, setMenu] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const submitSearch = () => {
+    const q = search.trim()
+    if (q) navigate('/search?q=' + encodeURIComponent(q))
+  }
 
   useEffect(() => {
     const h = () => setMenu(false)
@@ -36,7 +42,8 @@ export function Header() {
   }, [])
 
   const onCat = pathname.startsWith('/category/') ? pathname.split('/')[2] : null
-  const showCatNav = pathname === '/' || pathname.startsWith('/category')
+  const showCatNav =
+    pathname === '/' || pathname.startsWith('/category') || pathname === '/offers'
   const onAcctPage = ['/dashboard', '/wallet', '/orders', '/saved-ids'].some((p) =>
     pathname.startsWith(p),
   )
@@ -62,11 +69,13 @@ export function Header() {
           </div>
         </div>
 
-        <div className="searchbar desktop-only" onClick={() => navigate('/category/games')}>
+        <div className="searchbar desktop-only">
           <Icon name="search" size={18} />
           <input
             placeholder={t('search_ph')}
-            onKeyDown={(e) => e.key === 'Enter' && navigate('/category/games')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
           />
         </div>
 
@@ -111,6 +120,15 @@ export function Header() {
       {showCatNav && (
         <div className="wrap">
           <nav className="catnav">
+            {isAuthenticated && (
+              <a
+                className={pathname === '/offers' ? 'on' : ''}
+                style={{ color: 'var(--danger)', fontWeight: 800 }}
+                onClick={() => navigate('/offers')}
+              >
+                {t('offers_nav')}
+              </a>
+            )}
             {cats.map((c) => (
               <a
                 key={c.key}

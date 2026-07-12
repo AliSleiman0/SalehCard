@@ -7,6 +7,7 @@ export interface ProductsParams {
   category?: string
   rootDomain?: string
   available?: boolean
+  q?: string
 }
 
 export async function fetchProducts(
@@ -19,6 +20,7 @@ export async function fetchProducts(
   if (params.category !== undefined) query.set('category', params.category)
   if (params.rootDomain !== undefined) query.set('rootDomain', params.rootDomain)
   if (params.available !== undefined) query.set('available', String(params.available))
+  if (params.q !== undefined) query.set('q', params.q)
 
   const qs = query.toString()
   const path = qs ? `/api/v1/products?${qs}` : '/api/v1/products'
