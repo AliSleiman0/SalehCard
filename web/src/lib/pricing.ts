@@ -5,19 +5,22 @@ export interface PricedVariant {
   l: string
   /** retail price in USD */
   p: number
+  /** discounted retail price in USD while an offer is live, if any */
+  offerP?: number
   /** explicit reseller/agent price in USD (from API resellerPrice), if any */
   agentP?: number
 }
 
 export interface PricedProduct {
-  /** fallback agent discount fraction (e.g. 0.08) when no explicit agentP */
+  /** fallback agent discount fraction when no explicit agentP (0 = retail) */
   agentDisc?: number
   variants: PricedVariant[]
 }
 
-/** Effective unit price for a variant given retail vs agent view. */
+/** Effective unit price for a variant given retail vs agent view.
+ * Display-only: the server re-prices authoritatively at checkout. */
 export function priceFor(p: PricedProduct, v: PricedVariant, agent: boolean): number {
-  if (!agent) return v.p
+  if (!agent) return v.offerP ?? v.p
   return v.agentP ?? v.p * (1 - (p.agentDisc ?? 0))
 }
 

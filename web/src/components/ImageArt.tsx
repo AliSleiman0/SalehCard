@@ -1,8 +1,9 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { ART } from '@/lib/art'
 
 export function ImageArt({
   art = 'soft',
+  src,
   word = '',
   sub = '',
   h = 160,
@@ -12,6 +13,8 @@ export function ImageArt({
   className,
 }: {
   art?: string
+  /** real image URL; the gradient art renders behind it as loading state and error fallback */
+  src?: string
   word?: string
   sub?: string
   h?: number
@@ -20,7 +23,9 @@ export function ImageArt({
   style?: CSSProperties
   className?: string
 }) {
+  const [broken, setBroken] = useState(false)
   const [a, b] = ART[art] || ART.soft
+  const showImg = !!src && !broken
   const ws = wordSize || Math.max(20, Math.min(40, 220 / Math.max(word.length, 4)))
   return (
     <div
@@ -43,12 +48,31 @@ export function ImageArt({
           background: 'repeating-linear-gradient(135deg, #fff 0 2px, transparent 2px 16px)',
         }}
       />
-      <div className="art-label">
-        <div className="art-word" style={{ fontSize: ws, letterSpacing: '-.01em' }}>
-          {word}
+      {showImg && (
+        <img
+          src={src}
+          alt={word}
+          loading="lazy"
+          onError={() => setBroken(true)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 2,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            borderRadius: radius,
+          }}
+        />
+      )}
+      {!showImg && (
+        <div className="art-label">
+          <div className="art-word" style={{ fontSize: ws, letterSpacing: '-.01em' }}>
+            {word}
+          </div>
+          {sub && <div className="art-sub">{sub}</div>}
         </div>
-        {sub && <div className="art-sub">{sub}</div>}
-      </div>
+      )}
     </div>
   )
 }

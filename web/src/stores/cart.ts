@@ -7,6 +7,8 @@ export interface CartItem {
   brand: string
   title: string
   art: string
+  /** real product image (thumbnail); art is the fallback */
+  image?: string
   variant: string
   price: number
   qty: number

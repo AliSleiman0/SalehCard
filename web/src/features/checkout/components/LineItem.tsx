@@ -16,6 +16,7 @@ export function LineItem({
     <div className="lrow">
       <ImageArt
         art={it.art}
+        src={it.image}
         word={it.brand.split(' ')[0]}
         h={56}
         wordSize={14}

@@ -83,6 +83,7 @@ export default function ProductDetailPage() {
   const catLabel = rootMeta(p.rootDomain).label || p.cat
 
   const buy = (toCartFlag: boolean) => {
+    if (!p.available) return
     if (fulfill === 'transfer' && !rName) {
       toast(t('recipient_name'), 'user')
       return
@@ -97,6 +98,7 @@ export default function ProductDetailPage() {
       brand: p.brand,
       title: p.title,
       art: p.art,
+      image: p.image,
       variant: v.l,
       price: unit,
       qty,
@@ -127,8 +129,9 @@ export default function ProductDetailPage() {
       <div className="pdp">
         {/* media */}
         <div className="pdp-media">
-          <ImageArt art={p.art} word={p.brand} sub={p.title} h={380} wordSize={48} radius={22} />
+          <ImageArt art={p.art} src={p.imageFull} word={p.brand} sub={p.title} h={380} wordSize={48} radius={22} />
           <div className="row" style={{ gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+            {!p.available && <span className="badge badge-disc">{t('out_of_stock')}</span>}
             {p.instant && (
               <span className="badge badge-instant">
                 <Icon name="bolt" size={12} />
@@ -174,13 +177,24 @@ export default function ProductDetailPage() {
               </span>
             </div>
             <div className="row wrap-gap" style={{ gap: 12, marginTop: 10 }}>
-              <Stars value={p.rating} />
-              <span className="small num" style={{ fontWeight: 700 }}>
-                {p.rating}
-              </span>
-              <span className="small faint num">
-                {p.reviews.toLocaleString()} {t('reviews')}
-              </span>
+              {p.reviews > 0 && (
+                <>
+                  <Stars value={p.rating} />
+                  <span className="small num" style={{ fontWeight: 700 }}>
+                    {p.rating.toFixed(1)}
+                  </span>
+                  <span className="small faint num">
+                    {p.reviews.toLocaleString()} {t('reviews')}
+                  </span>
+                </>
+              )}
+              {p.offer && (
+                <span className="badge badge-disc">
+                  {p.offer.label}
+                  {p.offer.endsAt &&
+                    ` · ${t('offer_ends')} ${new Date(p.offer.endsAt).toLocaleDateString()}`}
+                </span>
+              )}
               {p.sold && (
                 <span className="small faint">
                   · {p.sold} {t('sold')}
@@ -203,6 +217,9 @@ export default function ProductDetailPage() {
                   <div className="row center" style={{ gap: 6, marginTop: 4 }}>
                     <Price usd={priceFor(p, vv, agent)} cur={cur} className="small num" />
                     {agent && <Price usd={vv.p} cur={cur} strike className="tiny" />}
+                    {!agent && vv.offerP !== undefined && (
+                      <Price usd={vv.p} cur={cur} strike className="tiny" />
+                    )}
                   </div>
                 </div>
               ))}
@@ -302,13 +319,23 @@ export default function ProductDetailPage() {
               </div>
             </div>
             <div className="row" style={{ gap: 12 }}>
-              <button className="btn btn-ghost btn-lg" style={{ flex: 1 }} onClick={() => buy(true)}>
+              <button
+                className="btn btn-ghost btn-lg"
+                style={{ flex: 1 }}
+                disabled={!p.available}
+                onClick={() => buy(true)}
+              >
                 <Icon name="cart" size={18} />
                 {t('add_cart')}
               </button>
-              <button className="btn btn-primary btn-lg" style={{ flex: 1.4 }} onClick={() => buy(false)}>
+              <button
+                className="btn btn-primary btn-lg"
+                style={{ flex: 1.4 }}
+                disabled={!p.available}
+                onClick={() => buy(false)}
+              >
                 <Icon name="bolt" size={18} />
-                {t('buy_now')}
+                {p.available ? t('buy_now') : t('out_of_stock')}
               </button>
             </div>
             <div className="row center" style={{ gap: 8, color: 'var(--ok)' }}>

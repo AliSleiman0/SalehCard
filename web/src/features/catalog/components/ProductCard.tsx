@@ -17,13 +17,18 @@ export function ProductCard({ p, compact = false }: { p: ViewProduct; compact?: 
   return (
     <div className="prodcard hover-pop" onClick={() => navigate('/product/' + p.id)}>
       <div style={{ position: 'relative' }}>
-        <ImageArt art={p.art} word={p.brand} sub={p.title} h={compact ? 124 : 150} radius={0} />
+        <ImageArt art={p.art} src={p.image} word={p.brand} sub={p.title} h={compact ? 124 : 150} radius={0} />
         <div className="row" style={{ position: 'absolute', top: 10, insetInlineStart: 10, gap: 6 }}>
-          {p.instant && (
-            <span className="badge badge-instant">
-              <Icon name="bolt" size={11} />
-              {t('instant')}
-            </span>
+          {p.offer && <span className="badge badge-disc">{p.offer.label}</span>}
+          {!p.available ? (
+            <span className="badge badge-soft">{t('out_of_stock')}</span>
+          ) : (
+            p.instant && (
+              <span className="badge badge-instant">
+                <Icon name="bolt" size={11} />
+                {t('instant')}
+              </span>
+            )
           )}
         </div>
         {agent && (
@@ -43,10 +48,12 @@ export function ProductCard({ p, compact = false }: { p: ViewProduct; compact?: 
             </span>
           </div>
         </div>
-        <div className="row" style={{ gap: 6 }}>
-          <Stars value={p.rating} size={13} />
-          <span className="tiny faint num">{(p.reviews / 1000).toFixed(0)}k</span>
-        </div>
+        {p.reviews > 0 && (
+          <div className="row" style={{ gap: 6 }}>
+            <Stars value={p.rating} size={13} />
+            <span className="tiny faint num">{p.reviews.toLocaleString()}</span>
+          </div>
+        )}
         <div className="spacer" />
         <div className="row between" style={{ marginTop: 4 }}>
           <div className="col" style={{ gap: 0 }}>
@@ -54,6 +61,7 @@ export function ProductCard({ p, compact = false }: { p: ViewProduct; compact?: 
             <span className="row" style={{ gap: 7 }}>
               <Price usd={eff} cur={cur} className="h3" />
               {agent && <Price usd={base} cur={cur} strike className="small" />}
+              {!agent && p.offer && <Price usd={p.offer.wasFrom} cur={cur} strike className="small" />}
             </span>
           </div>
           <span className="icon-btn" style={{ width: 36, height: 36, background: 'var(--grad)', color: '#fff', border: 0 }}>
