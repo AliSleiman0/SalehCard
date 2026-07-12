@@ -22,6 +22,7 @@ export { ToastProvider, useToast } from './Toast'
 export type { ToastFn } from './Toast'
 
 export { CodeVault } from './CodeVault'
+export { FileUpload } from './FileUpload'
 export { Stepper } from './Stepper'
 export { Segmented } from './Segmented'
 export { Tabs } from './Tabs'
