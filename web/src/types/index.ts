@@ -8,7 +8,40 @@ export interface Variant {
   id: string
   denomination: string
   price: number
+  offerPrice?: number
   resellerPrice?: number
+}
+
+export interface InputFieldConstraints {
+  min?: number
+  max?: number
+  options?: string[]
+}
+
+// Per-product checkout field spec (Product.inputFields). Labels are i18n maps
+// that may omit locales; `sensitive` values are masked client-side and never
+// persisted server-side.
+export interface InputField {
+  key: string
+  label: Partial<I18nString>
+  type: 'text' | 'amount' | 'quantity' | 'select'
+  constraints?: InputFieldConstraints
+  sensitive: boolean
+}
+
+// Game-ID verification hook (Product.verification): `app` is the game slug
+// for POST /products/{id}/verify-account.
+export interface Verification {
+  provider: number
+  app: string
+}
+
+export interface OfferInfo {
+  discountType: 'percent' | 'fixed'
+  discountValue: number
+  originalFromPrice: number
+  offerFromPrice: number
+  endsAt?: string
 }
 
 export interface RatingsSummary {
@@ -26,11 +59,15 @@ export interface Product {
   // Optional: only migrated products carry it. Used for browse-by-domain.
   rootDomain?: string
   images: string[]
+  thumbnail: string
   variants: Variant[]
   fulfillmentType: FulfillmentType
   stock: number
   available: boolean
   ratings: RatingsSummary
+  inputFields?: InputField[]
+  verification?: Verification
+  offer?: OfferInfo
   createdAt: string
   updatedAt: string
 }
@@ -125,14 +162,45 @@ export interface PlaceOrderItemInput {
   qty: number
   playerId?: string
   recipient?: Recipient
+  // Structured per-field capture for account_credit lines; labels are
+  // resolved server-side from the product's inputFields spec.
+  fields?: { key: string; value: string }[]
 }
 
 export interface PlaceOrderInput {
   items: PlaceOrderItemInput[]
   currency: string
   paymentMethod: PaymentMethod
+  usdtNetwork?: string
   promoCode?: string
 }
+
+export type PaymentIntentStatus = 'pending' | 'confirming' | 'confirmed' | 'expired'
+
+export interface PaymentIntent {
+  id: string
+  purpose: 'order' | 'topup'
+  orderId?: string
+  network: string
+  address: string
+  amountUsd: number
+  receivedUsd: number
+  status: PaymentIntentStatus
+  txHash?: string
+  createdAt: string
+  expiresAt: string
+}
+
+export interface PaymentConfig {
+  usdtEnabled: boolean
+  network: string
+  networks: string[]
+  expiryMinutes: number
+}
+
+// POST /orders response: for usdt orders the intent rides FLAT next to the
+// order fields (Go embeds the Order struct in placeOrderResponse).
+export type PlacedOrder = Order & { paymentIntent?: PaymentIntent }
 
 export type WalletTxType = 'topup' | 'purchase' | 'refund' | 'adjustment'
 

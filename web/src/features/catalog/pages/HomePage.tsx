@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Icon, ImageArt, LoadingSpinner, ErrorState, EmptyState } from '@/components'
 import { fmtPrice } from '@/lib/utils'
+import { fromPrice } from '@/lib/pricing'
 import { useCurrencyStore } from '@/stores/currency'
 import { useLocaleStore } from '@/stores/locale'
 import { useProducts } from '../hooks/useProducts'
@@ -57,6 +58,8 @@ export default function HomePage() {
 
   const products = (query.data?.data ?? []).map((p) => adaptProduct(p, locale))
   const firstId = products[0]?.id
+  // hero promo tile: prefer a product with a live offer, else the first product
+  const heroProd = products.find((p) => p.offer && p.available) ?? products.find((p) => p.available)
 
   const trust = [
     { icon: 'bolt' as const, c: 'var(--grad)', l: t('trust_instant') },
@@ -91,24 +94,29 @@ export default function HomePage() {
           </div>
         </div>
         <div className="hero-side">
-          <div className="promo-tile" style={{ background: 'radial-gradient(120% 120% at 100% 0%, #22e3c8, #0b8f9e)' }}>
-            <span className="eyebrow" style={{ color: 'rgba(255,255,255,.85)' }}>
-              {t('featured')}
-            </span>
-            <div className="h3" style={{ color: '#fff', marginTop: 4 }}>
-              PUBG MOBILE
+          {heroProd && (
+            <div className="promo-tile" style={{ background: 'radial-gradient(120% 120% at 100% 0%, #22e3c8, #0b8f9e)' }}>
+              <span className="eyebrow" style={{ color: 'rgba(255,255,255,.85)' }}>
+                {t('featured')}
+              </span>
+              <div className="h3" style={{ color: '#fff', marginTop: 4 }}>
+                {heroProd.brand}
+              </div>
+              <div className="row between" style={{ marginTop: 8 }}>
+                <span style={{ color: '#fff', fontWeight: 800 }}>
+                  {heroProd.offer ? `${heroProd.offer.label} · ` : ''}
+                  {fmtPrice(fromPrice(heroProd, false), cur)}
+                </span>
+                <button
+                  className="btn btn-sm"
+                  style={{ background: '#04121a', color: '#fff' }}
+                  onClick={() => navigate('/product/' + heroProd.id)}
+                >
+                  {t('buy_now')}
+                </button>
+              </div>
             </div>
-            <div className="row between" style={{ marginTop: 8 }}>
-              <span style={{ color: '#fff', fontWeight: 800 }}>1800 UC · {fmtPrice(24.99, cur)}</span>
-              <button
-                className="btn btn-sm"
-                style={{ background: '#04121a', color: '#fff' }}
-                onClick={() => navigate(firstId ? '/product/' + firstId : '/category/games')}
-              >
-                {t('buy_now')}
-              </button>
-            </div>
-          </div>
+          )}
           <div
             className="promo-tile"
             style={{ background: 'radial-gradient(120% 120% at 0% 100%, #d633ff, #5b1aa0)' }}
