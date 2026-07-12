@@ -26,6 +26,7 @@ function makeWrapper() {
 
 const fakeUser = {
   id: 'u1',
+  name: 'Test User',
   email: 'a@b.com',
   role: 'customer' as const,
   locale: 'en',

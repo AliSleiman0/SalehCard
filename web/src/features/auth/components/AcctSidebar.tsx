@@ -43,7 +43,7 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
         <div className="col" style={{ gap: 2, minWidth: 0 }}>
           <span style={{ fontWeight: 800 }}>{displayName(user)}</span>
           <span className="tiny faint" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {user?.email}
+            {user?.email || user?.phone}
           </span>
         </div>
       </div>
