@@ -4,7 +4,8 @@ import { Icon, Price, Button, useToast } from '@/components'
 import { fmtPrice } from '@/lib/utils'
 import { useCurrencyStore } from '@/stores/currency'
 
-export function PromoField() {
+// Cart-page promo preview (decorative — the real promo is applied at checkout).
+function PromoField() {
   const { t } = useTranslation()
   const toast = useToast()
   const [code, setCode] = useState('')

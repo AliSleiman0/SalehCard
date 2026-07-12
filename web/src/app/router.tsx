@@ -19,6 +19,8 @@ const SavedIDsPage = lazy(() => import('@/features/auth/pages/SavedIDsPage'))
 const ResellerDashboardPage = lazy(() => import('@/features/reseller/pages/ResellerDashboardPage'))
 const KycPage = lazy(() => import('@/features/kyc/pages/KycPage'))
 const KycFormPage = lazy(() => import('@/features/kyc/pages/KycFormPage'))
+const SearchPage = lazy(() => import('@/features/catalog/pages/SearchPage'))
+const OffersPage = lazy(() => import('@/features/offers/pages/OffersPage'))
 
 const fallback = (
   <div className="flex items-center justify-center h-screen">Loading...</div>
@@ -32,6 +34,15 @@ export default function AppRouter() {
           <Route path="/" element={<HomePage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route
+            path="/offers"
+            element={
+              <RequireAuth>
+                <OffersPage />
+              </RequireAuth>
+            }
+          />
           <Route path="/cart" element={<CartPage />} />
           <Route
             path="/checkout"

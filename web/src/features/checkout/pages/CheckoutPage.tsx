@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
 import { Icon, Price, Button, Panel, Badge, useToast } from '@/components'
 import { LineItem } from '@/features/checkout/components/LineItem'
-import { PromoField } from '@/features/checkout/components/OrderSummary'
+import { PromoField } from '@/features/checkout/components/PromoField'
 import { DynamicField } from '@/features/checkout/components/DynamicField'
+import type { PromoResult } from '@/features/checkout/api/promos'
 import { nonQuantityFields, buildOrderLine, isValidLebaneseMobile } from '@/features/checkout/lib/orderFields'
 import { fetchProduct } from '@/features/catalog/api/products'
 import { fmtPrice } from '@/lib/utils'
@@ -40,9 +41,12 @@ export default function CheckoutPage() {
   const kycStatus = kycQuery.data?.status
   const kycBlocked = !!kycStatus && kycStatus !== 'verified'
 
+  const [promo, setPromo] = useState<PromoResult | null>(null)
+
   const balance = walletQuery.data?.balance ?? 0
   const sub = cartItems.reduce((s, x) => s + x.price * x.qty, 0)
-  const total = sub
+  const discount = promo ? Math.min(promo.discount, sub) : 0
+  const total = sub - discount
 
   const insufficient = balance < total
   // One idempotency key per checkout attempt; held in a ref so React re-renders
@@ -116,6 +120,7 @@ export default function CheckoutPage() {
       items,
       currency: 'USD', // prices are USD; display currency is applied at render time
       paymentMethod: 'wallet',
+      promoCode: promo?.code,
     }
 
     // Fresh key per click (a corrective re-submit after an error is a new attempt).
@@ -287,12 +292,18 @@ export default function CheckoutPage() {
           }}
         >
           <h3 className="h3">{t('order_summary')}</h3>
-          <PromoField />
+          <PromoField orderTotal={sub} applied={promo} onApplied={setPromo} />
           <hr className="divider" />
           <div className="row between">
             <span className="muted">{t('subtotal')}</span>
             <Price usd={sub} cur={currency} className="num" />
           </div>
+          {discount > 0 && (
+            <div className="row between" style={{ color: 'var(--ok)' }}>
+              <span>{t('discount')}</span>
+              <span className="num">−{fmtPrice(discount, currency)}</span>
+            </div>
+          )}
           {agent && (
             <div className="row between" style={{ color: 'var(--agent)' }}>
               <span className="small">{t('agent_pricing')}</span>
