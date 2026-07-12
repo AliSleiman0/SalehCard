@@ -14,7 +14,7 @@ export function BottomNav() {
 
   const items: { path: string; icon: IconName; label: string; badge?: number }[] = [
     { path: '/', icon: 'home', label: t('nav_home') },
-    { path: '/category/games', icon: 'grid', label: t('nav_cats') },
+    { path: '/categories', icon: 'grid', label: t('nav_cats') },
     { path: '/wallet', icon: 'wallet', label: t('nav_wallet') },
     { path: '/cart', icon: 'cart', label: t('nav_cart'), badge: cartCount },
     {
