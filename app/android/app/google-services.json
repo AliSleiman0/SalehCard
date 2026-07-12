@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "184899958988",
+    "project_id": "salehcard-app",
+    "storage_bucket": "salehcard-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184899958988:android:259dab2d7dd426b1742a69",
+        "android_client_info": {
+          "package_name": "com.salehcard.salehcard_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

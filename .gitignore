@@ -35,3 +35,6 @@ pnpm-debug.log*
 # Deployment secrets (never commit — keep local only)
 *.secrets.md
 DEPLOY-CREDS.local.md
+
+# Go build artifacts (compiled api ops tools — dbtool, setphone, etc.)
+api/*.exe
