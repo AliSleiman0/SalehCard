@@ -90,14 +90,21 @@ export interface Category {
 
 export type UserRole = 'customer' | 'reseller' | 'admin'
 
+export interface SavedPlayerId {
+  label: string
+  value: string
+}
+
 export interface User {
   id: string
+  name: string
   email: string
+  phone?: string
   googleId?: string
   role: UserRole
   resellerTier?: string
   locale: string
-  savedPlayerIds: string[]
+  savedPlayerIds: SavedPlayerId[]
   walletBalance: number
   loyaltyPoints: number
   createdAt: string
@@ -240,4 +247,8 @@ export interface ApiResponse<T> {
 export interface AuthResponse {
   accessToken: string
   user: User
+  // Admin-only: set when the account must complete an SMS second factor. The
+  // storefront never implements the challenge — it surfaces a "use the admin
+  // console" error instead (see assertCustomerSession).
+  twoFactorRequired?: boolean
 }

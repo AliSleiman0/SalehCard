@@ -276,17 +276,18 @@ export default function ProductDetailPage() {
                   <div className="panel card-pad" style={{ marginTop: 8, padding: 10 }}>
                     {savedIds.map((sv) => (
                       <div
-                        key={sv}
+                        key={sv.value}
                         className="lrow clickable"
                         style={{ padding: '10px 6px' }}
                         onClick={() => {
-                          setPid(sv)
+                          setPid(sv.value)
                           setPickId(false)
                         }}
                       >
-                        <span className="num" style={{ fontWeight: 700, fontSize: 14 }}>
-                          {sv}
-                        </span>
+                        <div className="col" style={{ gap: 1 }}>
+                          <span style={{ fontWeight: 700, fontSize: 14 }}>{sv.label}</span>
+                          <span className="num tiny faint">{sv.value}</span>
+                        </div>
                         <span className="spacer" />
                         <Icon name="chevron" size={16} />
                       </div>

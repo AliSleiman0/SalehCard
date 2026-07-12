@@ -90,7 +90,7 @@ export default function DashboardPage() {
             ) : (
               <div className="savedgrid">
                 {ids.map((id) => (
-                  <SavedIdCard key={id} value={id} />
+                  <SavedIdCard key={id.value} id={id} />
                 ))}
               </div>
             )}

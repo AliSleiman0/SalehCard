@@ -1,17 +1,25 @@
 import { Icon } from '@/components'
+import type { SavedPlayerId } from '@/types'
 
-// SavedIdCard renders a single saved player ID (a plain string). The backend
-// stores saved IDs as bare strings, so there is no game/art/reorder affordance.
-export function SavedIdCard({ value, onDelete }: { value: string; onDelete?: () => void }) {
+// SavedIdCard renders a single saved player ID (label + value). The backend
+// stores saved IDs as {label, value} objects.
+export function SavedIdCard({ id, onDelete }: { id: SavedPlayerId; onDelete?: () => void }) {
   return (
     <div className="panel card-pad" style={{ padding: 14 }}>
       <div className="row between" style={{ gap: 10 }}>
-        <span
-          className="num"
-          style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-        >
-          {value}
-        </span>
+        <div className="col" style={{ gap: 2, minWidth: 0 }}>
+          <span
+            style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {id.label}
+          </span>
+          <span
+            className="num tiny faint"
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {id.value}
+          </span>
+        </div>
         {onDelete && (
           <button
             className="icon-btn"

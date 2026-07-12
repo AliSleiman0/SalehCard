@@ -14,20 +14,23 @@ export default function SavedIDsPage() {
   const updateProfile = useUpdateProfile()
 
   const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState('')
+  const [label, setLabel] = useState('')
+  const [value, setValue] = useState('')
 
   const addId = () => {
-    const v = draft.trim()
-    if (!v) return
-    if (ids.includes(v)) {
+    const lbl = label.trim()
+    const val = value.trim()
+    if (!lbl || !val) return
+    if (ids.some((x) => x.value === val)) {
       toast(t('saved_players'), 'user')
       return
     }
     updateProfile.mutate(
-      { savedPlayerIds: [...ids, v] },
+      { savedPlayerIds: [...ids, { label: lbl, value: val }] },
       {
         onSuccess: () => {
-          setDraft('')
+          setLabel('')
+          setValue('')
           setAdding(false)
         },
         onError: (err) => toast(err.message, 'user'),
@@ -35,9 +38,9 @@ export default function SavedIDsPage() {
     )
   }
 
-  const removeId = (id: string) =>
+  const removeId = (val: string) =>
     updateProfile.mutate(
-      { savedPlayerIds: ids.filter((x) => x !== id) },
+      { savedPlayerIds: ids.filter((x) => x.value !== val) },
       { onError: (err) => toast(err.message, 'user') },
     )
 
@@ -52,9 +55,9 @@ export default function SavedIDsPage() {
           <div className="grid" style={{ gridTemplateColumns: 'repeat(2,1fr)', gap: 16 }}>
             {ids.map((id) => (
               <SavedIdCard
-                key={id}
-                value={id}
-                onDelete={updateProfile.isPending ? undefined : () => removeId(id)}
+                key={id.value}
+                id={id}
+                onDelete={updateProfile.isPending ? undefined : () => removeId(id.value)}
               />
             ))}
             {adding ? (
@@ -62,9 +65,15 @@ export default function SavedIDsPage() {
                 <input
                   className="field"
                   autoFocus
+                  placeholder={t('saved_id_label')}
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                />
+                <input
+                  className="field"
                   placeholder={t('id_ph')}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addId()}
                 />
                 <div className="row" style={{ gap: 8 }}>
@@ -76,7 +85,8 @@ export default function SavedIDsPage() {
                     size="sm"
                     onClick={() => {
                       setAdding(false)
-                      setDraft('')
+                      setLabel('')
+                      setValue('')
                     }}
                   >
                     {t('cancel')}

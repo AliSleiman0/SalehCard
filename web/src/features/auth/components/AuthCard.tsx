@@ -1,47 +1,16 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
-import { Icon, Logo, Button, Input, useToast } from '@/components'
-import { useLocaleStore } from '@/stores/locale'
-import { useLogin } from '@/features/auth/hooks/useLogin'
-import { useRegister } from '@/features/auth/hooks/useRegister'
+import { Link } from 'react-router-dom'
+import { Icon, Logo, Button, Segmented, useToast } from '@/components'
+import { LoginCard } from './LoginCard'
+import { SignupCard } from './SignupCard'
 
+// AuthCard is the shared auth shell: logo, Google button, a Phone|Email tab, the
+// form body (LoginCard/SignupCard), and the login↔register switch link.
 export function AuthCard({ reg }: { reg: boolean }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const toast = useToast()
-  const locale = useLocaleStore((s) => s.locale)
-
-  const login = useLogin()
-  const register = useRegister()
-  const pending = login.isPending || register.isPending
-
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!email.includes('@')) {
-      setError(t('invalid_email'))
-      return
-    }
-    if (password.length < 8) {
-      setError(t('password_too_short'))
-      return
-    }
-
-    const onSuccess = () => navigate('/dashboard')
-    const onError = (err: Error) => setError(err.message || t('auth_failed'))
-
-    if (reg) {
-      register.mutate({ email, password, locale }, { onSuccess, onError })
-    } else {
-      login.mutate({ email, password }, { onSuccess, onError })
-    }
-  }
+  const [tab, setTab] = useState<'phone' | 'email'>('phone')
 
   return (
     <div
@@ -55,43 +24,31 @@ export function AuthCard({ reg }: { reg: boolean }) {
             {reg ? t('create_acct') : t('welcome_back')}
           </h1>
         </div>
-        <Button
-          variant="ghost"
-          size="lg"
-          block
-          type="button"
-          onClick={() => toast(t('coming_soon'))}
-        >
+
+        <Button variant="ghost" size="lg" block type="button" onClick={() => toast(t('coming_soon'))}>
           <Icon name="google" size={20} />
           {t('google')}
         </Button>
+
         <div className="row center" style={{ gap: 14, margin: '20px 0' }}>
           <hr className="divider" style={{ flex: 1 }} />
           <span className="tiny faint">{t('or')}</span>
           <hr className="divider" style={{ flex: 1 }} />
         </div>
-        <form className="col" style={{ gap: 14 }} onSubmit={submit}>
-          <Input
-            label={t('email')}
-            type="email"
-            placeholder="you@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+
+        <div style={{ marginBottom: 16 }}>
+          <Segmented
+            options={[
+              { value: 'phone', label: t('phone') },
+              { value: 'email', label: t('email') },
+            ]}
+            value={tab}
+            onChange={setTab}
           />
-          <Input
-            label={t('password')}
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={reg ? 'new-password' : 'current-password'}
-            error={error ?? undefined}
-          />
-          <Button variant="primary" size="lg" block type="submit" loading={pending}>
-            {reg ? t('register') : t('login')}
-          </Button>
-        </form>
+        </div>
+
+        {reg ? <SignupCard tab={tab} /> : <LoginCard tab={tab} />}
+
         <div className="row center" style={{ gap: 6, marginTop: 20 }}>
           <span className="small faint">{reg ? t('have_acct') : t('no_acct')}</span>
           <Link
