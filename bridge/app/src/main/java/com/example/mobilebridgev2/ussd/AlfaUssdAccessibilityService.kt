@@ -45,7 +45,7 @@ class AlfaUssdAccessibilityService : AccessibilityService() {
         if (editText != null) {
             handlePrompt(session, root, editText, promptText)
         } else {
-            handleMaybeTerminal(promptText)
+            handleMaybeTerminal(session, root, promptText)
         }
     }
 
@@ -75,7 +75,10 @@ class AlfaUssdAccessibilityService : AccessibilityService() {
             return
         }
 
-        val signature = "prompt:${session.step}:$promptText"
+        // De-dupe on the prompt CONTENT (not the step counter, which changes after each answer) so
+        // the same dialog re-firing WINDOW_CONTENT_CHANGED can't be answered — and Sent — twice.
+        // A genuinely different next step has different text and is handled normally.
+        val signature = "prompt:$promptText"
         if (session.lastHandledSignature == signature) return
         session.lastHandledSignature = signature
 
@@ -85,10 +88,23 @@ class AlfaUssdAccessibilityService : AccessibilityService() {
         session.phase = UssdSessionCoordinator.Phase.AWAITING_TERMINAL
     }
 
-    private fun handleMaybeTerminal(promptText: String) {
+    private fun handleMaybeTerminal(
+        session: UssdSessionCoordinator.Session,
+        root: AccessibilityNodeInfo,
+        promptText: String,
+    ) {
+        // Only accept a terminal reply AFTER we've answered at least one prompt. Before that, any
+        // no-input dialog is noise — the "Complete action using" app chooser, a progress frame,
+        // etc. — and must NOT be mistaken for the operator's result, or it prematurely ends the
+        // session and leaves the real confirm dialog unhandled.
+        if (session.phase != UssdSessionCoordinator.Phase.AWAITING_TERMINAL) return
         val lower = promptText.lowercase()
         // Transient progress frames are NOT terminal — keep waiting for the real result.
         if (promptText.isBlank() || IGNORE_PATTERNS.any { it in lower }) return
+        // Dismiss the operator's result dialog by clicking its OK/dismiss button (best effort),
+        // then report the captured text back to the coroutine.
+        findSendButton(root)?.let { clickableSelfOrAncestor(it)?.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+        BridgeReporter.log("INFO", "Terminal reply captured, dismissed: \"$promptText\"")
         UssdSessionCoordinator.complete(promptText)
     }
 
@@ -105,9 +121,20 @@ class AlfaUssdAccessibilityService : AccessibilityService() {
         } catch (_: Exception) { /* windows may be unavailable */ }
         event.source?.let { candidates.add(it) }
         if (candidates.isEmpty()) return null
-        // Choose the node subtree with an editable field, else the one with the most text.
-        return candidates.firstOrNull { findEditable(it) != null }
-            ?: candidates.maxByOrNull { collectText(it).length }
+
+        // Exclude the status bar / system UI and our own trampoline window. The USSD dialog is
+        // rendered by the phone/telecom app; the status bar (clock, ringer, signal) otherwise
+        // wins the "most text" tiebreak and gets captured as a bogus reply.
+        val relevant = candidates.filter { r ->
+            val pkg = r.packageName?.toString()
+            pkg != "com.android.systemui" && pkg != packageName
+        }.ifEmpty { candidates }
+
+        // Prefer the dialog with an input field (the confirm prompt); else the one that has a
+        // dialog button AND text (the result dialog); else fall back to the most text.
+        return relevant.firstOrNull { findEditable(it) != null }
+            ?: relevant.firstOrNull { findSendButton(it) != null && collectText(it).isNotBlank() }
+            ?: relevant.maxByOrNull { collectText(it).length }
     }
 
     private fun collectText(node: AccessibilityNodeInfo?): String {
@@ -184,6 +211,7 @@ class AlfaUssdAccessibilityService : AccessibilityService() {
         private val NEGATIVE_LABELS = listOf("cancel", "back", "no", "إلغاء", "رجوع", "لا")
         private val IGNORE_PATTERNS = listOf(
             "running", "ussd code", "please wait", "loading", "connecting", "sending", "processing",
+            "complete action using", // Android intent-disambiguation chooser — never a USSD result
         )
     }
 }
