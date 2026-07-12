@@ -1,7 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { Icon, Button, useToast, LoadingSpinner } from '@/components'
 import { AcctSidebar } from '@/features/auth/components/AcctSidebar'
+import { NetworkChips } from '@/features/payments/components/NetworkChips'
+import { usePaymentConfig } from '@/features/payments/hooks/usePaymentConfig'
+import { useCreateTopUpIntent } from '@/features/payments/hooks/useCreateTopUpIntent'
 import { useCurrencyStore } from '@/stores/currency'
 import { fmtPrice } from '@/lib/utils'
 import { useWallet } from '../hooks/useWallet'
@@ -49,19 +53,43 @@ function fmtTxDate(iso: string): string {
 export default function WalletPage() {
   const { t } = useTranslation()
   const toast = useToast()
+  const navigate = useNavigate()
   const cur = useCurrencyStore((s) => s.currency)
   const walletQuery = useWallet()
   const topUp = useTopUp()
   const requestsQuery = useTopUpRequests()
+  const paymentConfig = usePaymentConfig()
+  const createIntent = useCreateTopUpIntent()
+  const keyRef = useRef<string | null>(null)
   const [amt, setAmt] = useState(50)
   const [via, setVia] = useState<TopUpChannel>('whish')
+  const [usdtNetwork, setUsdtNetwork] = useState('')
 
   const balance = walletQuery.data?.balance ?? 0
   const txs = walletQuery.data?.transactions ?? []
   const requests = requestsQuery.data ?? []
+  const usdtEnabled = paymentConfig.data?.usdtEnabled === true
+  const networks = paymentConfig.data?.networks ?? []
+  // USDT chosen + on-chain enabled → the instant deposit flow (not a manual request).
+  const usdtInstant = via === 'usdt' && usdtEnabled
 
   const onTopUp = (): void => {
-    if (topUp.isPending) return
+    if (topUp.isPending || createIntent.isPending) return
+
+    if (usdtInstant) {
+      const network = usdtNetwork || paymentConfig.data?.network || networks[0]
+      keyRef.current = crypto.randomUUID()
+      createIntent.mutate(
+        { amount: amt, network, idempotencyKey: keyRef.current },
+        {
+          onSuccess: (intent) =>
+            navigate('/payments/usdt-deposit/' + intent.id, { state: { intent } }),
+          onError: (err) => toast(err.message || t('failed_title'), 'user'),
+        },
+      )
+      return
+    }
+
     topUp.mutate(
       { amount: amt, channel: via },
       {
@@ -123,18 +151,33 @@ export default function WalletPage() {
                     </div>
                   ))}
                 </div>
+                {usdtInstant && networks.length > 1 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div className="label">{t('usdt_network')}</div>
+                    <NetworkChips
+                      networks={networks}
+                      value={usdtNetwork || paymentConfig.data?.network || networks[0]}
+                      onChange={setUsdtNetwork}
+                    />
+                  </div>
+                )}
                 <p className="tiny muted" style={{ marginBottom: 14 }}>
-                  Top-ups are credited after we confirm your payment — usually within a few
-                  minutes during business hours.
+                  {usdtInstant
+                    ? t('usdt_topup_note')
+                    : 'Top-ups are credited after we confirm your payment — usually within a few minutes during business hours.'}
                 </p>
                 <Button
                   variant="primary"
                   size="lg"
                   block
-                  disabled={topUp.isPending}
+                  disabled={topUp.isPending || createIntent.isPending}
                   onClick={onTopUp}
                 >
-                  {topUp.isPending ? t('processing') : `Request top-up · ${fmtPrice(amt, cur)}`}
+                  {topUp.isPending || createIntent.isPending
+                    ? t('processing')
+                    : usdtInstant
+                      ? `${t('pay_with_usdt')} · ${fmtPrice(amt, cur)}`
+                      : `Request top-up · ${fmtPrice(amt, cur)}`}
                 </Button>
                 {requests.length > 0 && (
                   <div style={{ marginTop: 18 }}>

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { placeOrder } from '../api/orders'
-import type { Order, PlaceOrderInput } from '@/types'
+import type { PlacedOrder, PlaceOrderInput } from '@/types'
 
 export interface PlaceOrderArgs {
   input: PlaceOrderInput
@@ -21,7 +21,7 @@ export class OrderError extends Error {
 // wallet caches so history and balance reflect the new order.
 export function usePlaceOrder() {
   const qc = useQueryClient()
-  return useMutation<Order, Error, PlaceOrderArgs>({
+  return useMutation<PlacedOrder, Error, PlaceOrderArgs>({
     mutationFn: async ({ input, idempotencyKey }) => {
       const res = await placeOrder(input, idempotencyKey)
       if (!res.success || !res.data) {
