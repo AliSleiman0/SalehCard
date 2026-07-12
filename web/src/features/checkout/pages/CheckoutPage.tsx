@@ -17,24 +17,32 @@ import { useLocaleStore } from '@/stores/locale'
 import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useKycProfile } from '@/features/kyc/hooks/useKycProfile'
 import { KycGate } from '@/features/kyc/components/KycGate'
+import { usePaymentConfig } from '@/features/payments/hooks/usePaymentConfig'
+import { NetworkChips } from '@/features/payments/components/NetworkChips'
 import { usePlaceOrder, OrderError } from '@/features/orders/hooks/usePlaceOrder'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import { useQueryClient } from '@tanstack/react-query'
 import type { PlaceOrderInput, Product } from '@/types'
-
-// Wallet is the only live payment method (card/usdt were mock-approved and
-// are disabled until a real gateway exists — mirrors the API's validation).
 
 export default function CheckoutPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const toast = useToast()
+  const qc = useQueryClient()
   const cartItems = useCartStore((s) => s.items)
   const currency = useCurrencyStore((s) => s.currency)
   const locale = useLocaleStore((s) => s.locale)
   const agent = useUiStore((s) => s.agent)
   const walletQuery = useWallet()
   const kycQuery = useKycProfile()
+  const paymentConfig = usePaymentConfig()
   const placeOrder = usePlaceOrder()
+
+  // Payment method: wallet (default) or on-chain USDT (when the feature is on).
+  const usdtEnabled = paymentConfig.data?.usdtEnabled === true
+  const networks = paymentConfig.data?.networks ?? []
+  const [method, setMethod] = useState<'wallet' | 'usdt'>('wallet')
+  const [usdtNetwork, setUsdtNetwork] = useState('')
 
   // Block checkout until verified. Fail open on loading/error — the server still
   // enforces KYC_REQUIRED at POST /orders.
@@ -116,10 +124,13 @@ export default function CheckoutPage() {
       return buildOrderLine(it, p, itemValues)
     })
 
+    // A stale network pick (no longer offered) falls back to the server default.
+    const chosenNetwork = usdtNetwork || paymentConfig.data?.network || networks[0] || ''
     const input: PlaceOrderInput = {
       items,
       currency: 'USD', // prices are USD; display currency is applied at render time
-      paymentMethod: 'wallet',
+      paymentMethod: method,
+      usdtNetwork: method === 'usdt' && networks.includes(chosenNetwork) ? chosenNetwork : undefined,
       promoCode: promo?.code,
     }
 
@@ -130,15 +141,29 @@ export default function CheckoutPage() {
       { input, idempotencyKey: keyRef.current },
       {
         onSuccess: (order) => {
-          const view = adaptOrder(order, locale)
           useCartStore.getState().clear()
+          // A USDT order returns pending with a deposit intent — route to the
+          // waiting-for-payment screen (it navigates on once the chain confirms).
+          if (order.paymentIntent) {
+            navigate('/payments/usdt-deposit/' + order.paymentIntent.id, {
+              state: { intent: order.paymentIntent },
+            })
+            return
+          }
+          const view = adaptOrder(order, locale)
           navigate('/order-success/' + order.id, { state: { order: view } })
         },
         onError: (err) => {
-          if (err instanceof OrderError && err.code === 'KYC_REQUIRED') {
+          const code = err instanceof OrderError ? err.code : undefined
+          if (code === 'KYC_REQUIRED') {
             toast(t('kyc_required_toast'), 'user')
             navigate('/kyc')
             return
+          }
+          if (code === 'OUT_OF_STOCK') {
+            void qc.invalidateQueries({ queryKey: ['products'] })
+          } else if (code === 'PAYMENT_METHOD_UNAVAILABLE') {
+            void qc.invalidateQueries({ queryKey: ['payment-config'] })
           }
           toast(err.message || t('failed_title'), 'user')
         },
@@ -190,7 +215,7 @@ export default function CheckoutPage() {
               {t('pay_method')}
             </div>
             <div className="col" style={{ gap: 12 }}>
-              <div className="method on">
+              <div className={'method' + (method === 'wallet' ? ' on' : '')} onClick={() => setMethod('wallet')}>
                 <span className="mi" style={{ background: 'var(--grad)' }}>
                   <Icon name="wallet" size={18} />
                 </span>
@@ -205,22 +230,42 @@ export default function CheckoutPage() {
                     {t('balance')}: {fmtPrice(balance, currency)}
                   </span>
                 </div>
-                <span
-                  className="icon-btn"
-                  style={{
-                    width: 26,
-                    height: 26,
-                    background: 'var(--grad)',
-                    color: '#fff',
-                    border: 0,
-                  }}
-                >
-                  <Icon name="check" size={14} />
-                </span>
+                {method === 'wallet' && (
+                  <span className="icon-btn" style={{ width: 26, height: 26, background: 'var(--grad)', color: '#fff', border: 0 }}>
+                    <Icon name="check" size={14} />
+                  </span>
+                )}
               </div>
+
+              {usdtEnabled && (
+                <div className={'method' + (method === 'usdt' ? ' on' : '')} onClick={() => setMethod('usdt')}>
+                  <span className="mi" style={{ background: '#26a17b' }}>₮</span>
+                  <div className="col" style={{ gap: 2, flex: 1 }}>
+                    <span style={{ fontWeight: 800 }}>{t('pay_usdt')}</span>
+                    <span className="tiny faint">{t('pay_usdt_sub')}</span>
+                  </div>
+                  {method === 'usdt' && (
+                    <span className="icon-btn" style={{ width: 26, height: 26, background: '#26a17b', color: '#fff', border: 0 }}>
+                      <Icon name="check" size={14} />
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
-            {insufficient && (
+            {method === 'usdt' && networks.length > 1 && (
+              <div style={{ marginTop: 12 }}>
+                <div className="label">{t('usdt_network')}</div>
+                <NetworkChips
+                  networks={networks}
+                  value={usdtNetwork || paymentConfig.data?.network || networks[0]}
+                  onChange={setUsdtNetwork}
+                />
+              </div>
+            )}
+
+            {/* insufficient balance only blocks the wallet path; USDT doesn't draw on it */}
+            {method === 'wallet' && insufficient && (
               <Panel
                 style={{
                   marginTop: 14,
@@ -320,10 +365,10 @@ export default function CheckoutPage() {
             size="lg"
             block
             onClick={pay}
-            disabled={insufficient || placing || kycBlocked}
+            disabled={(method === 'wallet' && insufficient) || placing || kycBlocked}
           >
             <Icon name="shield" size={18} />
-            {placing ? t('processing') : t('place_order')}
+            {placing ? t('processing') : method === 'usdt' ? t('pay_with_usdt') : t('place_order')}
           </Button>
           <div className="row center" style={{ gap: 8, color: 'var(--ok)' }}>
             <Icon name="bolt" size={14} />
