@@ -1,9 +1,13 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { useQueries } from '@tanstack/react-query'
 import { Icon, Price, Button, Panel, Badge, useToast } from '@/components'
 import { LineItem } from '@/features/checkout/components/LineItem'
 import { PromoField } from '@/features/checkout/components/OrderSummary'
+import { DynamicField } from '@/features/checkout/components/DynamicField'
+import { nonQuantityFields, buildOrderLine, isValidLebaneseMobile } from '@/features/checkout/lib/orderFields'
+import { fetchProduct } from '@/features/catalog/api/products'
 import { fmtPrice } from '@/lib/utils'
 import { useCartStore } from '@/stores/cart'
 import { useCurrencyStore } from '@/stores/currency'
@@ -12,7 +16,7 @@ import { useLocaleStore } from '@/stores/locale'
 import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { usePlaceOrder, OrderError } from '@/features/orders/hooks/usePlaceOrder'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
-import type { PlaceOrderInput } from '@/types'
+import type { PlaceOrderInput, Product } from '@/types'
 
 // Wallet is the only live payment method (card/usdt were mock-approved and
 // are disabled until a real gateway exists — mirrors the API's validation).
@@ -39,17 +43,69 @@ export default function CheckoutPage() {
 
   const empty = cartItems.length === 0
 
+  // Full product specs per cart line (reuses the PDP's ['products', id] cache) so
+  // we can render the per-product dynamic delivery fields and rebuild order lines.
+  const productQueries = useQueries({
+    queries: cartItems.map((it) => ({
+      queryKey: ['products', it.id],
+      queryFn: () => fetchProduct(it.id),
+      enabled: !!it.id,
+    })),
+  })
+  const productFor = (id: string): Product | undefined =>
+    productQueries.map((q) => q.data?.data).find((p) => p?.id === id)
+
+  // Collected delivery-field values, keyed `${item.key}|${field.key}`.
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  // The first field is prefilled from the cart line's pid (chosen on the PDP).
+  const valueFor = (itemKey: string, fieldKey: string, index: number, pid?: string): string => {
+    const k = `${itemKey}|${fieldKey}`
+    if (fieldValues[k] !== undefined) return fieldValues[k]
+    return index === 0 ? (pid ?? '') : ''
+  }
+  const setValue = (itemKey: string, fieldKey: string, v: string) =>
+    setFieldValues((prev) => ({ ...prev, [`${itemKey}|${fieldKey}`]: v }))
+
+  // Cart lines that need delivery-field input (non-code product with schema fields).
+  const needing = cartItems.filter((it) => {
+    const p = productFor(it.id)
+    return p && p.fulfillmentType !== 'code' && nonQuantityFields(p).length > 0
+  })
+
   const pay = (): void => {
     if (empty || placeOrder.isPending) return
 
+    // Validate every dynamic field, then build order lines from the collected values.
+    const errors: Record<string, string> = {}
+    for (const it of needing) {
+      const p = productFor(it.id)!
+      nonQuantityFields(p).forEach((f, i) => {
+        const val = valueFor(it.key, f.key, i, it.pid).trim()
+        if (!val) errors[`${it.key}|${f.key}`] = t('field_required')
+        else if (f.key === 'phone' && !isValidLebaneseMobile(val))
+          errors[`${it.key}|${f.key}`] = t('invalid_phone')
+      })
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      toast(t('field_required'), 'user')
+      return
+    }
+    setFieldErrors({})
+
+    const items = cartItems.map((it) => {
+      const p = productFor(it.id)
+      const itemValues: Record<string, string> = {}
+      nonQuantityFields(p).forEach((f, i) => {
+        itemValues[f.key] = valueFor(it.key, f.key, i, it.pid)
+      })
+      return buildOrderLine(it, p, itemValues)
+    })
+
     const input: PlaceOrderInput = {
-      items: cartItems.map((it) => ({
-        productId: it.id,
-        variantId: it.variantId,
-        qty: it.qty,
-        playerId: it.pid || undefined,
-        recipient: it.recipient ?? undefined,
-      })),
+      items,
       currency: 'USD', // prices are USD; display currency is applied at render time
       paymentMethod: 'wallet',
     }
@@ -168,6 +224,39 @@ export default function CheckoutPage() {
               </Panel>
             )}
           </Panel>
+
+          {/* delivery details (per-product dynamic fields) */}
+          {needing.length > 0 && (
+            <Panel>
+              <div className="label" style={{ marginBottom: 14 }}>
+                {t('delivery_details')}
+              </div>
+              <div className="col" style={{ gap: 18 }}>
+                {needing.map((it) => {
+                  const p = productFor(it.id)!
+                  const fields = nonQuantityFields(p)
+                  return (
+                    <div key={it.key} className="col" style={{ gap: 12 }}>
+                      {needing.length > 1 && (
+                        <span className="small" style={{ fontWeight: 700, color: 'var(--text-dim)' }}>
+                          {it.brand} · {it.variant}
+                        </span>
+                      )}
+                      {fields.map((f, i) => (
+                        <DynamicField
+                          key={f.key}
+                          field={f}
+                          value={valueFor(it.key, f.key, i, it.pid)}
+                          onChange={(v) => setValue(it.key, f.key, v)}
+                          error={fieldErrors[`${it.key}|${f.key}`]}
+                        />
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            </Panel>
+          )}
 
           {/* items recap */}
           <Panel>

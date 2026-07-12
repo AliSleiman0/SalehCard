@@ -13,9 +13,14 @@ import { useAuthStore } from '@/stores/auth'
 import { useProduct } from '../hooks/useProduct'
 import { useProducts } from '../hooks/useProducts'
 import { useReviews } from '../hooks/useReviews'
+import { useMyReview } from '../hooks/useMyReview'
+import { useAccountVerification, type VerifyStatus } from '../hooks/useAccountVerification'
 import { adaptProduct } from '../lib/adaptProduct'
 import { adaptReview } from '../lib/adaptReview'
 import { ProductCard } from '../components/ProductCard'
+import { WriteReviewModal } from '../components/WriteReviewModal'
+import { DynamicField } from '@/features/checkout/components/DynamicField'
+import { TRANSFER_COUNTRIES } from '@/features/checkout/lib/transferCountries'
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -37,11 +42,22 @@ export default function ProductDetailPage() {
   const [pickId, setPickId] = useState(false)
   const [rName, setRName] = useState('')
   const [country, setCountry] = useState('Türkiye')
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   const p = useMemo(
     () => (query.data?.data ? adaptProduct(query.data.data, locale) : null),
     [query.data, locale],
   )
+
+  // Game-ID verification (debounced) — only for verify-enabled products and
+  // signed-in users (the endpoint is AuthRequired).
+  const verify = useAccountVerification(id ?? '', !!p?.verifyEnabled && isAuthenticated)
+  const myReview = useMyReview(id ?? '')
+
+  const setPlayerId = (v: string) => {
+    setPid(v)
+    verify.onIdChange(v)
+  }
 
   // approved reviews for this product (real API; aggregate rating stays on p)
   const reviewsQuery = useReviews(id ?? '')
@@ -82,14 +98,27 @@ export default function ProductDetailPage() {
   const catDomain = p.rootDomain || p.cat
   const catLabel = rootMeta(p.rootDomain).label || p.cat
 
+  // Whether checkout collects fields via the schema (first field lives on this
+  // page; the rest, if any, on the checkout page).
+  const hasFields = p.inputFields.length > 0 && fulfill !== 'code'
+  const verifyActive = p.verifyEnabled && isAuthenticated
+  const verifyGuestBlock = p.verifyEnabled && !isAuthenticated
+  const buyDisabled = !p.available || (verifyActive && !verify.allowsPurchase)
+  const reviewed = myReview.data?.reviewed === true
+
   const buy = (toCartFlag: boolean) => {
-    if (!p.available) return
-    if (fulfill === 'transfer' && !rName) {
+    if (buyDisabled) return
+    // transfer-without-schema falls back to the legacy name+country capture.
+    if (!hasFields && fulfill === 'transfer' && !rName) {
       toast(t('recipient_name'), 'user')
       return
     }
-    if (fulfill !== 'transfer' && p.needsId && !pid) {
+    if (!hasFields && fulfill !== 'transfer' && p.needsId && !pid) {
       toast(t('id_ph'), 'user')
+      return
+    }
+    if (hasFields && !pid.trim()) {
+      toast(t('field_required'), 'user')
       return
     }
     addToCart({
@@ -104,10 +133,17 @@ export default function ProductDetailPage() {
       qty,
       pid,
       fulfill,
-      recipient: fulfill === 'transfer' ? { name: rName, country, detail: '' } : null,
+      // transfer-with-schema builds its recipient at checkout from the fields;
+      // only the legacy no-schema transfer carries a recipient on the cart line.
+      recipient: !hasFields && fulfill === 'transfer' ? { name: rName, country, detail: '' } : null,
     })
     if (toCartFlag) toast(t('add_cart'), 'cart')
     else navigate('/checkout')
+  }
+
+  const goReview = () => {
+    if (!isAuthenticated) return navigate('/login')
+    setReviewOpen(true)
   }
 
   return (
@@ -226,8 +262,47 @@ export default function ProductDetailPage() {
             </div>
           </div>
 
-          {/* fulfillment input */}
-          {fulfill === 'transfer' ? (
+          {/* fulfillment input — schema-driven first field, legacy fallbacks */}
+          {hasFields ? (
+            <div className="col" style={{ gap: 10 }}>
+              {isAuthenticated && savedIds.length > 0 && (
+                <div className="row" style={{ justifyContent: 'flex-end' }}>
+                  <a
+                    className="tiny clickable"
+                    style={{ color: 'var(--brand-1)', fontWeight: 700 }}
+                    onClick={() => setPickId((s) => !s)}
+                  >
+                    {t('saved_ids')} ▾
+                  </a>
+                </div>
+              )}
+              <DynamicField field={p.inputFields[0]} value={pid} onChange={setPlayerId} />
+              {pickId && (
+                <div className="panel card-pad" style={{ padding: 10 }}>
+                  {savedIds.map((sv) => (
+                    <div
+                      key={sv.value}
+                      className="lrow clickable"
+                      style={{ padding: '10px 6px' }}
+                      onClick={() => {
+                        setPlayerId(sv.value)
+                        setPickId(false)
+                      }}
+                    >
+                      <div className="col" style={{ gap: 1 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>{sv.label}</span>
+                        <span className="num tiny faint">{sv.value}</span>
+                      </div>
+                      <span className="spacer" />
+                      <Icon name="chevron" size={16} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {verifyActive && <VerifyLine status={verify.status} username={verify.username} />}
+              {verifyGuestBlock && <p className="tiny faint">{t('verify_signin_hint')}</p>}
+            </div>
+          ) : fulfill === 'transfer' ? (
             <div className="col" style={{ gap: 12 }}>
               <div>
                 <span className="label">{t('recipient_name')}</span>
@@ -241,11 +316,9 @@ export default function ProductDetailPage() {
               <div>
                 <span className="label">{t('country')}</span>
                 <select className="field" value={country} onChange={(e) => setCountry(e.target.value)}>
-                  <option>Türkiye</option>
-                  <option>United States</option>
-                  <option>United Arab Emirates</option>
-                  <option>Saudi Arabia</option>
-                  <option>Egypt</option>
+                  {TRANSFER_COUNTRIES.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -319,26 +392,33 @@ export default function ProductDetailPage() {
                 )}
               </div>
             </div>
-            <div className="row" style={{ gap: 12 }}>
-              <button
-                className="btn btn-ghost btn-lg"
-                style={{ flex: 1 }}
-                disabled={!p.available}
-                onClick={() => buy(true)}
-              >
-                <Icon name="cart" size={18} />
-                {t('add_cart')}
+            {verifyGuestBlock ? (
+              <button className="btn btn-primary btn-lg" onClick={() => navigate('/login')}>
+                <Icon name="user" size={18} />
+                {t('signin_to_verify')}
               </button>
-              <button
-                className="btn btn-primary btn-lg"
-                style={{ flex: 1.4 }}
-                disabled={!p.available}
-                onClick={() => buy(false)}
-              >
-                <Icon name="bolt" size={18} />
-                {p.available ? t('buy_now') : t('out_of_stock')}
-              </button>
-            </div>
+            ) : (
+              <div className="row" style={{ gap: 12 }}>
+                <button
+                  className="btn btn-ghost btn-lg"
+                  style={{ flex: 1 }}
+                  disabled={buyDisabled}
+                  onClick={() => buy(true)}
+                >
+                  <Icon name="cart" size={18} />
+                  {t('add_cart')}
+                </button>
+                <button
+                  className="btn btn-primary btn-lg"
+                  style={{ flex: 1.4 }}
+                  disabled={buyDisabled}
+                  onClick={() => buy(false)}
+                >
+                  <Icon name="bolt" size={18} />
+                  {p.available ? t('buy_now') : t('out_of_stock')}
+                </button>
+              </div>
+            )}
             <div className="row center" style={{ gap: 8, color: 'var(--ok)' }}>
               <Icon name={fulfill === 'transfer' ? 'repeat' : 'bolt'} size={15} />
               <span className="small" style={{ fontWeight: 700 }}>
@@ -371,9 +451,16 @@ export default function ProductDetailPage() {
       <section className="section">
         <div className="row between" style={{ marginBottom: 16 }}>
           <h2 className="h2">{t('review_title')}</h2>
-          <span className="badge badge-instant">
-            <Icon name="check" size={12} /> {p.reviews.toLocaleString()} {t('reviews')}
-          </span>
+          {reviewed ? (
+            <span className="badge badge-instant">
+              <Icon name="check" size={12} /> {t('you_reviewed')}
+            </span>
+          ) : (
+            <button className="btn btn-ghost btn-sm" onClick={goReview}>
+              <Icon name="star" size={14} />
+              {t('write_review')}
+            </button>
+          )}
         </div>
         {reviews.length === 0 ? (
           <p className="muted" style={{ padding: '8px 4px' }}>
@@ -419,6 +506,40 @@ export default function ProductDetailPage() {
           </div>
         </section>
       )}
+
+      {id && <WriteReviewModal productId={id} open={reviewOpen} onClose={() => setReviewOpen(false)} />}
     </div>
+  )
+}
+
+// VerifyLine renders the game-ID lookup status under the ID field.
+function VerifyLine({ status, username }: { status: VerifyStatus; username: string }) {
+  const { t } = useTranslation()
+  if (status === 'idle') return null
+  if (status === 'checking') {
+    return (
+      <span className="tiny faint" style={{ fontWeight: 600 }}>
+        {t('verify_checking')}
+      </span>
+    )
+  }
+  if (status === 'found') {
+    return (
+      <span className="tiny" style={{ color: 'var(--ok)', fontWeight: 700 }}>
+        <Icon name="check" size={12} /> {username || t('verify_found')}
+      </span>
+    )
+  }
+  if (status === 'notFound') {
+    return (
+      <span className="tiny" style={{ color: 'var(--danger)', fontWeight: 700 }}>
+        {t('verify_not_found')}
+      </span>
+    )
+  }
+  return (
+    <span className="tiny faint" style={{ fontWeight: 600 }}>
+      {t('verify_unavailable')}
+    </span>
   )
 }
