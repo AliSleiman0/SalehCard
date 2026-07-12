@@ -71,6 +71,88 @@ func TestDeriveAddressRejectsPrivateKey(t *testing.T) {
 	}
 }
 
+// TestDeriveAddressExternalChainKey: a depth-4 export (the external chain
+// m/44'/195'/0'/0 — iancoleman's "BIP32 Extended Public Key") must derive the
+// exact same addresses as the depth-3 account export.
+func TestDeriveAddressExternalChainKey(t *testing.T) {
+	xprv, xpub := testAccountKey(t)
+
+	// Build the external-chain xpub (one non-hardened step below the account).
+	acct, err := hdkeychain.NewKeyFromString(xprv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extPriv, err := acct.Derive(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extPub, err := extPriv.Neuter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if extPub.Depth() != 4 {
+		t.Fatalf("external-chain key depth = %d, want 4", extPub.Depth())
+	}
+
+	for _, index := range []uint32{0, 1, 7} {
+		fromAccount, err := DeriveAddress(xpub, index)
+		if err != nil {
+			t.Fatalf("account-key derive %d: %v", index, err)
+		}
+		fromExternal, err := DeriveAddress(extPub.String(), index)
+		if err != nil {
+			t.Fatalf("external-key derive %d: %v", index, err)
+		}
+		if fromAccount != fromExternal {
+			t.Errorf("index %d: account-key %s != external-key %s", index, fromAccount, fromExternal)
+		}
+	}
+}
+
+// TestDeriveAddressRejectsWrongDepth: keys above the account or below the
+// external chain would derive addresses no wallet displays — refuse them.
+func TestDeriveAddressRejectsWrongDepth(t *testing.T) {
+	xprv, _ := testAccountKey(t)
+	acct, err := hdkeychain.NewKeyFromString(xprv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Depth 5: an address-level key (m/44'/195'/0'/0/0).
+	ext, err := acct.Derive(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr0, err := ext.Derive(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addrPub, err := addr0.Neuter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DeriveAddress(addrPub.String(), 0); err == nil {
+		t.Error("depth-5 (address-level) key accepted, want refusal")
+	}
+
+	// Depth 0: a master key.
+	seed, err := hex.DecodeString(testSeedHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	master, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	masterPub, err := master.Neuter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DeriveAddress(masterPub.String(), 0); err == nil {
+		t.Error("depth-0 (master) key accepted, want refusal")
+	}
+}
+
 func TestDeriveAddressRejectsGarbage(t *testing.T) {
 	if _, err := DeriveAddress("not-an-xpub", 0); err == nil {
 		t.Fatal("expected an error for a malformed key, got nil")
