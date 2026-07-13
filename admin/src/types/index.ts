@@ -52,8 +52,9 @@ export interface RatingsSummary {
 export type InputFieldType = 'text' | 'amount' | 'quantity' | 'select'
 
 // Customer-input field spec on a product. The label is 2-locale (en/ar) — this
-// mirrors the Go `InputField`/`I18nLabel`. Admins edit only the labels; the rest
-// (key/type/constraints/legacyName/sensitive) is preserved verbatim.
+// mirrors the Go `InputField`/`I18nLabel`. Admins edit key, type, labels, and
+// constraints (min/max for quantity/amount, options for select) in the product
+// editor; only `legacyName` is preserved verbatim.
 export interface InputField {
   key: string
   label: { en: string; ar: string }

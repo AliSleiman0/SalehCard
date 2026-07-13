@@ -22,6 +22,7 @@ import '../../../kyc/presentation/providers.dart' show kycProfileProvider;
 import '../../../payments/presentation/providers.dart' show paymentConfigProvider;
 import '../../../wallet/presentation/providers.dart' show walletProvider;
 import '../../domain/entities/order.dart';
+import '../../domain/field_validation.dart';
 import '../providers.dart';
 import '../widgets/dynamic_input_field.dart';
 
@@ -278,6 +279,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           // 'phone' field — validate it client-side so an obvious typo is caught
           // before the order is placed (the server re-validates regardless).
           errors[key] = l10n.invalidLebanesePhone;
+        } else if (field.type == 'amount') {
+          // Amount fields carry optional min/max bounds — enforce them here so
+          // the customer gets an inline message instead of a server 400 (the
+          // server re-validates regardless).
+          final msg = _amountIssueMessage(l10n, field.constraints, value);
+          if (msg != null) errors[key] = msg;
         }
       }
     }
@@ -378,6 +385,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (d.startsWith('0')) d = d.substring(1);
     if (d.length == 7 && d.startsWith('3')) d = '0$d';
     return RegExp(r'^(03|70|71|76|78|79|81)\d{6}$').hasMatch(d);
+  }
+
+  /// Maps an amount-bounds violation to its localized inline message, or null
+  /// when the value is fine (or the field carries no enforceable bounds).
+  static String? _amountIssueMessage(
+    AppLocalizations l10n,
+    InputFieldConstraints? c,
+    String value,
+  ) {
+    switch (checkAmountBounds(c, value)) {
+      case AmountBoundsIssue.none:
+        return null;
+      case AmountBoundsIssue.notANumber:
+        return l10n.amountNotANumber;
+      case AmountBoundsIssue.belowMin:
+      case AmountBoundsIssue.aboveMax:
+        final min = c?.min;
+        final max = c?.max;
+        if (min != null && max != null) {
+          return l10n.amountOutOfRange(formatBound(min), formatBound(max));
+        }
+        if (min != null) return l10n.amountAtLeast(formatBound(min));
+        return l10n.amountAtMost(formatBound(max!));
+    }
   }
 
   OrderRecipient _buildRecipient(Map<String, String> values) {

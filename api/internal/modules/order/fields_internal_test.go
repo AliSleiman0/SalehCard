@@ -1,6 +1,7 @@
 package order
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
@@ -140,5 +141,112 @@ func TestValidateQuantityField_NoQuantityField(t *testing.T) {
 	p := &product.Product{}
 	if err := validateQuantityField(p, 999999); err != nil {
 		t.Fatalf("no quantity field on the product → unconstrained, got %v", err)
+	}
+}
+
+// --- validateFieldInputs -----------------------------------------------------
+
+func selectProduct(options ...string) *product.Product {
+	return &product.Product{
+		InputFields: []product.InputField{{
+			Key:         "server",
+			Label:       product.I18nLabel{En: "Server"},
+			Type:        product.InputFieldSelect,
+			Constraints: &product.InputFieldConstraints{Options: options},
+		}},
+	}
+}
+
+func amountProduct(lo, hi *float64) *product.Product {
+	return &product.Product{
+		InputFields: []product.InputField{{
+			Key:         "topup",
+			Label:       product.I18nLabel{En: "Top-up amount"},
+			Type:        product.InputFieldAmount,
+			Constraints: &product.InputFieldConstraints{Min: lo, Max: hi},
+		}},
+	}
+}
+
+func TestValidateFieldInputs(t *testing.T) {
+	lo, hi := 1.0, 100.0
+	zero := 0.0
+	inverted := 500.0
+
+	tests := []struct {
+		name    string
+		p       *product.Product
+		in      []OrderFieldInput
+		wantErr bool
+	}{
+		{name: "no input fields on product", p: &product.Product{}, in: []OrderFieldInput{{Key: "x", Value: "y"}}},
+		{name: "select value in options passes", p: selectProduct("EU", "NA"), in: []OrderFieldInput{{Key: "server", Value: "EU"}}},
+		{name: "select value not in options rejected", p: selectProduct("EU", "NA"), in: []OrderFieldInput{{Key: "server", Value: "ASIA"}}, wantErr: true},
+		{name: "select matches option with surrounding spaces", p: selectProduct(" EU "), in: []OrderFieldInput{{Key: "server", Value: "EU"}}},
+		{name: "empty select value skipped (fields are optional)", p: selectProduct("EU"), in: []OrderFieldInput{{Key: "server", Value: "  "}}},
+		{name: "select with empty options is legacy free-entry", p: selectProduct(), in: []OrderFieldInput{{Key: "server", Value: "anything"}}},
+		{name: "amount within bounds passes", p: amountProduct(&lo, &hi), in: []OrderFieldInput{{Key: "topup", Value: "50"}}},
+		{name: "amount at the boundaries passes", p: amountProduct(&lo, &hi), in: []OrderFieldInput{{Key: "topup", Value: "100"}}},
+		{name: "amount below min rejected", p: amountProduct(&lo, &hi), in: []OrderFieldInput{{Key: "topup", Value: "0.5"}}, wantErr: true},
+		{name: "amount above max rejected", p: amountProduct(&lo, &hi), in: []OrderFieldInput{{Key: "topup", Value: "500"}}, wantErr: true},
+		{name: "non-numeric amount with active bounds rejected", p: amountProduct(&lo, &hi), in: []OrderFieldInput{{Key: "topup", Value: "abc"}}, wantErr: true},
+		{name: "non-numeric amount without bounds passes (today's behavior)", p: amountProduct(nil, nil), in: []OrderFieldInput{{Key: "topup", Value: "abc"}}},
+		{name: "corrupt zero-zero amount bound skipped", p: amountProduct(&zero, &zero), in: []OrderFieldInput{{Key: "topup", Value: "999999"}}},
+		{name: "corrupt min>max amount bound skipped", p: amountProduct(&inverted, &hi), in: []OrderFieldInput{{Key: "topup", Value: "1"}}},
+		{name: "one-sided min-only enforced", p: amountProduct(&lo, nil), in: []OrderFieldInput{{Key: "topup", Value: "0.5"}}, wantErr: true},
+		{name: "one-sided max-only enforced", p: amountProduct(nil, &hi), in: []OrderFieldInput{{Key: "topup", Value: "101"}}, wantErr: true},
+		{name: "one-sided min-only passes above it", p: amountProduct(&lo, nil), in: []OrderFieldInput{{Key: "topup", Value: "999999"}}},
+		{name: "empty amount value skipped", p: amountProduct(&lo, &hi), in: []OrderFieldInput{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFieldInputs(tt.p, tt.in)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected a validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// Quantity-type fields are enforced against the line's real qty by
+// validateQuantityField — validateFieldInputs must ignore them entirely,
+// whatever the client typed.
+func TestValidateFieldInputs_IgnoresQuantityFields(t *testing.T) {
+	lo, hi := 1.0, 5.0
+	p := &product.Product{
+		InputFields: []product.InputField{{
+			Key:         "qty",
+			Type:        product.InputFieldQuantity,
+			Constraints: &product.InputFieldConstraints{Min: &lo, Max: &hi},
+		}},
+	}
+	if err := validateFieldInputs(p, []OrderFieldInput{{Key: "qty", Value: "999"}}); err != nil {
+		t.Fatalf("quantity fields are validateQuantityField's job, got %v", err)
+	}
+}
+
+// A rejection must name the field, never echo the submitted value — the field
+// may be sensitive.
+func TestValidateFieldInputs_ErrorNeverEchoesValue(t *testing.T) {
+	p := &product.Product{
+		InputFields: []product.InputField{{
+			Key:         "secretChoice",
+			Label:       product.I18nLabel{En: "Secret choice"},
+			Type:        product.InputFieldSelect,
+			Sensitive:   true,
+			Constraints: &product.InputFieldConstraints{Options: []string{"a", "b"}},
+		}},
+	}
+	secret := "hunter2-secret-value"
+	err := validateFieldInputs(p, []OrderFieldInput{{Key: "secretChoice", Value: secret}})
+	if err == nil {
+		t.Fatal("out-of-options value should be rejected")
+	}
+	if got := err.Error(); strings.Contains(got, secret) {
+		t.Fatalf("error message must not echo the submitted value: %q", got)
 	}
 }

@@ -270,6 +270,9 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		if err := validateQuantityField(p, in.Qty); err != nil {
 			return nil, err
 		}
+		if err := validateFieldInputs(p, in.Fields); err != nil {
+			return nil, err
+		}
 		items = append(items, OrderItem{
 			ProductID:           p.ID,
 			VariantID:           variant.ID,
@@ -793,4 +796,86 @@ func validateQuantityField(p *product.Product, qty int) error {
 		}
 	}
 	return nil
+}
+
+// validateFieldInputs enforces the product's per-field constraints on the
+// customer's submitted values: a select value must be one of the field's
+// options, an amount value must be numeric and inside its min/max. It mirrors
+// validateQuantityField's legacy tolerances — a {min:0,max:0} or min>max
+// constraint is import corruption, not a real bound, and is skipped so a
+// mis-migrated product never bricks checkout. Empty values stay legal (fields
+// are optional at order time; "required" is a client concern), and submitted
+// values are never echoed into error messages — a field may be sensitive.
+func validateFieldInputs(p *product.Product, in []OrderFieldInput) error {
+	if len(p.InputFields) == 0 {
+		return nil
+	}
+	values := make(map[string]string, len(in))
+	for _, f := range in {
+		values[f.Key] = f.Value
+	}
+	for _, def := range p.InputFields {
+		// Quantity is enforced against the line's real qty by
+		// validateQuantityField — never against the client-typed value.
+		if def.Type == product.InputFieldQuantity || def.Constraints == nil {
+			continue
+		}
+		v := strings.TrimSpace(values[def.Key])
+		if v == "" {
+			continue
+		}
+		switch def.Type {
+		case product.InputFieldSelect:
+			// An empty options list is legacy free-entry — nothing to enforce.
+			if len(def.Constraints.Options) == 0 {
+				continue
+			}
+			ok := false
+			for _, opt := range def.Constraints.Options {
+				if v == strings.TrimSpace(opt) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				return badRequest(fmt.Sprintf("%s must be one of the listed options", fieldName(def)))
+			}
+		case product.InputFieldAmount:
+			lo, hi := def.Constraints.Min, def.Constraints.Max
+			if lo != nil && hi != nil && (*lo == 0 && *hi == 0 || *lo > *hi) {
+				continue // known corrupt shapes — not real bounds
+			}
+			if lo == nil && hi == nil {
+				continue
+			}
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return badRequest(fmt.Sprintf("%s must be a number", fieldName(def)))
+			}
+			switch {
+			case lo != nil && hi != nil && (f < *lo || f > *hi):
+				return badRequest(fmt.Sprintf("%s must be between %s and %s", fieldName(def), fmtBound(*lo), fmtBound(*hi)))
+			case lo != nil && f < *lo:
+				return badRequest(fmt.Sprintf("%s must be at least %s", fieldName(def), fmtBound(*lo)))
+			case hi != nil && f > *hi:
+				return badRequest(fmt.Sprintf("%s must be at most %s", fieldName(def), fmtBound(*hi)))
+			}
+		}
+	}
+	return nil
+}
+
+// fieldName names a field in a customer-facing error: the English label when
+// set, else the key — never the submitted value (the field may be sensitive).
+func fieldName(def product.InputField) string {
+	if def.Label.En != "" {
+		return def.Label.En
+	}
+	return def.Key
+}
+
+// fmtBound renders a bound in plain decimal for customer-facing messages —
+// %g would show a large legacy bound like 50000000000 as "5e+10".
+func fmtBound(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }

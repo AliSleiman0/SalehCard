@@ -132,6 +132,31 @@
   "placeOrderCta": "Place order",
   "fieldRequired": "This field is required.",
   "invalidLebanesePhone": "Enter a valid Lebanese mobile number (e.g. 71 123 456).",
+  "amountNotANumber": "Enter a valid number.",
+  "amountOutOfRange": "Enter an amount between {min} and {max}.",
+  "@amountOutOfRange": {
+    "placeholders": { "min": { "type": "String" }, "max": { "type": "String" } }
+  },
+  "amountAtLeast": "Enter an amount of at least {min}.",
+  "@amountAtLeast": {
+    "placeholders": { "min": { "type": "String" } }
+  },
+  "amountAtMost": "Enter an amount of at most {max}.",
+  "@amountAtMost": {
+    "placeholders": { "max": { "type": "String" } }
+  },
+  "amountRangeHint": "Between {min} and {max}",
+  "@amountRangeHint": {
+    "placeholders": { "min": { "type": "String" }, "max": { "type": "String" } }
+  },
+  "amountMinHint": "Minimum {min}",
+  "@amountMinHint": {
+    "placeholders": { "min": { "type": "String" } }
+  },
+  "amountMaxHint": "Maximum {max}",
+  "@amountMaxHint": {
+    "placeholders": { "max": { "type": "String" } }
+  },
 
   "orderCompletedTitle": "Order completed",
   "orderProcessingTitle": "We're completing your order",

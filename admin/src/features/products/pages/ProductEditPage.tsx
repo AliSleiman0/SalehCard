@@ -6,8 +6,9 @@ import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useProduct, useCreateProduct, useUpdateProduct, useUploadProductImage } from '../hooks/useProducts'
 import { reconcileBridgePhoneField } from '../lib/bridgeFields'
+import { toRows, fromRows, rowIssues, type InputFieldRow } from '../lib/fieldRows'
 import { useCan } from '@/stores/auth'
-import type { FulfillmentType, Locale, InputField } from '@/types'
+import type { FulfillmentType, Locale, InputFieldType } from '@/types'
 
 const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp'
@@ -77,9 +78,11 @@ export default function ProductEditPage() {
   const [bridgeMethod, setBridgeMethod] = useState<'transfer_credit' | 'recharge_line'>(
     'transfer_credit',
   )
-  // Input-field specs are edited labels-only; everything else is preserved as
-  // loaded so a save never mangles legacy fulfillment config.
-  const [inputFields, setInputFields] = useState<InputField[]>([])
+  // Input-field specs: key, type, labels, and constraints (min/max, select
+  // options) are all editable; legacyName rides along untouched. Numeric
+  // bounds live as strings while editing (fieldRows.ts).
+  const [inputFields, setInputFields] = useState<InputFieldRow[]>([])
+  const [fieldIssues, setFieldIssues] = useState<string[]>([])
   // Purchase-time ID verification (check_name): toggle + provider game slug.
   const [verifyEnabled, setVerifyEnabled] = useState(false)
   const [verifyApp, setVerifyApp] = useState('')
@@ -115,7 +118,7 @@ export default function ProductEditPage() {
       setBridgeProvider(p.bridge.provider)
       setBridgeMethod(p.bridge.method)
     }
-    setInputFields(p.inputFields ?? [])
+    setInputFields(toRows(p.inputFields ?? []))
     setVerifyEnabled(!!p.verification)
     setVerifyApp(p.verification?.app ?? '')
     setImages(p.images ?? [])
@@ -157,7 +160,10 @@ export default function ProductEditPage() {
     // clear sentinels.
     const isBridge = ff === 'credit' && bridgeOn
     const wasBridge = data?.data?.fulfillmentMode === 'bridge_device'
-    const fields = isBridge ? reconcileBridgePhoneField(inputFields) : inputFields
+    // Convert rows to the API shape first so reconcileBridgePhoneField keeps
+    // operating on plain InputField[].
+    const apiFields = fromRows(inputFields)
+    const fields = isBridge ? reconcileBridgePhoneField(apiFields) : apiFields
 
     return {
       title,
@@ -221,6 +227,12 @@ export default function ProductEditPage() {
   }
 
   const onSave = () => {
+    // Block the save on input-field problems the admin can fix in the table
+    // (duplicate keys, min>max, optionless select …) — mirrors the server's
+    // validation so a submit never bounces on a 400 the UI could have caught.
+    const issues = rowIssues(inputFields)
+    setFieldIssues(issues)
+    if (issues.length) return
     const input = buildInput()
     const onSuccess = () => navigate('/products')
     if (isNew) create.mutate(input, { onSuccess })
@@ -274,6 +286,24 @@ export default function ProductEditPage() {
           }}
         >
           {(error as Error).message}
+        </div>
+      )}
+
+      {fieldIssues.length > 0 && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            borderRadius: 'var(--ar-sm)',
+            background: 'rgba(255,77,109,.12)',
+            color: 'var(--danger)',
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          {fieldIssues.map((msg) => (
+            <div key={msg}>{msg}</div>
+          ))}
         </div>
       )}
 
@@ -480,7 +510,7 @@ export default function ProductEditPage() {
                   onClick={() =>
                     setInputFields([
                       ...inputFields,
-                      { key: '', label: { en: '', ar: '' }, type: 'text', sensitive: false },
+                      { key: '', label: { en: '', ar: '' }, type: 'text', sensitive: false, min: '', max: '', options: [] },
                     ])
                   }
                 >
@@ -491,8 +521,9 @@ export default function ProductEditPage() {
             <div className="ahint" style={{ margin: '0 0 10px' }}>
               Fields the customer fills at checkout (e.g. Account ID, Zone ID, Email). Values are
               attached to the order for fulfillment. Keys must be unique. <b>Sensitive</b> fields
-              are masked and never stored on the order. <code>select</code> options aren't editable
-              here yet — use <code>text</code> for now.
+              are masked and never stored on the order. <b>Constraints</b>: <code>quantity</code>/
+              <code>amount</code> take an optional min–max range; <code>select</code> takes the
+              choices shown to the customer.
             </div>
             {inputFields.length === 0 ? (
               <div className="ahint" style={{ margin: 0 }}>
@@ -507,13 +538,14 @@ export default function ProductEditPage() {
                       <th>Type</th>
                       <th>Label (EN)</th>
                       <th>Label (AR)</th>
+                      <th>Constraints</th>
                       <th>Sensitive</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {inputFields.map((f, i) => {
-                      const patch = (u: Partial<InputField>) => {
+                      const patch = (u: Partial<InputFieldRow>) => {
                         const next = [...inputFields]
                         next[i] = { ...f, ...u }
                         setInputFields(next)
@@ -534,7 +566,7 @@ export default function ProductEditPage() {
                             <select
                               className="select"
                               value={f.type}
-                              onChange={(e) => patch({ type: e.target.value as InputField['type'] })}
+                              onChange={(e) => patch({ type: e.target.value as InputFieldType })}
                             >
                               {(['text', 'select', 'amount', 'quantity'] as const).map((t) => (
                                 <option key={t} value={t}>
@@ -560,6 +592,33 @@ export default function ProductEditPage() {
                               dir="rtl"
                               onChange={(e) => patch({ label: { ...f.label, ar: e.target.value } })}
                             />
+                          </td>
+                          <td>
+                            {f.type === 'quantity' || f.type === 'amount' ? (
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} dir="ltr">
+                                <input
+                                  className="afield"
+                                  style={{ padding: '7px 10px', width: 70 }}
+                                  inputMode="decimal"
+                                  placeholder="Min"
+                                  value={f.min}
+                                  onChange={(e) => patch({ min: e.target.value })}
+                                />
+                                <span style={{ opacity: 0.5 }}>–</span>
+                                <input
+                                  className="afield"
+                                  style={{ padding: '7px 10px', width: 70 }}
+                                  inputMode="decimal"
+                                  placeholder="Max"
+                                  value={f.max}
+                                  onChange={(e) => patch({ max: e.target.value })}
+                                />
+                              </div>
+                            ) : f.type === 'select' ? (
+                              <OptionsEditor value={f.options} onChange={(options) => patch({ options })} />
+                            ) : (
+                              <span style={{ opacity: 0.4 }}>—</span>
+                            )}
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <input
@@ -832,6 +891,52 @@ export default function ProductEditPage() {
 
         </div>
       </div>
+    </div>
+  )
+}
+
+// OptionsEditor edits a select field's choices as removable chips plus a text
+// box: Enter or comma commits the typed option (trimmed; blanks and exact
+// duplicates ignored), and the box also commits on blur so a typed-but-not-
+// entered option isn't silently lost on save.
+function OptionsEditor({ value, onChange }: { value: string[]; onChange: (options: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+
+  const commit = () => {
+    const opt = draft.trim()
+    setDraft('')
+    if (!opt || value.includes(opt)) return
+    onChange([...value, opt])
+  }
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minWidth: 160 }} dir="ltr">
+      {value.map((opt) => (
+        <span
+          key={opt}
+          className="bdg"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
+          {opt}
+          <span className="iact danger" style={{ lineHeight: 0 }} onClick={() => onChange(value.filter((o) => o !== opt))}>
+            <Icon name="x" size={11} />
+          </span>
+        </span>
+      ))}
+      <input
+        className="afield"
+        style={{ padding: '5px 8px', width: 90, fontSize: 12 }}
+        placeholder="Add…"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault()
+            commit()
+          }
+        }}
+      />
     </div>
   )
 }

@@ -38,4 +38,15 @@ describe('reconcileBridgePhoneField', () => {
     expect(out[0].type).toBe('text')
     expect(out[1].key).toBe('qty')
   })
+
+  it('preserves constraints on the other fields', () => {
+    const fields: InputField[] = [
+      { key: 'phone', label: { en: 'Mobile number', ar: 'رقم' }, type: 'text' },
+      { key: 'qty', label: { en: 'Qty', ar: '' }, type: 'quantity', constraints: { min: 1, max: 5 } },
+      { key: 'srv', label: { en: 'Server', ar: '' }, type: 'select', constraints: { options: ['EU', 'NA'] } },
+    ]
+    const out = reconcileBridgePhoneField(fields)
+    expect(out.find((f) => f.key === 'qty')?.constraints).toEqual({ min: 1, max: 5 })
+    expect(out.find((f) => f.key === 'srv')?.constraints).toEqual({ options: ['EU', 'NA'] })
+  })
 })
