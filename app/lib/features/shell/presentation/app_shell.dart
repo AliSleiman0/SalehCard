@@ -32,56 +32,68 @@ class AppShell extends ConsumerWidget {
     // final cartCount = ref.watch(cartCountProvider);
     final index = navigationShell.currentIndex;
 
-    return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: colors.topbar,
-          border: Border(top: BorderSide(color: colors.border)),
-        ),
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-        child: SizedBox(
-          height: 62,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                icon: Icons.home_rounded,
-                label: l10n.navHome,
-                active: index == 0,
-                onTap: () => navigationShell.goBranch(0),
-              ),
-              _NavItem(
-                icon: Icons.grid_view_rounded,
-                label: l10n.navCategories,
-                active: index == 1,
-                onTap: () => navigationShell.goBranch(1),
-              ),
-              _ScanFab(onTap: () => _comingSoon(context)),
-              // Cart tab disabled for now — replaced by an "Offers" placeholder
-              // (feature deferred). The /cart branch (index 2) still exists in
-              // the router; it's just unreachable from the nav. Re-enable by
-              // restoring this _NavItem (and `cartCount` above).
-              // _NavItem(
-              //   icon: Icons.shopping_bag_outlined,
-              //   label: l10n.navCart,
-              //   active: index == 2,
-              //   badge: cartCount,
-              //   onTap: () => navigationShell.goBranch(2),
-              // ),
-              _NavItem(
-                icon: Icons.local_offer_outlined,
-                label: l10n.navOffers,
-                active: index == 4,
-                onTap: () => navigationShell.goBranch(4),
-              ),
-              _NavItem(
-                icon: Icons.menu_rounded,
-                label: l10n.navMenu,
-                active: index == 3,
-                onTap: () => navigationShell.goBranch(3),
-              ),
-            ],
+    // Android back button: on any tab other than Home, go to Home instead of
+    // popping the shell (which closes the app, since each branch is at its
+    // root). Only Home (index 0) lets the system back through to exit.
+    return PopScope(
+      canPop: index == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        navigationShell.goBranch(0);
+      },
+      child: Scaffold(
+        body: navigationShell,
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: colors.topbar,
+            border: Border(top: BorderSide(color: colors.border)),
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom,
+          ),
+          child: SizedBox(
+            height: 62,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _NavItem(
+                  icon: Icons.home_rounded,
+                  label: l10n.navHome,
+                  active: index == 0,
+                  onTap: () => navigationShell.goBranch(0),
+                ),
+                _NavItem(
+                  icon: Icons.grid_view_rounded,
+                  label: l10n.navCategories,
+                  active: index == 1,
+                  onTap: () => navigationShell.goBranch(1),
+                ),
+                _ScanFab(onTap: () => _comingSoon(context)),
+                // Cart tab disabled for now — replaced by an "Offers" placeholder
+                // (feature deferred). The /cart branch (index 2) still exists in
+                // the router; it's just unreachable from the nav. Re-enable by
+                // restoring this _NavItem (and `cartCount` above).
+                // _NavItem(
+                //   icon: Icons.shopping_bag_outlined,
+                //   label: l10n.navCart,
+                //   active: index == 2,
+                //   badge: cartCount,
+                //   onTap: () => navigationShell.goBranch(2),
+                // ),
+                _NavItem(
+                  icon: Icons.local_offer_outlined,
+                  label: l10n.navOffers,
+                  active: index == 4,
+                  onTap: () => navigationShell.goBranch(4),
+                ),
+                _NavItem(
+                  icon: Icons.menu_rounded,
+                  label: l10n.navMenu,
+                  active: index == 3,
+                  onTap: () => navigationShell.goBranch(3),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -126,8 +138,10 @@ class _NavItem extends StatelessWidget {
                     end: -6,
                     top: -4,
                     child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
                       constraints: const BoxConstraints(minWidth: 15),
                       decoration: const BoxDecoration(
                         color: AppTokens.danger,
@@ -148,9 +162,14 @@ class _NavItem extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 3),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
           ],
         ),
       ),
@@ -186,8 +205,11 @@ class _ScanFab extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(Icons.qr_code_scanner_rounded,
-                  color: Colors.white, size: 25),
+              child: const Icon(
+                Icons.qr_code_scanner_rounded,
+                color: Colors.white,
+                size: 25,
+              ),
             ),
           ),
         ),
