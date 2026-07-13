@@ -132,6 +132,31 @@
   "placeOrderCta": "تأكيد الطلب",
   "fieldRequired": "هذا الحقل مطلوب.",
   "invalidLebanesePhone": "أدخل رقم هاتف محمول لبناني صالح (مثال: 71 123 456).",
+  "amountNotANumber": "أدخل رقمًا صالحًا.",
+  "amountOutOfRange": "أدخل مبلغًا بين {min} و{max}.",
+  "@amountOutOfRange": {
+    "placeholders": { "min": { "type": "String" }, "max": { "type": "String" } }
+  },
+  "amountAtLeast": "أدخل مبلغًا لا يقل عن {min}.",
+  "@amountAtLeast": {
+    "placeholders": { "min": { "type": "String" } }
+  },
+  "amountAtMost": "أدخل مبلغًا لا يزيد عن {max}.",
+  "@amountAtMost": {
+    "placeholders": { "max": { "type": "String" } }
+  },
+  "amountRangeHint": "بين {min} و{max}",
+  "@amountRangeHint": {
+    "placeholders": { "min": { "type": "String" }, "max": { "type": "String" } }
+  },
+  "amountMinHint": "الحد الأدنى {min}",
+  "@amountMinHint": {
+    "placeholders": { "min": { "type": "String" } }
+  },
+  "amountMaxHint": "الحد الأقصى {max}",
+  "@amountMaxHint": {
+    "placeholders": { "max": { "type": "String" } }
+  },
 
   "orderCompletedTitle": "تم إتمام الطلب",
   "orderProcessingTitle": "نُكمل طلبك",

@@ -142,6 +142,82 @@ func TestProductService_Update_PassesInputFields(t *testing.T) {
 	assert.Equal(t, "ايدي الحساب", got.LegacyName)
 }
 
+func TestProductService_Update_RejectsDuplicateFieldKeys(t *testing.T) {
+	repo := &mockRepo{products: []product.Product{{Title: product.I18nString{En: "P"}}}}
+	svc := product.NewProductService(repo)
+
+	in := product.UpdateProductInput{
+		InputFields: []product.InputField{
+			{Key: "accountId", Type: product.InputFieldText},
+			{Key: "accountId", Type: product.InputFieldText},
+		},
+	}
+
+	_, err := svc.Update(context.Background(), "6a3f04c4ea6747f81d0baf8a", in)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+}
+
+// A legacy product carrying the corrupt {min:0,max:0} constraint must stay
+// editable: the save succeeds and the sanitizer strips the bogus bound instead
+// of rejecting the whole update (regression guard for imported catalog data).
+func TestProductService_Update_RepairsLegacyZeroBounds(t *testing.T) {
+	zero := 0.0
+	repo := &mockRepo{products: []product.Product{{Title: product.I18nString{En: "P"}}}}
+	svc := product.NewProductService(repo)
+
+	in := product.UpdateProductInput{
+		Title: &product.I18nString{En: "Renamed"},
+		InputFields: []product.InputField{{
+			Key:         "quantity",
+			Type:        product.InputFieldQuantity,
+			Constraints: &product.InputFieldConstraints{Min: &zero, Max: &zero},
+		}},
+	}
+
+	_, err := svc.Update(context.Background(), "6a3f04c4ea6747f81d0baf8a", in)
+
+	require.NoError(t, err)
+	require.Len(t, repo.lastUpdate.InputFields, 1)
+	assert.Nil(t, repo.lastUpdate.InputFields[0].Constraints, "corrupt {0,0} bound should be stripped")
+}
+
+// A partial update that doesn't touch inputFields (nil slice) must never be
+// re-validated — stored legacy data stays untouched behind the repository
+// nil-guard, whatever shape it is in.
+func TestProductService_Update_NilInputFieldsSkipsValidation(t *testing.T) {
+	repo := &mockRepo{products: []product.Product{{Title: product.I18nString{En: "P"}}}}
+	svc := product.NewProductService(repo)
+
+	in := product.UpdateProductInput{Title: &product.I18nString{En: "Renamed"}}
+
+	_, err := svc.Update(context.Background(), "6a3f04c4ea6747f81d0baf8a", in)
+
+	require.NoError(t, err)
+	assert.Nil(t, repo.lastUpdate.InputFields)
+}
+
+func TestProductService_Create_RejectsInvalidBounds(t *testing.T) {
+	lo, hi := 10.0, 2.0
+	repo := &mockRepo{}
+	svc := product.NewProductService(repo)
+
+	in := product.CreateProductInput{
+		Title: product.I18nString{En: "P"},
+		InputFields: []product.InputField{{
+			Key:         "amount",
+			Type:        product.InputFieldAmount,
+			Constraints: &product.InputFieldConstraints{Min: &lo, Max: &hi},
+		}},
+	}
+
+	_, err := svc.Create(context.Background(), in)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+}
+
 func TestProductService_List(t *testing.T) {
 	twoProducts := []product.Product{
 		{Title: product.I18nString{En: "Product A"}},

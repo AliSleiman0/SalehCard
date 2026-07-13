@@ -710,6 +710,48 @@ abstract class AppLocalizations {
   /// **'Enter a valid Lebanese mobile number (e.g. 71 123 456).'**
   String get invalidLebanesePhone;
 
+  /// No description provided for @amountNotANumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid number.'**
+  String get amountNotANumber;
+
+  /// No description provided for @amountOutOfRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount between {min} and {max}.'**
+  String amountOutOfRange(String min, String max);
+
+  /// No description provided for @amountAtLeast.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount of at least {min}.'**
+  String amountAtLeast(String min);
+
+  /// No description provided for @amountAtMost.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount of at most {max}.'**
+  String amountAtMost(String max);
+
+  /// No description provided for @amountRangeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Between {min} and {max}'**
+  String amountRangeHint(String min, String max);
+
+  /// No description provided for @amountMinHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum {min}'**
+  String amountMinHint(String min);
+
+  /// No description provided for @amountMaxHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum {max}'**
+  String amountMaxHint(String max);
+
   /// No description provided for @orderCompletedTitle.
   ///
   /// In en, this message translates to:

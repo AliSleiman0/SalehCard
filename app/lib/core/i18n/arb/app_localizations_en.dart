@@ -342,6 +342,39 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter a valid Lebanese mobile number (e.g. 71 123 456).';
 
   @override
+  String get amountNotANumber => 'Enter a valid number.';
+
+  @override
+  String amountOutOfRange(String min, String max) {
+    return 'Enter an amount between $min and $max.';
+  }
+
+  @override
+  String amountAtLeast(String min) {
+    return 'Enter an amount of at least $min.';
+  }
+
+  @override
+  String amountAtMost(String max) {
+    return 'Enter an amount of at most $max.';
+  }
+
+  @override
+  String amountRangeHint(String min, String max) {
+    return 'Between $min and $max';
+  }
+
+  @override
+  String amountMinHint(String min) {
+    return 'Minimum $min';
+  }
+
+  @override
+  String amountMaxHint(String max) {
+    return 'Maximum $max';
+  }
+
+  @override
   String get orderCompletedTitle => 'Order completed';
 
   @override

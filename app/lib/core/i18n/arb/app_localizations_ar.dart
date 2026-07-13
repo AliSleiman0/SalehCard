@@ -342,6 +342,39 @@ class AppLocalizationsAr extends AppLocalizations {
       'أدخل رقم هاتف محمول لبناني صالح (مثال: 71 123 456).';
 
   @override
+  String get amountNotANumber => 'أدخل رقمًا صالحًا.';
+
+  @override
+  String amountOutOfRange(String min, String max) {
+    return 'أدخل مبلغًا بين $min و$max.';
+  }
+
+  @override
+  String amountAtLeast(String min) {
+    return 'أدخل مبلغًا لا يقل عن $min.';
+  }
+
+  @override
+  String amountAtMost(String max) {
+    return 'أدخل مبلغًا لا يزيد عن $max.';
+  }
+
+  @override
+  String amountRangeHint(String min, String max) {
+    return 'بين $min و$max';
+  }
+
+  @override
+  String amountMinHint(String min) {
+    return 'الحد الأدنى $min';
+  }
+
+  @override
+  String amountMaxHint(String max) {
+    return 'الحد الأقصى $max';
+  }
+
+  @override
   String get orderCompletedTitle => 'تم إتمام الطلب';
 
   @override

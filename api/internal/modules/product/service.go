@@ -244,6 +244,11 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if err := validateBridge(mode, in.Bridge, in.Variants); err != nil {
 		return nil, err
 	}
+	fields, err := sanitizeInputFields(in.InputFields)
+	if err != nil {
+		return nil, err
+	}
+	in.InputFields = fields
 	return s.repo.Create(ctx, in)
 }
 
@@ -266,6 +271,17 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 				return nil, err
 			}
 		}
+	}
+	// Sanitize input-field specs only when the update carries them — nil means
+	// "leave unchanged" (repository nil-guard), so a partial update never
+	// re-validates a legacy product's stored fields. An empty non-nil slice is
+	// a legal clear and passes through.
+	if in.InputFields != nil {
+		fields, err := sanitizeInputFields(in.InputFields)
+		if err != nil {
+			return nil, err
+		}
+		in.InputFields = fields
 	}
 	return s.repo.Update(ctx, id, in)
 }

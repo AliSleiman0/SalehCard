@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../catalog/domain/entities/product.dart';
+import '../../domain/field_validation.dart';
 
 /// Renders one dynamic product [InputField] (`text | amount | quantity |
 /// select`) at checkout. Sensitive fields are masked. The parent owns the value:
@@ -73,10 +75,16 @@ class DynamicInputField extends StatelessWidget {
         ),
       );
     } else {
+      final isAmount = field.type == 'amount';
       input = TextField(
         controller: controller,
         obscureText: field.sensitive,
         keyboardType: _keyboardType(field.type, field.key),
+        // Amount fields take a plain number — keep junk untypeable; bounds are
+        // validated on submit (and re-validated server-side).
+        inputFormatters: isAmount
+            ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))]
+            : null,
         onChanged: onChanged,
         style: TextStyle(fontSize: 15, color: colors.text),
         cursorColor: AppTokens.brand1,
@@ -85,6 +93,8 @@ class DynamicInputField extends StatelessWidget {
           fillColor: colors.surface,
           hintText: l10n.enterValue(label),
           hintStyle: TextStyle(color: colors.textFaint),
+          helperText: isAmount ? _rangeHint(l10n) : null,
+          helperStyle: TextStyle(fontSize: 12, color: colors.textFaint),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           border: border,
@@ -136,6 +146,20 @@ class DynamicInputField extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  /// The allowed-range helper under an `amount` input, or null when the field
+  /// carries no enforceable bounds (incl. the legacy corrupt shapes).
+  String? _rangeHint(AppLocalizations l10n) {
+    final c = field.constraints;
+    if (!hasActiveBounds(c)) return null;
+    final min = c?.min;
+    final max = c?.max;
+    if (min != null && max != null) {
+      return l10n.amountRangeHint(formatBound(min), formatBound(max));
+    }
+    if (min != null) return l10n.amountMinHint(formatBound(min));
+    return l10n.amountMaxHint(formatBound(max!));
   }
 
   TextInputType _keyboardType(String type, String key) {
