@@ -3,7 +3,10 @@ import { Modal, Icon, LoadingSpinner, EmptyState, Pagination } from '@/component
 import { useCodes, useAddCode, useEditCode, useDeleteCode, useExpireCode } from '../hooks/useInventory'
 import type { Code, CodeStatus, InventoryStats } from '@/types'
 
-const PAGE_SIZE = 20
+// Keep a page short enough that the whole modal — add form, list, pagination and
+// Close — fits on screen without the footer falling below the fold (the modal has
+// no viewport-height cap). The list area also scrolls as a safety net on short screens.
+const PAGE_SIZE = 10
 
 // Status → badge tone (`.st st-*`). Available is a healthy green, delivered is
 // neutral (it's spent, tied to an order), expired is a retired/danger tone.
@@ -111,7 +114,7 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
         ) : codes.length === 0 ? (
           <EmptyState icon="layers" title="No codes yet" sub="Add a code above or bulk-upload a batch." />
         ) : (
-          <div className="tablewrap">
+          <div className="tablewrap" style={{ maxHeight: '46vh', overflowY: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr>
