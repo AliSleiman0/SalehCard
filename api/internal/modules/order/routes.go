@@ -49,6 +49,17 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	if cfg.FulfillmentMock {
 		adapters = append(adapters, provider.NewReference(cfg.FulfillmentMockID))
 	}
+	// Panel suppliers (jentel/speedcard/gift4card — DESIGN-SUPPLIERS.md Phase 1):
+	// one shared adapter per token-configured supplier. A misconfigured entry is
+	// skipped, so its id falls back to the parking stub rather than failing boot.
+	for _, sc := range cfg.EnabledSuppliers() {
+		p, err := provider.NewPanel(provider.PanelConfig{ID: sc.ID, Name: sc.Name, BaseURL: sc.BaseURL, Token: sc.Token})
+		if err != nil {
+			slog.Warn("order: skipping misconfigured supplier", "supplier", sc.Name, "error", err)
+			continue
+		}
+		adapters = append(adapters, p)
+	}
 	providers := provider.NewRegistry(adapters...)
 	// Payment gateway: "mock" enables the sandbox card/usdt path; default keeps
 	// checkout wallet-only.

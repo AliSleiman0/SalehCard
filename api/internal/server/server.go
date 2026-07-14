@@ -279,7 +279,17 @@ func (s *Server) Routes() {
 			}
 		}()
 
-		domain("products", func(g chi.Router) { product.RegisterAdminRoutes(g, s.db, rec, store, catResolver) })
+		// Fulfillment-provider options for the product editor's supplier
+		// dropdown: the dev reference mock (when on) + every token-configured
+		// panel supplier (DESIGN-SUPPLIERS.md Phase 1).
+		provOpts := []product.FulfillmentProviderOption{}
+		if s.cfg.FulfillmentMock {
+			provOpts = append(provOpts, product.FulfillmentProviderOption{ID: s.cfg.FulfillmentMockID, Name: "reference (mock)"})
+		}
+		for _, sc := range s.cfg.EnabledSuppliers() {
+			provOpts = append(provOpts, product.FulfillmentProviderOption{ID: sc.ID, Name: sc.Name})
+		}
+		domain("products", func(g chi.Router) { product.RegisterAdminRoutes(g, s.db, rec, store, catResolver, provOpts) })
 		domain("categories", func(g chi.Router) { category.RegisterAdminRoutes(g, s.db, rec) })
 		domain("inventory", func(g chi.Router) { code.RegisterAdminRoutes(g, s.db, rec) })
 		domain("dashboard", func(g chi.Router) { dashboard.RegisterAdminRoutes(g, s.db) })

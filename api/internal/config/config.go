@@ -139,6 +139,10 @@ type Config struct {
 	// (instead of parking). Off by default.
 	FulfillmentMock   bool
 	FulfillmentMockID int
+	// Suppliers are the upstream panel suppliers api-mode orders can dispatch
+	// to (DESIGN-SUPPLIERS.md). A supplier is ENABLED only when its token is
+	// set; otherwise its id resolves to the parking stub — today's behavior.
+	Suppliers []SupplierConfig
 
 	// On-chain USDT payments (payment module + platform/tron). The feature is
 	// enabled iff exactly one of USDTXPub / USDTAddress is set; USDTProvider
@@ -235,6 +239,29 @@ type BridgeConfig struct {
 	AlfaMessageFee        float64
 }
 
+// SupplierConfig is one upstream panel supplier (jentel / speedcard /
+// gift4card — same white-label API, one adapter each). Tokens are secrets and
+// are never validated at boot: an empty token simply disables the supplier
+// (its provider id falls back to the parking stub), matching the SMS/IDCheck
+// lazily-validated-credentials convention.
+type SupplierConfig struct {
+	ID      int    // provider-registry id (also Product.FulfillmentProvider)
+	Name    string // slug shown in admin dropdown / logs
+	BaseURL string
+	Token   string
+}
+
+// EnabledSuppliers returns the suppliers that have a token configured.
+func (c *Config) EnabledSuppliers() []SupplierConfig {
+	var out []SupplierConfig
+	for _, s := range c.Suppliers {
+		if s.Token != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // Load reads configuration from environment variables, applying defaults where
 // needed. ENV defaults to "production" so a deployment that forgets to set it
 // fails closed (strict auth, Validate enforced) rather than silently running
@@ -312,6 +339,26 @@ func Load() *Config {
 		PaymentProvider:   getEnv("PAYMENT_PROVIDER", "log"),
 		FulfillmentMock:   getBool("FULFILLMENT_MOCK", false),
 		FulfillmentMockID: getInt("FULFILLMENT_MOCK_ID", 1),
+		Suppliers: []SupplierConfig{
+			{
+				Name:    "jentel",
+				ID:      getInt("SUPPLIER_JENTEL_ID", 10),
+				BaseURL: getEnv("SUPPLIER_JENTEL_BASE_URL", "https://api.jentel-cash.com"),
+				Token:   os.Getenv("SUPPLIER_JENTEL_TOKEN"),
+			},
+			{
+				Name:    "speedcard",
+				ID:      getInt("SUPPLIER_SPEEDCARD_ID", 11),
+				BaseURL: getEnv("SUPPLIER_SPEEDCARD_BASE_URL", "https://api.speedcard.vip"),
+				Token:   os.Getenv("SUPPLIER_SPEEDCARD_TOKEN"),
+			},
+			{
+				Name:    "gift4card",
+				ID:      getInt("SUPPLIER_GIFT4CARD_ID", 12),
+				BaseURL: getEnv("SUPPLIER_GIFT4CARD_BASE_URL", "https://api.gift4card.com"),
+				Token:   os.Getenv("SUPPLIER_GIFT4CARD_TOKEN"),
+			},
+		},
 
 		USDTProvider:      getEnv("USDT_PROVIDER", "stub"),
 		USDTXPub:          os.Getenv("USDT_XPUB"),
@@ -428,6 +475,20 @@ func (c *Config) Validate() error {
 	usdtOn := c.USDTXPub != "" || c.USDTAddress != ""
 	if c.USDTXPub != "" && c.USDTAddress != "" {
 		return errors.New("set exactly one of USDT_XPUB (derived addresses) / USDT_ADDRESS (shared address) — not both")
+	}
+	// Duplicate fulfillment-provider ids are a config bug in EVERY env: the
+	// registry silently keeps one adapter per id, so a collision would misroute
+	// paid orders to the wrong supplier. Only ENABLED suppliers (and the mock,
+	// when on) occupy ids — disabled ones can share defaults harmlessly.
+	seenProviderIDs := map[int]string{}
+	if c.FulfillmentMock {
+		seenProviderIDs[c.FulfillmentMockID] = "reference mock"
+	}
+	for _, s := range c.EnabledSuppliers() {
+		if prev, dup := seenProviderIDs[s.ID]; dup {
+			return fmt.Errorf("supplier %q and %s share fulfillment-provider id %d — set distinct SUPPLIER_*_ID values", s.Name, prev, s.ID)
+		}
+		seenProviderIDs[s.ID] = "supplier " + strconv.Quote(s.Name)
 	}
 	if c.Env == "development" {
 		return nil

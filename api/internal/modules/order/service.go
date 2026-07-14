@@ -250,6 +250,13 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		// device engine relies on: exactly one line, quantity one (a partial
 		// multi-unit recharge has no clean meaning), a dialable mobile number, and
 		// — for transfer_credit — a positive face value to transfer.
+		// API-supplier lines are dispatched one order = one upstream call;
+		// multi-item dispatch doesn't exist yet, so refuse mixed carts rather
+		// than silently fulfilling only the first api line (the app's buy-now
+		// flow is single-item anyway). Quantity stays free — panels take qty.
+		if mode == product.FulfillmentModeAPI && len(input.Items) != 1 {
+			return nil, badRequest("this product must be purchased on its own")
+		}
 		if mode == product.FulfillmentModeBridgeDevice {
 			if len(input.Items) != 1 {
 				return nil, badRequest("a mobile recharge must be purchased on its own")
@@ -284,6 +291,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			FulfillmentType:     ft,
 			FulfillmentMode:     string(mode),
 			FulfillmentProvider: p.FulfillmentProvider,
+			UpstreamProductID:   p.UpstreamProductID,
 			PlayerID:            in.PlayerID,
 			Recipient:           in.Recipient,
 			Fields:              resolveOrderFields(p, in.Fields, in.Qty),
@@ -522,16 +530,38 @@ func (s *OrderService) park(ctx context.Context, order *Order, note string) (*Or
 }
 
 // fulfillAPI dispatches an api-mode order to its upstream provider. This is the
-// §5 seam: today every provider id resolves to a stub returning ErrNotImplemented,
-// so the order parks. A real adapter that succeeds completes the order; one that
-// hard-fails compensates (refund + mark failed).
+// §5 seam: an unconfigured provider id resolves to a stub returning
+// ErrNotImplemented, so the order parks. A real adapter (platform/provider
+// Panel) drives four outcomes: success completes the order; ErrPending
+// (upstream accepted, still working) parks it with the upstream reference for
+// the supplier settler; ErrUnavailable (environmental failure — supplier
+// balance/throttle/auth/transport ambiguity, no acceptance) parks it WITHOUT a
+// reference so a re-dispatch with the same order_uuid stays idempotent; any
+// other error is definitively about this order → compensate (refund + fail).
 func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
 	var provID *int
 	var in provider.FulfillInput
 	for _, it := range order.Items {
 		if it.FulfillmentMode == string(product.FulfillmentModeAPI) {
 			provID = it.FulfillmentProvider
-			in = provider.FulfillInput{ProductID: it.ProductID.Hex(), PlayerID: it.PlayerID, Qty: it.Qty}
+			// Item fields ride to the upstream as key=value params. Sensitive
+			// inputs never reach here — resolveOrderFields already dropped
+			// them from the snapshot (v1 limitation: a sensitive value can
+			// only reach a supplier via PlayerID).
+			fields := make(map[string]string, len(it.Fields))
+			for _, f := range it.Fields {
+				fields[f.Key] = f.Value
+			}
+			in = provider.FulfillInput{
+				ProductID:  it.ProductID.Hex(),
+				UpstreamID: it.UpstreamProductID,
+				PlayerID:   it.PlayerID,
+				Fields:     fields,
+				Qty:        it.Qty,
+				// Our order id doubles as the upstream idempotency key, so a
+				// crashed/retried dispatch can never double-charge.
+				OrderUUID: order.ID.Hex(),
+			}
 			break
 		}
 	}
@@ -541,6 +571,18 @@ func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, ord
 	case errors.Is(err, provider.ErrNotImplemented):
 		// No real upstream wired yet → queue for future/manual completion.
 		return s.park(ctx, order, "awaiting provider integration")
+	case errors.Is(err, provider.ErrPending):
+		// Upstream accepted but hasn't finished. Persist its reference (park
+		// copies order.Fulfillment, so mutating first rides along) — the
+		// supplier settler polls CheckStatus on it.
+		order.Fulfillment.ProviderRef = res.Reference
+		return s.park(ctx, order, "awaiting upstream provider")
+	case errors.Is(err, provider.ErrUnavailable):
+		// Environmental failure with no upstream acceptance: park, never
+		// compensate — the customer paid and the failure isn't theirs. The
+		// error detail is operational (never contains customer inputs).
+		slog.Warn("order: upstream unavailable, parking", "order", order.ID.Hex(), "error", err)
+		return s.park(ctx, order, "upstream temporarily unavailable")
 	case err != nil:
 		// A wired provider hard-failed → reverse the charge and fail the order.
 		s.compensate(ctx, userID, order, nil, charged)
@@ -548,6 +590,10 @@ func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, ord
 	default:
 		fulfillment := order.Fulfillment
 		fulfillment.TransferRef = res.Reference
+		fulfillment.ProviderRef = res.Reference
+		if len(res.Codes) > 0 {
+			fulfillment.DeliveredCode = strings.Join(res.Codes, "\n")
+		}
 		fulfillment.StatusTimeline = append(fulfillment.StatusTimeline, TimelineEvent{Status: "completed", At: time.Now().UTC()})
 		if uerr := s.repo.UpdateFulfillment(ctx, order.ID, OrderStatusCompleted, fulfillment); uerr != nil {
 			return nil, uerr
