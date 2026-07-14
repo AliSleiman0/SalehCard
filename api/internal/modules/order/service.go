@@ -539,32 +539,7 @@ func (s *OrderService) park(ctx context.Context, order *Order, note string) (*Or
 // reference so a re-dispatch with the same order_uuid stays idempotent; any
 // other error is definitively about this order → compensate (refund + fail).
 func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
-	var provID *int
-	var in provider.FulfillInput
-	for _, it := range order.Items {
-		if it.FulfillmentMode == string(product.FulfillmentModeAPI) {
-			provID = it.FulfillmentProvider
-			// Item fields ride to the upstream as key=value params. Sensitive
-			// inputs never reach here — resolveOrderFields already dropped
-			// them from the snapshot (v1 limitation: a sensitive value can
-			// only reach a supplier via PlayerID).
-			fields := make(map[string]string, len(it.Fields))
-			for _, f := range it.Fields {
-				fields[f.Key] = f.Value
-			}
-			in = provider.FulfillInput{
-				ProductID:  it.ProductID.Hex(),
-				UpstreamID: it.UpstreamProductID,
-				PlayerID:   it.PlayerID,
-				Fields:     fields,
-				Qty:        it.Qty,
-				// Our order id doubles as the upstream idempotency key, so a
-				// crashed/retried dispatch can never double-charge.
-				OrderUUID: order.ID.Hex(),
-			}
-			break
-		}
-	}
+	provID, in, _ := supplierFulfillInput(order)
 
 	res, err := s.providers.Resolve(provID).Fulfill(ctx, in)
 	switch {
@@ -581,7 +556,12 @@ func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, ord
 		// Environmental failure with no upstream acceptance: park, never
 		// compensate — the customer paid and the failure isn't theirs. The
 		// error detail is operational (never contains customer inputs).
+		// Arming the retry clock marks the park re-dispatchable: the supplier
+		// settler retries it on the backoff schedule (safe — the same
+		// OrderUUID dedupes upstream).
 		slog.Warn("order: upstream unavailable, parking", "order", order.ID.Hex(), "error", err)
+		next := time.Now().UTC().Add(supplierBackoff[0])
+		order.Fulfillment.SupplierNextRetryAt = &next
 		return s.park(ctx, order, "upstream temporarily unavailable")
 	case err != nil:
 		// A wired provider hard-failed → reverse the charge and fail the order.

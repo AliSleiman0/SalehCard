@@ -143,6 +143,13 @@ type Config struct {
 	// to (DESIGN-SUPPLIERS.md). A supplier is ENABLED only when its token is
 	// set; otherwise its id resolves to the parking stub — today's behavior.
 	Suppliers []SupplierConfig
+	// Supplier settler (DESIGN-SUPPLIERS.md Phase 2): tick interval for
+	// reconciling parked api-mode orders, and the give-up window after which
+	// a still-waiting or retry-exhausted order is flagged stuck (never
+	// auto-refunded). The re-dispatch backoff schedule itself is a constant
+	// in the order module.
+	SupplierSettlerInterval time.Duration
+	SupplierSettlerGiveUp   time.Duration
 
 	// On-chain USDT payments (payment module + platform/tron). The feature is
 	// enabled iff exactly one of USDTXPub / USDTAddress is set; USDTProvider
@@ -359,6 +366,8 @@ func Load() *Config {
 				Token:   os.Getenv("SUPPLIER_GIFT4CARD_TOKEN"),
 			},
 		},
+		SupplierSettlerInterval: getDuration("SUPPLIER_SETTLER_INTERVAL", 60*time.Second),
+		SupplierSettlerGiveUp:   getDuration("SUPPLIER_SETTLER_GIVEUP", 24*time.Hour),
 
 		USDTProvider:      getEnv("USDT_PROVIDER", "stub"),
 		USDTXPub:          os.Getenv("USDT_XPUB"),

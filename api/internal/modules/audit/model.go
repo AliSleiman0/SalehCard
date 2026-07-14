@@ -33,6 +33,11 @@ const (
 	ActionBalanceAdjust      = "reseller.balance_adjust"
 	ActionOrderRefund        = "order.refund"
 	ActionOrderStatus        = "order.status"
+	// ActionOrderSupplierSettle records supplier-settler outcomes (automatic
+	// completion of an upstream-delivered order, or a stuck-upstream flag);
+	// settler-driven refunds reuse ActionOrderRefund so the finance trail has
+	// one action for every refund regardless of who triggered it.
+	ActionOrderSupplierSettle = "order.supplier_settle"
 	ActionProductDelete      = "product.delete"
 	ActionProductImageUpload = "product.image_upload"
 	ActionKYCDecision        = "kyc.decision"

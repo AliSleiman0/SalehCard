@@ -98,7 +98,7 @@ func (f *fakeOrderRepo) UpdateFulfillment(_ context.Context, id bson.ObjectID, s
 	return apperrors.ErrNotFound
 }
 
-func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, _ bson.D) (*Order, error) {
+func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error) {
 	o, ok := f.byID[id]
 	if !ok {
 		return nil, apperrors.ErrNotFound
@@ -109,6 +109,20 @@ func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, fr
 	before := *o
 	o.Status = to
 	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	// Apply the known fulfillment dot-paths so settler tests can assert on the
+	// completed order (the real repo $sets these atomically).
+	for _, e := range extraSet {
+		if s, ok := e.Value.(string); ok {
+			switch e.Key {
+			case "fulfillment.transferRef":
+				o.Fulfillment.TransferRef = s
+			case "fulfillment.deliveredCode":
+				o.Fulfillment.DeliveredCode = s
+			case "fulfillment.providerRef":
+				o.Fulfillment.ProviderRef = s
+			}
+		}
+	}
 	return &before, nil
 }
 
@@ -119,6 +133,72 @@ func (f *fakeOrderRepo) AppendTimelineEvent(_ context.Context, id bson.ObjectID,
 	}
 	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
 	return nil
+}
+
+// --- supplier-settler repository fakes (in-memory filters over byID) ---------
+
+func (f *fakeOrderRepo) ListSupplierPollable(_ context.Context, limit int) ([]*Order, error) {
+	var out []*Order
+	for _, o := range f.byID {
+		if o.Status != OrderStatusProcessing || o.Fulfillment.ProviderRef == "" {
+			continue
+		}
+		for _, it := range o.Items {
+			if it.FulfillmentMode == "api" {
+				out = append(out, o)
+				break
+			}
+		}
+		if len(out) == limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeOrderRepo) ListSupplierRetryable(_ context.Context, now time.Time, limit int) ([]*Order, error) {
+	var out []*Order
+	for _, o := range f.byID {
+		if o.Status == OrderStatusProcessing && o.Fulfillment.SupplierNextRetryAt != nil &&
+			!o.Fulfillment.SupplierNextRetryAt.After(now) {
+			out = append(out, o)
+		}
+		if len(out) == limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeOrderRepo) BumpSupplierRetry(_ context.Context, id bson.ObjectID, retryCount int, nextRetryAt time.Time) error {
+	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing {
+		o.Fulfillment.SupplierRetryCount = retryCount
+		o.Fulfillment.SupplierNextRetryAt = &nextRetryAt
+	}
+	return nil
+}
+
+func (f *fakeOrderRepo) SetSupplierRef(_ context.Context, id bson.ObjectID, ref string, event TimelineEvent) error {
+	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing {
+		o.Fulfillment.ProviderRef = ref
+		o.Fulfillment.SupplierRetryCount = 0
+		o.Fulfillment.SupplierNextRetryAt = nil
+		o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	}
+	return nil
+}
+
+func (f *fakeOrderRepo) MarkSupplierStuck(_ context.Context, id bson.ObjectID, event TimelineEvent) (bool, error) {
+	o, ok := f.byID[id]
+	if !ok || o.Status != OrderStatusProcessing || o.Fulfillment.SupplierStuckAt != nil {
+		return false, nil
+	}
+	now := time.Now().UTC()
+	o.Fulfillment.SupplierStuckAt = &now
+	o.Fulfillment.SupplierRetryCount = 0
+	o.Fulfillment.SupplierNextRetryAt = nil
+	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	return true, nil
 }
 
 func (f *fakeOrderRepo) ListAll(_ context.Context, _ OrderFilter, _ pagination.Params) ([]*Order, int64, error) {
@@ -245,12 +325,14 @@ func (f *fakeCodeSvc) InventoryPaged(context.Context, pagination.Params, bool, s
 }
 
 // fakeWalletSvc tracks a single balance and records debit/refund calls.
+// refundErr, when set, makes Refund fail (settler ledger-failure tests).
 type fakeWalletSvc struct {
 	balance     float64
 	debited     float64
 	refunded    float64
 	debitCalls  int
 	refundCalls int
+	refundErr   error
 }
 
 func (f *fakeWalletSvc) Debit(_ context.Context, _ bson.ObjectID, amount float64, _ string) (*wallet.WalletTransaction, error) {
@@ -264,6 +346,9 @@ func (f *fakeWalletSvc) Debit(_ context.Context, _ bson.ObjectID, amount float64
 }
 func (f *fakeWalletSvc) Refund(_ context.Context, _ bson.ObjectID, amount float64, _ string) (*wallet.WalletTransaction, error) {
 	f.refundCalls++
+	if f.refundErr != nil {
+		return nil, f.refundErr
+	}
 	f.balance += amount
 	f.refunded += amount
 	return &wallet.WalletTransaction{Amount: amount, BalanceAfter: f.balance}, nil
@@ -889,14 +974,19 @@ func TestGetOrder_EnforcesOwnership(t *testing.T) {
 // --- supplier (api-mode) fulfillment -----------------------------------------
 
 // fakeProvider is a scripted upstream adapter: it returns the configured
-// result/err from Fulfill and records the FulfillInput it received, so tests
-// can drive every fulfillAPI branch and assert the plumbing.
+// result/err from Fulfill (and checkRes/checkErr from CheckStatus) and records
+// what it received, so tests can drive every fulfillAPI/settler branch.
 type fakeProvider struct {
 	id     int
 	res    provider.Result
 	err    error
 	lastIn *provider.FulfillInput
 	calls  int
+
+	checkRes     provider.Status
+	checkErr     error
+	checkCalls   int
+	lastCheckRef string
 }
 
 func (f *fakeProvider) ID() int { return f.id }
@@ -905,8 +995,16 @@ func (f *fakeProvider) Fulfill(_ context.Context, in provider.FulfillInput) (pro
 	f.lastIn = &in
 	return f.res, f.err
 }
-func (f *fakeProvider) CheckStatus(context.Context, string) (provider.Status, error) {
-	return provider.Status{}, provider.ErrNotImplemented
+func (f *fakeProvider) CheckStatus(_ context.Context, ref string) (provider.Status, error) {
+	f.checkCalls++
+	f.lastCheckRef = ref
+	if f.checkErr != nil {
+		return provider.Status{}, f.checkErr
+	}
+	if f.checkRes.State == "" {
+		return provider.Status{}, provider.ErrNotImplemented
+	}
+	return f.checkRes, nil
 }
 func (f *fakeProvider) Verify(context.Context, provider.FulfillInput) (provider.AccountInfo, error) {
 	return provider.AccountInfo{}, provider.ErrNotImplemented

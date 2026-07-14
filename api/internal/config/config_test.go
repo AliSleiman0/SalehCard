@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestValidate(t *testing.T) {
 	tests := []struct {
@@ -150,5 +153,22 @@ func TestLoadSuppliers(t *testing.T) {
 	enabled := cfg.EnabledSuppliers()
 	if len(enabled) != 1 || enabled[0].Name != "jentel" {
 		t.Errorf("EnabledSuppliers = %+v, want only jentel", enabled)
+	}
+}
+
+func TestLoadSupplierSettlerKnobs(t *testing.T) {
+	cfg := Load()
+	if cfg.SupplierSettlerInterval != 60*time.Second {
+		t.Errorf("default interval = %v, want 60s", cfg.SupplierSettlerInterval)
+	}
+	if cfg.SupplierSettlerGiveUp != 24*time.Hour {
+		t.Errorf("default give-up = %v, want 24h", cfg.SupplierSettlerGiveUp)
+	}
+
+	t.Setenv("SUPPLIER_SETTLER_INTERVAL", "5s")
+	t.Setenv("SUPPLIER_SETTLER_GIVEUP", "2m")
+	cfg = Load()
+	if cfg.SupplierSettlerInterval != 5*time.Second || cfg.SupplierSettlerGiveUp != 2*time.Minute {
+		t.Errorf("overrides = %v/%v, want 5s/2m", cfg.SupplierSettlerInterval, cfg.SupplierSettlerGiveUp)
 	}
 }

@@ -79,6 +79,13 @@ func main() {
 			rp.Run(workerCtx)
 		}()
 	}
+	if st := srv.SupplierSettler(); st != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			st.Run(workerCtx)
+		}()
+	}
 
 	// Wait for interrupt signal to gracefully shut down the server.
 	quit := make(chan os.Signal, 1)

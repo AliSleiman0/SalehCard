@@ -94,10 +94,19 @@ type Fulfillment struct {
 	TransferRef   string `bson:"transferRef,omitempty"     json:"transferRef,omitempty"`
 	// ProviderRef is the upstream supplier's order id for api-mode orders —
 	// kept distinct from TransferRef so refunds/manual transfers stay
-	// untangled; the supplier settler (design Phase 2) reconciles parked
-	// orders by it via Provider.CheckStatus.
-	ProviderRef    string          `bson:"providerRef,omitempty"     json:"providerRef,omitempty"`
-	StatusTimeline []TimelineEvent `bson:"statusTimeline"            json:"statusTimeline"`
+	// untangled; the supplier settler reconciles parked orders by it via
+	// Provider.CheckStatus.
+	ProviderRef string `bson:"providerRef,omitempty" json:"providerRef,omitempty"`
+	// Supplier-settler bookkeeping. SupplierNextRetryAt is set ONLY on
+	// ErrUnavailable parks (ref-less, safely re-dispatchable) — its presence
+	// is what distinguishes them from stub parks, which stay manual. Retry
+	// internals are hidden from JSON; SupplierStuckAt is the set-once "stuck
+	// upstream" marker (serialized — admin views embed Order, and Phase 3's
+	// dashboard counter queries it).
+	SupplierRetryCount  int             `bson:"supplierRetryCount,omitempty"  json:"-"`
+	SupplierNextRetryAt *time.Time      `bson:"supplierNextRetryAt,omitempty" json:"-"`
+	SupplierStuckAt     *time.Time      `bson:"supplierStuckAt,omitempty"     json:"supplierStuckAt,omitempty"`
+	StatusTimeline      []TimelineEvent `bson:"statusTimeline"                json:"statusTimeline"`
 }
 
 // Order is the root aggregate for a customer purchase.
