@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
+
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -40,6 +42,14 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.ParentLegacyID = &v
+	}
+	if raw := q.Get("parentId"); raw != "" {
+		oid, err := bson.ObjectIDFromHex(raw)
+		if err != nil {
+			response.BadRequest(w, "parentId must be a valid id")
+			return
+		}
+		f.ParentID = &oid
 	}
 
 	withCounts := false

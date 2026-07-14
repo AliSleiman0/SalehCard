@@ -24,6 +24,9 @@ export interface ProductInput {
   title: { en: string; ar: string; tr: string }
   description: { en: string; ar: string; tr: string }
   category: string
+  // Taxonomy node the product is assigned to. When set, the server derives the
+  // flat `category` slug + rootDomain from it (keeps legacy flat filters working).
+  categoryId?: string
   images: string[]
   thumbnail?: string
   // `id` is echoed for existing variants so the backend preserves their _id
@@ -39,6 +42,9 @@ export interface ProductInput {
   bridge?: BridgeSpec | { provider: ''; method: '' }
   stock: number
   available: boolean
+  // Admin-set unit cost (Product.pricing.cost). Sent only when filled; omitted =
+  // leave the stored value unchanged. Non-negative.
+  cost?: number
   inputFields?: InputField[]
   // Purchase-time ID verification. A non-empty `app` enables it; `{provider:0,
   // app:''}` clears it (disable). Omitted = leave unchanged.

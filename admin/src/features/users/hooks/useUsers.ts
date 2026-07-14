@@ -8,6 +8,7 @@ import {
   bulkUserAction,
   deleteUser,
   bulkSmsUsers,
+  bulkPushUsers,
   type UserListParams,
   type UserStatus,
   type BulkUserAction,
@@ -80,6 +81,13 @@ export function useBulkUserAction() {
 export function useBulkSms() {
   return useMutation({
     mutationFn: ({ ids, message }: { ids: string[]; message: string }) => bulkSmsUsers(ids, message),
+  })
+}
+
+export function useBulkPush() {
+  return useMutation({
+    mutationFn: ({ ids, title, body }: { ids: string[]; title: string; body: string }) =>
+      bulkPushUsers(ids, title, body),
   })
 }
 

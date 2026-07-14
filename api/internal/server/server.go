@@ -137,9 +137,13 @@ func (s *Server) Routes() {
 	// catalog is enriched with live-offer sale prices via a read-only offer repo
 	// (EnsureIndexes runs in offer.RegisterRoutes, so this second repo skips it).
 	offerCat := offerCatalog{repo: offer.NewMongoRepository(s.db.Collection("offers"))}
-	product.RegisterRoutes(s.router, s.db, s.cfg, offerCat)
+	// The category repository doubles as the product module's CategoryResolver
+	// (tree-aware ?categoryId= filtering + taxonomy denormalization on write).
+	catResolver := category.NewMongoRepository(s.db)
+	product.RegisterRoutes(s.router, s.db, s.cfg, offerCat, catResolver)
 
-	// Read-only category taxonomy (storefront browses by root domain).
+	// Read-only category taxonomy (storefront browses the tree: root domains,
+	// subcategories via ?parentId=, product counts).
 	category.RegisterRoutes(s.router, s.db)
 
 	// Offers listing (storefront Offers tab; sale-price deals) — AuthRequired.
@@ -275,7 +279,8 @@ func (s *Server) Routes() {
 			}
 		}()
 
-		domain("products", func(g chi.Router) { product.RegisterAdminRoutes(g, s.db, rec, store) })
+		domain("products", func(g chi.Router) { product.RegisterAdminRoutes(g, s.db, rec, store, catResolver) })
+		domain("categories", func(g chi.Router) { category.RegisterAdminRoutes(g, s.db, rec) })
 		domain("inventory", func(g chi.Router) { code.RegisterAdminRoutes(g, s.db, rec) })
 		domain("dashboard", func(g chi.Router) { dashboard.RegisterAdminRoutes(g, s.db) })
 		domain("finance", func(g chi.Router) { finance.RegisterAdminRoutes(g, s.db) })
@@ -286,7 +291,9 @@ func (s *Server) Routes() {
 			// orders.manage, not inventory.manage.
 			code.RegisterOrderResendRoutes(g, s.db, rec, ntf)
 		})
-		domain("users", func(g chi.Router) { user.RegisterAdminRoutes(g, s.db, rec, smsSender, s.cfg.BulkSMSMax) })
+		domain("users", func(g chi.Router) {
+			user.RegisterAdminRoutes(g, s.db, rec, smsSender, s.cfg.BulkSMSMax, ntf, s.cfg.BulkPushMax)
+		})
 		domain("resellers", func(g chi.Router) { reseller.RegisterAdminRoutes(g, s.db, rec) })
 		domain("promos", func(g chi.Router) { promo.RegisterAdminRoutes(g, s.db) })
 		domain("offers", func(g chi.Router) { offer.RegisterAdminRoutes(g, s.db) })

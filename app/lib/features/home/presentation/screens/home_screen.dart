@@ -12,15 +12,29 @@ import '../../../../core/widgets/brand_logo.dart';
 import '../../../../core/widgets/notification_bell.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../browse/domain/entities/category.dart';
+import '../../../browse/presentation/providers.dart';
+import '../../../browse/presentation/screens/categories_screen.dart' show openCategory;
 import '../../../catalog/domain/entities/product.dart';
 import '../../../catalog/presentation/providers.dart';
 import '../../../kyc/presentation/providers.dart';
 import '../../../kyc/presentation/widgets/kyc_banner.dart';
 import '../../../wallet/presentation/providers.dart';
 
+/// A small sample of a Collection's products (tree-aware — the collection node
+/// and all its descendants), for the home Collection rows. Keyed by the
+/// collection's category id. Failures degrade to an empty row (hidden).
+final _collectionSampleProvider = FutureProvider.autoDispose
+    .family<List<Product>, String>((ref, categoryId) async {
+  final result = await ref
+      .watch(getProductsPageUseCaseProvider)
+      .call(categoryId: categoryId, limit: 8);
+  return result.match((_) => <Product>[], (page) => page.items);
+});
+
 /// Home / wallet landing (content only — the bottom nav is provided by the app
-/// shell). The wallet/promo are design chrome; the Featured row and category
-/// sections are wired to the real catalog API (tap → product detail).
+/// shell). The wallet/promo are design chrome; the Featured row and Collection
+/// sections are wired to the real catalog API (tap → product detail / browse).
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -179,11 +193,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       onTap: () => context.push('/product/${p.id}'),
     );
 
-    final byCategory = <String, List<Product>>{};
-    for (final p in products) {
-      byCategory.putIfAbsent(p.category, () => []).add(p);
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -191,21 +200,71 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           title: l10n.featured,
           children: [for (final p in products.take(8)) chip(p)],
         ),
-        for (final entry in byCategory.entries)
-          _ProductRow(
-            title: _titleCase(entry.key),
-            children: [for (final p in entry.value) chip(p)],
-          ),
+        // Server-driven Collections (top-tier categories). Each renders a
+        // tree-aware product sample and a tappable title that drills into it.
+        const _CollectionsSection(),
       ],
     );
   }
+}
 
-  static String _titleCase(String s) {
-    if (s.isEmpty) return s;
-    return s
-        .split(RegExp(r'[\s_-]+'))
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+/// The home's Collection sections: one row per top-level category (Collection)
+/// that has products. Watches [categoriesProvider] (`GET /categories?depth=0`).
+class _CollectionsSection extends ConsumerWidget {
+  const _CollectionsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final collections = ref.watch(categoriesProvider);
+    return collections.maybeWhen(
+      data: (cats) {
+        final withProducts = cats.where((c) => (c.productCount ?? 0) > 0).toList();
+        if (withProducts.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [for (final c in withProducts) _CollectionRow(collection: c)],
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// One Collection row: a tree-aware product sample under a tappable title that
+/// drills into the Collection. Hidden while loading or when the sample is empty.
+class _CollectionRow extends ConsumerWidget {
+  const _CollectionRow({required this.collection});
+
+  final Category collection;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final localeCode = ref.watch(localeControllerProvider).languageCode;
+    final sample = ref.watch(_collectionSampleProvider(collection.id));
+
+    return sample.maybeWhen(
+      data: (products) {
+        if (products.isEmpty) return const SizedBox.shrink();
+        final chips = [
+          for (var i = 0; i < products.length; i++)
+            ProductChip(
+              name: products[i].title.resolve(localeCode),
+              tint: ProductChip.tintFor(i),
+              imageUrl: products[i].thumbUrl,
+              outOfStock: !products[i].inStock,
+              outOfStockLabel: l10n.outOfStock,
+              onTap: () => context.push('/product/${products[i].id}'),
+            ),
+        ];
+        return _ProductRow(
+          title: collection.name.resolve(localeCode),
+          onTitleTap: () => openCategory(context, collection, localeCode),
+          children: chips,
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
   }
 }
 
@@ -517,26 +576,42 @@ class _PromoCard extends StatelessWidget {
 }
 
 class _ProductRow extends StatelessWidget {
-  const _ProductRow({required this.title, required this.children});
+  const _ProductRow({required this.title, required this.children, this.onTitleTap});
 
   final String title;
   final List<Widget> children;
+  final VoidCallback? onTitleTap;
 
   @override
   Widget build(BuildContext context) {
+    final titleText = Text(
+      title,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+        color: context.colors.text,
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.only(top: 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: context.colors.text,
-            ),
-          ),
+          if (onTitleTap != null)
+            GestureDetector(
+              onTap: onTitleTap,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  titleText,
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, size: 22, color: context.colors.textDim),
+                ],
+              ),
+            )
+          else
+            titleText,
           const SizedBox(height: 12),
           SizedBox(
             height: 92,

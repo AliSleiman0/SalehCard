@@ -48,6 +48,10 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 			Keys: bson.D{{Key: "rootDomain", Value: 1}},
 		},
 		{
+			// Taxonomy-node browse (tree-aware category filter matches $in here).
+			Keys: bson.D{{Key: "categoryId", Value: 1}},
+		},
+		{
 			Keys: bson.D{
 				{Key: "available", Value: 1},
 				{Key: "createdAt", Value: -1},
@@ -70,6 +74,16 @@ func buildFilter(f ListFilter) bson.D {
 	filter := bson.D{}
 	if f.Category != "" {
 		filter = append(filter, bson.E{Key: "category", Value: f.Category})
+	}
+	// Tree-aware taxonomy filter: the service expands a categoryId to the node +
+	// its descendants (CategoryIDs). Fall back to an exact single-node match when
+	// only the raw id is present (e.g. no resolver wired).
+	if len(f.CategoryIDs) > 0 {
+		filter = append(filter, bson.E{Key: "categoryId", Value: bson.D{{Key: "$in", Value: f.CategoryIDs}}})
+	} else if f.CategoryID != "" {
+		if oid, err := bson.ObjectIDFromHex(f.CategoryID); err == nil {
+			filter = append(filter, bson.E{Key: "categoryId", Value: oid})
+		}
 	}
 	if f.RootDomain != "" {
 		filter = append(filter, bson.E{Key: "rootDomain", Value: f.RootDomain})
@@ -258,6 +272,46 @@ func (r *MongoRepository) CountByRootDomain(ctx context.Context) (map[string]int
 	return out, nil
 }
 
+// CountByCategory returns categoryId -> number of available products directly
+// assigned to that node (products without a categoryId are excluded). The
+// category service rolls these up each node's subtree via the ancestors chain.
+func (r *MongoRepository) CountByCategory(ctx context.Context) (map[bson.ObjectID]int64, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{
+			{Key: "available", Value: true},
+			{Key: "categoryId", Value: bson.D{{Key: "$ne", Value: nil}}},
+		}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$categoryId"},
+			{Key: "n", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var rows []struct {
+		ID bson.ObjectID `bson:"_id"`
+		N  int64         `bson:"n"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[bson.ObjectID]int64, len(rows))
+	for _, row := range rows {
+		out[row.ID] = row.N
+	}
+	return out, nil
+}
+
+// CountAssignedTo returns how many products are directly assigned to the given
+// category node (any availability). Used by the category delete-guard.
+func (r *MongoRepository) CountAssignedTo(ctx context.Context, categoryID bson.ObjectID) (int64, error) {
+	return r.col.CountDocuments(ctx, bson.D{{Key: "categoryId", Value: categoryID}})
+}
+
 // CategoryFacet is one distinct product category and how many products carry it.
 type CategoryFacet struct {
 	Value string `json:"value"`
@@ -319,11 +373,29 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		mode = DeriveMode(in.FulfillmentType)
 	}
 
+	// Taxonomy assignment (optional): the service has already resolved and set
+	// in.Category (slug) + in.RootDomain from the node.
+	var categoryID *bson.ObjectID
+	if in.CategoryID != nil {
+		if oid, oerr := bson.ObjectIDFromHex(*in.CategoryID); oerr == nil {
+			categoryID = &oid
+		}
+	}
+
+	// Admin-set unit cost (optional): seed a minimal Pricing carrying only Cost.
+	// Retail/Margin/Currency/Mode stay importer-owned and absent for admin products.
+	var pricing *Pricing
+	if in.Cost != nil {
+		pricing = &Pricing{Cost: *in.Cost}
+	}
+
 	p := Product{
 		ID:                  bson.NewObjectID(),
 		Title:               in.Title,
 		Description:         in.Description,
 		Category:            in.Category,
+		CategoryID:          categoryID,
+		RootDomain:          in.RootDomain,
 		Images:              in.Images,
 		Thumbnail:           in.Thumbnail,
 		Variants:            variants,
@@ -332,6 +404,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		FulfillmentProvider: in.FulfillmentProvider,
 		InputFields:         in.InputFields,
 		Bridge:              in.Bridge,
+		Pricing:             pricing,
 		Stock:               in.Stock,
 		Available:           in.Available,
 		Ratings:             in.Ratings,
@@ -475,6 +548,22 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	}
 	if in.Category != nil {
 		set = append(set, bson.E{Key: "category", Value: *in.Category})
+	}
+	// Taxonomy re-assignment: the service resolved CategoryID and set the derived
+	// RootDomain. Persist the node ref + denormalized rootDomain together.
+	if in.CategoryID != nil {
+		if oid, oerr := bson.ObjectIDFromHex(*in.CategoryID); oerr == nil {
+			set = append(set, bson.E{Key: "categoryId", Value: oid})
+		}
+	}
+	if in.RootDomain != nil {
+		set = append(set, bson.E{Key: "rootDomain", Value: *in.RootDomain})
+	}
+	// Admin-set unit cost: dot-path so it creates pricing.{cost} on a product with
+	// no pricing yet and preserves importer-owned retail/margin/currency on one
+	// that has them (never replacing the whole pricing subdoc).
+	if in.Cost != nil {
+		set = append(set, bson.E{Key: "pricing.cost", Value: *in.Cost})
 	}
 	if in.Images != nil {
 		set = append(set, bson.E{Key: "images", Value: in.Images})

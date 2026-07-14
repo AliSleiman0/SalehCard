@@ -12,6 +12,7 @@ import '../../features/browse/presentation/screens/categories_screen.dart';
 import '../../features/browse/presentation/screens/category_products_screen.dart';
 import '../../features/browse/presentation/screens/notifications_screen.dart';
 import '../../features/browse/presentation/screens/search_screen.dart';
+import '../../features/browse/presentation/screens/subcategories_screen.dart';
 import '../../features/catalog/presentation/screens/product_detail_screen.dart';
 import '../../features/checkout/domain/entities/order.dart';
 import '../../features/checkout/presentation/screens/checkout_screen.dart';
@@ -112,6 +113,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/category/:domain',
         builder: (context, state) => CategoryProductsScreen(
           domain: state.pathParameters['domain']!,
+          title: state.extra is String ? state.extra as String : null,
+        ),
+      ),
+      // Taxonomy drill-down: a node's subcategories, then a leaf's products.
+      GoRoute(
+        path: '/catalog/:id',
+        builder: (context, state) => SubcategoriesScreen(
+          parentId: state.pathParameters['id']!,
+          title: state.extra is String ? state.extra as String : null,
+        ),
+      ),
+      GoRoute(
+        path: '/catalog/:id/items',
+        builder: (context, state) => CategoryProductsScreen(
+          categoryId: state.pathParameters['id']!,
           title: state.extra is String ? state.extra as String : null,
         ),
       ),

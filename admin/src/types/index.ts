@@ -77,6 +77,8 @@ export interface Product {
   title: I18nString
   description: I18nString
   category: string
+  /** Managed taxonomy node this product is assigned to (absent = unassigned). */
+  categoryId?: string
   /** Display-image URLs. Legacy-import products can return null (no images). */
   images: string[] | null
   thumbnail?: string
@@ -89,6 +91,9 @@ export interface Product {
   ratings: RatingsSummary
   inputFields?: InputField[]
   verification?: Verification
+  /** Economics. Only `cost` (admin-set unit cost) is editable in the console;
+   *  retail/currency come from the legacy catalog importer. Absent = no cost set. */
+  pricing?: { cost?: number; retail?: number; currency?: string }
   createdAt: string
   updatedAt: string
 }
@@ -119,6 +124,9 @@ export interface InventoryStats {
   expired: number
   threshold: number
   level: StockLevel
+  /** Unit cost (Product.pricing.cost) and Available×cost. Absent = no cost set → show "—". */
+  unitPrice?: number
+  totalValue?: number
 }
 
 export type StockLevel = 'hi' | 'mid' | 'lo'

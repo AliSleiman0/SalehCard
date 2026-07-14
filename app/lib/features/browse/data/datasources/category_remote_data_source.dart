@@ -15,11 +15,13 @@ class CategoryRemoteDataSource {
     bool withCounts = false,
     int? depth,
     String? rootDomain,
+    String? parentId,
   }) async {
     final query = <String, dynamic>{};
     if (withCounts) query['withCounts'] = true;
     if (depth != null) query['depth'] = depth;
     if (rootDomain != null) query['rootDomain'] = rootDomain;
+    if (parentId != null && parentId.isNotEmpty) query['parentId'] = parentId;
     final response = await _dio.get<dynamic>(
       '/categories',
       queryParameters: query.isEmpty ? null : query,

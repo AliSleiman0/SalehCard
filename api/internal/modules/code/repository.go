@@ -19,9 +19,32 @@ var ErrOutOfStock = &apperrors.AppError{
 	Err:     apperrors.ErrConflict,
 }
 
+// ErrDuplicateCode is returned when adding or editing a code would collide with
+// an existing code for the same product (the (productId, code) unique index).
+var ErrDuplicateCode = &apperrors.AppError{
+	Code:    "CODE_DUPLICATE",
+	Message: "a code with this value already exists for this product",
+	Err:     apperrors.ErrConflict,
+}
+
 // Repository is the persistence contract for the code/inventory domain.
 type Repository interface {
 	BulkInsert(ctx context.Context, productID string, items []UploadItem, batch string) (inserted, duplicates int, err error)
+	// InsertOne inserts a single available code for the product, returning the
+	// created document. A collision with an existing code (unique index) returns
+	// ErrDuplicateCode.
+	InsertOne(ctx context.Context, productID string, item UploadItem, batch string) (*Code, error)
+	// FindByID returns one code by its ObjectID (scoped to the product), or
+	// ErrNotFound for a bad hex / missing document. Used to disambiguate a failed
+	// available-only mutation (not-found vs not-available).
+	FindByID(ctx context.Context, productID, codeID string) (*Code, error)
+	// UpdateAvailableCode edits the value/pin of an available code (matched by
+	// id + product), returning the updated document. A value collision returns
+	// ErrDuplicateCode; no matching available code returns ErrNotFound.
+	UpdateAvailableCode(ctx context.Context, productID, codeID, newCode, newPin string) (*Code, error)
+	// DeleteAvailableCode removes a code that is not delivered (available or
+	// expired), returning the deleted document, or ErrNotFound if none matches.
+	DeleteAvailableCode(ctx context.Context, productID, codeID string) (*Code, error)
 	ListByProduct(ctx context.Context, productID string, status Status, p pagination.Params) ([]Code, int64, error)
 	CountsByProduct(ctx context.Context, productID string) (map[Status]int, error)
 	// CountsByAllProducts returns per-product status→count maps for every product
@@ -61,6 +84,9 @@ type ProductMeta struct {
 	ID       string
 	Title    string
 	Category string
+	// Cost is the admin-set unit cost (Product.Pricing.Cost). Nil = no cost set —
+	// the inventory view renders "—" (distinct from a genuine 0).
+	Cost *float64
 }
 
 // MongoRepository is the MongoDB-backed Repository.
@@ -158,6 +184,101 @@ func (r *MongoRepository) BulkInsert(ctx context.Context, productID string, item
 		}
 	}
 	return len(docs), duplicates, nil
+}
+
+// InsertOne inserts a single available code for the product. The (productId,
+// code) unique index is the dedup guard: a collision surfaces as a Mongo
+// duplicate-key error, mapped to ErrDuplicateCode.
+func (r *MongoRepository) InsertOne(ctx context.Context, productID string, item UploadItem, batch string) (*Code, error) {
+	c := Code{
+		ID:        bson.NewObjectID(),
+		ProductID: productID,
+		Code:      item.Code,
+		Pin:       item.Pin,
+		Status:    StatusAvailable,
+		Batch:     batch,
+		CreatedAt: time.Now().UTC(),
+	}
+	if _, err := r.codes.InsertOne(ctx, c); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, ErrDuplicateCode
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+// FindByID returns one code by ObjectID scoped to the product.
+func (r *MongoRepository) FindByID(ctx context.Context, productID, codeID string) (*Code, error) {
+	oid, err := bson.ObjectIDFromHex(codeID)
+	if err != nil {
+		return nil, apperrors.ErrNotFound
+	}
+	var c Code
+	err = r.codes.FindOne(ctx, bson.D{{Key: "_id", Value: oid}, {Key: "productId", Value: productID}}).Decode(&c)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+// UpdateAvailableCode edits the value/pin of an available code (matched by id +
+// product). The single FindOneAndUpdate guards against editing a code that was
+// just claimed. A value collision surfaces as a duplicate-key error mapped to
+// ErrDuplicateCode; no matching available code returns ErrNotFound.
+func (r *MongoRepository) UpdateAvailableCode(ctx context.Context, productID, codeID, newCode, newPin string) (*Code, error) {
+	oid, err := bson.ObjectIDFromHex(codeID)
+	if err != nil {
+		return nil, apperrors.ErrNotFound
+	}
+	set := bson.D{{Key: "code", Value: newCode}}
+	update := bson.D{{Key: "$set", Value: set}}
+	if newPin == "" {
+		update = append(update, bson.E{Key: "$unset", Value: bson.D{{Key: "pin", Value: ""}}})
+	} else {
+		set = append(set, bson.E{Key: "pin", Value: newPin})
+		update = bson.D{{Key: "$set", Value: set}}
+	}
+	var c Code
+	err = r.codes.FindOneAndUpdate(ctx,
+		bson.D{{Key: "_id", Value: oid}, {Key: "productId", Value: productID}, {Key: "status", Value: StatusAvailable}},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&c)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, ErrDuplicateCode
+		}
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+// DeleteAvailableCode removes a code that is not delivered (available or
+// expired) — a delivered code is tied to an order's fulfillment and is never
+// deleted. Returns the deleted document, or ErrNotFound when none matches.
+func (r *MongoRepository) DeleteAvailableCode(ctx context.Context, productID, codeID string) (*Code, error) {
+	oid, err := bson.ObjectIDFromHex(codeID)
+	if err != nil {
+		return nil, apperrors.ErrNotFound
+	}
+	var c Code
+	err = r.codes.FindOneAndDelete(ctx,
+		bson.D{{Key: "_id", Value: oid}, {Key: "productId", Value: productID}, {Key: "status", Value: bson.D{{Key: "$ne", Value: StatusDelivered}}}},
+	).Decode(&c)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return &c, nil
 }
 
 // ListByProduct returns a paginated slice of a product's codes, optionally
@@ -315,6 +436,11 @@ type productDoc struct {
 	} `bson:"title"`
 	Category        string `bson:"category"`
 	FulfillmentType string `bson:"fulfillmentType"`
+	// Pricing carries only the admin-set unit cost for the inventory value columns.
+	// A product with no pricing subdoc decodes to a zero-value struct (Cost == nil).
+	Pricing struct {
+		Cost *float64 `bson:"cost"`
+	} `bson:"pricing"`
 }
 
 // CodeProducts returns metadata for every inventory-mode product. The query is
@@ -345,7 +471,7 @@ func (r *MongoRepository) CodeProducts(ctx context.Context) ([]ProductMeta, erro
 	}
 	out := make([]ProductMeta, len(docs))
 	for i, d := range docs {
-		out[i] = ProductMeta{ID: d.ID.Hex(), Title: d.Title.En, Category: d.Category}
+		out[i] = ProductMeta{ID: d.ID.Hex(), Title: d.Title.En, Category: d.Category, Cost: d.Pricing.Cost}
 	}
 	return out, nil
 }
@@ -364,7 +490,7 @@ func (r *MongoRepository) ProductMeta(ctx context.Context, productID string) (*P
 		}
 		return nil, err
 	}
-	return &ProductMeta{ID: d.ID.Hex(), Title: d.Title.En, Category: d.Category}, nil
+	return &ProductMeta{ID: d.ID.Hex(), Title: d.Title.En, Category: d.Category, Cost: d.Pricing.Cost}, nil
 }
 
 // RecordBatch persists an upload-batch history record, stamping id/createdAt.

@@ -23,6 +23,7 @@ type Repository interface {
 	UpsertToken(ctx context.Context, userID bson.ObjectID, token, platform string) error
 	DeleteToken(ctx context.Context, userID bson.ObjectID, token string) error
 	TokensForUser(ctx context.Context, userID bson.ObjectID) ([]string, error)
+	UsersWithTokens(ctx context.Context, ids []bson.ObjectID) ([]bson.ObjectID, error)
 	DeleteTokenValue(ctx context.Context, token string) error
 }
 
@@ -150,6 +151,26 @@ func (r *MongoRepository) TokensForUser(ctx context.Context, userID bson.ObjectI
 	out := make([]string, len(rows))
 	for i, row := range rows {
 		out[i] = row.Token
+	}
+	return out, nil
+}
+
+// UsersWithTokens returns the subset of ids that have at least one registered
+// device token, in a single distinct query. Used by the admin bulk-push fan-out
+// to skip (and not count) users with no pushable device.
+func (r *MongoRepository) UsersWithTokens(ctx context.Context, ids []bson.ObjectID) ([]bson.ObjectID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	res := r.tokens.Distinct(ctx, "userId", bson.D{
+		{Key: "userId", Value: bson.D{{Key: "$in", Value: ids}}},
+	})
+	if err := res.Err(); err != nil {
+		return nil, err
+	}
+	var out []bson.ObjectID
+	if err := res.Decode(&out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

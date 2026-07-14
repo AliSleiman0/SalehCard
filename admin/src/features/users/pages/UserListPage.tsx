@@ -20,7 +20,7 @@ import { money, downloadCsv } from '@/lib/utils'
 import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import { ApiError } from '@/lib/api-client'
-import { useUsers, useBulkUserAction, useBulkSms } from '../hooks/useUsers'
+import { useUsers, useBulkUserAction, useBulkSms, useBulkPush } from '../hooks/useUsers'
 import { adaptUser } from '../lib/adaptUser'
 import { listUsers, type UserStatus, type BulkUserAction, type AdminUser } from '../api/users'
 import type { UserRole } from '@/types'
@@ -46,6 +46,7 @@ export default function UserListPage() {
   const [page, setPage] = useState(1)
   const [exporting, setExporting] = useState(false)
   const [smsIds, setSmsIds] = useState<string[] | null>(null)
+  const [pushIds, setPushIds] = useState<string[] | null>(null)
 
   // Adopt the URL's ?q= (e.g. the top-bar global search navigates to /users?q=…).
   useEffect(() => {
@@ -173,6 +174,9 @@ export default function UserListPage() {
               <button className="abtn xs" onClick={() => setSmsIds(bulk.sel)}>
                 <Icon name="send" size={13} /> SMS
               </button>
+              <button className="abtn xs" onClick={() => setPushIds(bulk.sel)}>
+                <Icon name="bell" size={13} /> Push
+              </button>
             </div>
           </div>
         )}
@@ -266,6 +270,17 @@ export default function UserListPage() {
           }}
         />
       )}
+
+      {pushIds && (
+        <BulkPushModal
+          ids={pushIds}
+          onClose={() => setPushIds(null)}
+          onSent={() => {
+            setPushIds(null)
+            bulk.clear()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -324,6 +339,80 @@ function BulkSMSModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => 
           </button>
           <button className="abtn primary" onClick={submit} disabled={send.isPending}>
             <Icon name="send" size={15} /> {send.isPending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/** Compose + send a push notification (title + body) to the selected users.
+ *  Push is free (FCM), so there's no per-message cost wording — but recipients
+ *  with no registered device are skipped server-side, and the toast reports how
+ *  many were reached. A confirm dialog guards the send. */
+function BulkPushModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => void; onSent: () => void }) {
+  const { t } = useTranslation()
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [error, setError] = useState('')
+  const send = useBulkPush()
+
+  const submit = () => {
+    if (!title.trim() || !body.trim()) {
+      setError('Title and body are required.')
+      return
+    }
+    if (!window.confirm(`Send push to ${ids.length} user(s)?`)) return
+    setError('')
+    send.mutate(
+      { ids, title: title.trim(), body: body.trim() },
+      {
+        onSuccess: (res) => {
+          toast.success(`Push queued to ${res.data?.queued ?? 0} recipient(s).`)
+          onSent()
+        },
+        onError: (e) => setError(e instanceof ApiError ? e.message : 'Send failed.'),
+      },
+    )
+  }
+
+  return (
+    <Modal onClose={onClose} maxWidth={520}>
+      <div style={{ padding: 22 }}>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Push {ids.length} user(s)</h3>
+        <p style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 16 }}>
+          Users with no registered device are skipped automatically.
+        </p>
+        <label className="alabel">Title</label>
+        <input
+          className="afield"
+          maxLength={80}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, textAlign: 'right' }}>
+          {title.length} / 80
+        </div>
+        <label className="alabel" style={{ marginTop: 12, display: 'block' }}>
+          Message
+        </label>
+        <textarea
+          className="afield"
+          style={{ minHeight: 110 }}
+          maxLength={240}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+        />
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, textAlign: 'right' }}>
+          {body.length} / 240
+        </div>
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button className="abtn" onClick={onClose} disabled={send.isPending}>
+            {t('cancel')}
+          </button>
+          <button className="abtn primary" onClick={submit} disabled={send.isPending}>
+            <Icon name="bell" size={15} /> {send.isPending ? 'Sending…' : 'Send'}
           </button>
         </div>
       </div>

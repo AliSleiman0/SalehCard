@@ -13,6 +13,7 @@ class CatalogRemoteDataSource {
     int page = 1,
     int limit = 20,
     String? category,
+    String? categoryId,
     String? rootDomain,
     String? search,
   }) async {
@@ -20,6 +21,7 @@ class CatalogRemoteDataSource {
       page: page,
       limit: limit,
       category: category,
+      categoryId: categoryId,
       rootDomain: rootDomain,
       search: search,
     ))
@@ -32,6 +34,7 @@ class CatalogRemoteDataSource {
     int page = 1,
     int limit = 20,
     String? category,
+    String? categoryId,
     String? rootDomain,
     String? search,
   }) async {
@@ -41,6 +44,7 @@ class CatalogRemoteDataSource {
         'page': page,
         'limit': limit,
         if (category != null && category.isNotEmpty) 'category': category,
+        if (categoryId != null && categoryId.isNotEmpty) 'categoryId': categoryId,
         if (rootDomain != null && rootDomain.isNotEmpty) 'rootDomain': rootDomain,
         if (search != null && search.isNotEmpty) 'q': search,
       },

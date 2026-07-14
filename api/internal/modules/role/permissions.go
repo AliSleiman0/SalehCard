@@ -17,6 +17,7 @@ type Domain struct {
 var Domains = []Domain{
 	{Key: "dashboard", Label: "Dashboard"},
 	{Key: "products", Label: "Products"},
+	{Key: "categories", Label: "Categories"},
 	{Key: "inventory", Label: "Inventory"},
 	{Key: "offers", Label: "Offers"},
 	{Key: "orders", Label: "Orders"},

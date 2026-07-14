@@ -16,6 +16,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
     int page = 1,
     int limit = 20,
     String? category,
+    String? categoryId,
     String? rootDomain,
     String? search,
   }) async {
@@ -24,6 +25,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
         page: page,
         limit: limit,
         category: category,
+        categoryId: categoryId,
         rootDomain: rootDomain,
         search: search,
       );
@@ -38,6 +40,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
     int page = 1,
     int limit = 20,
     String? category,
+    String? categoryId,
     String? rootDomain,
     String? search,
   }) async {
@@ -46,6 +49,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
         page: page,
         limit: limit,
         category: category,
+        categoryId: categoryId,
         rootDomain: rootDomain,
         search: search,
       );

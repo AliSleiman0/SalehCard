@@ -53,6 +53,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	var f ListFilter
 	f.Category = q.Get("category")
+	f.CategoryID = q.Get("categoryId")
 	f.RootDomain = q.Get("rootDomain")
 	f.Search = q.Get("q")
 

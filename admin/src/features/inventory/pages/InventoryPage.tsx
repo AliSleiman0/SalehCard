@@ -11,7 +11,8 @@ import {
   useUploadHistory,
 } from '../hooks/useInventory'
 import { parseCodesFile, listCodes, type UploadItem } from '../api/codes'
-import { relativeTime, downloadCsv } from '@/lib/utils'
+import { CodesModal } from '../components/CodesModal'
+import { relativeTime, downloadCsv, money } from '@/lib/utils'
 import { useCan } from '@/stores/auth'
 import type { InventoryStats, Code } from '@/types'
 
@@ -130,6 +131,8 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
   const meta = data?.meta
   const totals = meta?.totals
   const [exportingId, setExportingId] = useState('')
+  // Which product's codes popup is open (null = closed).
+  const [codesFor, setCodesFor] = useState<InventoryStats | null>(null)
 
   // Switch the low-only view and jump back to the first page.
   const setView = (low: boolean) => {
@@ -177,15 +180,24 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
 
   return (
     <div>
-      <div className="kpigrid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+      <div className="kpigrid" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
         {(
           [
             ['Total codes', (totals?.uploaded ?? 0).toLocaleString(), 'box', 'var(--grad)'],
             ['Available', (totals?.available ?? 0).toLocaleString(), 'checkc', 'linear-gradient(135deg,#2fd47a,#22e3c8)'],
             ['Delivered', (totals?.delivered ?? 0).toLocaleString(), 'send', 'linear-gradient(135deg,#3b5bff,#8a3bff)'],
             ['Low-stock products', String(totals?.lowStock ?? 0), 'alert', 'rgba(255,77,109,.2)'],
-          ] as [string, string, 'box' | 'checkc' | 'send' | 'alert', string][]
-        ).map(([l, v, ic, bg]) => (
+            [
+              'Total stock value',
+              money(totals?.totalValue ?? 0),
+              'wallet',
+              'linear-gradient(135deg,#f0a020,#f5c542)',
+              totals?.unvaluedProducts
+                ? `${totals.unvaluedProducts} product${totals.unvaluedProducts === 1 ? '' : 's'} not priced`
+                : undefined,
+            ],
+          ] as [string, string, 'box' | 'checkc' | 'send' | 'alert' | 'wallet', string, string?][]
+        ).map(([l, v, ic, bg, note]) => (
           <div className="kpi" key={l}>
             <div className="k-top">
               <div className="k-ic" style={{ background: bg }}>
@@ -194,6 +206,11 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
               <div className="k-label">{l}</div>
             </div>
             <div className="k-val">{v}</div>
+            {note && (
+              <div className="k-foot" title="Products with no unit price set are excluded from this total.">
+                <span className="k-since">{note}</span>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -229,6 +246,8 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                 <th>Available</th>
                 <th>Delivered</th>
                 <th>Expired</th>
+                <th>Unit price</th>
+                <th>Total value</th>
                 <th>Threshold</th>
                 <th>Stock level</th>
                 <th></th>
@@ -257,6 +276,8 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                     <td className="num strong">{it.available}</td>
                     <td className="num muted">{it.delivered.toLocaleString()}</td>
                     <td className="num faint">{it.expired}</td>
+                    <td className="num muted">{it.unitPrice != null ? money(it.unitPrice) : '—'}</td>
+                    <td className="num strong">{it.totalValue != null ? money(it.totalValue) : '—'}</td>
                     <td className="num muted">{it.threshold}</td>
                     <td>
                       <span className={'stock ' + it.level}>
@@ -270,6 +291,15 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                     </td>
                     <td>
                       <div className="row-actions">
+                        {canManage && (
+                          <button
+                            className="abtn xs"
+                            onClick={() => setCodesFor(it)}
+                            title="View & manage this product's codes"
+                          >
+                            <Icon name="layers" size={13} /> Codes
+                          </button>
+                        )}
                         {canManage && (
                           <button className="abtn xs" onClick={() => onAdd(it.productId)}>
                             <Icon name="upload" size={13} /> Add
@@ -308,6 +338,7 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
           onPage={setPage}
         />
       </div>
+      {codesFor && <CodesModal product={codesFor} onClose={() => setCodesFor(null)} />}
     </div>
   )
 }

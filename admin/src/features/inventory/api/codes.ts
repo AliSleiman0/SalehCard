@@ -25,6 +25,10 @@ export interface InventoryTotals {
   available: number
   delivered: number
   lowStock: number
+  /** Σ (available × unit cost) across priced products; unvaluedProducts counts those
+   *  with no unit price set (excluded from the sum, not treated as $0). */
+  totalValue: number
+  unvaluedProducts: number
 }
 
 /** Meta for the paginated inventory listing: pagination + global KPI totals. */
@@ -76,6 +80,30 @@ export function uploadCodes(productId: string, codes: UploadItem[]): Promise<Api
   return apiClient.post<CodeUploadResult>(`/api/admin/products/${productId}/codes`, { codes })
 }
 
+/** Add a single code to a product's pool (inventory codes popup). */
+export function addCode(productId: string, body: { code: string; pin?: string }): Promise<ApiResponse<Code>> {
+  return apiClient.post<Code>(`/api/admin/products/${productId}/codes/single`, body)
+}
+
+/** Edit an available code's value/pin (keyed by the code's ObjectID). */
+export function editCode(
+  productId: string,
+  codeId: string,
+  body: { code: string; pin?: string }
+): Promise<ApiResponse<Code>> {
+  return apiClient.put<Code>(`/api/admin/products/${productId}/codes/${codeId}`, body)
+}
+
+/** Delete a non-delivered code (keyed by the code's ObjectID). */
+export function deleteCode(productId: string, codeId: string): Promise<ApiResponse<Code>> {
+  return apiClient.delete<Code>(`/api/admin/products/${productId}/codes/${codeId}`)
+}
+
+/** Retire an available code from the pool via the existing expire endpoint. */
+export function expireCode(code: string): Promise<ApiResponse<Code>> {
+  return apiClient.put<Code>(`/api/admin/codes/${encodeURIComponent(code)}/expire`)
+}
+
 export function lookupCode(code: string): Promise<ApiResponse<CodeAudit>> {
   return apiClient.get<CodeAudit>(`/api/admin/codes/${encodeURIComponent(code)}`)
 }
@@ -84,14 +112,15 @@ export function setStockThreshold(productId: string, threshold: number): Promise
   return apiClient.put<InventoryStats>(`/api/admin/products/${productId}/stock-threshold`, { threshold })
 }
 
-/** Parse a pasted/loaded codes file: one code per line, or `code,pin` per line. */
+/** Parse a pasted/loaded codes file: one code per line, or `code,pin` per line.
+ *  Strips ALL whitespace (internal too) from each field so the preview count
+ *  matches what the server stores — the server-side strip is the authoritative fix. */
 export function parseCodesFile(text: string): { items: UploadItem[]; invalid: number } {
   const items: UploadItem[] = []
   let invalid = 0
   for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (!line) continue
-    const [code, pin] = line.split(',').map((s) => s.trim())
+    if (!raw.trim()) continue
+    const [code, pin] = raw.split(',').map((s) => s.replace(/\s+/g, ''))
     if (!code) {
       invalid++
       continue

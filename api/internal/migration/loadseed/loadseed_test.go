@@ -99,7 +99,8 @@ func (f *fakeCatRepo) FindByLegacyID(_ context.Context, id int) (*category.Categ
 func (f *fakeCatRepo) Upsert(_ context.Context, in category.UpsertCategoryInput) (*category.Category, error) {
 	c := f.byID[in.LegacyID]
 	if c == nil {
-		c = &category.Category{LegacyID: in.LegacyID}
+		lid := in.LegacyID
+		c = &category.Category{LegacyID: &lid}
 		f.byID[in.LegacyID] = c
 	}
 	c.Slug, c.Name = in.Slug, category.I18nString(in.Name)

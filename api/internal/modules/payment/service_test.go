@@ -443,6 +443,13 @@ func (f *fakeNotifier) Notify(_ context.Context, _ bson.ObjectID, n notification
 	f.notes = append(f.notes, n)
 }
 
+func (f *fakeNotifier) NotifyMany(_ context.Context, ids []bson.ObjectID, n notification.Note) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.notes = append(f.notes, n)
+	return len(ids)
+}
+
 func (f *fakeNotifier) kinds() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -213,9 +213,13 @@ type Product struct {
 	// RootDomain is the top-level domain (games, app_topups, …) the product's
 	// category resolves to — denormalized at load time so the storefront can
 	// browse a whole domain with one indexed filter. Empty for non-migration products.
-	RootDomain string   `bson:"rootDomain,omitempty" json:"rootDomain,omitempty"`
-	Category   string   `bson:"category" json:"category"`
-	Images     []string `bson:"images"   json:"images"`
+	RootDomain string `bson:"rootDomain,omitempty" json:"rootDomain,omitempty"`
+	Category   string `bson:"category" json:"category"`
+	// CategoryID references a node in the managed category taxonomy (nil for
+	// unassigned / pre-migration products). The flat Category/RootDomain strings
+	// are kept denormalized from it so the legacy flat filters keep working.
+	CategoryID *bson.ObjectID `bson:"categoryId,omitempty" json:"categoryId,omitempty"`
+	Images     []string       `bson:"images"   json:"images"`
 	// Thumbnail is the 256px compressed preview URL (see platform/imaging);
 	// lists/chips prefer it, falling back to Images[0]. Images[0] stays the
 	// 1024px display URL for backward compatibility (Flutter reads images.first).
@@ -299,9 +303,16 @@ func (p *Product) normalize() {
 
 // CreateProductInput carries all the data required to create a new product.
 type CreateProductInput struct {
-	Title               I18nString      `json:"title"`
-	Description         I18nString      `json:"description"`
-	Category            string          `json:"category"`
+	Title       I18nString `json:"title"`
+	Description  I18nString `json:"description"`
+	Category     string     `json:"category"`
+	// CategoryID assigns the product to a taxonomy node. When set, the service
+	// resolves it and denormalizes Category (slug) + RootDomain onto the product.
+	CategoryID          *string         `json:"categoryId,omitempty"`
+	RootDomain          string          `json:"-"` // derived server-side from CategoryID; never client-set
+	// Cost is the admin-set unit cost (Pricing.Cost). Nil = unset; a real 0 is a
+	// legal value. Only Cost is admin-editable — Retail/Margin/Mode stay importer-owned.
+	Cost                *float64        `json:"cost,omitempty"`
 	Images              []string        `json:"images"`
 	Thumbnail           string          `json:"thumbnail,omitempty"`
 	Variants            []Variant       `json:"variants"`
@@ -318,9 +329,16 @@ type CreateProductInput struct {
 // UpdateProductInput carries the optional fields that can be patched on a product.
 // A nil pointer means "leave unchanged".
 type UpdateProductInput struct {
-	Title               *I18nString      `json:"title,omitempty"`
-	Description         *I18nString      `json:"description,omitempty"`
-	Category            *string          `json:"category,omitempty"`
+	Title       *I18nString `json:"title,omitempty"`
+	Description  *I18nString `json:"description,omitempty"`
+	Category     *string     `json:"category,omitempty"`
+	// CategoryID re-assigns the product to a taxonomy node. When set, the service
+	// resolves it and denormalizes Category (slug) + RootDomain from it.
+	CategoryID          *string          `json:"categoryId,omitempty"`
+	RootDomain          *string          `json:"-"` // derived server-side from CategoryID; never client-set
+	// Cost patches the admin-set unit cost (Pricing.Cost) via the dot-path
+	// `pricing.cost`, preserving importer-owned Retail/Margin/Currency. Nil = unchanged.
+	Cost                *float64         `json:"cost,omitempty"`
 	Images              []string         `json:"images,omitempty"`
 	Thumbnail           *string          `json:"thumbnail,omitempty"`
 	Variants            []Variant        `json:"variants,omitempty"`
@@ -345,7 +363,12 @@ type UpdateProductInput struct {
 // Category/Available are used by the customer-facing list; FulfillmentType,
 // Status, and Search are additional filters used by the admin list.
 type ListFilter struct {
-	Category        string
+	Category string
+	// CategoryID is the taxonomy-node filter (raw hex from ?categoryId=). The
+	// service expands it to the node + its descendants and sets CategoryIDs,
+	// which buildFilter matches with $in (tree-aware listing).
+	CategoryID      string
+	CategoryIDs     []bson.ObjectID
 	RootDomain      string
 	Available       *bool
 	FulfillmentType FulfillmentType

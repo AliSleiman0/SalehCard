@@ -15,12 +15,14 @@ class CategoryRepositoryImpl implements CategoryRepository {
     bool withCounts = false,
     int? depth,
     String? rootDomain,
+    String? parentId,
   }) async {
     try {
       final dtos = await _remote.getCategories(
         withCounts: withCounts,
         depth: depth,
         rootDomain: rootDomain,
+        parentId: parentId,
       );
       return Right(dtos.map((d) => d.toEntity()).toList());
     } catch (error) {

@@ -37,6 +37,11 @@ type Stats struct {
 	PendingTransfers int       `json:"pendingTransfers"`
 	RevenueSpark     []float64 `json:"revenueSpark"`
 	OrdersSpark      []int     `json:"ordersSpark"`
+	// Real (all-time order counts per status):
+	OrdersFailed    int `json:"ordersFailed"`
+	OrdersPending   int `json:"ordersPending"`
+	OrdersCompleted int `json:"ordersCompleted"`
+	OrdersRefunded  int `json:"ordersRefunded"`
 	// Real (derived from users / wallet ledger):
 	ActiveUsers  int     `json:"activeUsers"`  // accounts seen in the last 24h
 	WalletTopups float64 `json:"walletTopups"` // top-ups credited today
@@ -100,6 +105,9 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		activeUsers               int64
 		walletTopups              float64
 		pendingTopups, pendingKyc int64
+
+		ordersFailed, ordersPending     int64
+		ordersCompleted, ordersRefunded int64
 	)
 
 	g.Go(func() error {
@@ -134,6 +142,26 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	g.Go(func() error {
 		var err error
 		pendingTransfers, err = h.orders.CountPendingTransfers(ctx)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		ordersFailed, err = h.orders.CountByStatus(ctx, order.OrderStatusFailed)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		ordersPending, err = h.orders.CountByStatus(ctx, order.OrderStatusPending)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		ordersCompleted, err = h.orders.CountByStatus(ctx, order.OrderStatusCompleted)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		ordersRefunded, err = h.orders.CountByStatus(ctx, order.OrderStatusRefunded)
 		return err
 	})
 	g.Go(func() error {
@@ -179,6 +207,10 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		PendingTransfers: int(pendingTransfers),
 		RevenueSpark:     revenueSpark,
 		OrdersSpark:      ordersSpark,
+		OrdersFailed:     int(ordersFailed),
+		OrdersPending:    int(ordersPending),
+		OrdersCompleted:  int(ordersCompleted),
+		OrdersRefunded:   int(ordersRefunded),
 		ActiveUsers:      int(activeUsers),
 		WalletTopups:     walletTopups,
 		PendingTopups:    int(pendingTopups),

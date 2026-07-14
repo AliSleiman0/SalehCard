@@ -9,6 +9,7 @@ abstract interface class CatalogRepository {
     int page,
     int limit,
     String? category,
+    String? categoryId,
     String? rootDomain,
     String? search,
   });
@@ -18,6 +19,7 @@ abstract interface class CatalogRepository {
     int page,
     int limit,
     String? category,
+    String? categoryId,
     String? rootDomain,
     String? search,
   });

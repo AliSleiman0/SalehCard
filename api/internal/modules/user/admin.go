@@ -15,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
@@ -60,29 +61,34 @@ type adminHandler struct {
 	wallet     wallet.Repository
 	orders     *mongo.Collection
 	roles      *mongo.Collection
-	rec        audit.Recorder
-	smsSender  sms.Sender
-	maxBulkSMS int
+	rec         audit.Recorder
+	smsSender   sms.Sender
+	maxBulkSMS  int
+	notifier    notification.Notifier
+	maxBulkPush int
 }
 
 // RegisterAdminRoutes mounts the admin user routes onto r (the /api/admin group,
 // guarded by AdminOnly): paginated/filterable list, detail, role + status
 // changes, and manual wallet adjustment (credit/debit with a reason logged to the
 // ledger). Mutations are recorded via rec.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, smsSender sms.Sender, maxBulkSMS int) {
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, smsSender sms.Sender, maxBulkSMS int, notifier notification.Notifier, maxBulkPush int) {
 	a := &adminHandler{
-		repo:       NewMongoRepository(db),
-		wallet:     wallet.NewMongoRepository(db),
-		orders:     db.Collection("orders"),
-		roles:      db.Collection("roles"),
-		rec:        rec,
-		smsSender:  smsSender,
-		maxBulkSMS: maxBulkSMS,
+		repo:        NewMongoRepository(db),
+		wallet:      wallet.NewMongoRepository(db),
+		orders:      db.Collection("orders"),
+		roles:       db.Collection("roles"),
+		rec:         rec,
+		smsSender:   smsSender,
+		maxBulkSMS:  maxBulkSMS,
+		notifier:    notifier,
+		maxBulkPush: maxBulkPush,
 	}
 
 	r.Get("/users", a.list)
 	r.Post("/users/bulk", a.bulkStatus)
 	r.Post("/users/bulk-sms", a.bulkSMS)
+	r.Post("/users/bulk-push", a.bulkPush)
 	r.Get("/users/{id}", a.detail)
 	r.Put("/users/{id}/role", a.updateRole)
 	r.Put("/users/{id}/status", a.updateStatus)
@@ -394,6 +400,94 @@ func (a *adminHandler) bulkSMS(w http.ResponseWriter, r *http.Request) {
 		Summary:    map[string]any{"recipients": len(recipients)},
 	})
 	response.OK(w, map[string]int{"queued": len(recipients)})
+}
+
+// bulkPush length caps keep a broadcast readable in the notification tray (not a
+// carrier-billing limit like SMS): a short title and a body that fits a tray card.
+const (
+	bulkPushTitleMax = 80
+	bulkPushBodyMax  = 240
+)
+
+// bulkPush handles POST /api/admin/users/bulk-push — send a push notification to
+// many users at once. It mirrors bulkSMS but over FCM (free): recipients are the
+// selected, non-deleted users; each also gets an in-app inbox row. Users with no
+// registered device are silently skipped (and not counted). Push is free, so the
+// recipient cap (maxBulkPush) is only an abuse/rate guard, not a spend guardrail.
+// The fan-out runs detached inside the Notifier, so the response returns
+// immediately with how many token-holders were reached.
+func (a *adminHandler) bulkPush(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs   []string `json:"ids"`
+		Title string   `json:"title"`
+		Body  string   `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	title := strings.TrimSpace(body.Title)
+	text := strings.TrimSpace(body.Body)
+	if title == "" || text == "" {
+		response.BadRequest(w, "title and body are required")
+		return
+	}
+	if len(title) > bulkPushTitleMax {
+		response.BadRequest(w, "title must be 80 characters or fewer")
+		return
+	}
+	if len(text) > bulkPushBodyMax {
+		response.BadRequest(w, "body must be 240 characters or fewer")
+		return
+	}
+	ids := make([]bson.ObjectID, 0, len(body.IDs))
+	for _, s := range body.IDs {
+		if id, err := bson.ObjectIDFromHex(s); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		response.BadRequest(w, "no valid user ids supplied")
+		return
+	}
+	users, err := a.repo.FindByIDs(r.Context(), ids)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	recipients := make([]bson.ObjectID, 0, len(users))
+	for _, u := range users {
+		if u.Status == StatusDeleted {
+			continue
+		}
+		recipients = append(recipients, u.ID)
+	}
+
+	// Abuse guardrail: refuse a batch larger than the configured cap so a stray
+	// select-all can't enqueue thousands of fan-outs.
+	if len(recipients) > a.maxBulkPush {
+		response.Error(w, http.StatusBadRequest, "BULK_PUSH_LIMIT",
+			"too many recipients for one send — narrow the selection (limit "+strconv.Itoa(a.maxBulkPush)+")")
+		return
+	}
+
+	reached := 0
+	if a.notifier != nil && len(recipients) > 0 {
+		reached = a.notifier.NotifyMany(r.Context(), recipients, notification.Note{
+			Kind:  "admin_broadcast",
+			Title: title,
+			Body:  text,
+			Data:  map[string]string{"kind": "admin_broadcast"},
+		})
+	}
+
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionUserBulkPush,
+		TargetType: "user",
+		TargetID:   "bulk",
+		Summary:    map[string]any{"selected": len(recipients), "reached": reached},
+	})
+	response.OK(w, map[string]int{"queued": reached})
 }
 
 // deleteUser handles DELETE /api/admin/users/{id} — a soft-delete (anonymize).

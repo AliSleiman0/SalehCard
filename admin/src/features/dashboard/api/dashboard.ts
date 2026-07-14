@@ -15,6 +15,11 @@ export interface DashboardStats {
   pendingTransfers: number
   revenueSpark: number[] // last-14-day daily revenue
   ordersSpark: number[] // last-14-day daily order count
+  // All-time order counts per status:
+  ordersFailed: number
+  ordersPending: number
+  ordersCompleted: number
+  ordersRefunded: number
   // Derived from users / wallet ledger:
   activeUsers: number // accounts seen in the last 24h
   walletTopups: number // top-ups credited today

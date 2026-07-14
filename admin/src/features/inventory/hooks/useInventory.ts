@@ -6,9 +6,27 @@ import {
   uploadCodes,
   lookupCode,
   setStockThreshold,
+  addCode,
+  editCode,
+  deleteCode,
+  expireCode,
   type UploadItem,
 } from '../api/codes'
+import { toast } from '@/stores/toast'
+import { ApiError } from '@/lib/api-client'
 import type { CodeStatus } from '@/types'
+
+/** Invalidate the inventory list/KPIs and the per-product codes query together
+ *  after a single-code mutation. */
+function invalidateCodes(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['admin', 'inventory'] })
+  qc.invalidateQueries({ queryKey: ['admin', 'codes'] })
+}
+
+/** Surface an ApiError's server message (e.g. CODE_DUPLICATE), else a fallback. */
+function errMessage(e: unknown, fallback: string): string {
+  return e instanceof ApiError ? e.message : fallback
+}
 
 /** Full inventory list (all products) — for the thresholds editor and upload picker. */
 export function useInventory(enabled = true) {
@@ -67,5 +85,59 @@ export function useSetThreshold() {
     mutationFn: ({ productId, threshold }: { productId: string; threshold: number }) =>
       setStockThreshold(productId, threshold),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'inventory'] }),
+  })
+}
+
+/** Add a single code to a product's pool. */
+export function useAddCode() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ productId, code, pin }: { productId: string; code: string; pin?: string }) =>
+      addCode(productId, { code, pin }),
+    onSuccess: () => {
+      invalidateCodes(qc)
+      toast.success('Code added')
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not add code')),
+  })
+}
+
+/** Edit an available code's value/pin. */
+export function useEditCode() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ productId, codeId, code, pin }: { productId: string; codeId: string; code: string; pin?: string }) =>
+      editCode(productId, codeId, { code, pin }),
+    onSuccess: () => {
+      invalidateCodes(qc)
+      toast.success('Code updated')
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not update code')),
+  })
+}
+
+/** Delete a non-delivered code. */
+export function useDeleteCode() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ productId, codeId }: { productId: string; codeId: string }) => deleteCode(productId, codeId),
+    onSuccess: () => {
+      invalidateCodes(qc)
+      toast.success('Code deleted')
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not delete code')),
+  })
+}
+
+/** Expire (retire) an available code. */
+export function useExpireCode() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ code }: { code: string; productId: string }) => expireCode(code),
+    onSuccess: () => {
+      invalidateCodes(qc)
+      toast.success('Code expired')
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not expire code')),
   })
 }

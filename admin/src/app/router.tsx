@@ -8,6 +8,7 @@ const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage'))
 const DashboardPage = lazy(() => import('@/features/dashboard/pages/DashboardPage'))
 const ProductListPage = lazy(() => import('@/features/products/pages/ProductListPage'))
 const ProductEditPage = lazy(() => import('@/features/products/pages/ProductEditPage'))
+const CategoriesPage = lazy(() => import('@/features/categories/pages/CategoriesPage'))
 const InventoryPage = lazy(() => import('@/features/inventory/pages/InventoryPage'))
 const OrderListPage = lazy(() => import('@/features/orders/pages/OrderListPage'))
 const OrderDetailPage = lazy(() => import('@/features/orders/pages/OrderDetailPage'))
@@ -54,6 +55,7 @@ export default function AppRouter() {
         <Route path="/products" element={guard('products', <ProductListPage />)} />
         <Route path="/products/new" element={guard('products', <ProductEditPage />)} />
         <Route path="/products/:id/edit" element={guard('products', <ProductEditPage />)} />
+        <Route path="/categories" element={guard('categories', <CategoriesPage />)} />
         <Route path="/inventory" element={guard('inventory', <InventoryPage />)} />
         <Route path="/orders" element={guard('orders', <OrderListPage />)} />
         <Route path="/orders/:id" element={guard('orders', <OrderDetailPage />)} />

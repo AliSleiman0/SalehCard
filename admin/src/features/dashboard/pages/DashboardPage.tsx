@@ -7,8 +7,12 @@ import { money, downloadCsv, formatLongDate } from '@/lib/utils'
 import { useDashboardStats, useLowStock, useRevenueChart, useFulfillmentBreakdown, useHealth } from '../hooks/useDashboard'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
+import { useBridgeDevices } from '@/features/bridge/hooks/useBridge'
+import { useCan } from '@/stores/auth'
 
 type Range = 'daily' | 'weekly' | 'monthly'
+
+const LOW_BALANCE = 50 // USD; below this a bridge SIM is "running dry" (PO, 2026-07-14)
 
 // Donut colors keyed by fulfillment slice key — the design-system tokens (same
 // source as FfBadge / OrderListPage's FF_DOT), so the palette tracks the theme.
@@ -67,9 +71,42 @@ function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkC
   )
 }
 
+// BridgeBalanceTiles renders one KPI tile per non-null SIM balance (Touch / Alfa)
+// across all bridge devices. It's rendered as a fragment so each <Kpi> lands as a
+// direct child of .kpigrid. Keeping useBridgeDevices() inside this child (only
+// mounted when the viewer has bridge.view) means the query never fires for
+// non-bridge admins. Balances come live from the shared 15s-polling bridge query.
+function BridgeBalanceTiles({ onOpen }: { onOpen: () => void }) {
+  const { data } = useBridgeDevices()
+  const devices = data?.data ?? []
+  const tiles: React.ReactNode[] = []
+  for (const d of devices) {
+    for (const [op, bal] of [
+      ['Touch', d.touchBalance],
+      ['Alfa', d.alfaBalance],
+    ] as const) {
+      if (bal == null) continue // never-checked SIM → no tile (mirrors BridgePage)
+      tiles.push(
+        <Kpi
+          key={`${d.id}-${op}`}
+          icon={<Icon name="server" size={17} />}
+          iconBg="linear-gradient(135deg,#3b5bff,#22e3c8)"
+          label={`${op} balance`}
+          value={`$${bal.toFixed(2)}`}
+          since={d.name}
+          cls={bal < LOW_BALANCE ? 'alert' : undefined}
+          onClick={onOpen}
+        />,
+      )
+    }
+  }
+  return <>{tiles}</>
+}
+
 export default function DashboardPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const can = useCan()
   const [range, setRange] = useState<Range>('daily')
   const { data: statsRes } = useDashboardStats()
   const { data: lowRes } = useLowStock()
@@ -204,6 +241,42 @@ export default function DashboardPage() {
           since="codes running out"
           cls="crit"
         />
+        <Kpi
+          icon={<Icon name="bag" size={17} />}
+          iconBg="linear-gradient(135deg,#2fd47a,#22e3c8)"
+          label="Completed orders"
+          value={s ? s.ordersCompleted.toLocaleString() : '—'}
+          since="all-time"
+          onClick={() => navigate('/orders?status=completed')}
+        />
+        <Kpi
+          icon={<Icon name="bag" size={17} />}
+          iconBg="rgba(255,155,61,.2)"
+          label="Pending orders"
+          value={s ? String(s.ordersPending) : '—'}
+          since="all-time"
+          cls="alert"
+          onClick={() => navigate('/orders?status=pending')}
+        />
+        <Kpi
+          icon={<Icon name="alert" size={17} />}
+          iconBg="rgba(255,77,109,.2)"
+          label="Failed orders"
+          value={s ? String(s.ordersFailed) : '—'}
+          since="all-time"
+          cls="crit"
+          onClick={() => navigate('/orders?status=failed')}
+        />
+        <Kpi
+          icon={<Icon name="coins" size={17} />}
+          iconBg="rgba(255,155,61,.2)"
+          label="Refunded orders"
+          value={s ? String(s.ordersRefunded) : '—'}
+          since="all-time"
+          cls="alert"
+          onClick={() => navigate('/orders?status=refunded')}
+        />
+        {can('bridge.view') && <BridgeBalanceTiles onOpen={() => navigate('/bridge')} />}
       </div>
 
       <div className="dash-2col mb16">

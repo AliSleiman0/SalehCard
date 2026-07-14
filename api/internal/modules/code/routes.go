@@ -2,6 +2,7 @@ package code
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -42,6 +43,12 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	r.Get("/upload-history", uploadHistoryHandler(repo))
 	r.Post("/products/{id}/codes", h.Upload)
 	r.With(auth.RequirePermission("inventory.manage")).Get("/products/{id}/codes", h.ListCodes)
+	// Single-code management (the inventory codes popup). These return / mutate raw
+	// code values, so they carry the explicit inventory.manage guard (the domain
+	// wrapper already forces manage on non-GET; this matches the raw-code reads above).
+	r.With(auth.RequirePermission("inventory.manage")).Post("/products/{id}/codes/single", addCodeHandler(svc, rec))
+	r.With(auth.RequirePermission("inventory.manage")).Put("/products/{id}/codes/{codeId}", editCodeHandler(svc, rec))
+	r.With(auth.RequirePermission("inventory.manage")).Delete("/products/{id}/codes/{codeId}", deleteCodeHandler(svc, rec))
 	r.Put("/products/{id}/stock-threshold", h.SetThreshold)
 	r.With(auth.RequirePermission("inventory.manage")).Get("/codes/{code}", h.Lookup)
 	r.Put("/codes/{code}/expire", expireHandler(svc, rec))
@@ -68,6 +75,78 @@ func expireHandler(svc *CodeService, rec audit.Recorder) http.HandlerFunc {
 		}
 		rec.Record(r.Context(), audit.Entry{
 			Action:     audit.ActionCodeExpire,
+			TargetType: "code",
+			TargetID:   c.ID.Hex(),
+			Summary:    map[string]any{"code": c.Code, "productId": c.ProductID},
+		})
+		response.OK(w, c)
+	}
+}
+
+// addCodeHandler serves POST /api/admin/products/{id}/codes/single — adds one
+// available code to a product's pool from the inventory codes popup.
+func addCodeHandler(svc *CodeService, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		productID := chi.URLParam(r, "id")
+		var in CodeInput
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			response.BadRequest(w, "invalid request body")
+			return
+		}
+		c, err := svc.AddCode(r.Context(), productID, in.Code, in.Pin)
+		if err != nil {
+			writeCodeError(w, err)
+			return
+		}
+		rec.Record(r.Context(), audit.Entry{
+			Action:     audit.ActionCodeCreate,
+			TargetType: "code",
+			TargetID:   c.ID.Hex(),
+			Summary:    map[string]any{"code": c.Code, "productId": c.ProductID},
+		})
+		response.JSON(w, http.StatusCreated, response.Response{Success: true, Data: c})
+	}
+}
+
+// editCodeHandler serves PUT /api/admin/products/{id}/codes/{codeId} — edits an
+// available code's value/pin.
+func editCodeHandler(svc *CodeService, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		productID := chi.URLParam(r, "id")
+		codeID := chi.URLParam(r, "codeId")
+		var in CodeInput
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			response.BadRequest(w, "invalid request body")
+			return
+		}
+		c, err := svc.EditCode(r.Context(), productID, codeID, in.Code, in.Pin)
+		if err != nil {
+			writeCodeError(w, err)
+			return
+		}
+		rec.Record(r.Context(), audit.Entry{
+			Action:     audit.ActionCodeUpdate,
+			TargetType: "code",
+			TargetID:   c.ID.Hex(),
+			Summary:    map[string]any{"code": c.Code, "productId": c.ProductID},
+		})
+		response.OK(w, c)
+	}
+}
+
+// deleteCodeHandler serves DELETE /api/admin/products/{id}/codes/{codeId} —
+// removes a non-delivered code from a product's pool.
+func deleteCodeHandler(svc *CodeService, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		productID := chi.URLParam(r, "id")
+		codeID := chi.URLParam(r, "codeId")
+		c, err := svc.DeleteCode(r.Context(), productID, codeID)
+		if err != nil {
+			writeCodeError(w, err)
+			return
+		}
+		rec.Record(r.Context(), audit.Entry{
+			Action:     audit.ActionCodeDelete,
 			TargetType: "code",
 			TargetID:   c.ID.Hex(),
 			Summary:    map[string]any{"code": c.Code, "productId": c.ProductID},
@@ -114,13 +193,15 @@ func resendHandler(svc *CodeService, rec audit.Recorder, ntf notification.Notifi
 	}
 }
 
-// writeCodeError maps code lifecycle errors: missing → 404, not-available → 409,
-// otherwise 500.
+// writeCodeError maps code lifecycle errors: missing → 404, bad request → 400,
+// conflict (duplicate / not-available / delivered) → 409, otherwise 500.
 func writeCodeError(w http.ResponseWriter, err error) {
 	var appErr *apperrors.AppError
 	switch {
 	case errors.Is(err, apperrors.ErrNotFound):
 		response.NotFound(w)
+	case errors.As(err, &appErr) && errors.Is(err, apperrors.ErrBadRequest):
+		response.Error(w, http.StatusBadRequest, appErr.Code, appErr.Message)
 	case errors.As(err, &appErr) && errors.Is(err, apperrors.ErrConflict):
 		response.Error(w, http.StatusConflict, appErr.Code, appErr.Message)
 	default:

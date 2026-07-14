@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, Toggle, StatusBadge, LoadingSpinner, ErrorState, ffKey, type FfKey } from '@/components'
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
+import { useCategoryTree } from '@/features/categories/hooks/useCategories'
+import { orderedTree, pathLabel } from '@/features/categories/api/categories'
 import { useProduct, useCreateProduct, useUpdateProduct, useUploadProductImage } from '../hooks/useProducts'
 import { reconcileBridgePhoneField } from '../lib/bridgeFields'
 import { toRows, fromRows, rowIssues, type InputFieldRow } from '../lib/fieldRows'
@@ -61,13 +63,24 @@ export default function ProductEditPage() {
   const { data: catsRes } = useProductCategories()
   const cats = useMemo(() => catsRes?.data ?? [], [catsRes])
 
+  // Managed taxonomy tree — the product is assigned to a node (any tier). The
+  // legacy free-text facet select below is the fallback when no taxonomy exists.
+  const { data: catTreeRes } = useCategoryTree()
+  const catTree = useMemo(() => catTreeRes?.data ?? [], [catTreeRes])
+  const catTreeById = useMemo(() => new Map(catTree.map((n) => [n.id, n])), [catTree])
+  const catTreeOptions = useMemo(() => orderedTree(catTree), [catTree])
+  const hasTree = catTreeOptions.length > 0
+
   const [langTab, setLangTab] = useState<Locale>('en')
   const [title, setTitle] = useState({ en: '', ar: '', tr: '' })
   const [description, setDescription] = useState({ en: '', ar: '', tr: '' })
   const [category, setCategory] = useState('')
+  const [categoryId, setCategoryId] = useState('')
   const [ff, setFf] = useState<FfKey>('code')
   const [active, setActive] = useState(false)
   const [stock, setStock] = useState(0)
+  // Admin-set unit cost. String-backed so an empty field stays empty (not "0").
+  const [cost, setCost] = useState('')
   const [variants, setVariants] = useState<VariantRow[]>([
     { denomination: '', price: '', resellerPrice: '', faceValue: '' },
   ])
@@ -98,9 +111,11 @@ export default function ProductEditPage() {
     setTitle({ en: p.title.en, ar: p.title.ar, tr: p.title.tr })
     setDescription({ en: p.description?.en ?? '', ar: p.description?.ar ?? '', tr: p.description?.tr ?? '' })
     setCategory(p.category)
+    setCategoryId(p.categoryId ?? '')
     setFf(ffKey(p.fulfillmentType))
     setActive(p.available)
     setStock(p.stock)
+    setCost(p.pricing?.cost != null ? String(p.pricing.cost) : '')
     setVariants(
       p.variants.length
         ? p.variants.map((v) => ({
@@ -169,6 +184,9 @@ export default function ProductEditPage() {
       title,
       description,
       category,
+      // When a taxonomy node is picked, the server derives category + rootDomain
+      // from it; the flat `category` above is the fallback (no taxonomy / "None").
+      ...(categoryId ? { categoryId } : {}),
       images,
       thumbnail,
       fulfillmentType: toFulfillment(ff),
@@ -179,6 +197,8 @@ export default function ProductEditPage() {
           : {}),
       available: active,
       stock,
+      // Unit cost: send only when filled so a blank preserves the stored value.
+      ...(cost.trim() !== '' ? { cost: Math.max(0, parseFloat(cost) || 0) } : {}),
       variants: variants
         .filter((v) => v.denomination.trim() && v.price.trim())
         .map((v) => ({
@@ -341,13 +361,28 @@ export default function ProductEditPage() {
             </div>
             <div style={{ marginTop: 16 }}>
               <label className="alabel">Category</label>
-              <select className="select" style={{ width: '100%' }} value={category} onChange={(e) => setCategory(e.target.value)}>
-                {catOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {categoryLabel(c)}
-                  </option>
-                ))}
-              </select>
+              {hasTree ? (
+                <select className="select" style={{ width: '100%' }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                  <option value="">— None —</option>
+                  {catTreeOptions.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {pathLabel(n, catTreeById)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select className="select" style={{ width: '100%' }} value={category} onChange={(e) => setCategory(e.target.value)}>
+                  {catOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {categoryLabel(c)}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <div className="ahint">
+                Assign this product to a category so it appears in the app's browse tree (manage the
+                tree under Categories).
+              </div>
             </div>
           </div>
 
@@ -888,6 +923,21 @@ export default function ProductEditPage() {
               <div className="ahint">Bulk-upload codes in Inventory to grow the pool.</div>
             </div>
           )}
+
+          <div className="acard pad">
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Cost</h3>
+            <label className="alabel">Unit price (cost)</label>
+            <input
+              className="afield"
+              type="number"
+              min={0}
+              step="0.01"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+              placeholder="—"
+            />
+            <div className="ahint">Your cost per unit — used for inventory value, not shown to customers.</div>
+          </div>
 
         </div>
       </div>

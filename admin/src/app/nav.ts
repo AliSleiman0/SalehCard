@@ -55,6 +55,7 @@ export const NAV: NavGroup[] = [
     group: 'grp_catalog',
     items: [
       { to: '/products', icon: 'box', label: 'nav_products', domain: 'products' },
+      { to: '/categories', icon: 'layers', label: 'nav_categories', domain: 'categories' },
       { to: '/inventory', icon: 'layers', label: 'nav_inventory', domain: 'inventory' },
       { to: '/offers', icon: 'tag', label: 'nav_offers', domain: 'offers' },
     ],

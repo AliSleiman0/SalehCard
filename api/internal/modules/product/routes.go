@@ -19,7 +19,7 @@ import (
 // offers may be nil (disables live-offer price enrichment on catalog reads). cfg
 // supplies the JWT secret + ID-verification provider for the authenticated
 // verify-account route.
-func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, offers OfferLookup) {
+func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, offers OfferLookup, categories CategoryResolver) {
 	repo := NewMongoRepository(db)
 
 	// Best-effort index creation at startup; log or handle errors in production.
@@ -27,10 +27,12 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, offers
 
 	// Reseller catalog pricing uses the same repository the order module wires
 	// as its pricing port (order/routes.go), so a reseller browses at exactly
-	// the price checkout will charge.
+	// the price checkout will charge. categories makes the ?categoryId= filter
+	// tree-aware (list a node's whole subtree).
 	svc := NewProductService(repo,
 		WithOffers(offers),
 		WithResellerPricing(reseller.NewMongoRepository(db)),
+		WithCategoryResolver(categories),
 	)
 	h := NewHandler(svc)
 

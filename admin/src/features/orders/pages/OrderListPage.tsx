@@ -40,6 +40,13 @@ const FF_API: Record<FfKey, FulfillmentType> = {
   transfer: 'transfer',
 }
 
+// Statuses accepted from the ?status= URL param (e.g. dashboard KPI deep-links).
+// Anything else falls back to 'all'.
+const ORDER_STATUSES: readonly OrderStatus[] = ['pending', 'processing', 'completed', 'failed', 'refunded']
+function statusFromParam(raw: string | null): OrderStatus | 'all' {
+  return ORDER_STATUSES.includes(raw as OrderStatus) ? (raw as OrderStatus) : 'all'
+}
+
 export default function OrderListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -47,7 +54,7 @@ export default function OrderListPage() {
   const canManage = can('orders.manage')
   const [searchParams] = useSearchParams()
 
-  const [status, setStatus] = useState<OrderStatus | 'all'>('all')
+  const [status, setStatus] = useState<OrderStatus | 'all'>(() => statusFromParam(searchParams.get('status')))
   const [ff, setFf] = useState<'all' | FfKey>('all')
   const [pay, setPay] = useState<PaymentMethod | 'all'>('all')
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
@@ -59,6 +66,13 @@ export default function OrderListPage() {
   useEffect(() => {
     const q = searchParams.get('q') ?? ''
     setSearch(q)
+  }, [searchParams])
+
+  // Adopt the URL's ?status= (e.g. the dashboard KPI tiles deep-link to
+  // /orders?status=failed). Garbage/absent → 'all'.
+  useEffect(() => {
+    setStatus(statusFromParam(searchParams.get('status')))
+    setPage(1)
   }, [searchParams])
 
   // Debounce the search term so we issue one request per pause, not per keystroke

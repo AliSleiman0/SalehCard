@@ -95,6 +95,11 @@ type InventoryStats struct {
 	Expired   int        `json:"expired"`
 	Threshold int        `json:"threshold"`
 	Level     StockLevel `json:"level"`
+	// UnitPrice is the admin-set unit cost (Product.Pricing.Cost); TotalValue is
+	// Available × UnitPrice. Both nil when no cost is set (rendered as "—", distinct
+	// from a genuine 0).
+	UnitPrice  *float64 `json:"unitPrice,omitempty"`
+	TotalValue *float64 `json:"totalValue,omitempty"`
 }
 
 // InventoryTotals are the global KPI figures for the inventory screen, summed
@@ -105,6 +110,11 @@ type InventoryTotals struct {
 	Available int `json:"available"`
 	Delivered int `json:"delivered"`
 	LowStock  int `json:"lowStock"`
+	// TotalValue is Σ (available × unit cost) across products that have a unit cost
+	// set; UnvaluedProducts counts code-type products with no cost (excluded from the
+	// sum, not treated as 0) so the UI can note the total may under-report.
+	TotalValue       float64 `json:"totalValue"`
+	UnvaluedProducts int     `json:"unvaluedProducts"`
 }
 
 // InventoryMeta is the response meta for the paginated inventory listing: the
@@ -129,6 +139,13 @@ type ProductSummary struct {
 // SetThresholdInput is the body of PUT /api/admin/products/:id/stock-threshold.
 type SetThresholdInput struct {
 	Threshold int `json:"threshold"`
+}
+
+// CodeInput is the body of the single-code add/edit endpoints (the popup's
+// per-code create + modify). Pin is optional.
+type CodeInput struct {
+	Code string `json:"code"`
+	Pin  string `json:"pin,omitempty"`
 }
 
 // computeLevel derives the stock level from available vs threshold.

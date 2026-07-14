@@ -6,6 +6,7 @@ export function useDashboardStats(opts?: { enabled?: boolean }) {
     queryKey: ['admin', 'dashboard', 'stats'],
     queryFn: () => getDashboardStats(),
     enabled: opts?.enabled ?? true,
+    refetchInterval: 5_000, // live KPI tiles; pauses when tab hidden (RQ default)
   })
 }
 

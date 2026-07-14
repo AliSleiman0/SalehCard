@@ -10,7 +10,9 @@ class Category {
     required this.name,
     this.image,
     this.rootDomain,
+    this.parentId,
     this.depth = 0,
+    this.hasChildren = false,
     this.productCount,
   });
 
@@ -19,6 +21,13 @@ class Category {
   final I18nString name;
   final String? image;
   final String? rootDomain;
+
+  /// Parent node id (null for a top-level Collection).
+  final String? parentId;
   final int depth;
+
+  /// Whether this node has child categories — the browse UI drills into a
+  /// subcategory list when true, and lists products directly when false (leaf).
+  final bool hasChildren;
   final int? productCount;
 }

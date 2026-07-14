@@ -50,11 +50,22 @@ type ResellerPricing interface {
 	PricesForUser(ctx context.Context, userID bson.ObjectID) (map[string]float64, error)
 }
 
+// CategoryResolver is the narrow port the catalog uses to make a category filter
+// tree-aware (a node lists its own + descendants' products) and to denormalize a
+// product's flat category/rootDomain from an assigned taxonomy node. Satisfied by
+// category.MongoRepository and wired in the server package (product must not
+// import category — category imports product for its product-counter port).
+type CategoryResolver interface {
+	DescendantIDs(ctx context.Context, id string) ([]bson.ObjectID, error)
+	Resolve(ctx context.Context, id string) (slug, rootDomain string, err error)
+}
+
 // ProductService is the concrete implementation of Service.
 type ProductService struct {
-	repo      Repository
-	offers    OfferLookup     // optional; nil disables offer enrichment
-	resellers ResellerPricing // optional; nil disables reseller catalog pricing
+	repo       Repository
+	offers     OfferLookup      // optional; nil disables offer enrichment
+	resellers  ResellerPricing  // optional; nil disables reseller catalog pricing
+	categories CategoryResolver // optional; nil disables tree-aware category filtering
 }
 
 // ServiceOption configures a ProductService.
@@ -71,6 +82,12 @@ func WithResellerPricing(rp ResellerPricing) ServiceOption {
 	return func(s *ProductService) { s.resellers = rp }
 }
 
+// WithCategoryResolver enables tree-aware category filtering (a node lists its
+// subtree's products) and taxonomy denormalization on create/update.
+func WithCategoryResolver(cr CategoryResolver) ServiceOption {
+	return func(s *ProductService) { s.categories = cr }
+}
+
 // NewProductService constructs a ProductService backed by the given repository.
 func NewProductService(repo Repository, opts ...ServiceOption) *ProductService {
 	s := &ProductService{repo: repo}
@@ -80,9 +97,23 @@ func NewProductService(repo Repository, opts ...ServiceOption) *ProductService {
 	return s
 }
 
-// FindAll returns a paginated slice of products filtered by f.
+// FindAll returns a paginated slice of products filtered by f. A categoryId
+// filter is expanded to the node + all its descendants (tree-aware) when a
+// category resolver is wired, so listing a Collection or Category returns every
+// product beneath it.
 func (s *ProductService) FindAll(ctx context.Context, f ListFilter, p pagination.Params) ([]Product, int64, error) {
 	// TODO: enforce visibility rules (e.g. hide unavailable products for non-admin callers).
+	if f.CategoryID != "" && s.categories != nil {
+		ids, err := s.categories.DescendantIDs(ctx, f.CategoryID)
+		if err != nil {
+			return nil, 0, err
+		}
+		if len(ids) == 0 {
+			// Unknown/empty node → no products (avoid a fall-through to unfiltered).
+			return []Product{}, 0, nil
+		}
+		f.CategoryIDs = ids
+	}
 	products, total, err := s.repo.FindAll(ctx, f, p)
 	if err != nil {
 		return nil, 0, err
@@ -244,11 +275,24 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if err := validateBridge(mode, in.Bridge, in.Variants); err != nil {
 		return nil, err
 	}
+	if in.Cost != nil && *in.Cost < 0 {
+		return nil, badRequest("cost must be non-negative")
+	}
 	fields, err := sanitizeInputFields(in.InputFields)
 	if err != nil {
 		return nil, err
 	}
 	in.InputFields = fields
+	// Assigned to a taxonomy node → denormalize the flat category slug + rootDomain
+	// so the legacy flat filters keep finding it.
+	if in.CategoryID != nil && *in.CategoryID != "" && s.categories != nil {
+		slug, root, rerr := s.categories.Resolve(ctx, *in.CategoryID)
+		if rerr != nil {
+			return nil, badRequest("category not found")
+		}
+		in.Category = slug
+		in.RootDomain = root
+	}
 	return s.repo.Create(ctx, in)
 }
 
@@ -272,6 +316,9 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 			}
 		}
 	}
+	if in.Cost != nil && *in.Cost < 0 {
+		return nil, badRequest("cost must be non-negative")
+	}
 	// Sanitize input-field specs only when the update carries them — nil means
 	// "leave unchanged" (repository nil-guard), so a partial update never
 	// re-validates a legacy product's stored fields. An empty non-nil slice is
@@ -282,6 +329,16 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 			return nil, err
 		}
 		in.InputFields = fields
+	}
+	// Re-assigned to a taxonomy node → denormalize the flat category slug +
+	// rootDomain from it (repository persists categoryId + rootDomain together).
+	if in.CategoryID != nil && *in.CategoryID != "" && s.categories != nil {
+		slug, root, rerr := s.categories.Resolve(ctx, *in.CategoryID)
+		if rerr != nil {
+			return nil, badRequest("category not found")
+		}
+		in.Category = &slug
+		in.RootDomain = &root
 	}
 	return s.repo.Update(ctx, id, in)
 }

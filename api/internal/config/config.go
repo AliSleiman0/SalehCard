@@ -99,6 +99,12 @@ type Config struct {
 	// this is a spend guardrail). Exceeding it returns 400 BULK_SMS_LIMIT.
 	BulkSMSMax int
 
+	// BulkPushMax hard-caps the recipients an admin bulk-push send may target in
+	// one request. Push is free (FCM), so this is only an abuse/rate guard —
+	// hence a higher default than BulkSMSMax. Exceeding it returns
+	// 400 BULK_PUSH_LIMIT.
+	BulkPushMax int
+
 	// IDCheckProvider selects the game-account ID-verification adapter: "rapidapi"
 	// (RapidAPI ID Game Checker) or "stub" (dev — returns a placeholder username).
 	// Default "stub".
@@ -286,7 +292,8 @@ func Load() *Config {
 		SMTPPassword:   os.Getenv("SMTP_PASSWORD"),
 		SendGridAPIKey: os.Getenv("SENDGRID_API_KEY"),
 
-		BulkSMSMax: getInt("BULK_SMS_MAX", 200),
+		BulkSMSMax:  getInt("BULK_SMS_MAX", 200),
+		BulkPushMax: getInt("BULK_PUSH_MAX", 500),
 
 		IDCheckProvider:       getEnv("IDCHECK_PROVIDER", "stub"),
 		RapidAPIKey:           os.Getenv("RAPIDAPI_KEY"),

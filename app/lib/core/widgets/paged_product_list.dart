@@ -20,6 +20,7 @@ class PagedProductList extends ConsumerStatefulWidget {
     required this.emptyState,
     required this.noResults,
     this.rootDomain,
+    this.categoryId,
     this.pageSize = 30,
   });
 
@@ -28,6 +29,10 @@ class PagedProductList extends ConsumerStatefulWidget {
 
   /// Optional top-level domain to scope the listing to (e.g. `games`).
   final String? rootDomain;
+
+  /// Optional taxonomy-node id to scope the listing to. Tree-aware server-side:
+  /// the node's own products plus every descendant's.
+  final String? categoryId;
 
   /// Shown when the (unfiltered) listing is empty.
   final Widget emptyState;
@@ -67,7 +72,9 @@ class _PagedProductListState extends ConsumerState<PagedProductList> {
   @override
   void didUpdateWidget(covariant PagedProductList old) {
     super.didUpdateWidget(old);
-    if (old.query != widget.query || old.rootDomain != widget.rootDomain) {
+    if (old.query != widget.query ||
+        old.rootDomain != widget.rootDomain ||
+        old.categoryId != widget.categoryId) {
       _loadFirst();
     }
   }
@@ -105,6 +112,7 @@ class _PagedProductListState extends ConsumerState<PagedProductList> {
           page: nextPage,
           limit: widget.pageSize,
           rootDomain: widget.rootDomain,
+          categoryId: widget.categoryId,
           search: widget.query,
         );
     // Ignore responses from a superseded query, or after disposal.

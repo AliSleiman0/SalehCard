@@ -28,6 +28,7 @@ const (
 	ActionUserDelete         = "user.delete"
 	ActionUserSelfDelete     = "user.self_delete"
 	ActionUserBulkSMS        = "user.bulk_sms"
+	ActionUserBulkPush       = "user.bulk_push"
 	ActionWalletAdjust       = "wallet.adjust"
 	ActionBalanceAdjust      = "reseller.balance_adjust"
 	ActionOrderRefund        = "order.refund"
@@ -42,6 +43,9 @@ const (
 	ActionSettingsUpdate     = "settings.update"
 	ActionCodeExpire         = "code.expire"
 	ActionCodeResend         = "order.resend_code"
+	ActionCodeCreate         = "code.create"
+	ActionCodeUpdate         = "code.update"
+	ActionCodeDelete         = "code.delete"
 
 	ActionDepositAttribute = "payment.deposit_attribute"
 	ActionDepositIgnore    = "payment.deposit_ignore"
@@ -52,6 +56,10 @@ const (
 	ActionRoleCreate = "role.create"
 	ActionRoleUpdate = "role.update"
 	ActionRoleDelete = "role.delete"
+
+	ActionCategoryCreate = "category.create"
+	ActionCategoryUpdate = "category.update"
+	ActionCategoryDelete = "category.delete"
 
 	ActionBridgeDeviceCreate  = "bridge.device_create"
 	ActionBridgeDeviceUpdate  = "bridge.device_update"

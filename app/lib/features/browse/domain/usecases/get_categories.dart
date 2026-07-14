@@ -13,11 +13,13 @@ class GetCategories {
     bool withCounts = false,
     int? depth,
     String? rootDomain,
+    String? parentId,
   }) {
     return _repository.listCategories(
       withCounts: withCounts,
       depth: depth,
       rootDomain: rootDomain,
+      parentId: parentId,
     );
   }
 }

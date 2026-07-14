@@ -38,6 +38,16 @@ final categoriesProvider = FutureProvider.autoDispose<List<Category>>((
   return result.match((failure) => throw failure, (categories) => categories);
 });
 
+/// Child categories of a given parent node (`GET /categories?parentId=ID` with
+/// counts) — the subcategory drill-down step. Keyed by the parent id.
+final childCategoriesProvider = FutureProvider.autoDispose
+    .family<List<Category>, String>((ref, parentId) async {
+  final result = await ref
+      .watch(getCategoriesUseCaseProvider)
+      .call(parentId: parentId, withCounts: true);
+  return result.match((failure) => throw failure, (categories) => categories);
+});
+
 // ---- Notifications (real — GET /notifications) ----
 
 final notificationRepositoryProvider = Provider<NotificationRepository>(

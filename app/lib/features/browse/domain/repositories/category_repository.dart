@@ -8,5 +8,6 @@ abstract interface class CategoryRepository {
     bool withCounts,
     int? depth,
     String? rootDomain,
+    String? parentId,
   });
 }

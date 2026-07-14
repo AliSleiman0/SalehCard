@@ -11,22 +11,26 @@ class CategoryDto {
     required this.id,
     this.legacyId,
     this.parentLegacyId,
+    this.parentId,
     this.slug = '',
     this.name,
     this.image,
     this.rootDomain,
     this.depth = 0,
+    this.hasChildren = false,
     this.productCount,
   });
 
   final String id;
   final int? legacyId;
   final int? parentLegacyId;
+  final String? parentId;
   final String slug;
   final Map<String, dynamic>? name;
   final String? image;
   final String? rootDomain;
   final int depth;
+  final bool hasChildren;
   final int? productCount;
 
   factory CategoryDto.fromJson(Map<String, dynamic> json) =>
@@ -40,7 +44,9 @@ class CategoryDto {
         name: I18nString.fromJson(name),
         image: image,
         rootDomain: rootDomain,
+        parentId: parentId,
         depth: depth,
+        hasChildren: hasChildren,
         productCount: productCount,
       );
 }

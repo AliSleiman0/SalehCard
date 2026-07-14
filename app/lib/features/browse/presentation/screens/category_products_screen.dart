@@ -9,14 +9,24 @@ import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/paged_product_list.dart';
 import '../../../../core/widgets/search_field.dart';
 
-/// Products in a single top-level domain, reached by tapping a Browse tile.
-/// Lists the domain's catalog via `GET /products?rootDomain=<domain>` with
-/// infinite scroll, and an in-category search box (`&q=<query>`).
+/// Products in a category, reached by tapping a Browse leaf tile. Scopes the
+/// catalog either by a taxonomy node ([categoryId], tree-aware — the node and
+/// all descendants) or by a top-level [domain] (`rootDomain`), with infinite
+/// scroll and an in-category search box (`&q=<query>`).
 class CategoryProductsScreen extends ConsumerStatefulWidget {
-  const CategoryProductsScreen({super.key, required this.domain, this.title});
+  const CategoryProductsScreen({
+    super.key,
+    this.domain,
+    this.categoryId,
+    this.title,
+  }) : assert(domain != null || categoryId != null,
+            'one of domain / categoryId is required');
 
   /// The top-level domain slug to filter on (e.g. `games`).
-  final String domain;
+  final String? domain;
+
+  /// A taxonomy-node id to filter on (tree-aware). Preferred over [domain].
+  final String? categoryId;
 
   /// Localized category name for the app bar (falls back to [domain]).
   final String? title;
@@ -61,7 +71,7 @@ class _CategoryProductsScreenState
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.topbar,
-        title: Text(widget.title ?? widget.domain),
+        title: Text(widget.title ?? widget.domain ?? ''),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),
           child: Padding(
@@ -77,6 +87,7 @@ class _CategoryProductsScreenState
       ),
       body: PagedProductList(
         rootDomain: widget.domain,
+        categoryId: widget.categoryId,
         query: _query,
         emptyState: EmptyState(
           icon: Icons.inventory_2_outlined,

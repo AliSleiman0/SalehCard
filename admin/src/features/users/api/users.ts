@@ -114,3 +114,14 @@ export function deleteUser(id: string): Promise<ApiResponse<AdminUser>> {
 export function bulkSmsUsers(ids: string[], message: string): Promise<ApiResponse<{ queued: number }>> {
   return apiClient.post<{ queued: number }>(`${ADMIN}/bulk-sms`, { ids, message })
 }
+
+/** Send a push notification to many users at once (free, over FCM). Users with
+ *  no registered device are skipped server-side; the result reports how many were
+ *  reached. The backend caps the recipient count (BULK_PUSH_LIMIT) for abuse. */
+export function bulkPushUsers(
+  ids: string[],
+  title: string,
+  body: string,
+): Promise<ApiResponse<{ queued: number }>> {
+  return apiClient.post<{ queued: number }>(`${ADMIN}/bulk-push`, { ids, title, body })
+}

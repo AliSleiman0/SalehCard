@@ -16,6 +16,7 @@ class GetProductsPage {
     int page = 1,
     int limit = 30,
     String? category,
+    String? categoryId,
     String? rootDomain,
     String? search,
   }) {
@@ -23,6 +24,7 @@ class GetProductsPage {
       page: page,
       limit: limit,
       category: category,
+      categoryId: categoryId,
       rootDomain: rootDomain,
       search: search,
     );

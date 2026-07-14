@@ -39,8 +39,10 @@ type fakeRepo struct {
 	products   []ProductMeta
 	stock      map[string]int
 	batches    []UploadBatch
-	lookup     *Code  // FindByCodeOrSuffix result when set
-	orderCodes []Code // FindByOrder result
+	lookup     *Code        // FindByCodeOrSuffix result when set
+	orderCodes []Code       // FindByOrder result
+	codeDocs   []Code       // per-code store for InsertOne/FindByID/Update/Delete
+	bulkItems  []UploadItem // items received by BulkInsert (post-service normalization)
 }
 
 func newFakeRepo() *fakeRepo {
@@ -48,6 +50,7 @@ func newFakeRepo() *fakeRepo {
 }
 
 func (f *fakeRepo) BulkInsert(_ context.Context, productID string, items []UploadItem, _ string) (int, int, error) {
+	f.bulkItems = append(f.bulkItems, items...)
 	seen := map[string]struct{}{}
 	inserted, dupes := 0, 0
 	for _, it := range items {
@@ -70,6 +73,71 @@ func (f *fakeRepo) BulkInsert(_ context.Context, productID string, items []Uploa
 
 func (f *fakeRepo) ListByProduct(_ context.Context, _ string, _ Status, _ pagination.Params) ([]Code, int64, error) {
 	return nil, 0, nil
+}
+
+// InsertOne appends a single available code, enforcing (productId, code)
+// uniqueness like the real unique index.
+func (f *fakeRepo) InsertOne(_ context.Context, productID string, item UploadItem, batch string) (*Code, error) {
+	for _, c := range f.codeDocs {
+		if c.ProductID == productID && c.Code == item.Code {
+			return nil, ErrDuplicateCode
+		}
+	}
+	c := Code{ID: bson.NewObjectID(), ProductID: productID, Code: item.Code, Pin: item.Pin, Status: StatusAvailable, Batch: batch}
+	f.codeDocs = append(f.codeDocs, c)
+	if f.counts[productID] == nil {
+		f.counts[productID] = map[Status]int{}
+	}
+	f.counts[productID][StatusAvailable]++
+	return &c, nil
+}
+
+func (f *fakeRepo) FindByID(_ context.Context, productID, codeID string) (*Code, error) {
+	for i := range f.codeDocs {
+		if f.codeDocs[i].ID.Hex() == codeID && f.codeDocs[i].ProductID == productID {
+			c := f.codeDocs[i]
+			return &c, nil
+		}
+	}
+	return nil, apperrors.ErrNotFound
+}
+
+func (f *fakeRepo) UpdateAvailableCode(_ context.Context, productID, codeID, newCode, newPin string) (*Code, error) {
+	// Uniqueness check against other codes.
+	for _, c := range f.codeDocs {
+		if c.ProductID == productID && c.Code == newCode && c.ID.Hex() != codeID {
+			return nil, ErrDuplicateCode
+		}
+	}
+	for i := range f.codeDocs {
+		if f.codeDocs[i].ID.Hex() == codeID && f.codeDocs[i].ProductID == productID {
+			if f.codeDocs[i].Status != StatusAvailable {
+				return nil, apperrors.ErrNotFound // caller disambiguates via FindByID
+			}
+			f.codeDocs[i].Code = newCode
+			f.codeDocs[i].Pin = newPin
+			c := f.codeDocs[i]
+			return &c, nil
+		}
+	}
+	return nil, apperrors.ErrNotFound
+}
+
+func (f *fakeRepo) DeleteAvailableCode(_ context.Context, productID, codeID string) (*Code, error) {
+	for i := range f.codeDocs {
+		if f.codeDocs[i].ID.Hex() == codeID && f.codeDocs[i].ProductID == productID {
+			if f.codeDocs[i].Status == StatusDelivered {
+				return nil, apperrors.ErrNotFound // caller disambiguates via FindByID
+			}
+			c := f.codeDocs[i]
+			f.codeDocs = append(f.codeDocs[:i], f.codeDocs[i+1:]...)
+			if f.counts[productID] != nil && c.Status == StatusAvailable {
+				f.counts[productID][StatusAvailable]--
+			}
+			return &c, nil
+		}
+	}
+	return nil, apperrors.ErrNotFound
 }
 
 func (f *fakeRepo) CountsByProduct(_ context.Context, productID string) (map[Status]int, error) {
@@ -179,6 +247,24 @@ func TestUpload_CountsAndMirrorsStock(t *testing.T) {
 	assert.Equal(t, 2, repo.stock["p1"], "available count mirrored to product stock")
 }
 
+func TestUpload_StripsWhitespace(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewCodeService(repo)
+
+	in := UploadInput{Codes: []UploadItem{
+		{Code: "AB CD-12 34", Pin: "1 2 3 4"}, // internal spaces stripped from both
+		{Code: "   "},                         // whitespace-only → invalid, dropped
+	}}
+	res, err := svc.Upload(context.Background(), "p1", in)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, res.Inserted)
+	assert.Equal(t, 1, res.Invalid, "the whitespace-only code is counted invalid, not inserted")
+	require.Len(t, repo.bulkItems, 1, "only the valid code reaches the repo")
+	assert.Equal(t, "ABCD-1234", repo.bulkItems[0].Code, "internal whitespace stripped, hyphen preserved")
+	assert.Equal(t, "1234", repo.bulkItems[0].Pin, "pin whitespace stripped too")
+}
+
 func TestInventoryAndLowStock(t *testing.T) {
 	repo := newFakeRepo()
 	repo.products = []ProductMeta{{ID: "p1", Title: "Low one"}, {ID: "p2", Title: "Healthy"}}
@@ -224,7 +310,8 @@ func TestInventoryPaged(t *testing.T) {
 	require.Len(t, rows, 2)
 	assert.Equal(t, "Alpha", rows[0].Title)
 	assert.Equal(t, "Bravo", rows[1].Title)
-	assert.Equal(t, InventoryTotals{Uploaded: 310, Available: 205, Delivered: 105, LowStock: 2}, totals)
+	// No product has a unit cost here, so TotalValue is 0 and all three count as unvalued.
+	assert.Equal(t, InventoryTotals{Uploaded: 310, Available: 205, Delivered: 105, LowStock: 2, UnvaluedProducts: 3}, totals)
 
 	// Page 2 returns the tail.
 	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 2, Limit: 2}, false, "")
@@ -261,6 +348,135 @@ func TestInventoryPaged(t *testing.T) {
 	rows, _, _, err = svc.InventoryPaged(ctx, pagination.Params{Page: 9, Limit: 2}, false, "")
 	require.NoError(t, err)
 	assert.Empty(t, rows)
+}
+
+func TestInventoryPaged_TotalValue(t *testing.T) {
+	p1Cost, p2Cost := 2.50, 10.0
+	repo := newFakeRepo()
+	repo.products = []ProductMeta{
+		{ID: "p1", Title: "Alpha", Cost: &p1Cost}, // 4 available × 2.50 = 10.00
+		{ID: "p2", Title: "Bravo", Cost: &p2Cost}, // 3 available × 10.00 = 30.00
+		{ID: "p3", Title: "Charlie"},              // no cost → excluded from the sum
+	}
+	repo.counts["p1"] = map[Status]int{StatusAvailable: 4}
+	repo.counts["p2"] = map[Status]int{StatusAvailable: 3}
+	repo.counts["p3"] = map[Status]int{StatusAvailable: 7}
+	for _, id := range []string{"p1", "p2", "p3"} {
+		repo.thresholds[id] = 100
+	}
+	svc := NewCodeService(repo)
+
+	_, totals, _, err := svc.InventoryPaged(context.Background(), pagination.Params{Page: 1, Limit: 10}, false, "")
+	require.NoError(t, err)
+	// Only the two priced products contribute; the unpriced one is excluded, not $0.
+	assert.Equal(t, 40.0, totals.TotalValue)
+	assert.Equal(t, 1, totals.UnvaluedProducts)
+}
+
+func TestBuildStats_UnitPriceAndTotalValue(t *testing.T) {
+	cost := 2.50
+	zero := 0.0
+
+	// Cost set → UnitPrice mirrors it, TotalValue = available × cost.
+	got := buildStats(ProductMeta{ID: "p1", Cost: &cost}, map[Status]int{StatusAvailable: 5}, 100)
+	require.NotNil(t, got.UnitPrice)
+	require.NotNil(t, got.TotalValue)
+	assert.Equal(t, 2.50, *got.UnitPrice)
+	assert.Equal(t, 12.50, *got.TotalValue)
+
+	// No cost → both nil (rendered as "—", not $0).
+	got = buildStats(ProductMeta{ID: "p2"}, map[Status]int{StatusAvailable: 5}, 100)
+	assert.Nil(t, got.UnitPrice)
+	assert.Nil(t, got.TotalValue)
+
+	// Explicit 0 cost is a real value, distinct from unset.
+	got = buildStats(ProductMeta{ID: "p3", Cost: &zero}, map[Status]int{StatusAvailable: 5}, 100)
+	require.NotNil(t, got.UnitPrice)
+	require.NotNil(t, got.TotalValue)
+	assert.Equal(t, 0.0, *got.UnitPrice)
+	assert.Equal(t, 0.0, *got.TotalValue)
+}
+
+func TestAddCode(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewCodeService(repo)
+	ctx := context.Background()
+
+	c, err := svc.AddCode(ctx, "p1", "  AB C-1 23  ", "00 00")
+	require.NoError(t, err)
+	assert.Equal(t, "ABC-123", c.Code) // all whitespace stripped (outer + internal)
+	assert.Equal(t, "0000", c.Pin)     // pin whitespace stripped too
+	assert.Equal(t, StatusAvailable, c.Status)
+	assert.Equal(t, 1, repo.stock["p1"], "stock re-mirrored after add")
+
+	// Empty value is rejected.
+	_, err = svc.AddCode(ctx, "p1", "   ", "")
+	var appErr *apperrors.AppError
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "CODE_EMPTY", appErr.Code)
+
+	// A duplicate value for the same product is rejected.
+	_, err = svc.AddCode(ctx, "p1", "ABC-123", "")
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "CODE_DUPLICATE", appErr.Code)
+}
+
+func TestEditCode(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewCodeService(repo)
+	ctx := context.Background()
+
+	added, err := svc.AddCode(ctx, "p1", "ORIG", "")
+	require.NoError(t, err)
+	other, err := svc.AddCode(ctx, "p1", "OTHER", "")
+	require.NoError(t, err)
+
+	// Edit an available code's value + pin — whitespace stripped from both.
+	c, err := svc.EditCode(ctx, "p1", added.ID.Hex(), "N EW-1", "99 99")
+	require.NoError(t, err)
+	assert.Equal(t, "NEW-1", c.Code)
+	assert.Equal(t, "9999", c.Pin)
+
+	// Colliding with another code's value → duplicate.
+	_, err = svc.EditCode(ctx, "p1", added.ID.Hex(), "OTHER", "")
+	var appErr *apperrors.AppError
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "CODE_DUPLICATE", appErr.Code)
+	_ = other
+
+	// A delivered code cannot be edited.
+	repo.codeDocs = append(repo.codeDocs, Code{ID: bson.NewObjectID(), ProductID: "p1", Code: "SOLD", Status: StatusDelivered})
+	sold := repo.codeDocs[len(repo.codeDocs)-1]
+	_, err = svc.EditCode(ctx, "p1", sold.ID.Hex(), "REWRITE", "")
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "CODE_NOT_AVAILABLE", appErr.Code)
+}
+
+func TestDeleteCode(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewCodeService(repo)
+	ctx := context.Background()
+
+	added, err := svc.AddCode(ctx, "p1", "GONE", "")
+	require.NoError(t, err)
+
+	// Delete an available code — removed and stock re-mirrored.
+	c, err := svc.DeleteCode(ctx, "p1", added.ID.Hex())
+	require.NoError(t, err)
+	assert.Equal(t, "GONE", c.Code)
+	assert.Equal(t, 0, repo.stock["p1"])
+
+	// A delivered code is refused with CODE_DELIVERED.
+	repo.codeDocs = append(repo.codeDocs, Code{ID: bson.NewObjectID(), ProductID: "p1", Code: "SOLD", Status: StatusDelivered})
+	sold := repo.codeDocs[len(repo.codeDocs)-1]
+	_, err = svc.DeleteCode(ctx, "p1", sold.ID.Hex())
+	var appErr *apperrors.AppError
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "CODE_DELIVERED", appErr.Code)
+
+	// A missing code → not found.
+	_, err = svc.DeleteCode(ctx, "p1", bson.NewObjectID().Hex())
+	require.ErrorIs(t, err, apperrors.ErrNotFound)
 }
 
 func TestSetThreshold(t *testing.T) {

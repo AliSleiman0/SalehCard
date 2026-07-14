@@ -76,6 +76,22 @@ func (f *fakeRepo) TokensForUser(_ context.Context, userID bson.ObjectID) ([]str
 	return out, nil
 }
 
+func (f *fakeRepo) UsersWithTokens(_ context.Context, ids []bson.ObjectID) ([]bson.ObjectID, error) {
+	have := map[bson.ObjectID]bool{}
+	for _, uid := range f.tokens {
+		have[uid] = true
+	}
+	out := []bson.ObjectID{}
+	seen := map[bson.ObjectID]bool{}
+	for _, id := range ids {
+		if have[id] && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeRepo) DeleteTokenValue(_ context.Context, token string) error {
 	delete(f.tokens, token)
 	return nil
@@ -140,6 +156,34 @@ func TestNotifier_FanOut_PrunesUnregisteredTokens(t *testing.T) {
 	assert.Len(t, sender.sent, 2)
 	assert.NotContains(t, repo.tokens, "tok-stale") // pruned
 	assert.Contains(t, repo.tokens, "tok-live")
+}
+
+func TestNotifier_NotifyMany_SkipsTokenless(t *testing.T) {
+	repo := newFakeRepo()
+	sender := &fakeSender{}
+	withDevice1 := bson.NewObjectID()
+	withDevice2 := bson.NewObjectID()
+	tokenless := bson.NewObjectID() // selected but has no registered device
+	repo.tokens["tok-1"] = withDevice1
+	repo.tokens["tok-2"] = withDevice2
+
+	nt := &notifier{repo: repo, sender: sender}
+	reached := nt.NotifyMany(context.Background(),
+		[]bson.ObjectID{withDevice1, withDevice2, tokenless},
+		Note{Kind: "admin_broadcast", Title: "Hello", Body: "A message for you."})
+
+	// Only the two token-holders are counted; the tokenless user is skipped.
+	assert.Equal(t, 2, reached)
+
+	// The detached fan-out delivers one push per token to just those two users,
+	// and inserts an inbox row for each — never for the tokenless user.
+	require.Eventually(t, func() bool { return len(sender.sent) == 2 }, 2*time.Second, 10*time.Millisecond)
+	assert.ElementsMatch(t, []string{"tok-1", "tok-2"}, []string{sender.sent[0].Token, sender.sent[1].Token})
+	require.Eventually(t, func() bool { return len(repo.inserted) == 2 }, 2*time.Second, 10*time.Millisecond)
+	for _, row := range repo.inserted {
+		assert.NotEqual(t, tokenless, row.UserID)
+		assert.Equal(t, "admin_broadcast", row.Kind)
+	}
 }
 
 const testSecret = "test-secret"

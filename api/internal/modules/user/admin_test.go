@@ -15,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 )
@@ -373,6 +374,120 @@ func TestBulkSMSRejectsLongMessage(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("161-char message: got status %d, want 400", rr.Code)
+	}
+}
+
+// fakeNotifier records the recipients passed to NotifyMany and reports the whole
+// batch as reached (every recipient treated as a token-holder) — enough to assert
+// the handler's selection filtering + reported count without a real fan-out.
+type fakeNotifier struct {
+	mu      sync.Mutex
+	batches [][]bson.ObjectID
+	notes   []notification.Note
+}
+
+func (f *fakeNotifier) Notify(context.Context, bson.ObjectID, notification.Note) {}
+
+func (f *fakeNotifier) NotifyMany(_ context.Context, ids []bson.ObjectID, n notification.Note) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.batches = append(f.batches, ids)
+	f.notes = append(f.notes, n)
+	return len(ids)
+}
+
+func TestBulkPushSkipsDeletedAndReportsReached(t *testing.T) {
+	u1 := &User{ID: bson.NewObjectID(), Status: StatusActive}
+	u2 := &User{ID: bson.NewObjectID(), Status: StatusActive}
+	deleted := &User{ID: bson.NewObjectID(), Status: StatusDeleted}
+	a, _, _, rec := newAdminFixture(u1, u2, deleted)
+	ntf := &fakeNotifier{}
+	a.notifier, a.maxBulkPush = ntf, 500
+
+	ids := []string{u1.ID.Hex(), u2.ID.Hex(), deleted.ID.Hex()}
+	body, _ := json.Marshal(map[string]any{"ids": ids, "title": "Hi", "body": "A message for you."})
+	rr := doJSON(t, http.MethodPost, "/users/bulk-push", string(body),
+		func(r chi.Router) { r.Post("/users/bulk-push", a.bulkPush) })
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("bulk-push: got status %d, want 200 (body %s)", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Queued int `json:"queued"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Data.Queued != 2 {
+		t.Fatalf("queued = %d, want 2 (deleted skipped)", resp.Data.Queued)
+	}
+	if len(ntf.batches) != 1 || len(ntf.batches[0]) != 2 {
+		t.Fatalf("NotifyMany should receive exactly the 2 live ids, got %+v", ntf.batches)
+	}
+	for _, id := range ntf.batches[0] {
+		if id == deleted.ID {
+			t.Fatalf("deleted user must not be a push recipient")
+		}
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionUserBulkPush {
+		t.Fatalf("expected one user.bulk_push audit entry, got %+v", rec.entries)
+	}
+}
+
+func TestBulkPushRejectsOverCap(t *testing.T) {
+	u1 := &User{ID: bson.NewObjectID(), Status: StatusActive}
+	u2 := &User{ID: bson.NewObjectID(), Status: StatusActive}
+	a, _, _, rec := newAdminFixture(u1, u2)
+	ntf := &fakeNotifier{}
+	a.notifier, a.maxBulkPush = ntf, 1
+
+	body, _ := json.Marshal(map[string]any{"ids": []string{u1.ID.Hex(), u2.ID.Hex()}, "title": "t", "body": "b"})
+	rr := doJSON(t, http.MethodPost, "/users/bulk-push", string(body),
+		func(r chi.Router) { r.Post("/users/bulk-push", a.bulkPush) })
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("over-cap: got status %d, want 400", rr.Code)
+	}
+	var resp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Error.Code != "BULK_PUSH_LIMIT" {
+		t.Fatalf("error code = %q, want BULK_PUSH_LIMIT", resp.Error.Code)
+	}
+	if len(ntf.batches) != 0 {
+		t.Fatalf("over-cap send must not fan out, got %+v", ntf.batches)
+	}
+	if len(rec.entries) != 0 {
+		t.Fatalf("rejected send must not be audited, got %d entries", len(rec.entries))
+	}
+}
+
+func TestBulkPushRejectsMissingOrLongFields(t *testing.T) {
+	u := &User{ID: bson.NewObjectID(), Status: StatusActive}
+	a, _, _, _ := newAdminFixture(u)
+	ntf := &fakeNotifier{}
+	a.notifier, a.maxBulkPush = ntf, 500
+	reg := func(r chi.Router) { r.Post("/users/bulk-push", a.bulkPush) }
+
+	// Whitespace-only body → 400.
+	b1, _ := json.Marshal(map[string]any{"ids": []string{u.ID.Hex()}, "title": "Hi", "body": "   "})
+	if rr := doJSON(t, http.MethodPost, "/users/bulk-push", string(b1), reg); rr.Code != http.StatusBadRequest {
+		t.Fatalf("empty body: got status %d, want 400", rr.Code)
+	}
+	// Over-length body → 400.
+	b2, _ := json.Marshal(map[string]any{"ids": []string{u.ID.Hex()}, "title": "Hi", "body": strings.Repeat("x", bulkPushBodyMax+1)})
+	if rr := doJSON(t, http.MethodPost, "/users/bulk-push", string(b2), reg); rr.Code != http.StatusBadRequest {
+		t.Fatalf("long body: got status %d, want 400", rr.Code)
+	}
+	if len(ntf.batches) != 0 {
+		t.Fatalf("invalid requests must not fan out, got %+v", ntf.batches)
 	}
 }
 

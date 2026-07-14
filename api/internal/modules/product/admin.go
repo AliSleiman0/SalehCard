@@ -20,10 +20,10 @@ import (
 // responsible for applying the AdminOnly middleware to r (the /api/admin group).
 // Destructive actions are recorded via rec. store persists uploaded product
 // images (POST /products/images).
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, store blob.Storage) {
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, store blob.Storage, categories CategoryResolver) {
 	repo := NewMongoRepository(db)
 	_ = EnsureIndexes(context.Background(), db)
-	svc := NewProductService(repo)
+	svc := NewProductService(repo, WithCategoryResolver(categories))
 	h := NewHandler(svc)
 	h.rec = rec
 	h.store = store
@@ -63,9 +63,10 @@ func (h *Handler) AdminList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
 	f := ListFilter{
-		Category: q.Get("category"),
-		Status:   q.Get("status"),
-		Search:   q.Get("search"),
+		Category:   q.Get("category"),
+		CategoryID: q.Get("categoryId"),
+		Status:     q.Get("status"),
+		Search:     q.Get("search"),
 	}
 	if ft := q.Get("fulfillmentType"); ft != "" {
 		f.FulfillmentType = FulfillmentType(ft)
