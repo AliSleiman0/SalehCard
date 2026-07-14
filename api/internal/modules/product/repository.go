@@ -22,6 +22,7 @@ type Repository interface {
 	Upsert(ctx context.Context, in UpsertProductInput) (*Product, error)
 	Delete(ctx context.Context, id string) error
 	BulkSetAvailable(ctx context.Context, ids []string, available bool) (int64, error)
+	BulkSetCategory(ctx context.Context, ids []string, categoryID, slug, rootDomain string) (int64, error)
 	BulkDelete(ctx context.Context, ids []string) (int64, error)
 }
 
@@ -146,6 +147,48 @@ func (r *MongoRepository) BulkSetAvailable(ctx context.Context, ids []string, av
 			{Key: "updatedAt", Value: time.Now().UTC()},
 		}}},
 	)
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+// BulkSetCategory (re)assigns every product in ids to a taxonomy node, setting
+// the denormalized flat category slug + rootDomain alongside the categoryId.
+// An empty categoryID clears the assignment (unassigns) by unsetting all three
+// fields. The service resolves slug/rootDomain from the node before calling.
+func (r *MongoRepository) BulkSetCategory(ctx context.Context, ids []string, categoryID, slug, rootDomain string) (int64, error) {
+	oids := objectIDs(ids)
+	if len(oids) == 0 {
+		return 0, nil
+	}
+	filter := bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}}
+	now := time.Now().UTC()
+
+	var update bson.D
+	if categoryID == "" {
+		update = bson.D{
+			{Key: "$set", Value: bson.D{{Key: "updatedAt", Value: now}}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "categoryId", Value: ""},
+				{Key: "category", Value: ""},
+				{Key: "rootDomain", Value: ""},
+			}},
+		}
+	} else {
+		catOID, err := bson.ObjectIDFromHex(categoryID)
+		if err != nil {
+			return 0, apperrors.ErrBadRequest
+		}
+		update = bson.D{{Key: "$set", Value: bson.D{
+			{Key: "categoryId", Value: catOID},
+			{Key: "category", Value: slug},
+			{Key: "rootDomain", Value: rootDomain},
+			{Key: "updatedAt", Value: now},
+		}}}
+	}
+
+	res, err := r.col.UpdateMany(ctx, filter, update)
 	if err != nil {
 		return 0, err
 	}

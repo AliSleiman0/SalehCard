@@ -9,6 +9,7 @@ import {
   StatusBadge,
   Checkbox,
   Chip,
+  Modal,
   Pagination,
   LoadingSpinner,
   ErrorState,
@@ -20,6 +21,9 @@ import {
 import { downloadCsv } from '@/lib/utils'
 import { useBulk } from '@/hooks/useBulk'
 import { useCan } from '@/stores/auth'
+import { toast } from '@/stores/toast'
+import { useCategoryTree } from '@/features/categories/hooks/useCategories'
+import { orderedTree, pathLabel, type AdminCategory } from '@/features/categories/api/categories'
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useProducts, useDeleteProduct, useBulkProductAction } from '../hooks/useProducts'
@@ -73,6 +77,7 @@ export default function ProductListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(1)
   const [exporting, setExporting] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
 
   // Debounce search so we issue one request per pause, not per keystroke; reset
   // to page 1 on each new term.
@@ -264,6 +269,9 @@ export default function ProductListPage() {
               <button className="abtn xs" onClick={() => runBulk('deactivate')}>
                 <Icon name="eyeoff" size={13} /> {t('deactivate')}
               </button>
+              <button className="abtn xs" onClick={() => setAssignOpen(true)}>
+                <Icon name="layers" size={13} /> Move to category
+              </button>
               <button className="abtn xs danger" onClick={() => runBulk('delete')}>
                 <Icon name="trash" size={13} /> {t('delete')}
               </button>
@@ -357,6 +365,88 @@ export default function ProductListPage() {
           onPage={setPage}
         />
       </div>
+
+      {assignOpen && (
+        <AssignCategoryModal
+          count={bulk.sel.length}
+          pending={bulkAction.isPending}
+          onClose={() => setAssignOpen(false)}
+          onConfirm={(categoryId) =>
+            bulkAction.mutate(
+              { ids: bulk.sel, action: 'assign-category', categoryId },
+              {
+                onSuccess: (res) => {
+                  toast.success(
+                    categoryId
+                      ? `Moved ${res.data?.modified ?? 0} product(s).`
+                      : `Unassigned ${res.data?.modified ?? 0} product(s).`,
+                  )
+                  bulk.clear()
+                  setAssignOpen(false)
+                },
+                onError: () => toast.error('Could not move the products.'),
+              },
+            )
+          }
+        />
+      )}
     </div>
+  )
+}
+
+/** Bulk "Move to category": pick a taxonomy node (or None to unassign) for the
+ *  selected products. Options are the full tree, indented + path-labeled. */
+function AssignCategoryModal({
+  count,
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  count: number
+  pending: boolean
+  onClose: () => void
+  onConfirm: (categoryId: string) => void
+}) {
+  const { t } = useTranslation()
+  const { data } = useCategoryTree()
+  const nodes: AdminCategory[] = data?.data ?? []
+  const ordered = orderedTree(nodes)
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const [categoryId, setCategoryId] = useState('')
+
+  const target = categoryId ? pathLabel(byId.get(categoryId)!, byId) : 'no category (unassign)'
+
+  return (
+    <Modal onClose={onClose} maxWidth={480}>
+      <div className="pad">
+        <h3 style={{ marginTop: 0 }}>Move to category</h3>
+        <p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
+          Reassign {count} selected product{count === 1 ? '' : 's'} to{' '}
+          <b>{target}</b>.
+        </p>
+        <label className="alabel">Category</label>
+        <select
+          className="select"
+          style={{ width: '100%', marginBottom: 14 }}
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+        >
+          <option value="">— None (unassign) —</option>
+          {ordered.map((n) => (
+            <option key={n.id} value={n.id}>
+              {pathLabel(n, byId)}
+            </option>
+          ))}
+        </select>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button className="abtn" onClick={onClose}>
+            {t('cancel')}
+          </button>
+          <button className="abtn primary" disabled={pending} onClick={() => onConfirm(categoryId)}>
+            <Icon name="layers" size={14} /> {pending ? '…' : 'Move'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

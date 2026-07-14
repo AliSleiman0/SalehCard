@@ -44,6 +44,9 @@ func (f *fakeRepo) Delete(context.Context, string) error { return nil }
 func (f *fakeRepo) BulkSetAvailable(context.Context, []string, bool) (int64, error) {
 	return 0, nil
 }
+func (f *fakeRepo) BulkSetCategory(context.Context, []string, string, string, string) (int64, error) {
+	return 0, nil
+}
 func (f *fakeRepo) BulkDelete(context.Context, []string) (int64, error) { return 0, nil }
 
 func ptr(f float64) *float64 { return &f }

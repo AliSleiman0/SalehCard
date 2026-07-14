@@ -397,6 +397,21 @@ func (s *ProductService) Bulk(ctx context.Context, in BulkInput) (int64, error) 
 		return s.repo.BulkSetAvailable(ctx, in.IDs, false)
 	case BulkDelete:
 		return s.repo.BulkDelete(ctx, in.IDs)
+	case BulkAssignCategory:
+		// Empty categoryId → unassign (clear categoryId/category/rootDomain).
+		if in.CategoryID == "" {
+			return s.repo.BulkSetCategory(ctx, in.IDs, "", "", "")
+		}
+		// Resolve the node to its denormalized slug + rootDomain, exactly as
+		// create/update do, so the flat filters keep finding these products.
+		if s.categories == nil {
+			return 0, apperrors.ErrBadRequest
+		}
+		slug, root, rerr := s.categories.Resolve(ctx, in.CategoryID)
+		if rerr != nil {
+			return 0, badRequest("category not found")
+		}
+		return s.repo.BulkSetCategory(ctx, in.IDs, in.CategoryID, slug, root)
 	default:
 		return 0, apperrors.ErrBadRequest
 	}

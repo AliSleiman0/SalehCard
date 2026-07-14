@@ -14,6 +14,9 @@ export interface ProductListParams {
   page?: number
   limit?: number
   category?: string
+  // Taxonomy node id — tree-aware: matches the node + all its descendants
+  // (used by the Categories page's inline product panel).
+  categoryId?: string
   fulfillmentType?: FulfillmentType
   status?: 'active' | 'draft' | 'out'
   available?: boolean
@@ -60,6 +63,7 @@ export async function listProducts(
   if (params.page !== undefined) q.set('page', String(params.page))
   if (params.limit !== undefined) q.set('limit', String(params.limit))
   if (params.category) q.set('category', params.category)
+  if (params.categoryId) q.set('categoryId', params.categoryId)
   if (params.fulfillmentType) q.set('fulfillmentType', params.fulfillmentType)
   if (params.status) q.set('status', params.status)
   if (params.available !== undefined) q.set('available', String(params.available))
@@ -97,8 +101,14 @@ export function uploadProductImage(file: File): Promise<ApiResponse<UploadImageR
   return apiClient.upload<UploadImageResult>(`${ADMIN}/images`, form)
 }
 
-export type BulkAction = 'activate' | 'deactivate' | 'delete'
+export type BulkAction = 'activate' | 'deactivate' | 'delete' | 'assign-category'
 
-export function bulkProductAction(ids: string[], action: BulkAction): Promise<ApiResponse<{ modified: number }>> {
-  return apiClient.post<{ modified: number }>(`${ADMIN}/bulk`, { ids, action })
+// For 'assign-category', pass the target taxonomy node id in categoryId; an empty
+// string unassigns (clears the product's category). Ignored for other actions.
+export function bulkProductAction(
+  ids: string[],
+  action: BulkAction,
+  categoryId?: string,
+): Promise<ApiResponse<{ modified: number }>> {
+  return apiClient.post<{ modified: number }>(`${ADMIN}/bulk`, { ids, action, categoryId })
 }

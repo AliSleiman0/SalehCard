@@ -381,13 +381,17 @@ type ListFilter struct {
 type BulkAction string
 
 const (
-	BulkActivate   BulkAction = "activate"
-	BulkDeactivate BulkAction = "deactivate"
-	BulkDelete     BulkAction = "delete"
+	BulkActivate       BulkAction = "activate"
+	BulkDeactivate     BulkAction = "deactivate"
+	BulkDelete         BulkAction = "delete"
+	BulkAssignCategory BulkAction = "assign-category"
 )
 
 // BulkInput is the request body for POST /api/admin/products/bulk.
 type BulkInput struct {
 	IDs    []string   `json:"ids"`
 	Action BulkAction `json:"action"`
+	// CategoryID is the taxonomy node to assign for the "assign-category"
+	// action; empty clears the assignment (unassign). Ignored otherwise.
+	CategoryID string `json:"categoryId"`
 }

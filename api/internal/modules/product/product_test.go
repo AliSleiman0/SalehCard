@@ -29,6 +29,12 @@ type mockRepo struct {
 	products   []product.Product
 	err        error
 	lastUpdate product.UpdateProductInput
+	// Records of the last BulkSetCategory call, for assign-category assertions.
+	catIDs   []string
+	catID    string
+	catSlug  string
+	catRoot  string
+	catCalls int
 }
 
 func (m *mockRepo) FindAll(_ context.Context, _ product.ListFilter, _ pagination.Params) ([]product.Product, int64, error) {
@@ -75,6 +81,18 @@ func (m *mockRepo) Delete(_ context.Context, _ string) error {
 }
 
 func (m *mockRepo) BulkSetAvailable(_ context.Context, ids []string, _ bool) (int64, error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+	return int64(len(ids)), nil
+}
+
+func (m *mockRepo) BulkSetCategory(_ context.Context, ids []string, categoryID, slug, rootDomain string) (int64, error) {
+	m.catCalls++
+	m.catIDs = ids
+	m.catID = categoryID
+	m.catSlug = slug
+	m.catRoot = rootDomain
 	if m.err != nil {
 		return 0, m.err
 	}
@@ -663,4 +681,84 @@ func TestProductService_Bulk(t *testing.T) {
 			assert.Equal(t, tc.wantN, n)
 		})
 	}
+}
+
+// fakeCategoryResolver satisfies product.CategoryResolver for assign-category
+// tests: Resolve returns a fixed slug/root (or an error), DescendantIDs is unused.
+type fakeCategoryResolver struct {
+	slug string
+	root string
+	err  error
+}
+
+func (f fakeCategoryResolver) DescendantIDs(context.Context, string) ([]bson.ObjectID, error) {
+	return nil, nil
+}
+func (f fakeCategoryResolver) Resolve(context.Context, string) (string, string, error) {
+	return f.slug, f.root, f.err
+}
+
+func TestProductService_Bulk_AssignCategory(t *testing.T) {
+	const nodeID = "6a3f04c4ea6747f81d0baf8a"
+
+	t.Run("resolves node and sets slug + rootDomain", func(t *testing.T) {
+		repo := &mockRepo{}
+		svc := product.NewProductService(repo, product.WithCategoryResolver(
+			fakeCategoryResolver{slug: "pubg-mobile-id-uc", root: "games"}))
+
+		n, err := svc.Bulk(context.Background(), product.BulkInput{
+			IDs: []string{"a", "b"}, Action: product.BulkAssignCategory, CategoryID: nodeID,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), n)
+		assert.Equal(t, []string{"a", "b"}, repo.catIDs)
+		assert.Equal(t, nodeID, repo.catID)
+		assert.Equal(t, "pubg-mobile-id-uc", repo.catSlug)
+		assert.Equal(t, "games", repo.catRoot)
+	})
+
+	t.Run("empty categoryId unassigns without resolving", func(t *testing.T) {
+		repo := &mockRepo{}
+		// No resolver wired: an unassign must not need one.
+		svc := product.NewProductService(repo)
+
+		n, err := svc.Bulk(context.Background(), product.BulkInput{
+			IDs: []string{"a"}, Action: product.BulkAssignCategory, CategoryID: "",
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), n)
+		assert.Equal(t, 1, repo.catCalls)
+		assert.Empty(t, repo.catID)
+		assert.Empty(t, repo.catSlug)
+		assert.Empty(t, repo.catRoot)
+	})
+
+	t.Run("assigning without a resolver is a bad request", func(t *testing.T) {
+		repo := &mockRepo{}
+		svc := product.NewProductService(repo)
+
+		_, err := svc.Bulk(context.Background(), product.BulkInput{
+			IDs: []string{"a"}, Action: product.BulkAssignCategory, CategoryID: nodeID,
+		})
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+		assert.Zero(t, repo.catCalls)
+	})
+
+	t.Run("unresolvable node is a bad request", func(t *testing.T) {
+		repo := &mockRepo{}
+		svc := product.NewProductService(repo, product.WithCategoryResolver(
+			fakeCategoryResolver{err: apperrors.ErrNotFound}))
+
+		_, err := svc.Bulk(context.Background(), product.BulkInput{
+			IDs: []string{"a"}, Action: product.BulkAssignCategory, CategoryID: nodeID,
+		})
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+		assert.Zero(t, repo.catCalls)
+	})
 }

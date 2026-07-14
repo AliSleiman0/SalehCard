@@ -67,7 +67,15 @@ export function useUploadProductImage() {
 export function useBulkProductAction() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ ids, action }: { ids: string[]; action: BulkAction }) => bulkProductAction(ids, action),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'products'] }),
+    mutationFn: ({ ids, action, categoryId }: { ids: string[]; action: BulkAction; categoryId?: string }) =>
+      bulkProductAction(ids, action, categoryId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'products'] })
+      // assign-category moves product counts around the taxonomy tree and the
+      // product-category facets — refresh both so the Categories page + filters
+      // reflect the reassignment.
+      qc.invalidateQueries({ queryKey: ['admin', 'categories'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'products', 'categories'] })
+    },
   })
 }

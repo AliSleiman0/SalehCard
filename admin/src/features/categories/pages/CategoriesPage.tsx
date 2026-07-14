@@ -1,8 +1,21 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Icon, PageHead, Modal, Toggle, LoadingSpinner, ErrorState } from '@/components'
+import { useNavigate } from 'react-router-dom'
+import {
+  Icon,
+  PageHead,
+  Modal,
+  Toggle,
+  StatusBadge,
+  Pagination,
+  LoadingSpinner,
+  ErrorState,
+  EmptyState,
+} from '@/components'
 import { ApiError } from '@/lib/api-client'
-import { useUploadProductImage } from '@/features/products/hooks/useProducts'
+import { useProducts, useUploadProductImage } from '@/features/products/hooks/useProducts'
+import { ProductThumb } from '@/features/products/pages/ProductListPage'
+import { priceRange, productStatus } from '@/features/products/lib/view'
 import { useCategoryTree, useCreateCategory, useUpdateCategory, useDeleteCategory } from '../hooks/useCategories'
 import { orderedTree, pathLabel, subtreeIds, type AdminCategory } from '../api/categories'
 
@@ -16,6 +29,7 @@ export default function CategoriesPage() {
   const { t } = useTranslation()
   const { data, isLoading, isError, refetch } = useCategoryTree()
   const del = useDeleteCategory()
+  const update = useUpdateCategory()
 
   const nodes = useMemo(() => data?.data ?? [], [data])
   const ordered = useMemo(() => orderedTree(nodes), [nodes])
@@ -25,7 +39,80 @@ export default function CategoriesPage() {
   const [editing, setEditing] = useState<{ mode: 'new'; parentId?: string } | { mode: 'edit'; node: AdminCategory } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<AdminCategory | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const update = useUpdateCategory()
+
+  // collapsed = nodes whose children are hidden; openProducts = nodes showing
+  // their inline product panel; search filters the tree.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [openProducts, setOpenProducts] = useState<Set<string>>(new Set())
+  const [collapseInited, setCollapseInited] = useState(false)
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  // Open collapsed-to-collections once the tree loads — a fully-expanded 78-node
+  // tree is a wall of rows. Only nodes that have children are collapsible.
+  useEffect(() => {
+    if (!collapseInited && nodes.length > 0) {
+      setCollapsed(new Set(nodes.filter((n) => n.hasChildren).map((n) => n.id)))
+      setCollapseInited(true)
+    }
+  }, [nodes, collapseInited])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  const q = debouncedSearch.trim().toLowerCase()
+
+  const ancestorsOf = useCallback(
+    (n: AdminCategory): string[] => {
+      const out: string[] = []
+      const seen = new Set<string>()
+      let cur = n.parentId ? byId.get(n.parentId) : undefined
+      while (cur && !seen.has(cur.id)) {
+        seen.add(cur.id)
+        out.push(cur.id)
+        cur = cur.parentId ? byId.get(cur.parentId) : undefined
+      }
+      return out
+    },
+    [byId],
+  )
+
+  // While searching, show every match plus its ancestors (so hits keep context);
+  // null = not searching.
+  const matchIds = useMemo(() => {
+    if (!q) return null
+    const keep = new Set<string>()
+    for (const n of nodes) {
+      const hay = `${n.name.en} ${n.name.ar} ${n.name.tr} ${n.slug}`.toLowerCase()
+      if (hay.includes(q)) {
+        keep.add(n.id)
+        for (const a of ancestorsOf(n)) keep.add(a)
+      }
+    }
+    return keep
+  }, [q, nodes, ancestorsOf])
+
+  // A node is visible unless an ancestor is collapsed; search overrides collapse.
+  const visible = useMemo(
+    () =>
+      ordered.filter((n) => {
+        if (matchIds) return matchIds.has(n.id)
+        return !ancestorsOf(n).some((a) => collapsed.has(a))
+      }),
+    [ordered, matchIds, collapsed, ancestorsOf],
+  )
+
+  const toggleSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) =>
+    setter((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const collapseAll = () => setCollapsed(new Set(nodes.filter((n) => n.hasChildren).map((n) => n.id)))
+  const expandAll = () => setCollapsed(new Set())
 
   function runDelete(node: AdminCategory) {
     setDeleteError(null)
@@ -52,6 +139,26 @@ export default function CategoriesPage() {
           <Icon name="layers" size={17} />
           <h3>Catalog taxonomy</h3>
         </div>
+        {!isLoading && !isError && (
+          <div className="toolbar">
+            <div className="fsearch">
+              <Icon name="search" size={15} />
+              <input
+                placeholder="Search collections & categories…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <button className="abtn sm" onClick={expandAll}>
+                <Icon name="chevdown" size={13} /> Expand all
+              </button>
+              <button className="abtn sm" onClick={collapseAll}>
+                <Icon name="chevright" size={13} /> Collapse all
+              </button>
+            </div>
+          </div>
+        )}
         {isLoading && <LoadingSpinner />}
         {isError && <ErrorState message="Couldn't load categories." onRetry={() => void refetch()} />}
         {!isLoading && !isError && (
@@ -66,60 +173,99 @@ export default function CategoriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {ordered.map((n) => (
-                  <tr key={n.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', paddingLeft: n.depth * 22 }}>
-                        {n.depth > 0 && <Icon name="chevright" size={13} />}
-                        <div style={{ marginLeft: n.depth > 0 ? 4 : 0 }}>
-                          <b>{n.name.en || n.slug}</b>
-                          <div className="muted" style={{ fontSize: 12 }}>
-                            {n.slug}
-                            {n.depth === 0 && ' · Collection'}
-                            {n.depth === 1 && ' · Category'}
-                            {n.depth === 2 && ' · Subcategory'}
+                {visible.map((n) => {
+                  const isCollapsed = !matchIds && collapsed.has(n.id)
+                  const count = n.productCount ?? 0
+                  const productsOpen = openProducts.has(n.id)
+                  return (
+                    <Fragment key={n.id}>
+                      <tr>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', paddingLeft: n.depth * 22 }}>
+                            {n.hasChildren ? (
+                              <button
+                                type="button"
+                                className="treecaret"
+                                aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                                onClick={() => toggleSet(setCollapsed, n.id)}
+                                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'inline-flex' }}
+                              >
+                                <Icon name={isCollapsed ? 'chevright' : 'chevdown'} size={14} />
+                              </button>
+                            ) : (
+                              <span style={{ display: 'inline-block', width: 14 }} />
+                            )}
+                            <div style={{ marginLeft: 6 }}>
+                              <b>{n.name.en || n.slug}</b>
+                              <div className="muted" style={{ fontSize: 12 }}>
+                                {n.slug}
+                                {n.depth === 0 && ' · Collection'}
+                                {n.depth === 1 && ' · Category'}
+                                {n.depth === 2 && ' · Subcategory'}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="muted" style={{ fontSize: 13 }}>
-                      {n.productCount ?? 0}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex' }}>
-                        <Toggle
-                          on={n.visible}
-                          onClick={() => update.mutate({ id: n.id, input: { visible: !n.visible } })}
-                        />
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        {n.depth < MAX_DEPTH && (
-                          <button className="abtn sm" onClick={() => setEditing({ mode: 'new', parentId: n.id })}>
-                            <Icon name="plus" size={13} /> Child
-                          </button>
-                        )}
-                        <button className="abtn sm" onClick={() => setEditing({ mode: 'edit', node: n })}>
-                          <Icon name="edit" size={14} /> {t('edit')}
-                        </button>
-                        <button
-                          className="abtn sm danger"
-                          onClick={() => {
-                            setDeleteError(null)
-                            setConfirmDelete(n)
-                          }}
-                        >
-                          <Icon name="trash" size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {ordered.length === 0 && (
+                        </td>
+                        <td style={{ fontSize: 13 }}>
+                          {count > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleSet(setOpenProducts, n.id)}
+                              style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'var(--brand)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            >
+                              <Icon name={productsOpen ? 'chevdown' : 'chevright'} size={12} />
+                              {count}
+                            </button>
+                          ) : (
+                            <span className="muted">0</span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex' }}>
+                            <Toggle
+                              on={n.visible}
+                              onClick={() => update.mutate({ id: n.id, input: { visible: !n.visible } })}
+                            />
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            {n.depth < MAX_DEPTH && (
+                              <button className="abtn sm" onClick={() => setEditing({ mode: 'new', parentId: n.id })}>
+                                <Icon name="plus" size={13} /> Child
+                              </button>
+                            )}
+                            <button className="abtn sm" onClick={() => setEditing({ mode: 'edit', node: n })}>
+                              <Icon name="edit" size={14} /> {t('edit')}
+                            </button>
+                            <button
+                              className="abtn sm danger"
+                              onClick={() => {
+                                setDeleteError(null)
+                                setConfirmDelete(n)
+                              }}
+                            >
+                              <Icon name="trash" size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {productsOpen && (
+                        <tr>
+                          <td colSpan={4} style={{ background: 'var(--surface-2)', padding: 0 }}>
+                            <CategoryProductsPanel categoryId={n.id} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
+                {visible.length === 0 && (
                   <tr>
                     <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                      No categories yet — create a Collection to get started.
+                      {q
+                        ? 'No collections or categories match your search.'
+                        : 'No categories yet — create a Collection to get started.'}
                     </td>
                   </tr>
                 )}
@@ -343,5 +489,103 @@ function CategoryEditorModal({
         </div>
       </div>
     </Modal>
+  )
+}
+
+/** Inline product list under an expanded category row. Tree-aware — lists the
+ *  node's own + descendants' products (matching the roll-up count), with its own
+ *  search + pagination. Rows link to the product editor. */
+function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
+  const navigate = useNavigate()
+  const [search, setSearch] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebounced(search)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  const { data, isLoading, isError, refetch } = useProducts({
+    categoryId,
+    search: debounced.trim() || undefined,
+    page,
+  })
+  const rows = data?.data ?? []
+  const meta = data?.meta
+
+  return (
+    <div style={{ padding: '12px 16px' }}>
+      <div className="fsearch" style={{ marginBottom: 8, maxWidth: 340 }}>
+        <Icon name="search" size={14} />
+        <input
+          placeholder="Search products in this category…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      <div className="ahint" style={{ marginTop: 0, marginBottom: 10 }}>
+        Includes subcategories. The count reflects available products; drafts are listed here too.
+        Assign products from the Products page (select rows → Move to category).
+      </div>
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : isError ? (
+        <ErrorState message="Could not load products." onRetry={() => void refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="No products here yet."
+          sub={debounced ? 'Try a different search.' : 'Assign products from the Products page.'}
+        />
+      ) : (
+        <>
+          <div className="tablewrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Price (USD)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((p) => (
+                  <tr key={p.id} className="clickable" onClick={() => navigate(`/products/${p.id}/edit`)}>
+                    <td>
+                      <div className="cellprod">
+                        <ProductThumb p={p} />
+                        <div className="pn">
+                          <b>{p.title.en}</b>
+                          <span className="mono">{p.id.slice(-8)}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="muted">{p.category}</td>
+                    <td className="num strong">
+                      {priceRange(p) === '—' ? <span className="faint">—</span> : '$' + priceRange(p)}
+                    </td>
+                    <td>
+                      <StatusBadge s={productStatus(p)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination
+            page={meta?.page ?? 1}
+            pages={meta?.pages ?? 1}
+            total={meta?.total ?? rows.length}
+            shown={rows.length}
+            limit={meta?.limit}
+            onPage={setPage}
+          />
+        </>
+      )}
+    </div>
   )
 }
