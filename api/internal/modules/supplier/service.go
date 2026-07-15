@@ -264,18 +264,19 @@ func (s *Service) Sync(ctx context.Context, id int) (SyncResult, error) {
 		}
 		res.Checked++
 		up, found := byID[mp.UpstreamProductID]
-		if !found {
-			// Withdrawn upstream — hide it, never delete (orders may reference it).
+		if !found || !up.Available {
+			// Withdrawn or unavailable upstream — pull it OFF sale (never delete;
+			// orders may reference it). Sync ONLY ever hides (true→false): it never
+			// auto-publishes (false→true), so an imported-hidden product stays
+			// hidden until an admin reviews it — publishing is an admin decision.
+			res.Unavailable++
 			if mp.Available {
 				_ = s.setAvailable(ctx, mp.ID, false)
 				res.Updated++
 			}
-			res.Unavailable++
-			continue
-		}
-		if up.Available != mp.Available {
-			_ = s.setAvailable(ctx, mp.ID, up.Available)
-			res.Updated++
+			if !found {
+				continue
+			}
 		}
 		if len(mp.Variants) > 0 {
 			old := mp.Variants[0].Price
