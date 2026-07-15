@@ -36,10 +36,18 @@ export interface ProductInput {
   // (omit for new rows → the backend mints one).
   variants: { id?: string; denomination: string; price: number; resellerPrice?: number; faceValue?: number }[]
   fulfillmentType: FulfillmentType
-  // Execution mode. Sent as 'bridge_device' for mobile-recharge products (and
-  // 'manual_operator' to turn a former bridge product back into plain credit);
-  // omitted otherwise so the backend derives it.
+  // Execution mode. Sent as 'bridge_device' for mobile-recharge products,
+  // 'api' for supplier-fulfilled products (and 'manual_operator' to turn a
+  // former bridge/api product back into plain credit); omitted otherwise so
+  // the backend derives it.
   fulfillmentMode?: FulfillmentMode
+  // Upstream supplier registry id for api-mode products. 0 clears the stored
+  // id (the backend's clear sentinel — 0 is never a valid id). Omitted = leave
+  // unchanged.
+  fulfillmentProvider?: number
+  // The supplier's own product id for api-mode products. '' clears. Omitted =
+  // leave unchanged.
+  upstreamProductId?: string
   // Bridge recharge config. A non-empty `provider` sets it; `{provider:'',...}`
   // clears it. Omitted = leave unchanged.
   bridge?: BridgeSpec | { provider: ''; method: '' }
@@ -99,6 +107,17 @@ export function uploadProductImage(file: File): Promise<ApiResponse<UploadImageR
   const form = new FormData()
   form.set('image', file)
   return apiClient.upload<UploadImageResult>(`${ADMIN}/images`, form)
+}
+
+// One selectable upstream fulfillment supplier (env-configured on the API;
+// only suppliers with a token set appear).
+export interface FulfillmentProviderOption {
+  id: number
+  name: string
+}
+
+export function listFulfillmentProviders(): Promise<ApiResponse<FulfillmentProviderOption[]>> {
+  return apiClient.get<FulfillmentProviderOption[]>(`${ADMIN}/fulfillment-providers`)
 }
 
 export type BulkAction = 'activate' | 'deactivate' | 'delete' | 'assign-category'

@@ -445,6 +445,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		FulfillmentType:     in.FulfillmentType,
 		FulfillmentMode:     mode,
 		FulfillmentProvider: in.FulfillmentProvider,
+		UpstreamProductID:   in.UpstreamProductID,
 		InputFields:         in.InputFields,
 		Bridge:              in.Bridge,
 		Pricing:             pricing,
@@ -550,6 +551,9 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		{Key: "fulfillmentType", Value: lit(in.FulfillmentType)},
 		{Key: "fulfillmentMode", Value: lit(mode)},
 		{Key: "fulfillmentProvider", Value: lit(in.FulfillmentProvider)},
+		// upstreamProductId is deliberately ABSENT here: supplier mappings are
+		// admin-owned, and a legacy-catalog re-import must never wipe them
+		// (omitting the key leaves the stored value untouched).
 		{Key: "fulfillmentConfidence", Value: lit(in.FulfillmentConfidence)},
 		{Key: "fulfillmentCancellable", Value: lit(in.FulfillmentCancellable)},
 		{Key: "pricing", Value: lit(in.Pricing)},
@@ -633,7 +637,21 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 		set = append(set, bson.E{Key: "fulfillmentMode", Value: *in.FulfillmentMode})
 	}
 	if in.FulfillmentProvider != nil {
-		set = append(set, bson.E{Key: "fulfillmentProvider", Value: *in.FulfillmentProvider})
+		// 0 is the clear sentinel (never a valid registry id) — mirrors the
+		// verification/bridge "empty value clears" convention below.
+		if *in.FulfillmentProvider == 0 {
+			set = append(set, bson.E{Key: "fulfillmentProvider", Value: nil})
+		} else {
+			set = append(set, bson.E{Key: "fulfillmentProvider", Value: *in.FulfillmentProvider})
+		}
+	}
+	if in.UpstreamProductID != nil {
+		// "" clears the supplier mapping.
+		if *in.UpstreamProductID == "" {
+			set = append(set, bson.E{Key: "upstreamProductId", Value: nil})
+		} else {
+			set = append(set, bson.E{Key: "upstreamProductId", Value: *in.UpstreamProductID})
+		}
 	}
 	if in.Stock != nil {
 		set = append(set, bson.E{Key: "stock", Value: *in.Stock})

@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -97,7 +98,7 @@ func (f *fakeOrderRepo) UpdateFulfillment(_ context.Context, id bson.ObjectID, s
 	return apperrors.ErrNotFound
 }
 
-func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, _ bson.D) (*Order, error) {
+func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error) {
 	o, ok := f.byID[id]
 	if !ok {
 		return nil, apperrors.ErrNotFound
@@ -108,6 +109,20 @@ func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, fr
 	before := *o
 	o.Status = to
 	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	// Apply the known fulfillment dot-paths so settler tests can assert on the
+	// completed order (the real repo $sets these atomically).
+	for _, e := range extraSet {
+		if s, ok := e.Value.(string); ok {
+			switch e.Key {
+			case "fulfillment.transferRef":
+				o.Fulfillment.TransferRef = s
+			case "fulfillment.deliveredCode":
+				o.Fulfillment.DeliveredCode = s
+			case "fulfillment.providerRef":
+				o.Fulfillment.ProviderRef = s
+			}
+		}
+	}
 	return &before, nil
 }
 
@@ -118,6 +133,72 @@ func (f *fakeOrderRepo) AppendTimelineEvent(_ context.Context, id bson.ObjectID,
 	}
 	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
 	return nil
+}
+
+// --- supplier-settler repository fakes (in-memory filters over byID) ---------
+
+func (f *fakeOrderRepo) ListSupplierPollable(_ context.Context, limit int) ([]*Order, error) {
+	var out []*Order
+	for _, o := range f.byID {
+		if o.Status != OrderStatusProcessing || o.Fulfillment.ProviderRef == "" {
+			continue
+		}
+		for _, it := range o.Items {
+			if it.FulfillmentMode == "api" {
+				out = append(out, o)
+				break
+			}
+		}
+		if len(out) == limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeOrderRepo) ListSupplierRetryable(_ context.Context, now time.Time, limit int) ([]*Order, error) {
+	var out []*Order
+	for _, o := range f.byID {
+		if o.Status == OrderStatusProcessing && o.Fulfillment.SupplierNextRetryAt != nil &&
+			!o.Fulfillment.SupplierNextRetryAt.After(now) {
+			out = append(out, o)
+		}
+		if len(out) == limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeOrderRepo) BumpSupplierRetry(_ context.Context, id bson.ObjectID, retryCount int, nextRetryAt time.Time) error {
+	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing {
+		o.Fulfillment.SupplierRetryCount = retryCount
+		o.Fulfillment.SupplierNextRetryAt = &nextRetryAt
+	}
+	return nil
+}
+
+func (f *fakeOrderRepo) SetSupplierRef(_ context.Context, id bson.ObjectID, ref string, event TimelineEvent) error {
+	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing {
+		o.Fulfillment.ProviderRef = ref
+		o.Fulfillment.SupplierRetryCount = 0
+		o.Fulfillment.SupplierNextRetryAt = nil
+		o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	}
+	return nil
+}
+
+func (f *fakeOrderRepo) MarkSupplierStuck(_ context.Context, id bson.ObjectID, event TimelineEvent) (bool, error) {
+	o, ok := f.byID[id]
+	if !ok || o.Status != OrderStatusProcessing || o.Fulfillment.SupplierStuckAt != nil {
+		return false, nil
+	}
+	now := time.Now().UTC()
+	o.Fulfillment.SupplierStuckAt = &now
+	o.Fulfillment.SupplierRetryCount = 0
+	o.Fulfillment.SupplierNextRetryAt = nil
+	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	return true, nil
 }
 
 func (f *fakeOrderRepo) ListAll(_ context.Context, _ OrderFilter, _ pagination.Params) ([]*Order, int64, error) {
@@ -244,12 +325,14 @@ func (f *fakeCodeSvc) InventoryPaged(context.Context, pagination.Params, bool, s
 }
 
 // fakeWalletSvc tracks a single balance and records debit/refund calls.
+// refundErr, when set, makes Refund fail (settler ledger-failure tests).
 type fakeWalletSvc struct {
 	balance     float64
 	debited     float64
 	refunded    float64
 	debitCalls  int
 	refundCalls int
+	refundErr   error
 }
 
 func (f *fakeWalletSvc) Debit(_ context.Context, _ bson.ObjectID, amount float64, _ string) (*wallet.WalletTransaction, error) {
@@ -263,6 +346,9 @@ func (f *fakeWalletSvc) Debit(_ context.Context, _ bson.ObjectID, amount float64
 }
 func (f *fakeWalletSvc) Refund(_ context.Context, _ bson.ObjectID, amount float64, _ string) (*wallet.WalletTransaction, error) {
 	f.refundCalls++
+	if f.refundErr != nil {
+		return nil, f.refundErr
+	}
 	f.balance += amount
 	f.refunded += amount
 	return &wallet.WalletTransaction{Amount: amount, BalanceAfter: f.balance}, nil
@@ -883,4 +969,186 @@ func TestGetOrder_EnforcesOwnership(t *testing.T) {
 
 	_, err = svc.GetOrder(context.Background(), bson.NewObjectID(), o.ID) // different user
 	assert.ErrorIs(t, err, apperrors.ErrNotFound)
+}
+
+// --- supplier (api-mode) fulfillment -----------------------------------------
+
+// fakeProvider is a scripted upstream adapter: it returns the configured
+// result/err from Fulfill (and checkRes/checkErr from CheckStatus) and records
+// what it received, so tests can drive every fulfillAPI/settler branch.
+type fakeProvider struct {
+	id     int
+	res    provider.Result
+	err    error
+	lastIn *provider.FulfillInput
+	calls  int
+
+	checkRes     provider.Status
+	checkErr     error
+	checkCalls   int
+	lastCheckRef string
+}
+
+func (f *fakeProvider) ID() int { return f.id }
+func (f *fakeProvider) Fulfill(_ context.Context, in provider.FulfillInput) (provider.Result, error) {
+	f.calls++
+	f.lastIn = &in
+	return f.res, f.err
+}
+func (f *fakeProvider) CheckStatus(_ context.Context, ref string) (provider.Status, error) {
+	f.checkCalls++
+	f.lastCheckRef = ref
+	if f.checkErr != nil {
+		return provider.Status{}, f.checkErr
+	}
+	if f.checkRes.State == "" {
+		return provider.Status{}, provider.ErrNotImplemented
+	}
+	return f.checkRes, nil
+}
+func (f *fakeProvider) Verify(context.Context, provider.FulfillInput) (provider.AccountInfo, error) {
+	return provider.AccountInfo{}, provider.ErrNotImplemented
+}
+
+// newSUTWithProviders is newSUTWithOffers with real adapters in the registry.
+func newSUTWithProviders(prods []*product.Product, codeSvc *fakeCodeSvc, walletSvc *fakeWalletSvc, adapters ...provider.Provider) (*OrderService, *fakeOrderRepo) {
+	repo := newFakeOrderRepo()
+	byID := make(map[string]*product.Product, len(prods))
+	for _, p := range prods {
+		byID[p.ID.Hex()] = p
+	}
+	prodSvc := &fakeProductSvc{byID: byID}
+	svc := NewOrderService(repo, prodSvc, codeSvc, walletSvc, &fakePromoSvc{}, &fakeOfferSvc{}, provider.NewRegistry(adapters...), payments.New(payments.Config{}), nil, &fakeKycGate{approved: true}, nil, notification.Nop{}, &fakeAwarder{}, nil)
+	return svc, repo
+}
+
+// supplierProduct is an api-mode product mapped to a supplier: provider id,
+// upstream product id, and two input fields the panel expects as params.
+func supplierProduct(price float64, providerID int, upstreamID string) *product.Product {
+	p := apiProduct(price, &providerID)
+	p.UpstreamProductID = upstreamID
+	p.InputFields = []product.InputField{
+		{Key: "playerId", Label: product.I18nLabel{En: "Player ID"}, Type: product.InputFieldText},
+		{Key: "zoneId", Label: product.I18nLabel{En: "Zone"}, Type: product.InputFieldText},
+	}
+	return p
+}
+
+func supplierItem(p *product.Product, qty int) PlaceOrderItemInput {
+	item := itemFor(p, qty)
+	item.PlayerID = "player-9"
+	item.Fields = []OrderFieldInput{
+		{Key: "playerId", Value: "player-9"},
+		{Key: "zoneId", Value: "77"},
+	}
+	return item
+}
+
+func TestPlaceOrder_APISuccessCompletes(t *testing.T) {
+	p := supplierProduct(2.5, 7, "364")
+	fake := &fakeProvider{id: 7, res: provider.Result{Reference: "ID_up1", Codes: []string{"C1", "C2"}}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUTWithProviders([]*product.Product{p}, &fakeCodeSvc{available: map[string]int{}}, walletSvc, fake)
+	userID := bson.NewObjectID()
+
+	order, err := svc.PlaceOrder(context.Background(), userID, false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{supplierItem(p, 2)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusCompleted, order.Status)
+	assert.Equal(t, "ID_up1", order.Fulfillment.TransferRef)
+	assert.Equal(t, "ID_up1", order.Fulfillment.ProviderRef)
+	assert.Equal(t, "C1\nC2", order.Fulfillment.DeliveredCode)
+	assert.Equal(t, 95.0, walletSvc.balance) // 100 - 2.5*2, never refunded
+	aw := svc.loyalty.(*fakeAwarder)
+	assert.Equal(t, 1, aw.calls)
+
+	// Input plumbing: the adapter received the snapshot, not client-trusted data.
+	require.NotNil(t, fake.lastIn)
+	assert.Equal(t, "364", fake.lastIn.UpstreamID)
+	assert.Equal(t, p.ID.Hex(), fake.lastIn.ProductID)
+	assert.Equal(t, order.ID.Hex(), fake.lastIn.OrderUUID)
+	assert.Equal(t, 2, fake.lastIn.Qty)
+	assert.Equal(t, "player-9", fake.lastIn.PlayerID)
+	assert.Equal(t, map[string]string{"playerId": "player-9", "zoneId": "77"}, fake.lastIn.Fields)
+}
+
+func TestPlaceOrder_APIPendingParksWithProviderRef(t *testing.T) {
+	p := supplierProduct(2.5, 7, "364")
+	fake := &fakeProvider{
+		id:  7,
+		res: provider.Result{Reference: "ID_wait"},
+		err: fmt.Errorf("panel test: order pending: %w", provider.ErrPending),
+	}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUTWithProviders([]*product.Product{p}, &fakeCodeSvc{available: map[string]int{}}, walletSvc, fake)
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{supplierItem(p, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusProcessing, order.Status)
+	assert.Equal(t, "ID_wait", order.Fulfillment.ProviderRef) // settler reconciles by this
+	assert.True(t, hasTimelineNote(order, "awaiting upstream provider"))
+	assert.Equal(t, 97.5, walletSvc.balance) // charged, NOT refunded
+	assert.Equal(t, 0, walletSvc.refundCalls)
+}
+
+func TestPlaceOrder_APIUnavailableParksWithoutRef(t *testing.T) {
+	p := supplierProduct(2.5, 7, "364")
+	fake := &fakeProvider{
+		id:  7,
+		err: fmt.Errorf("panel test: upstream error code 100: %w", provider.ErrUnavailable),
+	}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUTWithProviders([]*product.Product{p}, &fakeCodeSvc{available: map[string]int{}}, walletSvc, fake)
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{supplierItem(p, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusProcessing, order.Status)
+	assert.Empty(t, order.Fulfillment.ProviderRef) // no acceptance → no ref
+	assert.True(t, hasTimelineNote(order, "upstream temporarily unavailable"))
+	assert.Equal(t, 97.5, walletSvc.balance) // charged, NOT refunded
+	assert.Equal(t, 0, walletSvc.refundCalls)
+}
+
+func TestPlaceOrder_APIHardFailCompensates(t *testing.T) {
+	p := supplierProduct(2.5, 7, "364")
+	fake := &fakeProvider{id: 7, err: errors.New("panel test: player id blocked (code 107)")}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, repo := newSUTWithProviders([]*product.Product{p}, &fakeCodeSvc{available: map[string]int{}}, walletSvc, fake)
+
+	_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{supplierItem(p, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.Error(t, err)
+	assert.Equal(t, 100.0, walletSvc.balance) // debit reversed
+	assert.Equal(t, 1, walletSvc.refundCalls)
+	for _, o := range repo.byID {
+		assert.Equal(t, OrderStatusFailed, o.Status)
+	}
+}
+
+func TestPlaceOrder_APISingleItemRule(t *testing.T) {
+	apiP := supplierProduct(2.5, 7, "364")
+	codeP := codeProduct(10, nil)
+	codeSvc := &fakeCodeSvc{available: map[string]int{codeP.ID.Hex(): 5}}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, _ := newSUTWithProviders([]*product.Product{apiP, codeP}, codeSvc, walletSvc, &fakeProvider{id: 7})
+
+	// An api-mode item mixed with anything else is refused outright (multi-item
+	// upstream dispatch doesn't exist; silent partial fulfillment is worse).
+	_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{supplierItem(apiP, 1), itemFor(codeP, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, apperrors.ErrBadRequest))
+	assert.Equal(t, 100.0, walletSvc.balance) // refused before any charge
 }

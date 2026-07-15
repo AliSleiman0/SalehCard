@@ -68,10 +68,13 @@ type OrderItem struct {
 	FulfillmentType string             `bson:"fulfillmentType"    json:"fulfillmentType"`
 	// FulfillmentMode/FulfillmentProvider are snapshots of the product's
 	// execution path at order time; the dispatcher routes on FulfillmentMode.
-	FulfillmentMode     string          `bson:"fulfillmentMode,omitempty"     json:"fulfillmentMode,omitempty"`
-	FulfillmentProvider *int            `bson:"fulfillmentProvider,omitempty" json:"fulfillmentProvider,omitempty"`
-	PlayerID            string          `bson:"playerId,omitempty"            json:"playerId,omitempty"`
-	Recipient           *RecipientInput `bson:"recipient,omitempty"           json:"recipient,omitempty"`
+	FulfillmentMode     string `bson:"fulfillmentMode,omitempty"     json:"fulfillmentMode,omitempty"`
+	FulfillmentProvider *int   `bson:"fulfillmentProvider,omitempty" json:"fulfillmentProvider,omitempty"`
+	// UpstreamProductID snapshots the supplier's own product id for api-mode
+	// lines (the panel newOrder path segment).
+	UpstreamProductID string          `bson:"upstreamProductId,omitempty" json:"upstreamProductId,omitempty"`
+	PlayerID          string          `bson:"playerId,omitempty"          json:"playerId,omitempty"`
+	Recipient         *RecipientInput `bson:"recipient,omitempty"         json:"recipient,omitempty"`
 	// Fields are the labeled customer inputs for this line (Account ID, Zone ID,
 	// Email, …), shown to the operator who fulfills the order.
 	Fields []OrderField `bson:"fields,omitempty" json:"fields,omitempty"`
@@ -86,10 +89,24 @@ type TimelineEvent struct {
 
 // Fulfillment carries delivery details for an order.
 type Fulfillment struct {
-	DeliveredCode  string          `bson:"deliveredCode,omitempty"   json:"deliveredCode,omitempty"`
-	CreditedToID   string          `bson:"creditedToId,omitempty"    json:"creditedToId,omitempty"`
-	TransferRef    string          `bson:"transferRef,omitempty"     json:"transferRef,omitempty"`
-	StatusTimeline []TimelineEvent `bson:"statusTimeline"            json:"statusTimeline"`
+	DeliveredCode string `bson:"deliveredCode,omitempty"   json:"deliveredCode,omitempty"`
+	CreditedToID  string `bson:"creditedToId,omitempty"    json:"creditedToId,omitempty"`
+	TransferRef   string `bson:"transferRef,omitempty"     json:"transferRef,omitempty"`
+	// ProviderRef is the upstream supplier's order id for api-mode orders —
+	// kept distinct from TransferRef so refunds/manual transfers stay
+	// untangled; the supplier settler reconciles parked orders by it via
+	// Provider.CheckStatus.
+	ProviderRef string `bson:"providerRef,omitempty" json:"providerRef,omitempty"`
+	// Supplier-settler bookkeeping. SupplierNextRetryAt is set ONLY on
+	// ErrUnavailable parks (ref-less, safely re-dispatchable) — its presence
+	// is what distinguishes them from stub parks, which stay manual. Retry
+	// internals are hidden from JSON; SupplierStuckAt is the set-once "stuck
+	// upstream" marker (serialized — admin views embed Order, and Phase 3's
+	// dashboard counter queries it).
+	SupplierRetryCount  int             `bson:"supplierRetryCount,omitempty"  json:"-"`
+	SupplierNextRetryAt *time.Time      `bson:"supplierNextRetryAt,omitempty" json:"-"`
+	SupplierStuckAt     *time.Time      `bson:"supplierStuckAt,omitempty"     json:"supplierStuckAt,omitempty"`
+	StatusTimeline      []TimelineEvent `bson:"statusTimeline"                json:"statusTimeline"`
 }
 
 // Order is the root aggregate for a customer purchase.

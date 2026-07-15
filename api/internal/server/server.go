@@ -32,13 +32,14 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/review"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/role"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/supplier"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/bsc"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
-	"github.com/AliSleiman0/salehcard/api/internal/platform/bsc"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/tron"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
@@ -56,6 +57,9 @@ type Server struct {
 	// bridgeReaper requeues stale mobile-bridge command leases (nil when bridge
 	// fulfillment is disabled); main.go runs it alongside the HTTP listener.
 	bridgeReaper *bridge.Reaper
+	// supplierSettler reconciles parked api-mode supplier orders (nil when no
+	// supplier is configured); main.go runs it alongside the HTTP listener.
+	supplierSettler *order.SupplierSettler
 }
 
 // Watcher returns the USDT payment watcher, or nil when the feature is off.
@@ -63,6 +67,10 @@ func (s *Server) Watcher() *payment.Watcher { return s.watcher }
 
 // BridgeReaper returns the mobile-bridge reaper, or nil when bridge is disabled.
 func (s *Server) BridgeReaper() *bridge.Reaper { return s.bridgeReaper }
+
+// SupplierSettler returns the supplier-order settler, or nil when no upstream
+// supplier is configured.
+func (s *Server) SupplierSettler() *order.SupplierSettler { return s.supplierSettler }
 
 // New creates a new Server instance with the provided config and database.
 func New(cfg *config.Config, db *mongo.Database) *Server {
@@ -237,6 +245,13 @@ func (s *Server) Routes() {
 	if bridgeReg.Service.Enabled() {
 		s.bridgeReaper = bridge.NewReaper(bridgeReg.Service, s.cfg.Bridge.ReaperInterval)
 	}
+	// Supplier settler (DESIGN-SUPPLIERS.md Phase 2): background reconciliation
+	// of parked api-mode orders. Only worth running when at least one supplier
+	// is token-configured; audits with a system actor via rec.
+	if len(s.cfg.EnabledSuppliers()) > 0 {
+		s.supplierSettler = order.NewSupplierSettler(orderSvc, rec,
+			s.cfg.SupplierSettlerInterval, s.cfg.SupplierSettlerGiveUp)
+	}
 	wallet.RegisterRoutes(s.router, s.db, s.cfg, store)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
@@ -279,7 +294,17 @@ func (s *Server) Routes() {
 			}
 		}()
 
-		domain("products", func(g chi.Router) { product.RegisterAdminRoutes(g, s.db, rec, store, catResolver) })
+		// Fulfillment-provider options for the product editor's supplier
+		// dropdown: the dev reference mock (when on) + every token-configured
+		// panel supplier (DESIGN-SUPPLIERS.md Phase 1).
+		provOpts := []product.FulfillmentProviderOption{}
+		if s.cfg.FulfillmentMock {
+			provOpts = append(provOpts, product.FulfillmentProviderOption{ID: s.cfg.FulfillmentMockID, Name: "reference (mock)"})
+		}
+		for _, sc := range s.cfg.EnabledSuppliers() {
+			provOpts = append(provOpts, product.FulfillmentProviderOption{ID: sc.ID, Name: sc.Name})
+		}
+		domain("products", func(g chi.Router) { product.RegisterAdminRoutes(g, s.db, rec, store, catResolver, provOpts) })
 		domain("categories", func(g chi.Router) { category.RegisterAdminRoutes(g, s.db, rec) })
 		domain("inventory", func(g chi.Router) { code.RegisterAdminRoutes(g, s.db, rec) })
 		domain("dashboard", func(g chi.Router) { dashboard.RegisterAdminRoutes(g, s.db) })
@@ -305,6 +330,15 @@ func (s *Server) Routes() {
 		domain("settings", func(g chi.Router) { settings.RegisterAdminRoutes(g, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider) })
 		domain("payments", func(g chi.Router) { payment.RegisterAdminRoutes(g, s.db, paySvc, rec) })
 		domain("bridge", func(g chi.Router) { bridge.RegisterAdminRoutes(g, bridgeReg.Service, bridgeReg.Store, rec) })
+		// Suppliers admin surface (DESIGN-SUPPLIERS.md Phase 3): per-supplier
+		// balance/health/mapped-count, catalog browse+import, price-drift sync,
+		// per-supplier settings, recent orders. Reuses the fulfillment registry
+		// built in order.RegisterRoutes (orderSvc.Providers()) — each configured
+		// supplier id resolves to its adapter's Cataloger for the live probes.
+		supplierProducts := product.NewProductService(product.NewMongoRepository(s.db), product.WithCategoryResolver(catResolver))
+		domain("suppliers", func(g chi.Router) {
+			supplier.RegisterAdminRoutes(g, s.db, rec, orderSvc.Providers(), s.cfg.EnabledSuppliers(), supplierProducts)
+		})
 
 		// Role management mounts outside the domain wrapper: listing roles + the
 		// permission catalog is open to every admin (the console needs names to

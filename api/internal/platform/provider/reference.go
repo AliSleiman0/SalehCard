@@ -26,6 +26,12 @@ func (r *ReferenceAdapter) Fulfill(_ context.Context, in FulfillInput) (Result, 
 	return Result{Reference: fmt.Sprintf("ref_%s_x%d", in.ProductID, in.Qty)}, nil
 }
 
+// CheckStatus reports any reference as accepted — the mock never leaves an
+// order pending.
+func (r *ReferenceAdapter) CheckStatus(_ context.Context, _ string) (Status, error) {
+	return Status{State: "accept"}, nil
+}
+
 // Verify returns a placeholder account for the check-name flow.
 func (r *ReferenceAdapter) Verify(_ context.Context, _ FulfillInput) (AccountInfo, error) {
 	return AccountInfo{Username: "reference-account"}, nil

@@ -234,7 +234,11 @@ type Product struct {
 	FulfillmentMode FulfillmentMode `bson:"fulfillmentMode,omitempty" json:"fulfillmentMode,omitempty"`
 	// FulfillmentProvider is the numeric upstream-provider id for api-mode
 	// products (spec §3); nil when not applicable.
-	FulfillmentProvider    *int       `bson:"fulfillmentProvider,omitempty"    json:"fulfillmentProvider,omitempty"`
+	FulfillmentProvider *int `bson:"fulfillmentProvider,omitempty"    json:"fulfillmentProvider,omitempty"`
+	// UpstreamProductID is the supplier's own product id (e.g. a panel's "364")
+	// for api-mode products — the path segment of the panel newOrder call.
+	// Meaningful only when FulfillmentMode == api; empty otherwise.
+	UpstreamProductID      string     `bson:"upstreamProductId,omitempty"      json:"upstreamProductId,omitempty"`
 	FulfillmentConfidence  Confidence `bson:"fulfillmentConfidence,omitempty"  json:"fulfillmentConfidence,omitempty"`
 	FulfillmentCancellable *bool      `bson:"fulfillmentCancellable,omitempty" json:"fulfillmentCancellable,omitempty"`
 	// Migration: rich economics + checkout schema (spec §3/§4).
@@ -319,11 +323,15 @@ type CreateProductInput struct {
 	FulfillmentType     FulfillmentType `json:"fulfillmentType"`
 	FulfillmentMode     FulfillmentMode `json:"fulfillmentMode,omitempty"`
 	FulfillmentProvider *int            `json:"fulfillmentProvider,omitempty"`
-	Bridge              *BridgeSpec     `json:"bridge,omitempty"`
-	InputFields         []InputField    `json:"inputFields,omitempty"`
-	Stock               int             `json:"stock"`
-	Available           bool            `json:"available"`
-	Ratings             RatingsSummary  `json:"ratings"`
+	// UpstreamProductID maps an api-mode product onto the supplier's catalog
+	// (DESIGN-SUPPLIERS.md). Deliberately unvalidated: a provider-less or
+	// id-less api product parks safely at order time (stub / ErrUnavailable).
+	UpstreamProductID string          `json:"upstreamProductId,omitempty"`
+	Bridge            *BridgeSpec     `json:"bridge,omitempty"`
+	InputFields       []InputField    `json:"inputFields,omitempty"`
+	Stock             int             `json:"stock"`
+	Available         bool            `json:"available"`
+	Ratings           RatingsSummary  `json:"ratings"`
 }
 
 // UpdateProductInput carries the optional fields that can be patched on a product.
@@ -342,10 +350,15 @@ type UpdateProductInput struct {
 	Images              []string         `json:"images,omitempty"`
 	Thumbnail           *string          `json:"thumbnail,omitempty"`
 	Variants            []Variant        `json:"variants,omitempty"`
-	FulfillmentType     *FulfillmentType `json:"fulfillmentType,omitempty"`
-	FulfillmentMode     *FulfillmentMode `json:"fulfillmentMode,omitempty"`
-	FulfillmentProvider *int             `json:"fulfillmentProvider,omitempty"`
-	Stock               *int             `json:"stock,omitempty"`
+	FulfillmentType *FulfillmentType `json:"fulfillmentType,omitempty"`
+	FulfillmentMode *FulfillmentMode `json:"fulfillmentMode,omitempty"`
+	// FulfillmentProvider: nil = unchanged; a non-nil 0 clears the stored id
+	// ($unset — 0 is never a valid registry id, mirroring the Verification
+	// clear-sentinel convention).
+	FulfillmentProvider *int `json:"fulfillmentProvider,omitempty"`
+	// UpstreamProductID: nil = unchanged; non-nil "" clears.
+	UpstreamProductID *string `json:"upstreamProductId,omitempty"`
+	Stock             *int    `json:"stock,omitempty"`
 	Available           *bool            `json:"available,omitempty"`
 	Ratings             *RatingsSummary  `json:"ratings,omitempty"`
 	InputFields         []InputField     `json:"inputFields,omitempty"`

@@ -8,6 +8,7 @@ import { useDashboardStats, useLowStock, useRevenueChart, useFulfillmentBreakdow
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import { useBridgeDevices } from '@/features/bridge/hooks/useBridge'
+import { useSuppliersList } from '@/features/suppliers/hooks/useSuppliers'
 import { useCan } from '@/stores/auth'
 
 type Range = 'daily' | 'weekly' | 'monthly'
@@ -101,6 +102,32 @@ function BridgeBalanceTiles({ onOpen }: { onOpen: () => void }) {
     }
   }
   return <>{tiles}</>
+}
+
+// SuppliersBalanceTiles renders one KPI tile per configured upstream supplier
+// (panel / telecom) showing its live balance + health. Its own query only fires
+// for admins with suppliers.view (the tiles are gated at the call site), and it
+// shares the 30s-polling supplier-list query with the /suppliers page.
+function SuppliersBalanceTiles({ onOpen }: { onOpen: () => void }) {
+  const { data } = useSuppliersList()
+  const suppliers = data?.data?.suppliers ?? []
+  const danger = new Set(['auth_error', 'ip_blocked', 'unreachable', 'maintenance'])
+  return (
+    <>
+      {suppliers.map((sup) => (
+        <Kpi
+          key={sup.id}
+          icon={<Icon name="server" size={17} />}
+          iconBg="linear-gradient(135deg,#8a3bff,#3b5bff)"
+          label={`${sup.name} balance`}
+          value={sup.balanceText}
+          since={sup.kind}
+          cls={sup.health === 'low_balance' ? 'alert' : danger.has(sup.health) ? 'crit' : undefined}
+          onClick={onOpen}
+        />
+      ))}
+    </>
+  )
 }
 
 export default function DashboardPage() {
@@ -276,7 +303,17 @@ export default function DashboardPage() {
           cls="alert"
           onClick={() => navigate('/orders?status=refunded')}
         />
+        <Kpi
+          icon={<Icon name="server" size={17} />}
+          iconBg="rgba(255,77,109,.2)"
+          label="Stuck upstream"
+          value={s ? String(s.stuckUpstream) : '—'}
+          since="supplier needs attention"
+          cls="crit"
+          onClick={() => navigate('/suppliers')}
+        />
         {can('bridge.view') && <BridgeBalanceTiles onOpen={() => navigate('/bridge')} />}
+        {can('suppliers.view') && <SuppliersBalanceTiles onOpen={() => navigate('/suppliers')} />}
       </div>
 
       <div className="dash-2col mb16">

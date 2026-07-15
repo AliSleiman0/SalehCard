@@ -6,7 +6,13 @@ import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useCategoryTree } from '@/features/categories/hooks/useCategories'
 import { orderedTree, pathLabel } from '@/features/categories/api/categories'
-import { useProduct, useCreateProduct, useUpdateProduct, useUploadProductImage } from '../hooks/useProducts'
+import {
+  useProduct,
+  useCreateProduct,
+  useUpdateProduct,
+  useUploadProductImage,
+  useFulfillmentProviders,
+} from '../hooks/useProducts'
 import { reconcileBridgePhoneField } from '../lib/bridgeFields'
 import { toRows, fromRows, rowIssues, type InputFieldRow } from '../lib/fieldRows'
 import { useCan } from '@/stores/auth'
@@ -91,6 +97,14 @@ export default function ProductEditPage() {
   const [bridgeMethod, setBridgeMethod] = useState<'transfer_credit' | 'recharge_line'>(
     'transfer_credit',
   )
+  // Upstream supplier (api-mode) delivery: orders are placed automatically at a
+  // wholesale panel supplier. Mutually exclusive with the bridge checkbox —
+  // both imply fulfillmentMode. Provider id is string-backed for the select.
+  const [apiOn, setApiOn] = useState(false)
+  const [apiProvider, setApiProvider] = useState('')
+  const [upstreamProductId, setUpstreamProductId] = useState('')
+  const { data: provRes } = useFulfillmentProviders()
+  const providerOptions = provRes?.data ?? []
   // Input-field specs: key, type, labels, and constraints (min/max, select
   // options) are all editable; legacyName rides along untouched. Numeric
   // bounds live as strings while editing (fieldRows.ts).
@@ -133,6 +147,9 @@ export default function ProductEditPage() {
       setBridgeProvider(p.bridge.provider)
       setBridgeMethod(p.bridge.method)
     }
+    setApiOn(p.fulfillmentMode === 'api')
+    setApiProvider(p.fulfillmentProvider != null ? String(p.fulfillmentProvider) : '')
+    setUpstreamProductId(p.upstreamProductId ?? '')
     setInputFields(toRows(p.inputFields ?? []))
     setVerifyEnabled(!!p.verification)
     setVerifyApp(p.verification?.app ?? '')
@@ -156,6 +173,69 @@ export default function ProductEditPage() {
   const pending = create.isPending || update.isPending || uploadImage.isPending
   const error = create.error || update.error
 
+  // Supplier-API delivery — shared by the code and credit fulfillment cards
+  // (panels deliver both top-ups and codes). Checking it unchecks the bridge
+  // (both imply fulfillmentMode).
+  const supplierSection = (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={apiOn}
+          onChange={(e) => {
+            setApiOn(e.target.checked)
+            if (e.target.checked) setBridgeOn(false)
+          }}
+        />
+        <b style={{ fontSize: 13.5 }}>Fulfill via supplier API</b>
+      </label>
+      <div className="ahint" style={{ margin: '6px 0 0' }}>
+        Orders are placed automatically at the selected wholesale supplier and paid from its
+        prepaid balance. Input-field keys must match the supplier's parameter names.
+      </div>
+      {apiOn && (
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+          <div>
+            <label className="alabel">Supplier</label>
+            <select
+              className="select"
+              value={apiProvider}
+              onChange={(e) => setApiProvider(e.target.value)}
+            >
+              <option value="">— select —</option>
+              {/* Preserve a stored id that isn't in the configured list (e.g. its
+                  token was removed) so editing doesn't silently drop it. */}
+              {apiProvider && !providerOptions.some((o) => String(o.id) === apiProvider) && (
+                <option value={apiProvider}>provider #{apiProvider}</option>
+              )}
+              {providerOptions.map((o) => (
+                <option key={o.id} value={String(o.id)}>
+                  {o.name} (#{o.id})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="alabel">Upstream product ID</label>
+            <input
+              className="afield"
+              value={upstreamProductId}
+              onChange={(e) => setUpstreamProductId(e.target.value)}
+              placeholder="e.g. 364"
+            />
+          </div>
+        </div>
+      )}
+      {apiOn && providerOptions.length === 0 && (
+        <div className="ahint" style={{ margin: '10px 0 0' }}>
+          No suppliers configured — set <code>SUPPLIER_*_TOKEN</code> on the API (or{' '}
+          <code>FULFILLMENT_MOCK=true</code> in dev). Orders will park for manual completion
+          until one is.
+        </div>
+      )}
+    </div>
+  )
+
   const buildInput = () => {
     // Verification: send the config when enabled with a slug; send the clear
     // sentinel ({provider:0, app:''}) when disabling a product that had it; omit
@@ -175,6 +255,13 @@ export default function ProductEditPage() {
     // clear sentinels.
     const isBridge = ff === 'credit' && bridgeOn
     const wasBridge = data?.data?.fulfillmentMode === 'bridge_device'
+    // Supplier API delivery applies to credit AND code products (panels deliver
+    // top-ups and codes alike); bridge wins when both are somehow on. Turning it
+    // off emits the clear sentinels (provider 0 / '') plus the mode the backend
+    // would otherwise derive — a code product must fall back to `inventory`, not
+    // `manual_operator`, or its code-pool dispatch would break.
+    const isApi = (ff === 'credit' || ff === 'code') && apiOn && !isBridge
+    const wasApi = data?.data?.fulfillmentMode === 'api'
     // Convert rows to the API shape first so reconcileBridgePhoneField keeps
     // operating on plain InputField[].
     const apiFields = fromRows(inputFields)
@@ -191,10 +278,26 @@ export default function ProductEditPage() {
       thumbnail,
       fulfillmentType: toFulfillment(ff),
       ...(isBridge
-        ? { fulfillmentMode: 'bridge_device' as const, bridge: { provider: bridgeProvider, method: bridgeMethod } }
-        : wasBridge
-          ? { fulfillmentMode: 'manual_operator' as const, bridge: { provider: '' as const, method: '' as const } }
-          : {}),
+        ? {
+            fulfillmentMode: 'bridge_device' as const,
+            bridge: { provider: bridgeProvider, method: bridgeMethod },
+            ...(wasApi ? { fulfillmentProvider: 0, upstreamProductId: '' } : {}),
+          }
+        : isApi
+          ? {
+              fulfillmentMode: 'api' as const,
+              ...(apiProvider ? { fulfillmentProvider: Number(apiProvider) } : {}),
+              upstreamProductId: upstreamProductId.trim(),
+              ...(wasBridge ? { bridge: { provider: '' as const, method: '' as const } } : {}),
+            }
+          : wasBridge || wasApi
+            ? {
+                fulfillmentMode:
+                  !wasBridge && ff === 'code' ? ('inventory' as const) : ('manual_operator' as const),
+                ...(wasBridge ? { bridge: { provider: '' as const, method: '' as const } } : {}),
+                ...(wasApi ? { fulfillmentProvider: 0, upstreamProductId: '' } : {}),
+              }
+            : {}),
       available: active,
       stock,
       // Unit cost: send only when filled so a blank preserves the stored value.
@@ -702,6 +805,9 @@ export default function ProductEditPage() {
               <div className="ahint" style={{ marginTop: 0 }}>
                 Manage the code pool that fulfills this product in Inventory. Low-stock alert fires below the threshold.
               </div>
+              {/* Supplier-API delivery: codes come from the upstream supplier
+                  instead of this product's inventory pool. */}
+              {supplierSection}
             </div>
           )}
           {ff === 'credit' && (
@@ -730,7 +836,12 @@ export default function ProductEditPage() {
                   <input
                     type="checkbox"
                     checked={bridgeOn}
-                    onChange={(e) => setBridgeOn(e.target.checked)}
+                    onChange={(e) => {
+                      setBridgeOn(e.target.checked)
+                      // Mutually exclusive with supplier-API delivery — both
+                      // imply the product's fulfillmentMode.
+                      if (e.target.checked) setApiOn(false)
+                    }}
                   />
                   <b style={{ fontSize: 13.5 }}>Deliver via mobile-recharge bridge (Lebanon)</b>
                 </label>
@@ -780,6 +891,9 @@ export default function ProductEditPage() {
                   </div>
                 )}
               </div>
+
+              {/* Supplier-API delivery (alternative to the bridge / manual queue) */}
+              {supplierSection}
             </div>
           )}
           {ff === 'transfer' && (

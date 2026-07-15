@@ -41,6 +41,26 @@ type Repository interface {
 	AppendTimelineEvent(ctx context.Context, id bson.ObjectID, event TimelineEvent) error
 	ListAll(ctx context.Context, f OrderFilter, p pagination.Params) ([]*Order, int64, error)
 
+	// Supplier settler (DESIGN-SUPPLIERS.md Phase 2). Pollable = parked
+	// api-mode orders the upstream ACCEPTED (providerRef set) — reconciled by
+	// CheckStatus. Retryable = ref-less environmental parks whose retry clock
+	// (supplierNextRetryAt) has come due — re-dispatched with backoff. The
+	// bookkeeping writes are all guarded on status==processing so they can
+	// never touch an order an admin (or the settler itself) already moved.
+	ListSupplierPollable(ctx context.Context, limit int) ([]*Order, error)
+	ListSupplierRetryable(ctx context.Context, now time.Time, limit int) ([]*Order, error)
+	// BumpSupplierRetry quietly advances the retry bookkeeping (no timeline
+	// event — retries must not spam the customer-visible timeline).
+	BumpSupplierRetry(ctx context.Context, id bson.ObjectID, retryCount int, nextRetryAt time.Time) error
+	// SetSupplierRef promotes a retryable park to the pollable class after a
+	// re-dispatch came back pending: stores the upstream ref, clears the retry
+	// clock, and appends one timeline event.
+	SetSupplierRef(ctx context.Context, id bson.ObjectID, ref string, event TimelineEvent) error
+	// MarkSupplierStuck flags an order stuck exactly once (atomic
+	// supplierStuckAt-absent filter), clearing the retry clock so re-dispatch
+	// stops permanently. Returns true only for the winning call.
+	MarkSupplierStuck(ctx context.Context, id bson.ObjectID, event TimelineEvent) (bool, error)
+
 	// Admin dashboard aggregations.
 	DayStats(ctx context.Context, day time.Time) (count int, revenue float64, err error)
 	CountByStatus(ctx context.Context, status OrderStatus) (int64, error)
@@ -136,6 +156,18 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 			Options: options.Index().
 				SetUnique(true).
 				SetPartialFilterExpression(bson.D{{Key: "idempotencyKey", Value: bson.D{{Key: "$exists", Value: true}}}}),
+		},
+		// Supplier settler batch queries (partial: only api-mode parked orders
+		// ever carry these fields, a sliver of the collection).
+		{
+			Keys: bson.D{{Key: "status", Value: 1}, {Key: "fulfillment.providerRef", Value: 1}},
+			Options: options.Index().
+				SetPartialFilterExpression(bson.D{{Key: "fulfillment.providerRef", Value: bson.D{{Key: "$exists", Value: true}}}}),
+		},
+		{
+			Keys: bson.D{{Key: "fulfillment.supplierNextRetryAt", Value: 1}},
+			Options: options.Index().
+				SetPartialFilterExpression(bson.D{{Key: "fulfillment.supplierNextRetryAt", Value: bson.D{{Key: "$exists", Value: true}}}}),
 		},
 	})
 	return err
@@ -315,6 +347,109 @@ func (r *MongoRepository) AppendTimelineEvent(ctx context.Context, id bson.Objec
 		return apperrors.ErrNotFound
 	}
 	return nil
+}
+
+// ListSupplierPollable returns parked api-mode orders that carry an upstream
+// reference (the supplier accepted them), oldest first. Stuck-flagged orders
+// stay in the result — the supplier may still deliver (design: keep polling).
+func (r *MongoRepository) ListSupplierPollable(ctx context.Context, limit int) ([]*Order, error) {
+	return r.findSupplierBatch(ctx, bson.D{
+		{Key: "status", Value: OrderStatusProcessing},
+		{Key: "fulfillment.providerRef", Value: bson.D{{Key: "$exists", Value: true}, {Key: "$ne", Value: ""}}},
+		{Key: "items.fulfillmentMode", Value: "api"},
+	}, limit)
+}
+
+// ListSupplierRetryable returns ref-less environmental parks whose retry clock
+// has come due. Completed/refunded orders fall out via the status clause;
+// stuck-flagged ones via the $unset of supplierNextRetryAt in MarkSupplierStuck.
+func (r *MongoRepository) ListSupplierRetryable(ctx context.Context, now time.Time, limit int) ([]*Order, error) {
+	return r.findSupplierBatch(ctx, bson.D{
+		{Key: "status", Value: OrderStatusProcessing},
+		{Key: "fulfillment.supplierNextRetryAt", Value: bson.D{{Key: "$lte", Value: now}}},
+	}, limit)
+}
+
+// findSupplierBatch runs one settler batch query, oldest orders first.
+func (r *MongoRepository) findSupplierBatch(ctx context.Context, filter bson.D, limit int) ([]*Order, error) {
+	cur, err := r.collection.Find(ctx, filter,
+		options.Find().SetSort(bson.D{{Key: "createdAt", Value: 1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var orders []*Order
+	if err := cur.All(ctx, &orders); err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
+
+// BumpSupplierRetry quietly advances the retry bookkeeping. Guarded on
+// status==processing (a no-op on an order that moved on) and deliberately
+// timeline-free — hourly retries must not spam the customer-visible timeline.
+func (r *MongoRepository) BumpSupplierRetry(ctx context.Context, id bson.ObjectID, retryCount int, nextRetryAt time.Time) error {
+	_, err := r.collection.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: id}, {Key: "status", Value: OrderStatusProcessing}},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "fulfillment.supplierRetryCount", Value: retryCount},
+			{Key: "fulfillment.supplierNextRetryAt", Value: nextRetryAt},
+			{Key: "updatedAt", Value: time.Now().UTC()},
+		}}},
+	)
+	return err
+}
+
+// SetSupplierRef promotes a retryable park to the pollable class: a re-dispatch
+// came back pending, so the order now has an upstream reference to reconcile by.
+func (r *MongoRepository) SetSupplierRef(ctx context.Context, id bson.ObjectID, ref string, event TimelineEvent) error {
+	_, err := r.collection.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: id}, {Key: "status", Value: OrderStatusProcessing}},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "fulfillment.providerRef", Value: ref},
+				{Key: "updatedAt", Value: time.Now().UTC()},
+			}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "fulfillment.supplierRetryCount", Value: ""},
+				{Key: "fulfillment.supplierNextRetryAt", Value: ""},
+			}},
+			{Key: "$push", Value: bson.D{{Key: "fulfillment.statusTimeline", Value: event}}},
+		},
+	)
+	return err
+}
+
+// MarkSupplierStuck flags an order stuck exactly once: the atomic
+// supplierStuckAt-absent filter makes concurrent ticks/replicas race to a
+// single winner, and clearing the retry clock stops re-dispatch permanently.
+// Never touches status or money — the admin decides via the refund action.
+func (r *MongoRepository) MarkSupplierStuck(ctx context.Context, id bson.ObjectID, event TimelineEvent) (bool, error) {
+	err := r.collection.FindOneAndUpdate(ctx,
+		bson.D{
+			{Key: "_id", Value: id},
+			{Key: "status", Value: OrderStatusProcessing},
+			{Key: "fulfillment.supplierStuckAt", Value: bson.D{{Key: "$exists", Value: false}}},
+		},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "fulfillment.supplierStuckAt", Value: time.Now().UTC()},
+				{Key: "updatedAt", Value: time.Now().UTC()},
+			}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "fulfillment.supplierRetryCount", Value: ""},
+				{Key: "fulfillment.supplierNextRetryAt", Value: ""},
+			}},
+			{Key: "$push", Value: bson.D{{Key: "fulfillment.statusTimeline", Value: event}}},
+		},
+	).Err()
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return false, nil // already flagged, or the order moved on
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // ListAll returns a paginated slice of orders matching f (admin), newest first.

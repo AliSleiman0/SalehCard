@@ -22,6 +22,7 @@ var Domains = []Domain{
 	{Key: "offers", Label: "Offers"},
 	{Key: "orders", Label: "Orders"},
 	{Key: "bridge", Label: "Bridge"},
+	{Key: "suppliers", Label: "Suppliers"},
 	{Key: "users", Label: "Users"},
 	{Key: "resellers", Label: "Resellers"},
 	{Key: "kyc", Label: "KYC"},
