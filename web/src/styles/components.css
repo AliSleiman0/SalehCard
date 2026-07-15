@@ -59,7 +59,8 @@
 .label { display:block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
 
 /* segmented / tabs */
-.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 4px; gap: 2px; }
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 4px; gap: 2px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
 .seg button { border: 0; background: transparent; color: var(--text-dim); font-weight: 700; font-size: 13.5px; padding: 8px 16px; border-radius: var(--r-pill); cursor: pointer; transition: .15s; }
 .seg button.on { background: var(--grad); color: #fff; }
 .seg.plain button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
@@ -116,7 +117,10 @@
   padding: 16px 18px; display:flex; align-items:center; justify-content: space-between; gap: 14px;
 }
 .vault.masked .code { filter: blur(7px); user-select: none; }
-.vault .code { transition: filter .25s; font-weight: 600; }
+/* min-width:0 + overflow-wrap so a long redemption code wraps inside the box
+   instead of overflowing the card on narrow phones (space-between + gap keeps
+   the copy button pinned to the end). */
+.vault .code { transition: filter .25s; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- skeleton ---------- */
 .skel { background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%); background-size: 400% 100%; animation: sk 1.3s infinite; border-radius: 8px; }
@@ -140,6 +144,62 @@
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* ---------- Glassmorphism auth card ---------- */
+/* Full-screen centered shell with two soft colored glows so the frosted card
+   has real color to refract behind it. */
+.auth-shell {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 28px 0;
+  overflow: hidden;
+}
+.auth-shell::before,
+.auth-shell::after {
+  content: "";
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: .55;
+  z-index: 0;
+  pointer-events: none;
+}
+.auth-shell::before {
+  background: radial-gradient(circle, var(--brand-1), transparent 68%);
+  top: -80px; inset-inline-start: -60px;
+}
+.auth-shell::after {
+  background: radial-gradient(circle, var(--brand-2, #22e3c8), transparent 68%);
+  bottom: -80px; inset-inline-end: -60px;
+}
+/* The frosted panel itself — translucent surface + backdrop blur + a light top
+   edge. Overrides .card's solid background (defined earlier, so this wins). */
+.glass-card {
+  position: relative;
+  z-index: 1;
+  background: color-mix(in srgb, var(--surface) 46%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
+  border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
+  box-shadow:
+    0 24px 70px -24px rgba(0, 0, 0, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .10);
+}
+[data-theme="light"] .glass-card {
+  background: color-mix(in srgb, #ffffff 55%, transparent);
+  border-color: color-mix(in srgb, #ffffff 65%, transparent);
+  box-shadow:
+    0 24px 70px -24px rgba(24, 24, 60, .22),
+    inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+/* Browsers without backdrop-filter fall back to a more opaque surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-card { background: var(--surface); }
 }
 
 /* ---------- spinner (LoadingSpinner + Button loading) ---------- */

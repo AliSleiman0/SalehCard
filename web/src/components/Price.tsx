@@ -14,7 +14,9 @@ export function Price({
 }) {
   const storeCur = useCurrencyStore((s) => s.currency)
   return (
-    <span className={cn('num', strike && 'strike', className)}>
+    // nowrap so a formatted price is never split mid-number, even when an
+    // ancestor sets overflow-wrap:anywhere for long ids (see .num in tokens.css).
+    <span className={cn('num', strike && 'strike', className)} style={{ whiteSpace: 'nowrap' }}>
       {fmtPrice(usd, cur ?? storeCur)}
     </span>
   )

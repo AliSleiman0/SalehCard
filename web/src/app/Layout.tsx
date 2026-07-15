@@ -9,6 +9,10 @@ export default function Layout() {
   const { agent, acctDrawer, setAcctDrawer } = useUiStore()
   const { pathname } = useLocation()
 
+  // Auth screens are focused, chrome-free: no header, footer, or bottom nav — the
+  // AuthCard carries its own logo and centers in the full viewport.
+  const authRoute = pathname === '/login' || pathname === '/register'
+
   // Close the account drawer whenever the route changes (e.g. tapping a nav link).
   useEffect(() => {
     setAcctDrawer(false)
@@ -30,12 +34,12 @@ export default function Layout() {
       data-acct-drawer={acctDrawer ? '1' : '0'}
     >
       <div className="appscroll">
-        <Header />
+        {!authRoute && <Header />}
         <main>
           <Outlet />
         </main>
-        <Footer />
-        <BottomNav />
+        {!authRoute && <Footer />}
+        {!authRoute && <BottomNav />}
       </div>
       <div className="drawer-backdrop" onClick={() => setAcctDrawer(false)} />
     </div>

@@ -35,6 +35,7 @@ export function Logo({
         </svg>
       </div>
       <div
+        className="logo-word"
         style={{
           fontFamily: 'var(--font-display)',
           fontSize: s * 0.62,

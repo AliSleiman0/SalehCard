@@ -57,16 +57,17 @@ export default function OrderDetailPage() {
             {o.fulfill === 'transfer' && <TransferDetail o={o} />}
           </>
         )}
-        <div className="row" style={{ gap: 12 }}>
+        <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
           <Button
             variant="ghost"
             block
+            style={{ flex: '1 1 130px' }}
             onClick={() => navigate(reorderId ? '/product/' + reorderId : '/')}
           >
             <Icon name="repeat" size={16} />
             {t('reorder')}
           </Button>
-          <Button variant="primary" block onClick={() => navigate('/')}>
+          <Button variant="primary" block style={{ flex: '1 1 130px' }} onClick={() => navigate('/')}>
             {t('continue_shop')}
           </Button>
         </div>
