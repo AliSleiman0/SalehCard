@@ -12,11 +12,11 @@ export function AuthCard({ reg }: { reg: boolean }) {
   const [tab, setTab] = useState<'phone' | 'email'>('phone')
 
   return (
-    <div
-      className="wrap"
-      style={{ minHeight: '78vh', display: 'grid', placeItems: 'center', padding: '30px 0' }}
-    >
-      <div className="card card-pad" style={{ width: '100%', maxWidth: 420, padding: 32 }}>
+    <div className="wrap auth-shell">
+      <div
+        className="card card-pad glass-card"
+        style={{ width: '100%', maxWidth: 420, padding: 32 }}
+      >
         <div className="col center" style={{ gap: 14, marginBottom: 22 }}>
           <Logo size={32} />
           <h1 className="h2" style={{ marginTop: 6 }}>

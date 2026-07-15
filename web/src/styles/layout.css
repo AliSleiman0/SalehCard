@@ -95,6 +95,10 @@
 /* list row */
 .lrow { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); }
 .lrow:last-child { border-bottom: 0; }
+/* Long unbreakable tokens (order ids, hashes) inside a row must be allowed to
+   break — otherwise their min-content stretches the row past a phone's width and
+   overflows the page. `anywhere` (unlike break-word) also shrinks intrinsic size. */
+.lrow, .lrow * { overflow-wrap: anywhere; }
 
 /* methods */
 .method { display: flex; align-items: center; gap: 14px; border: 1.5px solid var(--border); border-radius: var(--r-md); padding: 16px; cursor: pointer; background: var(--surface); transition: .15s; }
@@ -121,48 +125,36 @@
   opacity: 0; pointer-events: none; transition: opacity .25s;
 }
 
-/* ---------- Responsive / mobile mode ---------- */
-@media (max-width: 720px) {
+/* ---------- Responsive / mobile mode ----------
+   Breakpoints (max-width, hard-coded — CSS media queries can't read custom props):
+     920px = tablet & down   720px = phone   520px = small phone
+   Ordered largest → smallest so the narrower blocks cascade last and win. */
+
+/* Tablet & down (≤920px) — collapse the multi-column page layouts to one column
+   and turn the account sidebar into an off-canvas drawer. */
+@media (max-width: 920px) {
+  /* minmax(0, 1fr) (not the default 1fr = minmax(auto,1fr)) lets a track shrink
+     below its content's min-content, so a wide/unbreakable child can never force
+     horizontal page overflow — it reflows within the column instead. */
   .hero,
   .pdp,
   .cols2,
-  .cols-acct { grid-template-columns: 1fr; gap: 18px; }
-  .hero-card { padding: 28px 24px; }
+  .cols-acct { grid-template-columns: minmax(0, 1fr); gap: 22px; }
   .hero-side { grid-template-rows: auto auto; }
   .trustrow,
   .catgrid,
-  .prodgrid { grid-template-columns: repeat(2,1fr); }
-  .trustrow { gap: 8px; }
+  .prodgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .statgrid,
   .variants,
-  .howsteps { grid-template-columns: 1fr 1fr; }
+  .howsteps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .statgrid .bigbal { grid-column: 1 / -1; }
   .pdp-media,
   .sidenav { position: static; }
-  .appheader .wrap { height: 60px; gap: 10px; }
-  .wrap { padding-inline: 16px; }
-  .desktop-only { display: none !important; }
-  .mobile-only { display: revert !important; }
-}
-
-/* tighten list rows on small phones */
-@media (max-width: 520px) {
-  .lrow { gap: 10px; }
-  .card-pad { padding: 16px; }
-}
-
-@media (max-width: 920px) {
-  .hero,
-  .pdp,
-  .cols2,
-  .cols-acct { grid-template-columns: 1fr; }
-  .trustrow,
-  .catgrid,
-  .prodgrid { grid-template-columns: repeat(2,1fr); }
-  .sidenav { position: static; flex-direction: row; flex-wrap: wrap; }
 
   /* account sidebar becomes an off-canvas overlay drawer (scoped to .acct-drawer
-     so CategoryPage's plain .sidenav filter panel is unaffected) */
+     so CategoryPage's plain .sidenav filter panel is unaffected). The plain
+     .sidenav simply flows inline (it is a row of filter controls). */
+  .sidenav:not(.acct-drawer) { flex-direction: row; flex-wrap: wrap; }
   .acct-menu-btn { display: grid; }
   .sidenav-close { display: inline-grid; }
   .sidenav.acct-drawer {
@@ -173,4 +165,41 @@
   }
   .app[data-acct-drawer="1"] .sidenav.acct-drawer { transform: translateX(0); box-shadow: var(--shadow); }
   .app[data-acct-drawer="1"] .drawer-backdrop { opacity: 1; pointer-events: auto; }
+}
+
+/* Phone (≤720px) — swap desktop chrome for the mobile header/bottom-nav,
+   tighten the hero and header, snap padding to a fixed 16px. */
+@media (max-width: 720px) {
+  .hero-card { padding: 28px 24px; }
+  .trustrow { gap: 8px; }
+  .appheader .wrap { height: 60px; gap: 10px; }
+  .wrap { padding-inline: 16px; }
+  .desktop-only { display: none !important; }
+  .mobile-only { display: revert !important; }
+  /* `.mobile-only { display: revert }` reverts an element to its UA default display,
+     which is wrong for flex/grid containers — a <nav> reverts to `block` (stacking the
+     bottom-nav items vertically) and a <button> loses its grid centering. Restore the
+     intended display for the two mobile-only elements that aren't block by default.
+     Higher specificity (two classes) + !important wins over the .mobile-only revert. */
+  .bottomnav.mobile-only { display: flex !important; }
+  .icon-btn.mobile-only { display: grid !important; }
+}
+
+/* Small phone (≤520px) — go single-column for card + stat grids so nothing
+   clips, and tighten rows/padding. */
+@media (max-width: 520px) {
+  .catgrid,
+  .statgrid,
+  .variants,
+  .howsteps { grid-template-columns: minmax(0, 1fr); }
+  .statgrid .bigbal { grid-column: auto; }
+  .prodgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .hero-card { padding: 24px 18px; }
+  .section { margin: 28px 0; }
+  .lrow { gap: 10px; }
+  .card-pad { padding: 16px; }
+  /* On account pages the extra drawer-toggle button crowds the header; on small
+     phones drop the logo wordmark (the S-mark still links home) so the logo can't
+     overlap the right-side icons. Scoped via :has() to pages that show the button. */
+  .appheader .header-left:has(.acct-menu-btn) .logo-word { display: none; }
 }

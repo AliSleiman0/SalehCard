@@ -398,10 +398,10 @@ export default function ProductDetailPage() {
                 {t('signin_to_verify')}
               </button>
             ) : (
-              <div className="row" style={{ gap: 12 }}>
+              <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-ghost btn-lg"
-                  style={{ flex: 1 }}
+                  style={{ flex: '1 1 130px' }}
                   disabled={buyDisabled}
                   onClick={() => buy(true)}
                 >
@@ -410,7 +410,7 @@ export default function ProductDetailPage() {
                 </button>
                 <button
                   className="btn btn-primary btn-lg"
-                  style={{ flex: 1.4 }}
+                  style={{ flex: '1.4 1 130px' }}
                   disabled={buyDisabled}
                   onClick={() => buy(false)}
                 >
@@ -467,7 +467,7 @@ export default function ProductDetailPage() {
             {t('no_reviews')}
           </p>
         ) : (
-          <div className="prodgrid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+          <div className="prodgrid">
             {reviews.map((r) => (
               <div key={r.id} className="panel card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div className="row between">
