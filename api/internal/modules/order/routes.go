@@ -49,11 +49,12 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	if cfg.FulfillmentMock {
 		adapters = append(adapters, provider.NewReference(cfg.FulfillmentMockID))
 	}
-	// Panel suppliers (jentel/speedcard/gift4card — DESIGN-SUPPLIERS.md Phase 1):
-	// one shared adapter per token-configured supplier. A misconfigured entry is
+	// Upstream suppliers (jentel/speedcard/gift4card panels — DESIGN-SUPPLIERS.md
+	// Phase 1 — and the umanage telecom reseller — Phase 4): one adapter per
+	// credential-configured supplier, dispatched on Kind. A misconfigured entry is
 	// skipped, so its id falls back to the parking stub rather than failing boot.
 	for _, sc := range cfg.EnabledSuppliers() {
-		p, err := provider.NewPanel(provider.PanelConfig{ID: sc.ID, Name: sc.Name, BaseURL: sc.BaseURL, Token: sc.Token})
+		p, err := provider.New(supplierSpec(sc))
 		if err != nil {
 			slog.Warn("order: skipping misconfigured supplier", "supplier", sc.Name, "error", err)
 			continue
@@ -79,4 +80,20 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 		r.Get("/{id}", h.GetOrder)
 	})
 	return svc
+}
+
+// supplierSpec maps one configured supplier onto the transport-agnostic spec the
+// provider package dispatches on (panel vs telecom).
+func supplierSpec(sc config.SupplierConfig) provider.SupplierSpec {
+	return provider.SupplierSpec{
+		ID:        sc.ID,
+		Name:      sc.Name,
+		Kind:      sc.Kind,
+		Currency:  sc.Currency,
+		BaseURL:   sc.BaseURL,
+		Token:     sc.Token,
+		APIKey:    sc.APIKey,
+		APISecret: sc.APISecret,
+		StoreID:   sc.StoreID,
+	}
 }

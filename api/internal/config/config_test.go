@@ -133,14 +133,14 @@ func TestLoadSuppliers(t *testing.T) {
 	t.Setenv("SUPPLIER_SPEEDCARD_ID", "42")
 
 	cfg := Load()
-	if len(cfg.Suppliers) != 3 {
-		t.Fatalf("Suppliers = %d entries, want 3", len(cfg.Suppliers))
+	if len(cfg.Suppliers) != 4 {
+		t.Fatalf("Suppliers = %d entries, want 4 (3 panels + umanage)", len(cfg.Suppliers))
 	}
 	byName := map[string]SupplierConfig{}
 	for _, s := range cfg.Suppliers {
 		byName[s.Name] = s
 	}
-	if s := byName["jentel"]; s.ID != 10 || s.BaseURL != "https://api.jentel-cash.com" || s.Token != "tok-j" {
+	if s := byName["jentel"]; s.ID != 10 || s.Kind != "panel" || s.BaseURL != "https://api.jentel-cash.com" || s.Token != "tok-j" {
 		t.Errorf("jentel = %+v", s)
 	}
 	if s := byName["speedcard"]; s.ID != 42 || s.BaseURL != "https://api.speedcard.vip" {
@@ -149,10 +149,31 @@ func TestLoadSuppliers(t *testing.T) {
 	if s := byName["gift4card"]; s.ID != 12 || s.BaseURL != "https://api.gift4card.com" {
 		t.Errorf("gift4card = %+v", s)
 	}
+	// umanage is the telecom supplier (LBP, key/secret auth, provider id 13).
+	if s := byName["umanage"]; s.ID != 13 || s.Kind != "telecom" || s.Currency != "LBP" {
+		t.Errorf("umanage = %+v, want id 13 / telecom / LBP", s)
+	}
 
+	// Only jentel has a credential set → the sole enabled supplier (umanage has
+	// no key/secret here, so Configured() is false).
 	enabled := cfg.EnabledSuppliers()
 	if len(enabled) != 1 || enabled[0].Name != "jentel" {
 		t.Errorf("EnabledSuppliers = %+v, want only jentel", enabled)
+	}
+}
+
+func TestUmanageEnabledByCredentials(t *testing.T) {
+	t.Setenv("SUPPLIER_UMANAGE_KEY", "pk_live_x")
+	t.Setenv("SUPPLIER_UMANAGE_SECRET", "sk_live_y")
+	cfg := Load()
+	var found bool
+	for _, s := range cfg.EnabledSuppliers() {
+		if s.Name == "umanage" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("umanage should be enabled when key+secret are set")
 	}
 }
 

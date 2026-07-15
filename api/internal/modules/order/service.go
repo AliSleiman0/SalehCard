@@ -117,6 +117,13 @@ func NewOrderService(repo Repository, products product.Service, codes code.Servi
 	return &OrderService{repo: repo, products: products, codes: codes, wallet: wlt, promo: promos, offers: offers, providers: providers, payments: pay, usdt: usdt, kyc: kycGate, margins: margins, ntf: ntf, loyalty: loyalty, bridge: brdg}
 }
 
+// Providers exposes the upstream-fulfillment registry so the admin supplier
+// module can resolve each configured provider id to its Cataloger (balance +
+// catalog probes) without rebuilding the adapters. Resolve returns a parking
+// stub for unconfigured ids, which the Cataloger assertion then treats as
+// "catalog unavailable".
+func (s *OrderService) Providers() *provider.Registry { return s.providers }
+
 // PlaceOrder validates and prices an order server-side, charges the chosen
 // payment method, and fulfills code items by claiming inventory. It follows an
 // order-first strategy: the order is persisted as pending, then charged and

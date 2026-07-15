@@ -32,13 +32,14 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/review"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/role"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/supplier"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/bsc"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
-	"github.com/AliSleiman0/salehcard/api/internal/platform/bsc"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/tron"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
@@ -329,6 +330,15 @@ func (s *Server) Routes() {
 		domain("settings", func(g chi.Router) { settings.RegisterAdminRoutes(g, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider) })
 		domain("payments", func(g chi.Router) { payment.RegisterAdminRoutes(g, s.db, paySvc, rec) })
 		domain("bridge", func(g chi.Router) { bridge.RegisterAdminRoutes(g, bridgeReg.Service, bridgeReg.Store, rec) })
+		// Suppliers admin surface (DESIGN-SUPPLIERS.md Phase 3): per-supplier
+		// balance/health/mapped-count, catalog browse+import, price-drift sync,
+		// per-supplier settings, recent orders. Reuses the fulfillment registry
+		// built in order.RegisterRoutes (orderSvc.Providers()) — each configured
+		// supplier id resolves to its adapter's Cataloger for the live probes.
+		supplierProducts := product.NewProductService(product.NewMongoRepository(s.db), product.WithCategoryResolver(catResolver))
+		domain("suppliers", func(g chi.Router) {
+			supplier.RegisterAdminRoutes(g, s.db, rec, orderSvc.Providers(), s.cfg.EnabledSuppliers(), supplierProducts)
+		})
 
 		// Role management mounts outside the domain wrapper: listing roles + the
 		// permission catalog is open to every admin (the console needs names to

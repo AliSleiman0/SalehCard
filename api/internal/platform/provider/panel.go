@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -27,19 +28,21 @@ import (
 //
 // Sensitive inputs (PlayerID, Fields values) are never logged here (spec §3.2).
 type Panel struct {
-	id      int
-	name    string
-	baseURL string // override point for tests
-	token   string
-	http    *http.Client
+	id       int
+	name     string
+	currency string
+	baseURL  string // override point for tests
+	token    string
+	http     *http.Client
 }
 
 // PanelConfig configures one panel supplier instance.
 type PanelConfig struct {
-	ID      int    // registry id the adapter registers under
-	Name    string // supplier slug ("jentel", "speedcard", "gift4card") — logging/errors only
-	BaseURL string // e.g. https://api.jentel-cash.com
-	Token   string // api-token header value
+	ID       int    // registry id the adapter registers under
+	Name     string // supplier slug ("jentel", "speedcard", "gift4card") — logging/errors only
+	Currency string // balance currency for the admin probe (USD); defaults to USD
+	BaseURL  string // e.g. https://api.jentel-cash.com
+	Token    string // api-token header value
 }
 
 // NewPanel builds a panel adapter, erroring on missing config (the caller
@@ -48,12 +51,17 @@ func NewPanel(cfg PanelConfig) (*Panel, error) {
 	if cfg.ID <= 0 || cfg.Name == "" || cfg.BaseURL == "" || cfg.Token == "" {
 		return nil, fmt.Errorf("panel: id, name, base url, and token are required")
 	}
+	currency := cfg.Currency
+	if currency == "" {
+		currency = "USD"
+	}
 	return &Panel{
-		id:      cfg.ID,
-		name:    cfg.Name,
-		baseURL: strings.TrimRight(cfg.BaseURL, "/"),
-		token:   cfg.Token,
-		http:    &http.Client{Timeout: 20 * time.Second},
+		id:       cfg.ID,
+		name:     cfg.Name,
+		currency: currency,
+		baseURL:  strings.TrimRight(cfg.BaseURL, "/"),
+		token:    cfg.Token,
+		http:     &http.Client{Timeout: 20 * time.Second},
 	}, nil
 }
 
@@ -181,9 +189,177 @@ func (p *Panel) Verify(_ context.Context, _ FulfillInput) (AccountInfo, error) {
 	return AccountInfo{}, ErrNotImplemented
 }
 
-// Profile (balance probe) and catalog listing are Phase 3 (admin /suppliers
-// page) — they will be added as non-Provider methods reached via an interface
-// assertion so the fulfillment port stays slim.
+// Profile probes the panel account for its balance (admin /suppliers page,
+// DESIGN-SUPPLIERS.md Phase 3): GET {base}/client/api/profile. The success body
+// is the bare object {balance, email} (not the {status:"OK",data} envelope);
+// an error body still carries {status:"error", code}, so classifyProbe runs
+// first. Balance is a decimal string upstream.
+func (p *Panel) Profile(ctx context.Context) (Account, error) {
+	body, err := p.getRaw(ctx, p.baseURL+"/client/api/profile")
+	if err != nil {
+		return Account{}, err
+	}
+	var prof struct {
+		Balance flexString `json:"balance"`
+		Email   string     `json:"email"`
+		Status  string     `json:"status"`
+		Code    int        `json:"code"`
+		Message string     `json:"message"`
+		Msg     string     `json:"msg"`
+	}
+	if err := json.Unmarshal(body, &prof); err != nil {
+		return Account{}, fmt.Errorf("panel %s: undecodable profile: %w", p.name, ErrUnavailable)
+	}
+	if strings.EqualFold(prof.Status, "error") || prof.Code != 0 {
+		return Account{}, p.classifyProbe(prof.Code, firstNonEmpty(prof.Message, prof.Msg))
+	}
+	bal, _ := strconv.ParseFloat(strings.TrimSpace(string(prof.Balance)), 64)
+	return Account{Balance: bal, Currency: p.currency, Email: prof.Email}, nil
+}
+
+// panelCatalogProduct is one row of GET /client/api/products. qty_values is
+// polymorphic: null (single qty), a discrete ["110","150"] list, or a
+// {"min":..,"max":..} range (numbers or strings) — panelQty decodes all three.
+type panelCatalogProduct struct {
+	ID           flexString `json:"id"`
+	Name         string     `json:"name"`
+	Price        float64    `json:"price"`
+	BasePrice    float64    `json:"base_price"`
+	Params       []string   `json:"params"`
+	CategoryName string     `json:"category_name"`
+	Available    bool       `json:"available"`
+	ProductType  string     `json:"product_type"`
+	ParentID     flexString `json:"parent_id"`
+	QtyValues    panelQty   `json:"qty_values"`
+}
+
+// panelQty captures the three qty_values shapes.
+type panelQty struct {
+	Values []string
+	Min    *int
+	Max    *int
+}
+
+func (q *panelQty) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "" || s == "null" {
+		return nil
+	}
+	if strings.HasPrefix(s, "[") {
+		var raw []flexString
+		if err := json.Unmarshal(b, &raw); err != nil {
+			return err
+		}
+		for _, v := range raw {
+			if t := strings.TrimSpace(string(v)); t != "" {
+				q.Values = append(q.Values, t)
+			}
+		}
+		return nil
+	}
+	var r struct {
+		Min flexString `json:"min"`
+		Max flexString `json:"max"`
+	}
+	if err := json.Unmarshal(b, &r); err != nil {
+		return err
+	}
+	if n, err := strconv.Atoi(strings.TrimSpace(string(r.Min))); err == nil {
+		q.Min = &n
+	}
+	if n, err := strconv.Atoi(strings.TrimSpace(string(r.Max))); err == nil {
+		q.Max = &n
+	}
+	return nil
+}
+
+// ListProducts returns the panel's full catalog for the admin browse/import UI:
+// GET {base}/client/api/products. The success body is a bare JSON array; an
+// error body is the {status:"error",code} envelope.
+func (p *Panel) ListProducts(ctx context.Context) ([]CatalogProduct, error) {
+	body, err := p.getRaw(ctx, p.baseURL+"/client/api/products")
+	if err != nil {
+		return nil, err
+	}
+	// Detect an error envelope before attempting the array decode.
+	var env panelEnvelope
+	if json.Unmarshal(body, &env) == nil && (strings.EqualFold(env.Status, "error") || env.Code != 0) {
+		return nil, p.classifyProbe(env.Code, firstNonEmpty(env.Message, env.Msg))
+	}
+	var rows []panelCatalogProduct
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, fmt.Errorf("panel %s: undecodable products: %w", p.name, ErrUnavailable)
+	}
+	out := make([]CatalogProduct, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, CatalogProduct{
+			UpstreamID:  string(r.ID),
+			Name:        r.Name,
+			Category:    r.CategoryName,
+			ParentID:    string(r.ParentID),
+			Price:       r.Price,
+			BasePrice:   r.BasePrice,
+			Currency:    p.currency,
+			Available:   r.Available,
+			Params:      r.Params,
+			ProductType: r.ProductType,
+			QtyMin:      r.QtyValues.Min,
+			QtyMax:      r.QtyValues.Max,
+			QtyValues:   r.QtyValues.Values,
+		})
+	}
+	return out, nil
+}
+
+// getRaw performs an authenticated GET and returns the raw body, wrapping
+// transport errors and undecodable non-2xx responses in ErrUnavailable. Used by
+// the Cataloger probes, whose success bodies are NOT the fulfillment envelope.
+func (p *Panel) getRaw(ctx context.Context, endpoint string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("panel %s: build request: %w", p.name, ErrUnavailable)
+	}
+	req.Header.Set("api-token", p.token)
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("panel %s: request failed: %w", p.name, ErrUnavailable)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("panel %s: read body: %w", p.name, ErrUnavailable)
+	}
+	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && len(body) == 0 {
+		return nil, fmt.Errorf("panel %s: status %d: %w", p.name, resp.StatusCode, ErrUnavailable)
+	}
+	return body, nil
+}
+
+// classifyProbe maps a panel error code to the health-probe vocabulary
+// (distinct from classify, which serves the order engine). 120-122 → auth,
+// 123 → IP blocked, 130 → maintenance, everything else → unreachable.
+func (p *Panel) classifyProbe(code int, msg string) error {
+	switch code {
+	case 120, 121, 122:
+		return fmt.Errorf("panel %s: auth error (code %d): %s: %w", p.name, code, msg, ErrProbeAuth)
+	case 123:
+		return fmt.Errorf("panel %s: IP not allowed (code %d): %w", p.name, code, ErrProbeIPBlocked)
+	case 130:
+		return fmt.Errorf("panel %s: maintenance (code %d): %w", p.name, code, ErrProbeMaintenance)
+	default:
+		return fmt.Errorf("panel %s: probe error code %d: %s: %w", p.name, code, msg, ErrUnavailable)
+	}
+}
+
+// firstNonEmpty returns the first non-empty string.
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // get performs an authenticated GET and decodes the envelope. Transport
 // errors, non-2xx statuses, and undecodable bodies all wrap ErrUnavailable:

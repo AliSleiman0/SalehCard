@@ -246,23 +246,39 @@ type BridgeConfig struct {
 	AlfaMessageFee        float64
 }
 
-// SupplierConfig is one upstream panel supplier (jentel / speedcard /
-// gift4card — same white-label API, one adapter each). Tokens are secrets and
-// are never validated at boot: an empty token simply disables the supplier
-// (its provider id falls back to the parking stub), matching the SMS/IDCheck
-// lazily-validated-credentials convention.
+// SupplierConfig is one upstream supplier. The panel suppliers (jentel /
+// speedcard / gift4card) share one white-label API authed by Token; umanage is
+// a telecom reseller (Kind "telecom") authed by APIKey/APISecret over a
+// per-store path. Credentials are secrets and are never validated at boot: an
+// absent credential simply disables the supplier (its provider id falls back to
+// the parking stub), matching the SMS/IDCheck lazily-validated convention.
 type SupplierConfig struct {
-	ID      int    // provider-registry id (also Product.FulfillmentProvider)
-	Name    string // slug shown in admin dropdown / logs
-	BaseURL string
-	Token   string
+	ID       int    // provider-registry id (also Product.FulfillmentProvider)
+	Name     string // slug shown in admin dropdown / logs
+	Kind     string // "panel" (jentel/speedcard/gift4card) | "telecom" (umanage)
+	Currency string // supplier's own balance currency: "USD" | "LBP"
+	BaseURL  string
+	// Panel auth (Kind == "panel").
+	Token string // api-token header value
+	// Telecom auth (Kind == "telecom", umanage).
+	APIKey    string
+	APISecret string
+	StoreID   int // 0 → resolve at boot via GET /stores
 }
 
-// EnabledSuppliers returns the suppliers that have a token configured.
+// Configured reports whether this supplier has the credentials its Kind needs.
+func (s SupplierConfig) Configured() bool {
+	if s.Kind == "telecom" {
+		return s.APIKey != "" && s.APISecret != ""
+	}
+	return s.Token != ""
+}
+
+// EnabledSuppliers returns the suppliers that have credentials configured.
 func (c *Config) EnabledSuppliers() []SupplierConfig {
 	var out []SupplierConfig
 	for _, s := range c.Suppliers {
-		if s.Token != "" {
+		if s.Configured() {
 			out = append(out, s)
 		}
 	}
@@ -348,22 +364,38 @@ func Load() *Config {
 		FulfillmentMockID: getInt("FULFILLMENT_MOCK_ID", 1),
 		Suppliers: []SupplierConfig{
 			{
-				Name:    "jentel",
-				ID:      getInt("SUPPLIER_JENTEL_ID", 10),
-				BaseURL: getEnv("SUPPLIER_JENTEL_BASE_URL", "https://api.jentel-cash.com"),
-				Token:   os.Getenv("SUPPLIER_JENTEL_TOKEN"),
+				Name:     "jentel",
+				Kind:     "panel",
+				Currency: "USD",
+				ID:       getInt("SUPPLIER_JENTEL_ID", 10),
+				BaseURL:  getEnv("SUPPLIER_JENTEL_BASE_URL", "https://api.jentel-cash.com"),
+				Token:    os.Getenv("SUPPLIER_JENTEL_TOKEN"),
 			},
 			{
-				Name:    "speedcard",
-				ID:      getInt("SUPPLIER_SPEEDCARD_ID", 11),
-				BaseURL: getEnv("SUPPLIER_SPEEDCARD_BASE_URL", "https://api.speedcard.vip"),
-				Token:   os.Getenv("SUPPLIER_SPEEDCARD_TOKEN"),
+				Name:     "speedcard",
+				Kind:     "panel",
+				Currency: "USD",
+				ID:       getInt("SUPPLIER_SPEEDCARD_ID", 11),
+				BaseURL:  getEnv("SUPPLIER_SPEEDCARD_BASE_URL", "https://api.speedcard.vip"),
+				Token:    os.Getenv("SUPPLIER_SPEEDCARD_TOKEN"),
 			},
 			{
-				Name:    "gift4card",
-				ID:      getInt("SUPPLIER_GIFT4CARD_ID", 12),
-				BaseURL: getEnv("SUPPLIER_GIFT4CARD_BASE_URL", "https://api.gift4card.com"),
-				Token:   os.Getenv("SUPPLIER_GIFT4CARD_TOKEN"),
+				Name:     "gift4card",
+				Kind:     "panel",
+				Currency: "USD",
+				ID:       getInt("SUPPLIER_GIFT4CARD_ID", 12),
+				BaseURL:  getEnv("SUPPLIER_GIFT4CARD_BASE_URL", "https://api.gift4card.com"),
+				Token:    os.Getenv("SUPPLIER_GIFT4CARD_TOKEN"),
+			},
+			{
+				Name:      "umanage",
+				Kind:      "telecom",
+				Currency:  "LBP",
+				ID:        getInt("SUPPLIER_UMANAGE_ID", 13),
+				BaseURL:   getEnv("SUPPLIER_UMANAGE_BASE_URL", "https://api.umanageapp.uk/api/v1/external"),
+				APIKey:    os.Getenv("SUPPLIER_UMANAGE_KEY"),
+				APISecret: os.Getenv("SUPPLIER_UMANAGE_SECRET"),
+				StoreID:   getInt("SUPPLIER_UMANAGE_STORE_ID", 0),
 			},
 		},
 		SupplierSettlerInterval: getDuration("SUPPLIER_SETTLER_INTERVAL", 60*time.Second),
@@ -419,14 +451,14 @@ func Load() *Config {
 			TouchTransferTemplate: getEnv("BRIDGE_TOUCH_TRANSFER_TEMPLATE", "{phone}T{amount}"),
 			TouchTransferDest:     getEnv("BRIDGE_TOUCH_TRANSFER_DEST", "1199"),
 			// Alfa recharge is a USSD dial (not SMS): *111*<card PIN>*<number>#.
-			AlfaRechargeTemplate:  getEnv("BRIDGE_ALFA_RECHARGE_TEMPLATE", "*111*{code}*{phone}#"),
-			AlfaRechargeDest:      getEnv("BRIDGE_ALFA_RECHARGE_DEST", "1313"),
-			AlfaTransferTemplate:  getEnv("BRIDGE_ALFA_TRANSFER_TEMPLATE", "{phone}T{amount}"),
-			AlfaTransferDest:      getEnv("BRIDGE_ALFA_TRANSFER_DEST", "1313"),
-			TouchMinBalance:       getFloat("BRIDGE_TOUCH_MIN_BALANCE", 20),
-			AlfaMinBalance:        getFloat("BRIDGE_ALFA_MIN_BALANCE", 20),
-			TouchMessageFee:       getFloat("BRIDGE_TOUCH_MESSAGE_FEE", 0.16),
-			AlfaMessageFee:        getFloat("BRIDGE_ALFA_MESSAGE_FEE", 0.14),
+			AlfaRechargeTemplate: getEnv("BRIDGE_ALFA_RECHARGE_TEMPLATE", "*111*{code}*{phone}#"),
+			AlfaRechargeDest:     getEnv("BRIDGE_ALFA_RECHARGE_DEST", "1313"),
+			AlfaTransferTemplate: getEnv("BRIDGE_ALFA_TRANSFER_TEMPLATE", "{phone}T{amount}"),
+			AlfaTransferDest:     getEnv("BRIDGE_ALFA_TRANSFER_DEST", "1313"),
+			TouchMinBalance:      getFloat("BRIDGE_TOUCH_MIN_BALANCE", 20),
+			AlfaMinBalance:       getFloat("BRIDGE_ALFA_MIN_BALANCE", 20),
+			TouchMessageFee:      getFloat("BRIDGE_TOUCH_MESSAGE_FEE", 0.16),
+			AlfaMessageFee:       getFloat("BRIDGE_ALFA_MESSAGE_FEE", 0.14),
 		},
 	}
 }
