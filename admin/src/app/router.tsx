@@ -18,6 +18,7 @@ const ResellerListPage = lazy(() => import('@/features/resellers/pages/ResellerL
 const ResellerDetailPage = lazy(() => import('@/features/resellers/pages/ResellerDetailPage'))
 const FinancePage = lazy(() => import('@/features/finance/pages/FinancePage'))
 const TopupsPage = lazy(() => import('@/features/topups/pages/TopupsPage'))
+const TopupMethodsPage = lazy(() => import('@/features/topups/pages/TopupMethodsPage'))
 const PaymentsPage = lazy(() => import('@/features/payments/pages/PaymentsPage'))
 const BridgePage = lazy(() => import('@/features/bridge/pages/BridgePage'))
 const SuppliersPage = lazy(() => import('@/features/suppliers/pages/SuppliersPage'))
@@ -68,6 +69,7 @@ export default function AppRouter() {
         <Route path="/resellers/:id" element={guard('resellers', <ResellerDetailPage />)} />
         <Route path="/finance" element={guard('finance', <FinancePage />)} />
         <Route path="/topups" element={guard('topups', <TopupsPage />)} />
+        <Route path="/topup-methods" element={guard('topups', <TopupMethodsPage />)} />
         <Route path="/payments" element={guard('payments', <PaymentsPage />)} />
         <Route path="/promos" element={guard('promos', <PromoListPage />)} />
         <Route path="/promos/new" element={guard('promos', <PromoEditPage />)} />

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
@@ -13,11 +14,16 @@ import '../../../payments/presentation/providers.dart';
 import '../../domain/entities/wallet.dart';
 import '../providers.dart';
 
-/// Top-up screen: preset amount chips + a custom amount field, an out-of-band
-/// payment channel selector (Whish/OMT/cash/USDT), an optional payment note,
-/// and a request history list. Submits a PENDING request via
+/// Sentinel selection key for the on-chain USDT option (settles automatically,
+/// distinct from the admin-defined manual methods).
+const _usdtOnchainKey = '__usdt_onchain__';
+
+/// Top-up screen: preset amount chips + a custom amount field, a payment-method
+/// selector (on-chain USDT when enabled + admin-defined manual methods, each
+/// with its own instructions and inputs), an optional note, and a request
+/// history list. A manual method submits a PENDING request via
 /// `POST /wallet/topups` — the wallet is credited only when an admin approves
-/// after confirming the payment.
+/// after confirming the payment. USDT settles on-chain automatically.
 class TopUpScreen extends ConsumerStatefulWidget {
   const TopUpScreen({super.key});
 
@@ -27,21 +33,24 @@ class TopUpScreen extends ConsumerStatefulWidget {
 
 class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   static const List<double> _presets = [25, 50, 100, 250];
-  static const List<(String, IconData)> _channels = [
-    ('whish', Icons.phone_iphone_rounded),
-    ('omt', Icons.storefront_rounded),
-    ('cash', Icons.payments_rounded),
-    ('usdt', Icons.currency_exchange_rounded),
-    ('other', Icons.more_horiz_rounded),
-  ];
 
   final _customController = TextEditingController();
   final _noteController = TextEditingController();
   double? _selectedPreset = 50;
-  String _channel = 'whish';
+
+  /// The selected method key: a method id, the on-chain USDT sentinel, or null
+  /// (defaults to the first available option at render time).
+  String? _selKey;
   // On-chain USDT network pick; empty = the server's default. Only offered
   // when the config lists more than one network.
   String _usdtNetwork = '';
+
+  /// Collected values for the selected manual method's inputs (field key ->
+  /// value; file fields hold the uploaded document URL).
+  final Map<String, String> _fieldValues = {};
+
+  /// File-field keys currently uploading (spinner state).
+  final Set<String> _uploadingKeys = {};
 
   @override
   void initState() {
@@ -65,55 +74,114 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     return _selectedPreset ?? 0;
   }
 
-  Future<void> _submit() async {
+  /// Selecting a method clears any inputs from the previously-selected one.
+  void _selectMethod(String key) {
+    if (_selKey == key) return;
+    setState(() {
+      _selKey = key;
+      _fieldValues.clear();
+      _uploadingKeys.clear();
+    });
+  }
+
+  /// Picks a photo and uploads it, storing the returned URL as [fieldKey]'s
+  /// value. Reuses the same image_picker → multipart flow as KYC.
+  Future<void> _pickAndUpload(String fieldKey) async {
+    FocusScope.of(context).unfocus();
+    final l10n = AppLocalizations.of(context);
+    final picked = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 2000);
+    if (picked == null || !mounted) return;
+    setState(() => _uploadingKeys.add(fieldKey));
+    final result =
+        await ref.read(walletRepositoryProvider).uploadDocument(picked.path);
+    if (!mounted) return;
+    result.match(
+      (failure) {
+        setState(() => _uploadingKeys.remove(fieldKey));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(failure.message.isNotEmpty
+              ? failure.message
+              : l10n.paymentFailed),
+        ));
+      },
+      (url) {
+        setState(() {
+          _fieldValues[fieldKey] = url;
+          _uploadingKeys.remove(fieldKey);
+        });
+      },
+    );
+  }
+
+  Future<void> _submit(List<TopUpMethod> methods) async {
     final l10n = AppLocalizations.of(context);
     final amount = _amount;
     if (amount <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.topUpAmount)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.topUpAmount)));
       return;
     }
 
-    // USDT is an on-chain, auto-confirming top-up when the backend has it
-    // enabled: create a deposit intent and hand off to the waiting screen.
-    // (If it is disabled, fall through to the manual out-of-band request.)
-    if (_channel == 'usdt') {
+    final selKey = _effectiveSelKey(methods);
+
+    // On-chain USDT: create a deposit intent and hand off to the waiting screen.
+    if (selKey == _usdtOnchainKey) {
       final config = await ref.read(paymentConfigProvider.future);
       if (!mounted) return;
-      if (config.usdtEnabled) {
-        // A stale pick (network no longer offered) falls back to the default.
-        final network =
-            config.networks.contains(_usdtNetwork) ? _usdtNetwork : '';
-        await _submitUsdtIntent(amount, l10n, network);
+      final network = config.networks.contains(_usdtNetwork) ? _usdtNetwork : '';
+      await _submitUsdtIntent(amount, l10n, network);
+      return;
+    }
+
+    final method = methods.where((m) => m.id == selKey).firstOrNull;
+    if (method == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose a payment method.')),
+      );
+      return;
+    }
+
+    // Required-field guard (the server re-validates).
+    for (final f in method.fields) {
+      if (f.isRequired && (_fieldValues[f.key]?.trim().isEmpty ?? true)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${f.label} is required.')),
+        );
         return;
       }
     }
 
-    final req = await ref
-        .read(topUpControllerProvider.notifier)
-        .submit(
+    final fields = <String, String>{
+      for (final e in _fieldValues.entries)
+        if (e.value.trim().isNotEmpty) e.key: e.value.trim(),
+    };
+
+    final req = await ref.read(topUpControllerProvider.notifier).submit(
           TopUpInput(
             amount: amount,
-            channel: _channel,
+            methodId: method.id,
+            fields: fields,
             note: _noteController.text.trim(),
           ),
         );
     if (!mounted) return;
     if (req != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).topUpRequested)),
+        SnackBar(content: Text(l10n.topUpRequested)),
       );
       _noteController.clear();
+      setState(() {
+        _fieldValues.clear();
+        _uploadingKeys.clear();
+      });
     } else {
       final failure = ref.read(topUpControllerProvider).failure;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            failure?.message.isNotEmpty == true
-                ? failure!.message
-                : l10n.paymentFailed,
-          ),
+          content: Text(failure?.message.isNotEmpty == true
+              ? failure!.message
+              : l10n.paymentFailed),
         ),
       );
     }
@@ -135,22 +203,31 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       final failure = ref.read(createTopUpIntentControllerProvider).failure;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            failure?.message.isNotEmpty == true
-                ? failure!.message
-                : l10n.paymentFailed,
-          ),
+          content: Text(failure?.message.isNotEmpty == true
+              ? failure!.message
+              : l10n.paymentFailed),
         ),
       );
     }
   }
 
-  /// Pull-to-refresh for the request history: an admin approval moves both the
-  /// request status and the wallet balance, so refresh both.
+  /// Pull-to-refresh: an admin approval moves both the request status and the
+  /// wallet balance, and the admin may have edited the method list.
   Future<void> _refreshRequests() async {
     ref.invalidate(topUpRequestsProvider);
+    ref.invalidate(topUpMethodsProvider);
     ref.invalidate(walletProvider);
     await ref.read(topUpRequestsProvider.future);
+  }
+
+  /// The selection to act on: the explicit pick, else the first available
+  /// option (on-chain USDT first when enabled, else the first manual method).
+  String? _effectiveSelKey(List<TopUpMethod> methods) {
+    if (_selKey != null) return _selKey;
+    final usdtEnabled =
+        ref.read(paymentConfigProvider).asData?.value.usdtEnabled ?? false;
+    if (usdtEnabled) return _usdtOnchainKey;
+    return methods.firstOrNull?.id;
   }
 
   @override
@@ -160,11 +237,14 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     final submitting = ref.watch(topUpControllerProvider).submitting ||
         ref.watch(createTopUpIntentControllerProvider).submitting;
     final requestsAsync = ref.watch(topUpRequestsProvider);
+    final methodsAsync = ref.watch(topUpMethodsProvider);
     final amount = _amount;
     final paymentConfig = ref.watch(paymentConfigProvider).asData?.value;
-    final usdtNetworks = (paymentConfig?.usdtEnabled ?? false)
-        ? paymentConfig!.networks
-        : const <String>[];
+    final usdtEnabled = paymentConfig?.usdtEnabled ?? false;
+    final usdtNetworks = usdtEnabled ? paymentConfig!.networks : const <String>[];
+    final methods = methodsAsync.asData?.value ?? const <TopUpMethod>[];
+    final selKey = _effectiveSelKey(methods);
+    final selectedMethod = methods.where((m) => m.id == selKey).firstOrNull;
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -197,8 +277,7 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                       for (final preset in _presets)
                         _AmountChip(
                           label: formatUsd(preset),
-                          selected:
-                              _selectedPreset == preset &&
+                          selected: _selectedPreset == preset &&
                               _customController.text.trim().isEmpty,
                           onTap: () {
                             FocusScope.of(context).unfocus();
@@ -225,20 +304,32 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  if (methodsAsync.isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: AppSpinner(size: 22),
+                    ),
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      for (final (channel, icon) in _channels)
+                      if (usdtEnabled)
                         _ChannelChip(
-                          label: channel.toUpperCase(),
-                          icon: icon,
-                          selected: _channel == channel,
-                          onTap: () => setState(() => _channel = channel),
+                          label: 'USDT',
+                          icon: Icons.currency_exchange_rounded,
+                          selected: selKey == _usdtOnchainKey,
+                          onTap: () => _selectMethod(_usdtOnchainKey),
+                        ),
+                      for (final m in methods)
+                        _ChannelChip(
+                          label: m.name,
+                          icon: Icons.account_balance_rounded,
+                          selected: selKey == m.id,
+                          onTap: () => _selectMethod(m.id),
                         ),
                     ],
                   ),
-                  if (_channel == 'usdt' && usdtNetworks.length > 1) ...[
+                  if (selKey == _usdtOnchainKey && usdtNetworks.length > 1) ...[
                     const SizedBox(height: 16),
                     Text(
                       l10n.usdtNetworkLabel,
@@ -266,6 +357,22 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                           ),
                       ],
                     ),
+                  ],
+                  if (selectedMethod != null) ...[
+                    if (selectedMethod.instructions.isNotEmpty)
+                      _InstructionsCard(text: selectedMethod.instructions),
+                    for (final field in selectedMethod.fields)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: _MethodFieldInput(
+                          field: field,
+                          value: _fieldValues[field.key],
+                          uploading: _uploadingKeys.contains(field.key),
+                          onChanged: (v) =>
+                              setState(() => _fieldValues[field.key] = v),
+                          onPickFile: () => _pickAndUpload(field.key),
+                        ),
+                      ),
                   ],
                   const SizedBox(height: 16),
                   _NoteField(controller: _noteController),
@@ -301,9 +408,9 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
           _TopUpBar(
             label: '${l10n.topUpCta}  ·  ${formatUsd(amount)}',
             submitting: submitting,
-            enabled: amount > 0,
+            enabled: amount > 0 && selKey != null,
             colors: colors,
-            onTap: _submit,
+            onTap: () => _submit(methods),
           ),
         ],
       ),
@@ -311,7 +418,253 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   }
 }
 
-/// A selectable out-of-band payment channel chip.
+/// A card showing the selected method's "how to pay" instructions.
+class _InstructionsCard extends StatelessWidget {
+  const _InstructionsCard({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTokens.brand1.withValues(alpha: 0.08),
+        border: Border.all(color: AppTokens.brand1.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 18, color: AppTokens.brand1),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13.5,
+                height: 1.4,
+                color: colors.text,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One dynamic input for a manual method: text/number → field, select →
+/// dropdown, file → pick-and-upload button with an uploaded/loading state.
+class _MethodFieldInput extends StatelessWidget {
+  const _MethodFieldInput({
+    required this.field,
+    required this.value,
+    required this.uploading,
+    required this.onChanged,
+    required this.onPickFile,
+  });
+
+  final TopUpMethodField field;
+  final String? value;
+  final bool uploading;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onPickFile;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final label = field.isRequired ? '${field.label} *' : field.label;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            color: colors.text,
+          ),
+        ),
+        const SizedBox(height: 8),
+        switch (field.type) {
+          TopUpFieldType.select => _SelectField(
+              field: field,
+              value: value,
+              onChanged: onChanged,
+            ),
+          TopUpFieldType.file => _FileField(
+              uploaded: value != null && value!.isNotEmpty,
+              uploading: uploading,
+              onPick: onPickFile,
+            ),
+          _ => _TextInput(
+              field: field,
+              value: value,
+              onChanged: onChanged,
+            ),
+        },
+      ],
+    );
+  }
+}
+
+class _TextInput extends StatelessWidget {
+  const _TextInput({
+    required this.field,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final TopUpMethodField field;
+  final String? value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final isNumber = field.type == TopUpFieldType.number;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppTokens.rMd),
+      borderSide: BorderSide(color: colors.border),
+    );
+    return TextField(
+      keyboardType: isNumber
+          ? const TextInputType.numberWithOptions(decimal: true)
+          : TextInputType.text,
+      inputFormatters: isNumber
+          ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))]
+          : null,
+      onChanged: onChanged,
+      style: TextStyle(fontSize: 14, color: colors.text),
+      cursorColor: AppTokens.brand1,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: colors.surface,
+        hintText: field.placeholder.isNotEmpty ? field.placeholder : null,
+        hintStyle: TextStyle(color: colors.textFaint),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppTokens.rMd),
+          borderSide: const BorderSide(color: AppTokens.brand1, width: 1.6),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectField extends StatelessWidget {
+  const _SelectField({
+    required this.field,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final TopUpMethodField field;
+  final String? value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppTokens.rMd),
+      borderSide: BorderSide(color: colors.border),
+    );
+    return DropdownButtonFormField<String>(
+      initialValue:
+          (value != null && field.options.contains(value)) ? value : null,
+      isExpanded: true,
+      dropdownColor: colors.surface,
+      style: TextStyle(fontSize: 14, color: colors.text),
+      hint: Text(field.placeholder.isNotEmpty ? field.placeholder : 'Select…',
+          style: TextStyle(color: colors.textFaint)),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: colors.surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppTokens.rMd),
+          borderSide: const BorderSide(color: AppTokens.brand1, width: 1.6),
+        ),
+      ),
+      items: [
+        for (final opt in field.options)
+          DropdownMenuItem(value: opt, child: Text(opt)),
+      ],
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
+    );
+  }
+}
+
+class _FileField extends StatelessWidget {
+  const _FileField({
+    required this.uploaded,
+    required this.uploading,
+    required this.onPick,
+  });
+
+  final bool uploaded;
+  final bool uploading;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final done = uploaded && !uploading;
+    return InkWell(
+      onTap: uploading ? null : onPick,
+      borderRadius: BorderRadius.circular(AppTokens.rMd),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border.all(
+            color: done ? AppTokens.accent : colors.border,
+          ),
+          borderRadius: BorderRadius.circular(AppTokens.rMd),
+        ),
+        child: Row(
+          children: [
+            if (uploading)
+              const AppSpinner(size: 18)
+            else
+              Icon(
+                done ? Icons.check_circle_rounded : Icons.upload_file_rounded,
+                size: 20,
+                color: done ? AppTokens.accent : colors.textDim,
+              ),
+            const SizedBox(width: 10),
+            Text(
+              uploading
+                  ? 'Uploading…'
+                  : done
+                      ? 'Uploaded · tap to replace'
+                      : 'Upload photo',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: done ? AppTokens.accent : colors.text,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A selectable payment-method chip.
 class _ChannelChip extends StatelessWidget {
   const _ChannelChip({
     required this.label,
@@ -404,7 +757,7 @@ class _NoteField extends StatelessWidget {
   }
 }
 
-/// One row in the request history: amount + channel + status chip (+ rejection
+/// One row in the request history: amount + method + status chip (+ rejection
 /// reason when present).
 class _RequestTile extends StatelessWidget {
   const _RequestTile({required this.request, required this.l10n});
@@ -450,15 +803,17 @@ class _RequestTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                request.channel.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: colors.textFaint,
+              Expanded(
+                child: Text(
+                  request.methodLabel.toUpperCase(),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors.textFaint,
+                  ),
                 ),
               ),
-              const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(

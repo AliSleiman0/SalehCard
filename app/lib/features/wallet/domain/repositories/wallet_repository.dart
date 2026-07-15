@@ -13,4 +13,10 @@ abstract interface class WalletRepository {
 
   /// The customer's top-up request history, newest first.
   Future<Either<Failure, List<TopUpRequest>>> listTopUps();
+
+  /// The enabled admin-defined manual funding methods.
+  Future<Either<Failure, List<TopUpMethod>>> listMethods();
+
+  /// Uploads a payment-proof photo, returning its stored URL.
+  Future<Either<Failure, String>> uploadDocument(String filePath);
 }

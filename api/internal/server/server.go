@@ -252,7 +252,7 @@ func (s *Server) Routes() {
 		s.supplierSettler = order.NewSupplierSettler(orderSvc, rec,
 			s.cfg.SupplierSettlerInterval, s.cfg.SupplierSettlerGiveUp)
 	}
-	wallet.RegisterRoutes(s.router, s.db, s.cfg)
+	wallet.RegisterRoutes(s.router, s.db, s.cfg, store)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
 	kyc.RegisterRoutes(s.router, s.db, s.cfg, store)

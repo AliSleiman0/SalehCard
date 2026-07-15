@@ -22,7 +22,14 @@ class WalletRemoteDataSource {
       '/wallet/topups',
       data: {
         'amount': input.amount,
-        'channel': input.channel,
+        if (input.channel.isNotEmpty) 'channel': input.channel,
+        if (input.methodId != null && input.methodId!.isNotEmpty)
+          'methodId': input.methodId,
+        if (input.fields.isNotEmpty)
+          'fields': [
+            for (final e in input.fields.entries)
+              {'key': e.key, 'value': e.value},
+          ],
         if (input.note != null && input.note!.isNotEmpty) 'note': input.note,
       },
     );
@@ -37,5 +44,26 @@ class WalletRemoteDataSource {
       for (final item in list)
         TopUpRequestDto.fromJson(item as Map<String, dynamic>),
     ];
+  }
+
+  /// GET /wallet/topup-methods → the enabled manual funding methods.
+  Future<List<TopUpMethodDto>> listMethods() async {
+    final response = await _dio.get<dynamic>('/wallet/topup-methods');
+    final list = unwrap(response) as List<dynamic>? ?? const [];
+    return [
+      for (final item in list)
+        TopUpMethodDto.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  /// POST /wallet/topups/documents (multipart `image`) → the stored public URL
+  /// the customer submits as a file-field value. Dio sets the multipart
+  /// content-type itself for [FormData] bodies.
+  Future<String> uploadDocument(String filePath) async {
+    final form = FormData.fromMap({
+      'image': await MultipartFile.fromFile(filePath, filename: 'proof.jpg'),
+    });
+    final response = await _dio.post<dynamic>('/wallet/topups/documents', data: form);
+    return (unwrap(response) as Map<String, dynamic>)['url'] as String;
   }
 }

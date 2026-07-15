@@ -33,6 +33,9 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 	if err := wallet.EnsureIndexes(ctx, db); err != nil {
 		return err
 	}
+	if err := seedMethods(ctx, db); err != nil {
+		return err
+	}
 
 	rows := []row{
 		{"customer@salehcard.local", wallet.TxTypeTopUp, 50, "card", "seed:topup-card", 9},
@@ -85,6 +88,75 @@ func Seed(ctx context.Context, db *mongo.Database) error {
 			CreatedAt:    now.AddDate(0, 0, -rw.DaysAgo),
 		})
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seedMethods ensures a few default manual top-up methods exist so the app's
+// top-up screen has options out of the box. Idempotent: each is inserted only
+// when a method with the same name is absent, so re-running neither duplicates
+// nor overwrites admin edits.
+func seedMethods(ctx context.Context, db *mongo.Database) error {
+	if err := wallet.EnsureMethodIndexes(ctx, db); err != nil {
+		return err
+	}
+	col := db.Collection("topup_methods")
+	now := time.Now().UTC()
+
+	defaults := []wallet.TopUpMethod{
+		{
+			Name:         "Bank Transfer",
+			Instructions: "Transfer the amount to account IBAN LB00 0000 0000 0000 0000 0000 0000 (SalehCard SARL), then upload your transfer receipt below.",
+			Enabled:      true,
+			SortOrder:    10,
+			Fields: []wallet.MethodField{
+				{Key: "reference", Label: "Transfer reference #", Type: wallet.MethodFieldText, Required: false},
+				{Key: "receipt", Label: "Transfer receipt", Type: wallet.MethodFieldFile, Required: true},
+			},
+		},
+		{
+			Name:         "Whish",
+			Instructions: "Send the amount via Whish to +961 78 991 778, then enter the sender number below.",
+			Enabled:      true,
+			SortOrder:    20,
+			Fields: []wallet.MethodField{
+				{Key: "sender", Label: "Sender phone number", Type: wallet.MethodFieldText, Required: true},
+			},
+		},
+		{
+			Name:         "OMT",
+			Instructions: "Send the amount via OMT to SalehCard, then upload the OMT slip.",
+			Enabled:      true,
+			SortOrder:    30,
+			Fields: []wallet.MethodField{
+				{Key: "slip", Label: "OMT slip", Type: wallet.MethodFieldFile, Required: true},
+			},
+		},
+		{
+			Name:         "Cash",
+			Instructions: "Pay cash at one of our points of sale, then note the branch below.",
+			Enabled:      true,
+			SortOrder:    40,
+			Fields: []wallet.MethodField{
+				{Key: "branch", Label: "Branch / agent", Type: wallet.MethodFieldText, Required: false},
+			},
+		},
+	}
+
+	for _, m := range defaults {
+		exists, err := col.CountDocuments(ctx, bson.D{{Key: "name", Value: m.Name}})
+		if err != nil {
+			return err
+		}
+		if exists > 0 {
+			continue
+		}
+		m.ID = bson.NewObjectID()
+		m.CreatedAt = now
+		m.UpdatedAt = now
+		if _, err := col.InsertOne(ctx, &m); err != nil {
 			return err
 		}
 	}

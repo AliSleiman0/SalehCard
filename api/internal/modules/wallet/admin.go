@@ -48,7 +48,7 @@ type adminHandler struct {
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, ntf notification.Notifier) {
 	topups := NewTopUpRepo(db)
 	a := &adminHandler{
-		svc:    NewWalletService(NewMongoRepository(db), topups),
+		svc:    NewWalletService(NewMongoRepository(db), topups).WithMethods(NewMethodRepo(db)),
 		topups: topups,
 		users:  db.Collection("users"),
 		rec:    rec,
@@ -58,6 +58,86 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, n
 	r.Get("/wallet/topups", a.list)
 	r.Post("/wallet/topups/{id}/approve", a.approve)
 	r.Post("/wallet/topups/{id}/reject", a.reject)
+
+	// Admin-managed manual top-up methods (bank transfer, etc.).
+	r.Get("/wallet/topup-methods", a.listMethods)
+	r.Post("/wallet/topup-methods", a.createMethod)
+	r.Put("/wallet/topup-methods/{id}", a.updateMethod)
+	r.Delete("/wallet/topup-methods/{id}", a.deleteMethod)
+}
+
+// listMethods handles GET /api/admin/wallet/topup-methods — every method.
+func (a *adminHandler) listMethods(w http.ResponseWriter, r *http.Request) {
+	methods, err := a.svc.ListMethods(r.Context())
+	if err != nil {
+		writeTopUpError(w, err)
+		return
+	}
+	response.OK(w, methods)
+}
+
+// createMethod handles POST /api/admin/wallet/topup-methods.
+func (a *adminHandler) createMethod(w http.ResponseWriter, r *http.Request) {
+	var in MethodInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	m, err := a.svc.CreateMethod(r.Context(), in)
+	if err != nil {
+		writeTopUpError(w, err)
+		return
+	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionTopupMethodCreate,
+		TargetType: "topup_method",
+		TargetID:   m.ID.Hex(),
+		Summary:    map[string]any{"name": m.Name, "enabled": m.Enabled, "fields": len(m.Fields)},
+	})
+	response.OK(w, m)
+}
+
+// updateMethod handles PUT /api/admin/wallet/topup-methods/{id}.
+func (a *adminHandler) updateMethod(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseTopUpID(w, r)
+	if !ok {
+		return
+	}
+	var in MethodInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+	m, err := a.svc.UpdateMethod(r.Context(), id, in)
+	if err != nil {
+		writeTopUpError(w, err)
+		return
+	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionTopupMethodUpdate,
+		TargetType: "topup_method",
+		TargetID:   m.ID.Hex(),
+		Summary:    map[string]any{"name": m.Name, "enabled": m.Enabled, "fields": len(m.Fields)},
+	})
+	response.OK(w, m)
+}
+
+// deleteMethod handles DELETE /api/admin/wallet/topup-methods/{id}.
+func (a *adminHandler) deleteMethod(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseTopUpID(w, r)
+	if !ok {
+		return
+	}
+	if err := a.svc.DeleteMethod(r.Context(), id); err != nil {
+		writeTopUpError(w, err)
+		return
+	}
+	a.rec.Record(r.Context(), audit.Entry{
+		Action:     audit.ActionTopupMethodDelete,
+		TargetType: "topup_method",
+		TargetID:   id.Hex(),
+	})
+	response.OK(w, map[string]bool{"deleted": true})
 }
 
 // list handles GET /api/admin/wallet/topups — paginated, filterable by status,
@@ -96,7 +176,7 @@ func (a *adminHandler) approve(w http.ResponseWriter, r *http.Request) {
 		TargetType: "topup",
 		TargetID:   id.Hex(),
 		Summary: map[string]any{
-			"amount": req.Amount, "channel": req.Channel, "userId": req.UserID.Hex(),
+			"amount": req.Amount, "channel": req.Channel, "method": req.MethodName, "userId": req.UserID.Hex(),
 		},
 	})
 	a.ntf.Notify(r.Context(), req.UserID, notification.Note{
@@ -135,7 +215,7 @@ func (a *adminHandler) reject(w http.ResponseWriter, r *http.Request) {
 		TargetType: "topup",
 		TargetID:   id.Hex(),
 		Summary: map[string]any{
-			"amount": req.Amount, "channel": req.Channel,
+			"amount": req.Amount, "channel": req.Channel, "method": req.MethodName,
 			"userId": req.UserID.Hex(), "reason": req.DecisionReason,
 		},
 	})

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,9 +30,10 @@ type Service interface {
 // Top-up request limits: a sanity cap on a single request and a per-user
 // pending-queue guard.
 const (
-	maxTopUpAmount  = 10_000
-	maxTopUpNoteLen = 500
-	maxPendingTopUp = 3
+	maxTopUpAmount        = 10_000
+	maxTopUpNoteLen       = 500
+	maxPendingTopUp       = 3
+	maxTopUpFieldValueLen = 512
 )
 
 // ErrLedgerWriteFailed reports an approval whose balance change was reversed
@@ -45,14 +48,24 @@ var ErrLedgerWriteFailed = &apperrors.AppError{
 // WalletService is the concrete implementation of Service plus the top-up
 // request queue.
 type WalletService struct {
-	repo   Repository
-	topups TopUpStore
+	repo    Repository
+	topups  TopUpStore
+	methods MethodStore
 }
 
 // NewWalletService constructs a WalletService backed by the given repositories
 // (topups may be nil for consumers that only need the payment surface).
 func NewWalletService(repo Repository, topups TopUpStore) *WalletService {
 	return &WalletService{repo: repo, topups: topups}
+}
+
+// WithMethods wires the admin-managed top-up method store, enabling manual
+// method-based top-up requests. Returns the receiver for chained construction.
+// Left nil for consumers (payment surface, order refunds) that never file
+// method-based requests.
+func (s *WalletService) WithMethods(m MethodStore) *WalletService {
+	s.methods = m
+	return s
 }
 
 // CreateTopUpRequest files a pending top-up request (no money moves — the
@@ -65,36 +78,187 @@ func (s *WalletService) CreateTopUpRequest(ctx context.Context, userID bson.Obje
 	if input.Amount > maxTopUpAmount {
 		return nil, &apperrors.AppError{Code: "BAD_REQUEST", Message: "top-up amount exceeds the per-request limit", Err: apperrors.ErrBadRequest}
 	}
-	channel := strings.ToLower(strings.TrimSpace(input.Channel))
-	if !TopUpChannels[channel] {
-		return nil, &apperrors.AppError{Code: "BAD_REQUEST", Message: "channel must be one of usdt, whish, omt, cash, other", Err: apperrors.ErrBadRequest}
-	}
 	note := strings.TrimSpace(input.Note)
 	if len(note) > maxTopUpNoteLen {
 		return nil, &apperrors.AppError{Code: "BAD_REQUEST", Message: "note is too long", Err: apperrors.ErrBadRequest}
-	}
-	if pending, err := s.topups.CountPendingForUser(ctx, userID); err != nil {
-		return nil, err
-	} else if pending >= maxPendingTopUp {
-		return nil, &apperrors.AppError{Code: "TOO_MANY_PENDING", Message: "you already have pending top-up requests awaiting review", Err: apperrors.ErrBadRequest}
 	}
 
 	req := &TopUpRequest{
 		UserID:   userID,
 		Amount:   input.Amount,
 		Currency: "USD",
-		Channel:  channel,
 		Note:     note,
 	}
+
+	// A manual method (admin-defined) is the current path; a bare Channel is the
+	// legacy fallback for older clients. Exactly one is resolved here.
+	if strings.TrimSpace(input.MethodID) != "" {
+		if err := s.applyMethod(ctx, req, input); err != nil {
+			return nil, err
+		}
+	} else {
+		channel := strings.ToLower(strings.TrimSpace(input.Channel))
+		if !TopUpChannels[channel] {
+			return nil, &apperrors.AppError{Code: "BAD_REQUEST", Message: "a payment method is required", Err: apperrors.ErrBadRequest}
+		}
+		req.Channel = channel
+	}
+
+	if pending, err := s.topups.CountPendingForUser(ctx, userID); err != nil {
+		return nil, err
+	} else if pending >= maxPendingTopUp {
+		return nil, &apperrors.AppError{Code: "TOO_MANY_PENDING", Message: "you already have pending top-up requests awaiting review", Err: apperrors.ErrBadRequest}
+	}
+
 	if err := s.topups.Create(ctx, req); err != nil {
 		return nil, err
 	}
 	return req, nil
 }
 
+// applyMethod resolves the admin-defined manual method on a top-up request:
+// it validates the method is enabled, enforces its field spec against the
+// customer's submitted values, resolves each field's label server-side, and
+// snapshots the method id + name + fields onto req. Never trusts client labels
+// (spec parity with order.resolveOrderFields).
+func (s *WalletService) applyMethod(ctx context.Context, req *TopUpRequest, input TopUpInput) error {
+	if s.methods == nil {
+		return &apperrors.AppError{Code: "BAD_REQUEST", Message: "a payment method is required", Err: apperrors.ErrBadRequest}
+	}
+	id, err := bson.ObjectIDFromHex(strings.TrimSpace(input.MethodID))
+	if err != nil {
+		return &apperrors.AppError{Code: "BAD_REQUEST", Message: "invalid payment method", Err: apperrors.ErrBadRequest}
+	}
+	method, err := s.methods.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			return &apperrors.AppError{Code: "BAD_REQUEST", Message: "unknown payment method", Err: apperrors.ErrBadRequest}
+		}
+		return err
+	}
+	if !method.Enabled {
+		return &apperrors.AppError{Code: "BAD_REQUEST", Message: "this payment method is not available", Err: apperrors.ErrBadRequest}
+	}
+
+	submitted := make(map[string]string, len(input.Fields))
+	for _, f := range input.Fields {
+		submitted[f.Key] = strings.TrimSpace(f.Value)
+	}
+
+	fields := make([]TopUpField, 0, len(method.Fields))
+	for _, def := range method.Fields {
+		v := submitted[def.Key]
+		if v == "" {
+			if def.Required {
+				return &apperrors.AppError{Code: "BAD_REQUEST", Message: def.Label + " is required", Err: apperrors.ErrBadRequest}
+			}
+			continue
+		}
+		if len(v) > maxTopUpFieldValueLen {
+			return &apperrors.AppError{Code: "BAD_REQUEST", Message: def.Label + " is too long", Err: apperrors.ErrBadRequest}
+		}
+		switch def.Type {
+		case MethodFieldSelect:
+			if !contains(def.Options, v) {
+				return &apperrors.AppError{Code: "BAD_REQUEST", Message: def.Label + " must be one of the listed options", Err: apperrors.ErrBadRequest}
+			}
+		case MethodFieldNumber:
+			if _, perr := strconv.ParseFloat(v, 64); perr != nil {
+				return &apperrors.AppError{Code: "BAD_REQUEST", Message: def.Label + " must be a number", Err: apperrors.ErrBadRequest}
+			}
+		case MethodFieldFile:
+			if !validTopUpDocURL(v) {
+				return &apperrors.AppError{Code: "BAD_REQUEST", Message: def.Label + " must be an uploaded document", Err: apperrors.ErrBadRequest}
+			}
+		}
+		fields = append(fields, TopUpField{Key: def.Key, Label: def.Label, Value: v})
+	}
+
+	req.MethodID = &method.ID
+	req.MethodName = method.Name
+	req.Fields = fields
+	// Channel keeps a human-readable value for the ledger row + legacy views.
+	req.Channel = strings.ToLower(strings.TrimSpace(method.Name))
+	return nil
+}
+
+// contains reports whether v equals one of opts.
+func contains(opts []string, v string) bool {
+	for _, o := range opts {
+		if o == v {
+			return true
+		}
+	}
+	return false
+}
+
+// validTopUpDocURL accepts only URLs shaped like our own top-up document
+// uploads (POST /api/v1/wallet/topups/documents stores under a topups/ key as
+// re-encoded JPEG). Mirrors kyc.validDocURL — rejects junk / off-keyspace URLs.
+func validTopUpDocURL(s string) bool {
+	if s == "" || len(s) > 512 {
+		return false
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return false
+	}
+	return strings.Contains(u.Path, "/topups/") && strings.HasSuffix(u.Path, ".jpg")
+}
+
 // ListTopUpRequests returns the user's own request history, newest first.
 func (s *WalletService) ListTopUpRequests(ctx context.Context, userID bson.ObjectID) ([]*TopUpRequest, error) {
 	return s.topups.FindByUser(ctx, userID)
+}
+
+// errMethodsUnavailable guards the method operations when the store is unwired.
+var errMethodsUnavailable = &apperrors.AppError{Code: "BAD_REQUEST", Message: "top-up methods are not available", Err: apperrors.ErrBadRequest}
+
+// ListMethods returns all admin-defined top-up methods (admin view).
+func (s *WalletService) ListMethods(ctx context.Context) ([]*TopUpMethod, error) {
+	if s.methods == nil {
+		return nil, errMethodsUnavailable
+	}
+	return s.methods.List(ctx)
+}
+
+// ListEnabledMethods returns enabled top-up methods (customer view).
+func (s *WalletService) ListEnabledMethods(ctx context.Context) ([]*TopUpMethod, error) {
+	if s.methods == nil {
+		return []*TopUpMethod{}, nil
+	}
+	return s.methods.ListEnabled(ctx)
+}
+
+// CreateMethod validates and inserts a new top-up method.
+func (s *WalletService) CreateMethod(ctx context.Context, in MethodInput) (*TopUpMethod, error) {
+	if s.methods == nil {
+		return nil, errMethodsUnavailable
+	}
+	m, err := in.normalizeAndValidate()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.methods.Create(ctx, m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// UpdateMethod validates and applies an edit to an existing method.
+func (s *WalletService) UpdateMethod(ctx context.Context, id bson.ObjectID, in MethodInput) (*TopUpMethod, error) {
+	if s.methods == nil {
+		return nil, errMethodsUnavailable
+	}
+	return s.methods.Update(ctx, id, in)
+}
+
+// DeleteMethod removes a method (existing requests keep their snapshot).
+func (s *WalletService) DeleteMethod(ctx context.Context, id bson.ObjectID) error {
+	if s.methods == nil {
+		return errMethodsUnavailable
+	}
+	return s.methods.Delete(ctx, id)
 }
 
 // ApproveTopUpRequest credits the wallet for a pending request. Sequence under

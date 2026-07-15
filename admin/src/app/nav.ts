@@ -76,6 +76,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: '/finance', icon: 'wallet', label: 'nav_wallet', domain: 'finance' },
       { to: '/topups', icon: 'coins', label: 'nav_topups', domain: 'topups' },
+      { to: '/topup-methods', icon: 'card', label: 'nav_topup_methods', domain: 'topups' },
       { to: '/payments', icon: 'card', label: 'nav_payments', domain: 'payments' },
       { to: '/promos', icon: 'tag', label: 'nav_promos', domain: 'promos' },
       { to: '/expenses', icon: 'coins', label: 'nav_expenses', domain: 'expenses' },
