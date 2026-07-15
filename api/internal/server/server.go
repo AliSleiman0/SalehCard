@@ -237,7 +237,7 @@ func (s *Server) Routes() {
 	if bridgeReg.Service.Enabled() {
 		s.bridgeReaper = bridge.NewReaper(bridgeReg.Service, s.cfg.Bridge.ReaperInterval)
 	}
-	wallet.RegisterRoutes(s.router, s.db, s.cfg)
+	wallet.RegisterRoutes(s.router, s.db, s.cfg, store)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
 	kyc.RegisterRoutes(s.router, s.db, s.cfg, store)

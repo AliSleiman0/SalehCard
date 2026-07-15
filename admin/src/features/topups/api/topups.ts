@@ -4,6 +4,13 @@ import type { ApiResponse, PaginationMeta, UserRole } from '@/types'
 /** Moderation state of a top-up request. */
 export type TopUpStatus = 'pending' | 'approved' | 'rejected'
 
+/** One customer-submitted value on a manual top-up request (file values hold a URL). */
+export interface TopUpField {
+  key: string
+  label: string
+  value: string
+}
+
 /** A top-up request enriched with its customer contact (admin view). */
 export interface AdminTopUp {
   id: string
@@ -11,6 +18,9 @@ export interface AdminTopUp {
   amount: number
   currency: string
   channel: string
+  methodId?: string
+  methodName?: string
+  fields?: TopUpField[]
   note?: string
   status: TopUpStatus
   decidedBy?: string

@@ -44,6 +44,13 @@ final topUpRequestsProvider =
   return result.match((failure) => throw failure, (reqs) => reqs);
 });
 
+/// The enabled admin-defined manual funding methods (bank transfer, etc.).
+final topUpMethodsProvider =
+    FutureProvider.autoDispose<List<TopUpMethod>>((ref) async {
+  final result = await ref.watch(walletRepositoryProvider).listMethods();
+  return result.match((failure) => throw failure, (methods) => methods);
+});
+
 /// Submit state for the top-up CTA.
 class TopUpState {
   const TopUpState({this.submitting = false, this.failure});

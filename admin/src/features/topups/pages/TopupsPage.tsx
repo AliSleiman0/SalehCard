@@ -30,6 +30,11 @@ const STATUS_CLASS: Record<TopUpStatus, string> = {
   rejected: 'st st-danger',
 }
 
+/** isDocUrl detects an uploaded top-up document (re-encoded JPEG in our keyspace). */
+function isDocUrl(v: string): boolean {
+  return /^https?:\/\//.test(v) && v.includes('/topups/') && v.endsWith('.jpg')
+}
+
 export default function TopupsPage() {
   const { t } = useTranslation()
   const can = useCan()
@@ -101,7 +106,7 @@ export default function TopupsPage() {
                 <div key={r.id} style={{ borderBottom: '1px solid var(--border)', padding: '14px 18px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <b style={{ fontSize: 15 }}>{money(r.amount)}</b>
-                    <span className="bdg">{r.channel.toUpperCase()}</span>
+                    <span className="bdg">{(r.methodName || r.channel).toUpperCase()}</span>
                     <span className="faint" style={{ fontSize: 12.5 }}>
                       {r.customerEmail || r.customerPhone || r.userId.slice(-8)}
                     </span>
@@ -114,6 +119,42 @@ export default function TopupsPage() {
                       {r.status}
                     </span>
                   </div>
+                  {r.fields && r.fields.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 16,
+                        marginTop: 10,
+                        alignItems: 'flex-start',
+                      }}
+                    >
+                      {r.fields.map((f) => (
+                        <div key={f.key} style={{ fontSize: 12.5 }}>
+                          <div className="faint" style={{ marginBottom: 3 }}>
+                            {f.label}
+                          </div>
+                          {isDocUrl(f.value) ? (
+                            <a href={f.value} target="_blank" rel="noreferrer">
+                              <img
+                                src={f.value}
+                                alt={f.label}
+                                style={{
+                                  width: 72,
+                                  height: 72,
+                                  objectFit: 'cover',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--border)',
+                                }}
+                              />
+                            </a>
+                          ) : (
+                            <b>{f.value}</b>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {r.note && (
                     <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>
                       Note: {r.note}

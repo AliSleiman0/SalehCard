@@ -39,4 +39,23 @@ class WalletRepositoryImpl implements WalletRepository {
       return Left(mapError(error));
     }
   }
+
+  @override
+  Future<Either<Failure, List<TopUpMethod>>> listMethods() async {
+    try {
+      final dtos = await _remote.listMethods();
+      return Right([for (final dto in dtos) dto.toEntity()]);
+    } catch (error) {
+      return Left(mapError(error));
+    }
+  }
+
+  @override
+  Future<Either<Failure, String>> uploadDocument(String filePath) async {
+    try {
+      return Right(await _remote.uploadDocument(filePath));
+    } catch (error) {
+      return Left(mapError(error));
+    }
+  }
 }
