@@ -19,8 +19,9 @@ import (
 // RegisterAdminRoutes mounts the admin product CRUD onto r. The caller is
 // responsible for applying the AdminOnly middleware to r (the /api/admin group).
 // Destructive actions are recorded via rec. store persists uploaded product
-// images (POST /products/images).
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, store blob.Storage, categories CategoryResolver) {
+// images (POST /products/images). providers is the env-configured fulfillment
+// supplier list served to the editor's supplier dropdown.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, store blob.Storage, categories CategoryResolver, providers []FulfillmentProviderOption) {
 	repo := NewMongoRepository(db)
 	_ = EnsureIndexes(context.Background(), db)
 	svc := NewProductService(repo, WithCategoryResolver(categories))
@@ -33,12 +34,33 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, s
 	// collision.
 	r.Get("/products", h.AdminList)
 	r.Get("/products/categories", categoryFacetsHandler(repo))
+	r.Get("/products/fulfillment-providers", fulfillmentProvidersHandler(providers))
 	r.Post("/products", h.Create)
 	r.Post("/products/bulk", h.Bulk)
 	r.Post("/products/images", h.UploadImage)
 	r.Get("/products/{id}", h.GetByID)
 	r.Put("/products/{id}", h.Update)
 	r.Delete("/products/{id}", h.Delete)
+}
+
+// FulfillmentProviderOption is one selectable upstream fulfillment supplier —
+// its registry id (what Product.FulfillmentProvider stores) and display name.
+type FulfillmentProviderOption struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// fulfillmentProvidersHandler serves GET /api/admin/products/fulfillment-providers
+// — the env-configured suppliers the product editor's "Fulfill via supplier API"
+// dropdown offers. Static per deploy (a supplier appears only when its token is
+// set), so the client may cache it.
+func fulfillmentProvidersHandler(providers []FulfillmentProviderOption) http.HandlerFunc {
+	if providers == nil {
+		providers = []FulfillmentProviderOption{} // marshal as [], never null
+	}
+	return func(w http.ResponseWriter, _ *http.Request) {
+		response.OK(w, providers)
+	}
 }
 
 // categoryFacetsHandler serves GET /api/admin/products/categories — the distinct

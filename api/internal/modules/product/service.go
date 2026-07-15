@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -278,6 +279,9 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if in.Cost != nil && *in.Cost < 0 {
 		return nil, badRequest("cost must be non-negative")
 	}
+	// Supplier mapping is deliberately NOT hard-validated (an api product
+	// without provider/upstream id parks safely at order time via the stub).
+	in.UpstreamProductID = strings.TrimSpace(in.UpstreamProductID)
 	fields, err := sanitizeInputFields(in.InputFields)
 	if err != nil {
 		return nil, err
@@ -318,6 +322,10 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 	}
 	if in.Cost != nil && *in.Cost < 0 {
 		return nil, badRequest("cost must be non-negative")
+	}
+	if in.UpstreamProductID != nil {
+		trimmed := strings.TrimSpace(*in.UpstreamProductID)
+		in.UpstreamProductID = &trimmed
 	}
 	// Sanitize input-field specs only when the update carries them — nil means
 	// "leave unchanged" (repository nil-guard), so a partial update never

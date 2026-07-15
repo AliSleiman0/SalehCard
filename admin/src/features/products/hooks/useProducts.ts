@@ -7,6 +7,7 @@ import {
   deleteProduct,
   bulkProductAction,
   uploadProductImage,
+  listFulfillmentProviders,
   type ProductListParams,
   type ProductInput,
   type BulkAction,
@@ -28,6 +29,15 @@ export function useProduct(id: string | undefined) {
     queryKey: ['admin', 'product', id],
     queryFn: () => getProduct(id!),
     enabled: !!id,
+  })
+}
+
+export function useFulfillmentProviders() {
+  return useQuery({
+    queryKey: ['admin', 'products', 'fulfillment-providers'],
+    queryFn: listFulfillmentProviders,
+    // Env-driven on the API — changes only on redeploy, so cache generously.
+    staleTime: 5 * 60 * 1000,
   })
 }
 

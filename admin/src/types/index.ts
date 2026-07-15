@@ -34,8 +34,8 @@ export interface Variant {
   faceValue?: number
 }
 
-/** How an order is executed (orthogonal to fulfillmentType). Only bridge_device
- *  is surfaced in the admin editor; the rest are backend-derived. */
+/** How an order is executed (orthogonal to fulfillmentType). bridge_device and
+ *  api are surfaced in the admin editor; the rest are backend-derived. */
 export type FulfillmentMode = 'api' | 'manual_operator' | 'inventory' | 'bridge_device'
 
 /** Lebanese mobile-recharge fulfillment config (bridge_device products). */
@@ -85,6 +85,10 @@ export interface Product {
   variants: Variant[]
   fulfillmentType: FulfillmentType
   fulfillmentMode?: FulfillmentMode
+  /** Upstream supplier registry id (api-mode products). */
+  fulfillmentProvider?: number
+  /** The supplier's own product id (api-mode products). */
+  upstreamProductId?: string
   bridge?: BridgeSpec
   stock: number
   available: boolean

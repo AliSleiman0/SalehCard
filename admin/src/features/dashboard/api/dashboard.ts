@@ -26,6 +26,9 @@ export interface DashboardStats {
   // Work-queue signals (money blocked until an admin acts):
   pendingTopups: number // open top-up requests awaiting a decision
   pendingKyc: number // KYC submissions awaiting review
+  // Supplier signals (DESIGN-SUPPLIERS.md Phase 3):
+  parkedUpstream: number // processing api-mode orders awaiting a supplier
+  stuckUpstream: number // orders flagged stuck upstream (need attention)
 }
 
 export function getDashboardStats(): Promise<ApiResponse<DashboardStats>> {

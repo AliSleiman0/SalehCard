@@ -65,6 +65,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: '/orders', icon: 'bag', label: 'nav_orders', domain: 'orders' },
       { to: '/bridge', icon: 'server', label: 'nav_bridge', domain: 'bridge' },
+      { to: '/suppliers', icon: 'box', label: 'nav_suppliers', domain: 'suppliers' },
       { to: '/users', icon: 'users', label: 'nav_users', domain: 'users' },
       { to: '/resellers', icon: 'handshake', label: 'nav_resellers', domain: 'resellers' },
       { to: '/kyc', icon: 'id', label: 'nav_kyc', domain: 'kyc' },

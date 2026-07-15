@@ -48,6 +48,9 @@ type Stats struct {
 	// Work-queue signals (money is blocked on these):
 	PendingTopups int `json:"pendingTopups"` // open top-up requests awaiting a decision
 	PendingKyc    int `json:"pendingKyc"`    // KYC submissions awaiting review
+	// Supplier signals (DESIGN-SUPPLIERS.md Phase 3):
+	ParkedUpstream int `json:"parkedUpstream"` // processing api-mode orders awaiting the supplier
+	StuckUpstream  int `json:"stuckUpstream"`  // orders flagged stuck upstream (need attention)
 }
 
 // ffSlice is one segment of the fulfillment-breakdown donut.
@@ -59,25 +62,27 @@ type ffSlice struct {
 
 // Handler serves the dashboard endpoints.
 type Handler struct {
-	products *mongo.Collection
-	codes    code.Service
-	orders   order.Repository
-	users    user.Repository
-	wallet   wallet.Repository
-	topups   wallet.TopUpStore
-	kyc      kyc.Repository
+	products  *mongo.Collection
+	ordersCol *mongo.Collection
+	codes     code.Service
+	orders    order.Repository
+	users     user.Repository
+	wallet    wallet.Repository
+	topups    wallet.TopUpStore
+	kyc       kyc.Repository
 }
 
 // RegisterAdminRoutes mounts the dashboard routes onto r (the /api/admin group).
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 	h := &Handler{
-		products: db.Collection("products"),
-		codes:    code.NewService(db),
-		orders:   order.NewMongoRepository(db.Collection("orders")),
-		users:    user.NewMongoRepository(db),
-		wallet:   wallet.NewMongoRepository(db),
-		topups:   wallet.NewTopUpRepo(db),
-		kyc:      kyc.NewMongoRepository(db.Collection("kyc_submissions"), db.Collection("users")),
+		products:  db.Collection("products"),
+		ordersCol: db.Collection("orders"),
+		codes:     code.NewService(db),
+		orders:    order.NewMongoRepository(db.Collection("orders")),
+		users:     user.NewMongoRepository(db),
+		wallet:    wallet.NewMongoRepository(db),
+		topups:    wallet.NewTopUpRepo(db),
+		kyc:       kyc.NewMongoRepository(db.Collection("kyc_submissions"), db.Collection("users")),
 	}
 	r.Get("/dashboard/stats", h.GetStats)
 	r.Get("/dashboard/low-stock", h.GetLowStock)
@@ -108,6 +113,8 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 		ordersFailed, ordersPending     int64
 		ordersCompleted, ordersRefunded int64
+
+		parkedUpstream, stuckUpstream int64
 	)
 
 	g.Go(func() error {
@@ -189,6 +196,24 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		pendingKyc, err = h.kyc.CountPending(ctx)
 		return err
 	})
+	g.Go(func() error {
+		// Parked api-mode orders: still processing, waiting on a supplier.
+		var err error
+		parkedUpstream, err = h.ordersCol.CountDocuments(ctx, bson.D{
+			{Key: "status", Value: "processing"},
+			{Key: "items.fulfillmentMode", Value: "api"},
+		})
+		return err
+	})
+	g.Go(func() error {
+		// Stuck-upstream orders: flagged by the supplier settler, still unresolved.
+		var err error
+		stuckUpstream, err = h.ordersCol.CountDocuments(ctx, bson.D{
+			{Key: "status", Value: "processing"},
+			{Key: "fulfillment.supplierStuckAt", Value: bson.D{{Key: "$exists", Value: true}, {Key: "$ne", Value: nil}}},
+		})
+		return err
+	})
 
 	if err := g.Wait(); err != nil {
 		response.InternalError(w)
@@ -215,6 +240,8 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		WalletTopups:     walletTopups,
 		PendingTopups:    int(pendingTopups),
 		PendingKyc:       int(pendingKyc),
+		ParkedUpstream:   int(parkedUpstream),
+		StuckUpstream:    int(stuckUpstream),
 	}
 	response.OK(w, stats)
 }

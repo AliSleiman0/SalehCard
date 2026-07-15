@@ -18,6 +18,11 @@ func (p *StubProvider) Fulfill(_ context.Context, _ FulfillInput) (Result, error
 	return Result{}, ErrNotImplemented
 }
 
+// CheckStatus always reports ErrNotImplemented.
+func (p *StubProvider) CheckStatus(_ context.Context, _ string) (Status, error) {
+	return Status{}, ErrNotImplemented
+}
+
 // Verify always reports ErrNotImplemented.
 func (p *StubProvider) Verify(_ context.Context, _ FulfillInput) (AccountInfo, error) {
 	return AccountInfo{}, ErrNotImplemented

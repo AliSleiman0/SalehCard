@@ -412,3 +412,54 @@ trigger any business event (e.g. approve a top-up), and confirm a tray
 notification arrives on the device. If the GMS plugin misbehaves under the new
 AGP, the guarded FlutterFire programmatic init is the fallback — the e2e check
 is required either way.
+
+## 20. Upstream supplier integration — prod rollout (DESIGN-SUPPLIERS.md, all 4 phases)
+
+The whole supplier stack (panel adapters jentel/speedcard/gift4card + async
+settler + `/suppliers` admin surface + umanage telecom adapter) is code-complete
+and merged, but **inert in prod until credentials are set** — every supplier id
+resolves to the parking stub with no env, which is exactly today's behavior
+(api-mode orders park for manual completion). To go live:
+
+1. **Set supplier credentials** as Azure app settings on `salehcard-api`
+   (secrets — never in repo; add to `DEPLOY-CREDS.local.md`):
+   - Panels: `SUPPLIER_JENTEL_TOKEN`, `SUPPLIER_SPEEDCARD_TOKEN`,
+     `SUPPLIER_GIFT4CARD_TOKEN` (the `api-token` values; the four tokens shared
+     in chat are chat-exposed — owner accepted, not rotating). Default ids
+     10/11/12 and base URLs are baked in; override with `SUPPLIER_*_ID` /
+     `SUPPLIER_*_BASE_URL` only if needed.
+   - umanage (telecom): `SUPPLIER_UMANAGE_KEY` + `SUPPLIER_UMANAGE_SECRET`
+     (X-API-Key / X-API-Secret). `SUPPLIER_UMANAGE_STORE_ID` optional (resolved
+     at boot via GET /stores when 0). Id 13, LBP.
+   - Optional settler knobs: `SUPPLIER_SETTLER_INTERVAL` (default 60s),
+     `SUPPLIER_SETTLER_GIVEUP` (default 24h).
+   A supplier with no credential stays a parking stub → zero risk in setting
+   them one at a time.
+
+2. **IP-allowlist the prod NAT egress IP at every supplier.** The panels enforce
+   IP allowlisting (error 123) and umanage may too. Prod already egresses via the
+   fixed **NAT Gateway IP** (set up for Monty SMS — see `HANDOFF-OTP-DEPLOY.md`);
+   register that one IP with jentel/speedcard/gift4card and umanage at
+   onboarding. An un-allowlisted caller → the balance probe shows `ip_blocked` and
+   orders park (never a failed/refunded order). Dev boxes are NOT allowlisted, so
+   the stub stays the dev default.
+
+3. **RBAC:** the new `suppliers` domain (`suppliers.view`/`.manage`) exists in
+   the catalog. Super admins get it automatically (nil adminRoleId → `["*"]`);
+   grant it to any custom roles that should see `/suppliers`. No migration.
+
+4. **Prepaid balances:** each supplier is prepaid — keep a wallet funded at each
+   panel/umanage. A drained supplier wallet silently PARKS paid customers'
+   orders; the `/suppliers` balance cards + dashboard supplier strip + the
+   per-supplier `lowBalanceThreshold` (Settings) are the operational guardrail —
+   set a sensible threshold per supplier after go-live.
+
+5. **First-supplier canary:** enable ONE panel first (e.g. jentel), map a single
+   low-value product (admin product editor → Fulfill via supplier API + upstream
+   id, or `/suppliers` → Browse & import which creates it hidden), place one real
+   wallet order end-to-end, confirm it completes with a delivered code and an
+   `order.supplier_settle`/completion audit entry, THEN widen. umanage is a
+   separate strategic rail (bridge-adjacent) — ship panels first.
+
+Verify after setting creds: `/suppliers` renders live balances (not
+`unreachable`/`ip_blocked`), and the dashboard shows the supplier balance strip.
