@@ -21,6 +21,13 @@ import { ProductCard } from '../components/ProductCard'
 import { WriteReviewModal } from '../components/WriteReviewModal'
 import { DynamicField } from '@/features/checkout/components/DynamicField'
 import { TRANSFER_COUNTRIES } from '@/features/checkout/lib/transferCountries'
+import type { SavedPlayerId } from '@/types'
+
+// Stable empty reference for the savedPlayerIds selector. Defaulting to a fresh
+// `[]` inside a Zustand v5 selector returns a new snapshot every render, which
+// useSyncExternalStore treats as a change → infinite re-render loop ("Maximum
+// update depth exceeded"). Keep the fallback outside the selector.
+const EMPTY_SAVED_IDS: SavedPlayerId[] = []
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -32,7 +39,7 @@ export default function ProductDetailPage() {
   const locale = useLocaleStore((s) => s.locale)
   const addToCart = useCartStore((s) => s.add)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const savedIds = useAuthStore((s) => s.user?.savedPlayerIds ?? [])
+  const savedIds = useAuthStore((s) => s.user?.savedPlayerIds) ?? EMPTY_SAVED_IDS
 
   const query = useProduct(id ?? '')
 
