@@ -82,6 +82,14 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "loyaltyEarnUsdPerPoint must be greater than zero")
 		return
 	}
+	if in.ExchangeRates != nil {
+		cleaned, msg := normalizeExchangeRates(*in.ExchangeRates)
+		if msg != "" {
+			response.BadRequest(w, msg)
+			return
+		}
+		in.ExchangeRates = &cleaned
+	}
 
 	actor := ""
 	var actorPhone string

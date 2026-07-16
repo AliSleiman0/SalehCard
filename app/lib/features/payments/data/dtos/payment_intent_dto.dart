@@ -66,12 +66,14 @@ class PaymentConfigDto {
     this.network = 'trc20',
     this.networks = const [],
     this.expiryMinutes = 30,
+    this.exchangeRates = const [],
   });
 
   final bool usdtEnabled;
   final String network;
   final List<String> networks;
   final int expiryMinutes;
+  final List<ExchangeRate> exchangeRates;
 
   factory PaymentConfigDto.fromJson(Map<String, dynamic> json) {
     final network = json['network'] as String? ?? 'trc20';
@@ -85,6 +87,14 @@ class PaymentConfigDto {
               .toList() ??
           [network],
       expiryMinutes: (json['expiryMinutes'] as num?)?.toInt() ?? 30,
+      exchangeRates: [
+        for (final r in (json['exchangeRates'] as List<dynamic>? ?? const []))
+          if (r is Map<String, dynamic>)
+            ExchangeRate(
+              label: r['label'] as String? ?? '',
+              value: r['value'] as String? ?? '',
+            ),
+      ],
     );
   }
 
@@ -93,5 +103,6 @@ class PaymentConfigDto {
         network: network,
         networks: networks.isEmpty ? [network] : networks,
         expiryMinutes: expiryMinutes,
+        exchangeRates: exchangeRates,
       );
 }

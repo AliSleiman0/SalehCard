@@ -7,6 +7,12 @@ export interface Integration {
   configured: boolean
 }
 
+/** One admin-defined currency rate line shown to customers (both free text). */
+export interface ExchangeRate {
+  label: string
+  value: string
+}
+
 /** Platform settings as returned by GET /api/admin/settings (matches the Go model). */
 export interface AdminSettings {
   storeName: string
@@ -22,6 +28,8 @@ export interface AdminSettings {
   loyaltyEarnUsdPerPoint: number
   /** Require an SMS second factor for admin logins (off by default). */
   adminSmsTwoFactorEnabled: boolean
+  /** Currency rates surfaced on the customer top-up screen. */
+  exchangeRates: ExchangeRate[]
   updatedAt: string
   updatedBy?: string
   integrations?: Record<string, Integration>
@@ -39,6 +47,7 @@ export interface SettingsInput {
   loyaltyEnabled?: boolean
   loyaltyEarnUsdPerPoint?: number
   adminSmsTwoFactorEnabled?: boolean
+  exchangeRates?: ExchangeRate[]
 }
 
 const ADMIN = '/api/admin/settings'

@@ -8,6 +8,7 @@ import { lastActive } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
+import type { ExchangeRate } from '../api/settings'
 
 // The persisted surfaces here are the admin-accounts list (backed by
 // /api/admin/users?role=admin) and the Store & support + Loyalty program knobs
@@ -50,6 +51,11 @@ export default function SettingsPage() {
   const [twoFAEnabled, setTwoFAEnabled] = useState(false)
   const [twoFAError, setTwoFAError] = useState<string | null>(null)
 
+  // --- Exchange rates -------------------------------------------------------
+  const [rates, setRates] = useState<ExchangeRate[]>([])
+  const [ratesError, setRatesError] = useState<string | null>(null)
+  const [ratesSaved, setRatesSaved] = useState(false)
+
   useEffect(() => {
     const s = settingsRes?.data
     if (!s) return
@@ -57,6 +63,7 @@ export default function SettingsPage() {
     setLoyaltyEnabled(s.loyaltyEnabled)
     setEarnRate(String(s.loyaltyEarnUsdPerPoint))
     setTwoFAEnabled(s.adminSmsTwoFactorEnabled)
+    setRates(s.exchangeRates ?? [])
   }, [settingsRes])
 
   // Toggle admin SMS-2FA. Saves immediately (optimistic); on error — e.g. the
@@ -105,6 +112,30 @@ export default function SettingsPage() {
         onSuccess: () => setLoyaltySaved(true),
         onError: (e) =>
           setLoyaltyError(e instanceof ApiError ? e.message : 'Could not save loyalty settings.'),
+      },
+    )
+  }
+
+  function saveRates() {
+    setRatesError(null)
+    setRatesSaved(false)
+    // Drop fully blank rows; a half-filled row is a client-side error (the
+    // server enforces the same, but we catch it before the round-trip).
+    const trimmed = rates.map((r) => ({ label: r.label.trim(), value: r.value.trim() }))
+    const cleaned = trimmed.filter((r) => r.label !== '' || r.value !== '')
+    if (cleaned.some((r) => r.label === '' || r.value === '')) {
+      setRatesError('Each rate needs both a currency and a value.')
+      return
+    }
+    update.mutate(
+      { exchangeRates: cleaned },
+      {
+        onSuccess: () => {
+          setRates(cleaned)
+          setRatesSaved(true)
+        },
+        onError: (e) =>
+          setRatesError(e instanceof ApiError ? e.message : 'Could not save exchange rates.'),
       },
     )
   }
@@ -250,6 +281,76 @@ export default function SettingsPage() {
               <Icon name="check" size={15} /> {t('save')}
             </button>
             {loyaltySaved && !update.isPending && (
+              <span className="muted" style={{ fontSize: 12.5 }}>Saved.</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="acard" style={{ marginBottom: 18 }}>
+        <div className="panelhead">
+          <Icon name="coins" size={17} />
+          <h3>Exchange rates</h3>
+        </div>
+        <div className="pad">
+          <div className="muted" style={{ fontSize: 12.5, marginBottom: 14, lineHeight: 1.6, maxWidth: 560 }}>
+            Currency rates shown to customers on the top-up screen (e.g. Syrian pound, Egyptian
+            pound). Both fields are free text and displayed exactly as typed. Leave the list empty
+            to hide it.
+          </div>
+          {rates.map((r, i) => (
+            <div
+              key={i}
+              style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}
+            >
+              <input
+                className="afield"
+                style={{ flex: '0 0 200px' }}
+                placeholder="Currency (e.g. SYP)"
+                maxLength={40}
+                value={r.label}
+                onChange={(e) =>
+                  setRates((rs) => rs.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))
+                }
+              />
+              <input
+                className="afield"
+                style={{ flex: 1 }}
+                placeholder="Rate (e.g. 89,500 per $1)"
+                maxLength={40}
+                value={r.value}
+                onChange={(e) =>
+                  setRates((rs) => rs.map((x, idx) => (idx === i ? { ...x, value: e.target.value } : x)))
+                }
+              />
+              <button
+                className="abtn ghost"
+                title="Remove"
+                onClick={() => setRates((rs) => rs.filter((_, idx) => idx !== i))}
+                disabled={!canManage}
+              >
+                <Icon name="trash" size={15} />
+              </button>
+            </div>
+          ))}
+          <button
+            className="abtn"
+            style={{ marginTop: 4 }}
+            onClick={() => setRates((rs) => [...rs, { label: '', value: '' }])}
+            disabled={!canManage || rates.length >= 20}
+          >
+            <Icon name="plus" size={15} /> Add rate
+          </button>
+          {ratesError && (
+            <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 14 }}>
+              {ratesError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>
+            <button className="abtn primary" onClick={saveRates} disabled={update.isPending || settingsLoading || !canManage}>
+              <Icon name="check" size={15} /> {t('save')}
+            </button>
+            {ratesSaved && !update.isPending && (
               <span className="muted" style={{ fontSize: 12.5 }}>Saved.</span>
             )}
           </div>

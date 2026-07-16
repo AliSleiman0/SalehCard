@@ -1,6 +1,7 @@
 package payment
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -8,19 +9,29 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
-// Handler exposes the customer payment-intent endpoints.
-type Handler struct {
-	svc *Service
+// settingsReader is the narrow read-only view of app settings the config
+// endpoint needs (to surface the admin-defined exchange rates). Implemented by
+// settings.MongoRepository.
+type settingsReader interface {
+	Get(ctx context.Context) (*settings.Settings, error)
 }
 
-// NewHandler constructs a Handler.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+// Handler exposes the customer payment-intent endpoints.
+type Handler struct {
+	svc      *Service
+	settings settingsReader
+}
+
+// NewHandler constructs a Handler. settings may be nil (config falls back to an
+// empty exchange-rate list).
+func NewHandler(svc *Service, settingsRepo settingsReader) *Handler {
+	return &Handler{svc: svc, settings: settingsRepo}
 }
 
 // IntentView is the client-facing intent shape: amounts as USD floats, micros
@@ -116,19 +127,28 @@ func (h *Handler) GetIntent(w http.ResponseWriter, r *http.Request) {
 // default) is kept for clients that predate multi-network; Networks is the
 // full list a picker offers.
 type configView struct {
-	USDTEnabled   bool     `json:"usdtEnabled"`
-	Network       string   `json:"network"`
-	Networks      []string `json:"networks"`
-	ExpiryMinutes int      `json:"expiryMinutes"`
+	USDTEnabled   bool                    `json:"usdtEnabled"`
+	Network       string                  `json:"network"`
+	Networks      []string                `json:"networks"`
+	ExpiryMinutes int                     `json:"expiryMinutes"`
+	ExchangeRates []settings.ExchangeRate `json:"exchangeRates"`
 }
 
-// GetConfig handles GET /api/v1/payments/config — the client feature gate.
+// GetConfig handles GET /api/v1/payments/config — the client feature gate. It
+// also carries the admin-defined exchange rates shown on the top-up screen.
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	rates := []settings.ExchangeRate{}
+	if h.settings != nil {
+		if s, err := h.settings.Get(r.Context()); err == nil && len(s.ExchangeRates) > 0 {
+			rates = s.ExchangeRates
+		}
+	}
 	response.OK(w, configView{
 		USDTEnabled:   h.svc.Enabled(),
 		Network:       h.svc.DefaultNetwork(),
 		Networks:      h.svc.Networks(),
 		ExpiryMinutes: h.svc.ExpiryMinutes(),
+		ExchangeRates: rates,
 	})
 }
 
