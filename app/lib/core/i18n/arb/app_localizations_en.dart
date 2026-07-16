@@ -38,6 +38,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get mtBuy => 'Buy';
+
+  @override
+  String get mtSell => 'Sell';
+
+  @override
+  String get mtAmount => 'Amount';
+
+  @override
+  String get mtBuyTotal => 'Buy total';
+
+  @override
+  String get mtSellTotal => 'Sell total';
+
+  @override
   String get retry => 'Retry';
 
   @override

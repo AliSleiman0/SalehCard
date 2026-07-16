@@ -91,6 +91,35 @@ class Verification {
   final String app;
 }
 
+/// Buy/sell exchange-rate board for a money-transfer (`transfer`) product. Rates
+/// are quote-currency units per 1 [baseCurrency] unit (e.g. 89500 LBP per $1).
+/// Both rates are optional — a product may quote only [buyRate], only [sellRate],
+/// or both; a null/zero rate means "not offered". [minAmount]/[maxAmount] bound
+/// the base amount (null/0 = unbounded) and are informational in the rate board.
+class MoneyTransfer {
+  const MoneyTransfer({
+    required this.baseCurrency,
+    required this.quoteCurrency,
+    this.buyRate,
+    this.sellRate,
+    this.minAmount,
+    this.maxAmount,
+  });
+
+  final String baseCurrency;
+  final String quoteCurrency;
+  final double? buyRate;
+  final double? sellRate;
+  final double? minAmount;
+  final double? maxAmount;
+
+  /// Whether a usable buy rate is on offer.
+  bool get hasBuy => (buyRate ?? 0) > 0;
+
+  /// Whether a usable sell rate is on offer.
+  bool get hasSell => (sellRate ?? 0) > 0;
+}
+
 /// Catalog product (domain entity).
 class Product {
   const Product({
@@ -105,6 +134,7 @@ class Product {
     this.fulfillmentType = 'code',
     this.inputFields = const [],
     this.verification,
+    this.moneyTransfer,
     this.rating,
     this.ratingCount = 0,
     this.offer,
@@ -160,6 +190,15 @@ class Product {
 
   /// Whether the customer must verify a game ID (see nickname) before buying.
   bool get requiresIdVerification => verification != null;
+
+  /// Buy/sell rate board for a money-transfer product; null otherwise.
+  final MoneyTransfer? moneyTransfer;
+
+  /// Whether to show the money-transfer rate board + calculator: a rate board
+  /// is present and offers at least one rate.
+  bool get isMoneyTransfer =>
+      moneyTransfer != null &&
+      (moneyTransfer!.hasBuy || moneyTransfer!.hasSell);
 
   final double? rating;
   final int ratingCount;

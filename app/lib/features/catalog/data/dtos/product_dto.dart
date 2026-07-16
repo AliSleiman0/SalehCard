@@ -139,6 +139,39 @@ class VerificationDto {
   Verification toEntity() => Verification(provider: provider, app: app);
 }
 
+@JsonSerializable()
+class MoneyTransferDto {
+  const MoneyTransferDto({
+    this.baseCurrency = '',
+    this.quoteCurrency = '',
+    this.buyRate,
+    this.sellRate,
+    this.minAmount,
+    this.maxAmount,
+  });
+
+  final String baseCurrency;
+  final String quoteCurrency;
+  final double? buyRate;
+  final double? sellRate;
+  final double? minAmount;
+  final double? maxAmount;
+
+  factory MoneyTransferDto.fromJson(Map<String, dynamic> json) =>
+      _$MoneyTransferDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$MoneyTransferDtoToJson(this);
+
+  MoneyTransfer toEntity() => MoneyTransfer(
+        baseCurrency: baseCurrency,
+        quoteCurrency: quoteCurrency,
+        buyRate: buyRate,
+        sellRate: sellRate,
+        minAmount: minAmount,
+        maxAmount: maxAmount,
+      );
+}
+
 @JsonSerializable(explicitToJson: true)
 class ProductDto {
   const ProductDto({
@@ -153,6 +186,7 @@ class ProductDto {
     this.fulfillmentType,
     this.inputFields,
     this.verification,
+    this.moneyTransfer,
     this.ratings,
     this.offer,
   });
@@ -168,6 +202,7 @@ class ProductDto {
   final String? fulfillmentType;
   final List<InputFieldDto>? inputFields;
   final VerificationDto? verification;
+  final MoneyTransferDto? moneyTransfer;
   final RatingsDto? ratings;
   final ProductOfferDto? offer;
 
@@ -190,6 +225,7 @@ class ProductDto {
         inputFields:
             (inputFields ?? const []).map((f) => f.toEntity()).toList(),
         verification: verification?.toEntity(),
+        moneyTransfer: moneyTransfer?.toEntity(),
         rating: ratings?.average,
         ratingCount: ratings?.count ?? 0,
         offer: offer?.toEntity(),

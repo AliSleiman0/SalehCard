@@ -72,6 +72,20 @@ export interface Verification {
   app: string
 }
 
+// Buy/sell exchange-rate board on a money-transfer (`transfer`) product. Rates
+// are quote-currency units per 1 base unit (e.g. 89500 LBP per $1). Both rates
+// are optional (a product may quote only buy, only sell, or both); min/max
+// bound the base amount and are informational in the rate-board UI. Mirrors the
+// Go `MoneyTransfer`.
+export interface MoneyTransferSpec {
+  baseCurrency: string
+  quoteCurrency: string
+  buyRate?: number
+  sellRate?: number
+  minAmount?: number
+  maxAmount?: number
+}
+
 export interface Product {
   id: string
   title: I18nString
@@ -95,6 +109,8 @@ export interface Product {
   ratings: RatingsSummary
   inputFields?: InputField[]
   verification?: Verification
+  /** Buy/sell rate board on a money-transfer product; absent otherwise. */
+  moneyTransfer?: MoneyTransferSpec
   /** Economics. Only `cost` (admin-set unit cost) is editable in the console;
    *  retail/currency come from the legacy catalog importer. Absent = no cost set. */
   pricing?: { cost?: number; retail?: number; currency?: string }

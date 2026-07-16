@@ -448,6 +448,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		UpstreamProductID:   in.UpstreamProductID,
 		InputFields:         in.InputFields,
 		Bridge:              in.Bridge,
+		MoneyTransfer:       in.MoneyTransfer,
 		Pricing:             pricing,
 		Stock:               in.Stock,
 		Available:           in.Available,
@@ -553,7 +554,9 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		{Key: "fulfillmentProvider", Value: lit(in.FulfillmentProvider)},
 		// upstreamProductId is deliberately ABSENT here: supplier mappings are
 		// admin-owned, and a legacy-catalog re-import must never wipe them
-		// (omitting the key leaves the stored value untouched).
+		// (omitting the key leaves the stored value untouched). moneyTransfer is
+		// omitted for the same reason: the buy/sell rate board is admin-set (the
+		// loader has no rate data), so a re-import leaves any stored rates intact.
 		{Key: "fulfillmentConfidence", Value: lit(in.FulfillmentConfidence)},
 		{Key: "fulfillmentCancellable", Value: lit(in.FulfillmentCancellable)},
 		{Key: "pricing", Value: lit(in.Pricing)},
@@ -679,6 +682,15 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 			set = append(set, bson.E{Key: "bridge", Value: nil})
 		} else {
 			set = append(set, bson.E{Key: "bridge", Value: in.Bridge})
+		}
+	}
+	if in.MoneyTransfer != nil {
+		// Both currencies empty and no rates means "remove the rate board" → clear.
+		if in.MoneyTransfer.BaseCurrency == "" && in.MoneyTransfer.QuoteCurrency == "" &&
+			in.MoneyTransfer.BuyRate == 0 && in.MoneyTransfer.SellRate == 0 {
+			set = append(set, bson.E{Key: "moneyTransfer", Value: nil})
+		} else {
+			set = append(set, bson.E{Key: "moneyTransfer", Value: in.MoneyTransfer})
 		}
 	}
 

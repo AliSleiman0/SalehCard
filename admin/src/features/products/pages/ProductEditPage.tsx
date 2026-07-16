@@ -113,6 +113,10 @@ export default function ProductEditPage() {
   // Purchase-time ID verification (check_name): toggle + provider game slug.
   const [verifyEnabled, setVerifyEnabled] = useState(false)
   const [verifyApp, setVerifyApp] = useState('')
+  // Money-transfer buy/sell rate board (transfer products only). String-backed so
+  // partial typing (currencies, "89." …) stays literal; parsed on save.
+  const [mt, setMt] = useState({ base: '', quote: '', buy: '', sell: '', min: '', max: '' })
+  const [mtError, setMtError] = useState('')
   const [images, setImages] = useState<string[]>([])
   const [thumbnail, setThumbnail] = useState('')
   const [imageError, setImageError] = useState('')
@@ -153,6 +157,15 @@ export default function ProductEditPage() {
     setInputFields(toRows(p.inputFields ?? []))
     setVerifyEnabled(!!p.verification)
     setVerifyApp(p.verification?.app ?? '')
+    const m = p.moneyTransfer
+    setMt({
+      base: m?.baseCurrency ?? '',
+      quote: m?.quoteCurrency ?? '',
+      buy: m?.buyRate != null ? String(m.buyRate) : '',
+      sell: m?.sellRate != null ? String(m.sellRate) : '',
+      min: m?.minAmount != null ? String(m.minAmount) : '',
+      max: m?.maxAmount != null ? String(m.maxAmount) : '',
+    })
     setImages(p.images ?? [])
     setThumbnail(p.thumbnail ?? '')
   }, [data])
@@ -267,6 +280,27 @@ export default function ProductEditPage() {
     const apiFields = fromRows(inputFields)
     const fields = isBridge ? reconcileBridgePhoneField(apiFields) : apiFields
 
+    // Money-transfer rate board (transfer products only). Send the spec when the
+    // admin filled currencies/rates; send the clear sentinel ({baseCurrency:'',
+    // quoteCurrency:''}) when a product that had rates now has none (incl. a
+    // switch away from transfer); omit otherwise so the backend leaves it alone.
+    const hadMt = !!data?.data?.moneyTransfer
+    const mtHasContent =
+      ff === 'transfer' &&
+      !!(mt.base.trim() || mt.quote.trim() || mt.buy.trim() || mt.sell.trim())
+    const moneyTransfer = mtHasContent
+      ? {
+          baseCurrency: mt.base.trim().toUpperCase(),
+          quoteCurrency: mt.quote.trim().toUpperCase(),
+          ...(mt.buy.trim() ? { buyRate: parseFloat(mt.buy) || 0 } : {}),
+          ...(mt.sell.trim() ? { sellRate: parseFloat(mt.sell) || 0 } : {}),
+          ...(mt.min.trim() ? { minAmount: parseFloat(mt.min) || 0 } : {}),
+          ...(mt.max.trim() ? { maxAmount: parseFloat(mt.max) || 0 } : {}),
+        }
+      : hadMt
+        ? { baseCurrency: '' as const, quoteCurrency: '' as const }
+        : undefined
+
     return {
       title,
       description,
@@ -320,6 +354,7 @@ export default function ProductEditPage() {
       // there were never any, leaving stored data untouched via the nil-guard.
       ...(fields.length || data?.data?.inputFields?.length ? { inputFields: fields } : {}),
       ...(verification ? { verification } : {}),
+      ...(moneyTransfer ? { moneyTransfer } : {}),
     }
   }
 
@@ -349,6 +384,28 @@ export default function ProductEditPage() {
     setImageError('')
   }
 
+  // Client-side money-transfer validation mirroring the server: currencies
+  // required together, at least one positive rate, non-negative rates, min ≤ max.
+  // Empty (no rates at all) is fine — it clears / omits. Returns '' when valid.
+  const mtIssue = (): string => {
+    if (ff !== 'transfer') return ''
+    const hasContent = !!(
+      mt.base.trim() || mt.quote.trim() || mt.buy.trim() || mt.sell.trim() || mt.min.trim() || mt.max.trim()
+    )
+    if (!hasContent) return ''
+    if (!mt.base.trim() || !mt.quote.trim()) return 'Exchange rates need both a base and a quote currency.'
+    const buy = parseFloat(mt.buy)
+    const sell = parseFloat(mt.sell)
+    if ((mt.buy.trim() && buy < 0) || (mt.sell.trim() && sell < 0)) return 'Exchange rates cannot be negative.'
+    const hasBuy = mt.buy.trim() !== '' && buy > 0
+    const hasSell = mt.sell.trim() !== '' && sell > 0
+    if (!hasBuy && !hasSell) return 'Set at least one of the buy or sell rate.'
+    const min = parseFloat(mt.min)
+    const max = parseFloat(mt.max)
+    if (mt.min.trim() && mt.max.trim() && min > 0 && max > 0 && min > max) return 'Minimum amount cannot exceed the maximum.'
+    return ''
+  }
+
   const onSave = () => {
     // Block the save on input-field problems the admin can fix in the table
     // (duplicate keys, min>max, optionless select …) — mirrors the server's
@@ -356,6 +413,9 @@ export default function ProductEditPage() {
     const issues = rowIssues(inputFields)
     setFieldIssues(issues)
     if (issues.length) return
+    const mtErr = mtIssue()
+    setMtError(mtErr)
+    if (mtErr) return
     const input = buildInput()
     const onSuccess = () => navigate('/products')
     if (isNew) create.mutate(input, { onSuccess })
@@ -908,6 +968,94 @@ export default function ProductEditPage() {
               <div className="ahint" style={{ marginTop: 0 }}>
                 Transfer orders use a manual status timeline (Submitted → Processing → Completed). No inventory or code
                 pool is attached.
+              </div>
+
+              {/* Buy/sell exchange-rate board — shown as a rate board + live
+                  calculator on the product page. */}
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <Icon name="coins" size={17} />
+                  <h3 style={{ fontSize: 15, fontWeight: 800 }}>Exchange rates (buy / sell)</h3>
+                </div>
+                <div className="ahint" style={{ marginTop: 0 }}>
+                  Rates are quote-currency units per 1 base unit (e.g. 89,500 LBP per $1). Fill buy, sell, or both;
+                  leave everything blank for no rate board.
+                </div>
+                <div className="g2" style={{ marginTop: 12 }}>
+                  <div>
+                    <label className="alabel">Base currency</label>
+                    <input
+                      className="afield"
+                      maxLength={8}
+                      placeholder="e.g. USD"
+                      value={mt.base}
+                      onChange={(e) => setMt((s) => ({ ...s, base: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="alabel">Quote currency</label>
+                    <input
+                      className="afield"
+                      maxLength={8}
+                      placeholder="e.g. LBP"
+                      value={mt.quote}
+                      onChange={(e) => setMt((s) => ({ ...s, quote: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="g2" style={{ marginTop: 12 }}>
+                  <div>
+                    <label className="alabel">Buy rate</label>
+                    <input
+                      className="afield"
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 89000"
+                      value={mt.buy}
+                      onChange={(e) => setMt((s) => ({ ...s, buy: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="alabel">Sell rate</label>
+                    <input
+                      className="afield"
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 89500"
+                      value={mt.sell}
+                      onChange={(e) => setMt((s) => ({ ...s, sell: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="g2" style={{ marginTop: 12 }}>
+                  <div>
+                    <label className="alabel">Min amount (optional)</label>
+                    <input
+                      className="afield"
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 1"
+                      value={mt.min}
+                      onChange={(e) => setMt((s) => ({ ...s, min: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="alabel">Max amount (optional)</label>
+                    <input
+                      className="afield"
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 5000"
+                      value={mt.max}
+                      onChange={(e) => setMt((s) => ({ ...s, max: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                {mtError && (
+                  <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 8 }}>
+                    {mtError}
+                  </div>
+                )}
               </div>
             </div>
           )}

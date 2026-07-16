@@ -38,6 +38,21 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get mtBuy => 'شراء';
+
+  @override
+  String get mtSell => 'بيع';
+
+  @override
+  String get mtAmount => 'المبلغ';
+
+  @override
+  String get mtBuyTotal => 'إجمالي الشراء';
+
+  @override
+  String get mtSellTotal => 'إجمالي البيع';
+
+  @override
   String get retry => 'إعادة المحاولة';
 
   @override

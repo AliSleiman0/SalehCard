@@ -278,6 +278,15 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if err := validateBridge(mode, in.Bridge, in.Variants); err != nil {
 		return nil, err
 	}
+	mt, err := validateMoneyTransfer(in.FulfillmentType, in.MoneyTransfer)
+	if err != nil {
+		return nil, err
+	}
+	// Drop an empty/cleared spec so a non-transfer product never stores a bare {}.
+	if !mt.hasRates() {
+		mt = nil
+	}
+	in.MoneyTransfer = mt
 	if in.Cost != nil && *in.Cost < 0 {
 		return nil, badRequest("cost must be non-negative")
 	}
@@ -321,6 +330,20 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 				return nil, err
 			}
 		}
+	}
+	// Validate the buy/sell rate board when the update carries one. The effective
+	// fulfillment type is *in.FulfillmentType when the save resends it (the admin
+	// editor always does); an unset type skips only the type guard.
+	if in.MoneyTransfer != nil {
+		var ft FulfillmentType
+		if in.FulfillmentType != nil {
+			ft = *in.FulfillmentType
+		}
+		mt, err := validateMoneyTransfer(ft, in.MoneyTransfer)
+		if err != nil {
+			return nil, err
+		}
+		in.MoneyTransfer = mt
 	}
 	if in.Cost != nil && *in.Cost < 0 {
 		return nil, badRequest("cost must be non-negative")

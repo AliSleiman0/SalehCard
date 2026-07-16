@@ -8,6 +8,7 @@ import type {
   BridgeSpec,
   InputField,
   Verification,
+  MoneyTransferSpec,
 } from '@/types'
 
 export interface ProductListParams {
@@ -60,6 +61,10 @@ export interface ProductInput {
   // Purchase-time ID verification. A non-empty `app` enables it; `{provider:0,
   // app:''}` clears it (disable). Omitted = leave unchanged.
   verification?: Verification
+  // Buy/sell rate board on a money-transfer product. A spec with currencies +
+  // at least one rate sets it; `{baseCurrency:'', quoteCurrency:''}` (no rates)
+  // clears it. Omitted = leave unchanged.
+  moneyTransfer?: MoneyTransferSpec | { baseCurrency: ''; quoteCurrency: '' }
 }
 
 const ADMIN = '/api/admin/products'

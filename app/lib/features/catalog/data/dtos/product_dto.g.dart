@@ -98,6 +98,26 @@ VerificationDto _$VerificationDtoFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$VerificationDtoToJson(VerificationDto instance) =>
     <String, dynamic>{'provider': instance.provider, 'app': instance.app};
 
+MoneyTransferDto _$MoneyTransferDtoFromJson(Map<String, dynamic> json) =>
+    MoneyTransferDto(
+      baseCurrency: json['baseCurrency'] as String? ?? '',
+      quoteCurrency: json['quoteCurrency'] as String? ?? '',
+      buyRate: (json['buyRate'] as num?)?.toDouble(),
+      sellRate: (json['sellRate'] as num?)?.toDouble(),
+      minAmount: (json['minAmount'] as num?)?.toDouble(),
+      maxAmount: (json['maxAmount'] as num?)?.toDouble(),
+    );
+
+Map<String, dynamic> _$MoneyTransferDtoToJson(MoneyTransferDto instance) =>
+    <String, dynamic>{
+      'baseCurrency': instance.baseCurrency,
+      'quoteCurrency': instance.quoteCurrency,
+      'buyRate': instance.buyRate,
+      'sellRate': instance.sellRate,
+      'minAmount': instance.minAmount,
+      'maxAmount': instance.maxAmount,
+    };
+
 ProductDto _$ProductDtoFromJson(Map<String, dynamic> json) => ProductDto(
   id: json['id'] as String,
   title: json['title'] as Map<String, dynamic>?,
@@ -116,6 +136,11 @@ ProductDto _$ProductDtoFromJson(Map<String, dynamic> json) => ProductDto(
   verification: json['verification'] == null
       ? null
       : VerificationDto.fromJson(json['verification'] as Map<String, dynamic>),
+  moneyTransfer: json['moneyTransfer'] == null
+      ? null
+      : MoneyTransferDto.fromJson(
+          json['moneyTransfer'] as Map<String, dynamic>,
+        ),
   ratings: json['ratings'] == null
       ? null
       : RatingsDto.fromJson(json['ratings'] as Map<String, dynamic>),
@@ -137,6 +162,7 @@ Map<String, dynamic> _$ProductDtoToJson(ProductDto instance) =>
       'fulfillmentType': instance.fulfillmentType,
       'inputFields': instance.inputFields?.map((e) => e.toJson()).toList(),
       'verification': instance.verification?.toJson(),
+      'moneyTransfer': instance.moneyTransfer?.toJson(),
       'ratings': instance.ratings?.toJson(),
       'offer': instance.offer?.toJson(),
     };
