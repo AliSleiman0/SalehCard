@@ -79,6 +79,9 @@ func (r *MongoRepository) Update(ctx context.Context, in UpdateInput, actor stri
 	if in.AdminSmsTwoFactorEnabled != nil {
 		cur.AdminSmsTwoFactorEnabled = *in.AdminSmsTwoFactorEnabled
 	}
+	if in.ExchangeRates != nil {
+		cur.ExchangeRates = *in.ExchangeRates
+	}
 	cur.ID = settingsID
 	cur.UpdatedAt = time.Now().UTC()
 	cur.UpdatedBy = actor

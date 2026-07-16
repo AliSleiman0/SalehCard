@@ -69,6 +69,14 @@ class PaymentIntent {
   bool get isExpired => status == PaymentIntentStatus.expired;
 }
 
+/// One admin-defined currency rate shown on the top-up screen (free text).
+class ExchangeRate {
+  const ExchangeRate({required this.label, required this.value});
+
+  final String label;
+  final String value;
+}
+
 /// The app-facing USDT feature gate (`GET /payments/config`).
 class PaymentConfig {
   const PaymentConfig({
@@ -76,6 +84,7 @@ class PaymentConfig {
     this.network = 'trc20',
     this.networks = const ['trc20'],
     this.expiryMinutes = 30,
+    this.exchangeRates = const [],
   });
 
   final bool usdtEnabled;
@@ -87,4 +96,7 @@ class PaymentConfig {
   final List<String> networks;
 
   final int expiryMinutes;
+
+  /// Admin-maintained currency rates shown on the top-up screen (may be empty).
+  final List<ExchangeRate> exchangeRates;
 }

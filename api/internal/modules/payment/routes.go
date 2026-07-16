@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/ratelimit"
 )
@@ -26,7 +27,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, svc *S
 	if err := EnsureDepositIndexes(context.Background(), db); err != nil {
 		slog.Warn("payment: failed to ensure deposit indexes", "error", err)
 	}
-	h := NewHandler(svc)
+	h := NewHandler(svc, settings.NewMongoRepository(db))
 
 	limiter := ratelimit.New(ratelimit.Config{Provider: cfg.RateLimitProvider}, db)
 	if _, ok := limiter.(ratelimit.NoopLimiter); !ok {

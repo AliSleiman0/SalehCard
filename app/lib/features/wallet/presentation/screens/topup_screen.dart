@@ -10,6 +10,7 @@ import '../../../../core/network/idempotency.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
+import '../../../payments/domain/entities/payment_intent.dart';
 import '../../../payments/presentation/providers.dart';
 import '../../domain/entities/wallet.dart';
 import '../providers.dart';
@@ -361,6 +362,8 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                   if (selectedMethod != null) ...[
                     if (selectedMethod.instructions.isNotEmpty)
                       _InstructionsCard(text: selectedMethod.instructions),
+                    if (paymentConfig?.exchangeRates.isNotEmpty ?? false)
+                      _ExchangeRatesCard(rates: paymentConfig!.exchangeRates),
                     for (final field in selectedMethod.fields)
                       Padding(
                         padding: const EdgeInsets.only(top: 14),
@@ -450,6 +453,77 @@ class _InstructionsCard extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A quiet, un-pushy list of admin-defined exchange rates shown under the
+/// method instructions. Deliberately low-key: a hairline-bordered block with a
+/// muted accent — gray on dark, light purple on white.
+class _ExchangeRatesCard extends StatelessWidget {
+  const _ExchangeRatesCard({required this.rates});
+
+  final List<ExchangeRate> rates;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Gray on dark, light purple on white — the one place the screen branches
+    // on brightness; everything else comes from the AppColors extension.
+    final accent = isDark ? colors.textDim : AppTokens.brandMid;
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.05),
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Exchange rates',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+              color: accent,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final rate in rates)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      rate.label,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.3,
+                        color: colors.textDim,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    rate.value,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.3,
+                      fontWeight: FontWeight.w700,
+                      color: colors.text,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
