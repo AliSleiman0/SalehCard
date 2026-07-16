@@ -47,6 +47,28 @@ func TestBuildUpsertSet_LiteralWrapsDollarValues(t *testing.T) {
 	}
 }
 
+// The category taxonomy filter must match a single node exactly when only the
+// expanded-list is empty (the "directOnly" / no-resolver path), and use $in when
+// the service has expanded a node to its descendants (the tree-aware path).
+func TestBuildFilter_CategoryDirectVsTree(t *testing.T) {
+	oid := bson.NewObjectID()
+
+	// Direct: only CategoryID set → exact single-id equality, no $in.
+	direct := buildFilter(ListFilter{CategoryID: oid.Hex()})
+	v := valueFor(direct, "categoryId")
+	if got, ok := v.(bson.ObjectID); !ok || got != oid {
+		t.Fatalf("direct categoryId = %#v, want exact %v", v, oid)
+	}
+
+	// Tree: CategoryIDs set → $in over the expanded list.
+	tree := buildFilter(ListFilter{CategoryID: oid.Hex(), CategoryIDs: []bson.ObjectID{oid}})
+	tv := valueFor(tree, "categoryId")
+	d, ok := tv.(bson.D)
+	if !ok || len(d) != 1 || d[0].Key != "$in" {
+		t.Fatalf("tree categoryId = %#v, want $in expression", tv)
+	}
+}
+
 func valueFor(d bson.D, key string) any {
 	for _, e := range d {
 		if e.Key == key {

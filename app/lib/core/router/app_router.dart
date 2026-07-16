@@ -129,6 +129,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => CategoryProductsScreen(
           categoryId: state.pathParameters['id']!,
           title: state.extra is String ? state.extra as String : null,
+          // ?directOnly=true lists only the node's own products (from the
+          // subcategories screen's "See all"); default is the tree-aware list.
+          directOnly: state.uri.queryParameters['directOnly'] == 'true',
         ),
       ),
       GoRoute(

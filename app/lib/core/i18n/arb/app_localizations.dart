@@ -146,6 +146,12 @@ abstract class AppLocalizations {
   /// **'Products'**
   String get catalogTitle;
 
+  /// No description provided for @seeAllCount.
+  ///
+  /// In en, this message translates to:
+  /// **'See all {count}'**
+  String seeAllCount(int count);
+
   /// No description provided for @retry.
   ///
   /// In en, this message translates to:

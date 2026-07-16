@@ -16,6 +16,7 @@ class CatalogRemoteDataSource {
     String? categoryId,
     String? rootDomain,
     String? search,
+    bool directOnly = false,
   }) async {
     return (await getProductsPage(
       page: page,
@@ -24,12 +25,17 @@ class CatalogRemoteDataSource {
       categoryId: categoryId,
       rootDomain: rootDomain,
       search: search,
+      directOnly: directOnly,
     ))
         .items;
   }
 
   /// Fetches one page of products plus the total count (from the response
   /// `meta`), so paginated callers can tell whether more pages remain.
+  ///
+  /// [directOnly] lists only products assigned to [categoryId] exactly (no
+  /// subtree expansion) — used to surface products attached directly to a node
+  /// that also has subcategories.
   Future<Paged<ProductDto>> getProductsPage({
     int page = 1,
     int limit = 20,
@@ -37,6 +43,7 @@ class CatalogRemoteDataSource {
     String? categoryId,
     String? rootDomain,
     String? search,
+    bool directOnly = false,
   }) async {
     final response = await _dio.get<dynamic>(
       '/products',
@@ -47,6 +54,7 @@ class CatalogRemoteDataSource {
         if (categoryId != null && categoryId.isNotEmpty) 'categoryId': categoryId,
         if (rootDomain != null && rootDomain.isNotEmpty) 'rootDomain': rootDomain,
         if (search != null && search.isNotEmpty) 'q': search,
+        if (directOnly) 'directOnly': true,
       },
     );
     final (:data, :meta) = unwrapPaged(response);

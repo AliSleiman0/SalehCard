@@ -19,6 +19,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
     String? categoryId,
     String? rootDomain,
     String? search,
+    bool directOnly = false,
   }) async {
     try {
       final dtos = await _remote.getProducts(
@@ -28,6 +29,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
         categoryId: categoryId,
         rootDomain: rootDomain,
         search: search,
+        directOnly: directOnly,
       );
       return Right(dtos.map((d) => d.toEntity()).toList());
     } catch (error) {
@@ -43,6 +45,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
     String? categoryId,
     String? rootDomain,
     String? search,
+    bool directOnly = false,
   }) async {
     try {
       final page0 = await _remote.getProductsPage(
@@ -52,6 +55,7 @@ class CatalogRepositoryImpl implements CatalogRepository {
         categoryId: categoryId,
         rootDomain: rootDomain,
         search: search,
+        directOnly: directOnly,
       );
       return Right(page0.map((d) => d.toEntity()));
     } catch (error) {
