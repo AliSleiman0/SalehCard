@@ -152,6 +152,36 @@ abstract class AppLocalizations {
   /// **'See all {count}'**
   String seeAllCount(int count);
 
+  /// No description provided for @mtBuy.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy'**
+  String get mtBuy;
+
+  /// No description provided for @mtSell.
+  ///
+  /// In en, this message translates to:
+  /// **'Sell'**
+  String get mtSell;
+
+  /// No description provided for @mtAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get mtAmount;
+
+  /// No description provided for @mtBuyTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy total'**
+  String get mtBuyTotal;
+
+  /// No description provided for @mtSellTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Sell total'**
+  String get mtSellTotal;
+
   /// No description provided for @retry.
   ///
   /// In en, this message translates to:

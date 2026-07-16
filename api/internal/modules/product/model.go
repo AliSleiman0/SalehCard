@@ -202,6 +202,22 @@ type Verification struct {
 	App      string `bson:"app"      json:"app"`
 }
 
+// MoneyTransfer holds the buy/sell exchange rates shown on a money-transfer
+// (FulfillmentTransfer) product's page: a base→quote currency pair plus the
+// rates (quote units per 1 base unit). Both rates are optional — a product may
+// quote only Buy, only Sell, or both; a zero rate means "not offered" (a real
+// exchange rate is always > 0, so 0 doubles as the unset sentinel). MinAmount /
+// MaxAmount bound the base amount (0 = unbounded); they are informational in the
+// current rate-board UI and reserved for a later transactional flow.
+type MoneyTransfer struct {
+	BaseCurrency  string  `bson:"baseCurrency"        json:"baseCurrency"`
+	QuoteCurrency string  `bson:"quoteCurrency"       json:"quoteCurrency"`
+	BuyRate       float64 `bson:"buyRate,omitempty"   json:"buyRate,omitempty"`
+	SellRate      float64 `bson:"sellRate,omitempty"  json:"sellRate,omitempty"`
+	MinAmount     float64 `bson:"minAmount,omitempty" json:"minAmount,omitempty"`
+	MaxAmount     float64 `bson:"maxAmount,omitempty" json:"maxAmount,omitempty"`
+}
+
 // Product is the root entity for a digital gift-card or top-up item.
 type Product struct {
 	ID    bson.ObjectID `bson:"_id,omitempty" json:"id"`
@@ -248,9 +264,12 @@ type Product struct {
 	Verification      *Verification      `bson:"verification,omitempty"      json:"verification,omitempty"`
 	// Bridge configures Lebanese mobile-recharge fulfillment for bridge_device
 	// products (operator + delivery method); nil for all other products.
-	Bridge    *BridgeSpec `bson:"bridge,omitempty"            json:"bridge,omitempty"`
-	Stock     int         `bson:"stock"     json:"stock"`
-	Available bool        `bson:"available" json:"available"`
+	Bridge *BridgeSpec `bson:"bridge,omitempty"            json:"bridge,omitempty"`
+	// MoneyTransfer holds the buy/sell rate board for a FulfillmentTransfer
+	// product; nil for all other products.
+	MoneyTransfer *MoneyTransfer `bson:"moneyTransfer,omitempty"     json:"moneyTransfer,omitempty"`
+	Stock         int            `bson:"stock"     json:"stock"`
+	Available     bool           `bson:"available" json:"available"`
 	// Migration: status fidelity + ordering + review markers.
 	Status    string         `bson:"status,omitempty"    json:"status,omitempty"`
 	SortOrder int            `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
@@ -326,12 +345,14 @@ type CreateProductInput struct {
 	// UpstreamProductID maps an api-mode product onto the supplier's catalog
 	// (DESIGN-SUPPLIERS.md). Deliberately unvalidated: a provider-less or
 	// id-less api product parks safely at order time (stub / ErrUnavailable).
-	UpstreamProductID string         `json:"upstreamProductId,omitempty"`
-	Bridge            *BridgeSpec    `json:"bridge,omitempty"`
-	InputFields       []InputField   `json:"inputFields,omitempty"`
-	Stock             int            `json:"stock"`
-	Available         bool           `json:"available"`
-	Ratings           RatingsSummary `json:"ratings"`
+	UpstreamProductID string      `json:"upstreamProductId,omitempty"`
+	Bridge            *BridgeSpec `json:"bridge,omitempty"`
+	// MoneyTransfer sets the buy/sell rate board; only valid on a transfer product.
+	MoneyTransfer *MoneyTransfer `json:"moneyTransfer,omitempty"`
+	InputFields   []InputField   `json:"inputFields,omitempty"`
+	Stock         int            `json:"stock"`
+	Available     bool           `json:"available"`
+	Ratings       RatingsSummary `json:"ratings"`
 }
 
 // UpdateProductInput carries the optional fields that can be patched on a product.
@@ -370,6 +391,10 @@ type UpdateProductInput struct {
 	// non-empty Provider sets it; a non-nil value with an empty Provider clears it
 	// (product is no longer bridge-fulfilled). Nil leaves it unchanged.
 	Bridge *BridgeSpec `json:"bridge,omitempty"`
+	// MoneyTransfer patches the buy/sell rate board. A non-nil value with a
+	// non-empty currency (and at least one rate) sets it; a non-nil value with both
+	// currencies empty and both rates zero clears it. Nil leaves it unchanged.
+	MoneyTransfer *MoneyTransfer `json:"moneyTransfer,omitempty"`
 }
 
 // ListFilter holds the optional query filters for listing products.

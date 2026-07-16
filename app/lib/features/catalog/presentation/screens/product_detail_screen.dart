@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
@@ -271,6 +272,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     ),
                   ),
               ],
+              if (product.isMoneyTransfer) ...[
+                const SizedBox(height: 22),
+                _MoneyTransferCalculatorCard(
+                  rates: product.moneyTransfer!,
+                  l10n: l10n,
+                ),
+              ],
               if (hasVariants) ...[
                 const SizedBox(height: 22),
                 Text(
@@ -424,6 +432,198 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     } else {
       context.go('/cart');
     }
+  }
+}
+
+/// Buy/sell exchange-rate board + live calculator for a money-transfer product.
+/// Shows the base→quote rate chips (only the rates on offer), an amount field,
+/// and the converted Buy/Sell totals as the customer types. Purely
+/// informational — it does not feed the purchase flow (see [MoneyTransfer]).
+/// Styled like the topup screen's exchange-rate card: a soft accent tint that
+/// reads gray on dark, violet on light.
+class _MoneyTransferCalculatorCard extends StatefulWidget {
+  const _MoneyTransferCalculatorCard({required this.rates, required this.l10n});
+
+  final MoneyTransfer rates;
+  final AppLocalizations l10n;
+
+  @override
+  State<_MoneyTransferCalculatorCard> createState() =>
+      _MoneyTransferCalculatorCardState();
+}
+
+class _MoneyTransferCalculatorCardState
+    extends State<_MoneyTransferCalculatorCard> {
+  final _amount = TextEditingController();
+
+  // Western digits + grouping, locale-independent (the amounts are currency
+  // figures the customer must read exactly, like [formatUsd]).
+  static final _rateFmt = NumberFormat('#,##0.####', 'en_US');
+  static final _totalFmt = NumberFormat('#,##0.##', 'en_US');
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final l10n = widget.l10n;
+    final r = widget.rates;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isDark ? colors.textDim : AppTokens.brandMid;
+    final amount = double.tryParse(_amount.text.trim()) ?? 0;
+    final showTotals = amount > 0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.05),
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${r.baseCurrency} → ${r.quoteCurrency}',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+              color: accent,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (r.hasBuy)
+                _rateChip(l10n.mtBuy, _rateFmt.format(r.buyRate),
+                    r.quoteCurrency, colors, accent),
+              if (r.hasBuy && r.hasSell) const SizedBox(width: 10),
+              if (r.hasSell)
+                _rateChip(l10n.mtSell, _rateFmt.format(r.sellRate),
+                    r.quoteCurrency, colors, accent),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _amount,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+            ],
+            onChanged: (_) => setState(() {}),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: colors.text,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              labelText: l10n.mtAmount,
+              suffixText: r.baseCurrency,
+              filled: true,
+              fillColor: colors.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppTokens.rSm),
+                borderSide: BorderSide(color: colors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppTokens.rSm),
+                borderSide: BorderSide(color: colors.border),
+              ),
+            ),
+          ),
+          if (showTotals) ...[
+            const SizedBox(height: 12),
+            if (r.hasBuy)
+              _totalRow(
+                l10n.mtBuyTotal,
+                '${_totalFmt.format(amount * r.buyRate!)} ${r.quoteCurrency}',
+                colors,
+              ),
+            if (r.hasBuy && r.hasSell) const SizedBox(height: 6),
+            if (r.hasSell)
+              _totalRow(
+                l10n.mtSellTotal,
+                '${_totalFmt.format(amount * r.sellRate!)} ${r.quoteCurrency}',
+                colors,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _rateChip(
+    String label,
+    String rate,
+    String quote,
+    AppColors colors,
+    Color accent,
+  ) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(AppTokens.rSm),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: accent,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              rate,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: colors.text,
+              ),
+            ),
+            Text(
+              '$quote / 1',
+              style: TextStyle(fontSize: 10.5, color: colors.textFaint),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _totalRow(String label, String value, AppColors colors) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12.5, color: colors.textDim),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w800,
+            color: colors.text,
+          ),
+        ),
+      ],
+    );
   }
 }
 

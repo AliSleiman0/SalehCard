@@ -14,6 +14,11 @@
       "count": { "type": "int" }
     }
   },
+  "mtBuy": "Buy",
+  "mtSell": "Sell",
+  "mtAmount": "Amount",
+  "mtBuyTotal": "Buy total",
+  "mtSellTotal": "Sell total",
   "retry": "Retry",
   "logout": "Log out",
   "outOfStock": "Out of stock",
