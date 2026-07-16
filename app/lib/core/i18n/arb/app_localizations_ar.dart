@@ -33,6 +33,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get catalogTitle => 'المنتجات';
 
   @override
+  String seeAllCount(int count) {
+    return 'عرض الكل $count';
+  }
+
+  @override
   String get retry => 'إعادة المحاولة';
 
   @override

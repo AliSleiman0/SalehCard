@@ -57,6 +57,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	f.RootDomain = q.Get("rootDomain")
 	f.Search = q.Get("q")
 
+	if raw := q.Get("directOnly"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			response.BadRequest(w, "directOnly must be a boolean")
+			return
+		}
+		f.CategoryDirect = v
+	}
+
 	if raw := q.Get("available"); raw != "" {
 		v, err := strconv.ParseBool(raw)
 		if err != nil {

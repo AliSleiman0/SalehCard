@@ -28,6 +28,7 @@ import (
 type mockRepo struct {
 	products   []product.Product
 	err        error
+	lastFilter product.ListFilter
 	lastUpdate product.UpdateProductInput
 	// Records of the last BulkSetCategory call, for assign-category assertions.
 	catIDs   []string
@@ -37,7 +38,8 @@ type mockRepo struct {
 	catCalls int
 }
 
-func (m *mockRepo) FindAll(_ context.Context, _ product.ListFilter, _ pagination.Params) ([]product.Product, int64, error) {
+func (m *mockRepo) FindAll(_ context.Context, f product.ListFilter, _ pagination.Params) ([]product.Product, int64, error) {
+	m.lastFilter = f
 	if m.err != nil {
 		return nil, 0, m.err
 	}
@@ -696,6 +698,55 @@ func (f fakeCategoryResolver) DescendantIDs(context.Context, string) ([]bson.Obj
 }
 func (f fakeCategoryResolver) Resolve(context.Context, string) (string, string, error) {
 	return f.slug, f.root, f.err
+}
+
+// recordingResolver records DescendantIDs calls to prove the directOnly path
+// skips the tree expansion.
+type recordingResolver struct {
+	ids    []bson.ObjectID
+	called int
+}
+
+func (r *recordingResolver) DescendantIDs(context.Context, string) ([]bson.ObjectID, error) {
+	r.called++
+	return r.ids, nil
+}
+func (r *recordingResolver) Resolve(context.Context, string) (string, string, error) {
+	return "", "", nil
+}
+
+func TestProductService_FindAll_DirectOnly(t *testing.T) {
+	node := bson.NewObjectID()
+	child := bson.NewObjectID()
+
+	t.Run("directOnly skips DescendantIDs and matches the node exactly", func(t *testing.T) {
+		repo := &mockRepo{}
+		res := &recordingResolver{ids: []bson.ObjectID{node, child}}
+		svc := product.NewProductService(repo, product.WithCategoryResolver(res))
+
+		_, _, err := svc.FindAll(context.Background(),
+			product.ListFilter{CategoryID: node.Hex(), CategoryDirect: true},
+			pagination.Params{})
+
+		require.NoError(t, err)
+		assert.Zero(t, res.called, "DescendantIDs must not be called when directOnly is set")
+		assert.Empty(t, repo.lastFilter.CategoryIDs, "no tree expansion for directOnly")
+		assert.Equal(t, node.Hex(), repo.lastFilter.CategoryID)
+	})
+
+	t.Run("without directOnly it expands to descendants", func(t *testing.T) {
+		repo := &mockRepo{}
+		res := &recordingResolver{ids: []bson.ObjectID{node, child}}
+		svc := product.NewProductService(repo, product.WithCategoryResolver(res))
+
+		_, _, err := svc.FindAll(context.Background(),
+			product.ListFilter{CategoryID: node.Hex()},
+			pagination.Params{})
+
+		require.NoError(t, err)
+		assert.Equal(t, 1, res.called, "DescendantIDs expands the node")
+		assert.Equal(t, []bson.ObjectID{node, child}, repo.lastFilter.CategoryIDs)
+	})
 }
 
 func TestProductService_Bulk_AssignCategory(t *testing.T) {

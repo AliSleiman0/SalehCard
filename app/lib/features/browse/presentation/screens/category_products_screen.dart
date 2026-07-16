@@ -19,6 +19,7 @@ class CategoryProductsScreen extends ConsumerStatefulWidget {
     this.domain,
     this.categoryId,
     this.title,
+    this.directOnly = false,
   }) : assert(domain != null || categoryId != null,
             'one of domain / categoryId is required');
 
@@ -30,6 +31,10 @@ class CategoryProductsScreen extends ConsumerStatefulWidget {
 
   /// Localized category name for the app bar (falls back to [domain]).
   final String? title;
+
+  /// When true, list only products assigned to [categoryId] exactly (no subtree
+  /// expansion) — the node's directly-attached products.
+  final bool directOnly;
 
   @override
   ConsumerState<CategoryProductsScreen> createState() =>
@@ -88,6 +93,7 @@ class _CategoryProductsScreenState
       body: PagedProductList(
         rootDomain: widget.domain,
         categoryId: widget.categoryId,
+        directOnly: widget.directOnly,
         query: _query,
         emptyState: EmptyState(
           icon: Icons.inventory_2_outlined,

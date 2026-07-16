@@ -308,12 +308,12 @@ func (p *Product) normalize() {
 // CreateProductInput carries all the data required to create a new product.
 type CreateProductInput struct {
 	Title       I18nString `json:"title"`
-	Description  I18nString `json:"description"`
-	Category     string     `json:"category"`
+	Description I18nString `json:"description"`
+	Category    string     `json:"category"`
 	// CategoryID assigns the product to a taxonomy node. When set, the service
 	// resolves it and denormalizes Category (slug) + RootDomain onto the product.
-	CategoryID          *string         `json:"categoryId,omitempty"`
-	RootDomain          string          `json:"-"` // derived server-side from CategoryID; never client-set
+	CategoryID *string `json:"categoryId,omitempty"`
+	RootDomain string  `json:"-"` // derived server-side from CategoryID; never client-set
 	// Cost is the admin-set unit cost (Pricing.Cost). Nil = unset; a real 0 is a
 	// legal value. Only Cost is admin-editable — Retail/Margin/Mode stay importer-owned.
 	Cost                *float64        `json:"cost,omitempty"`
@@ -326,30 +326,30 @@ type CreateProductInput struct {
 	// UpstreamProductID maps an api-mode product onto the supplier's catalog
 	// (DESIGN-SUPPLIERS.md). Deliberately unvalidated: a provider-less or
 	// id-less api product parks safely at order time (stub / ErrUnavailable).
-	UpstreamProductID string          `json:"upstreamProductId,omitempty"`
-	Bridge            *BridgeSpec     `json:"bridge,omitempty"`
-	InputFields       []InputField    `json:"inputFields,omitempty"`
-	Stock             int             `json:"stock"`
-	Available         bool            `json:"available"`
-	Ratings           RatingsSummary  `json:"ratings"`
+	UpstreamProductID string         `json:"upstreamProductId,omitempty"`
+	Bridge            *BridgeSpec    `json:"bridge,omitempty"`
+	InputFields       []InputField   `json:"inputFields,omitempty"`
+	Stock             int            `json:"stock"`
+	Available         bool           `json:"available"`
+	Ratings           RatingsSummary `json:"ratings"`
 }
 
 // UpdateProductInput carries the optional fields that can be patched on a product.
 // A nil pointer means "leave unchanged".
 type UpdateProductInput struct {
 	Title       *I18nString `json:"title,omitempty"`
-	Description  *I18nString `json:"description,omitempty"`
-	Category     *string     `json:"category,omitempty"`
+	Description *I18nString `json:"description,omitempty"`
+	Category    *string     `json:"category,omitempty"`
 	// CategoryID re-assigns the product to a taxonomy node. When set, the service
 	// resolves it and denormalizes Category (slug) + RootDomain from it.
-	CategoryID          *string          `json:"categoryId,omitempty"`
-	RootDomain          *string          `json:"-"` // derived server-side from CategoryID; never client-set
+	CategoryID *string `json:"categoryId,omitempty"`
+	RootDomain *string `json:"-"` // derived server-side from CategoryID; never client-set
 	// Cost patches the admin-set unit cost (Pricing.Cost) via the dot-path
 	// `pricing.cost`, preserving importer-owned Retail/Margin/Currency. Nil = unchanged.
-	Cost                *float64         `json:"cost,omitempty"`
-	Images              []string         `json:"images,omitempty"`
-	Thumbnail           *string          `json:"thumbnail,omitempty"`
-	Variants            []Variant        `json:"variants,omitempty"`
+	Cost            *float64         `json:"cost,omitempty"`
+	Images          []string         `json:"images,omitempty"`
+	Thumbnail       *string          `json:"thumbnail,omitempty"`
+	Variants        []Variant        `json:"variants,omitempty"`
 	FulfillmentType *FulfillmentType `json:"fulfillmentType,omitempty"`
 	FulfillmentMode *FulfillmentMode `json:"fulfillmentMode,omitempty"`
 	// FulfillmentProvider: nil = unchanged; a non-nil 0 clears the stored id
@@ -357,11 +357,11 @@ type UpdateProductInput struct {
 	// clear-sentinel convention).
 	FulfillmentProvider *int `json:"fulfillmentProvider,omitempty"`
 	// UpstreamProductID: nil = unchanged; non-nil "" clears.
-	UpstreamProductID *string `json:"upstreamProductId,omitempty"`
-	Stock             *int    `json:"stock,omitempty"`
-	Available           *bool            `json:"available,omitempty"`
-	Ratings             *RatingsSummary  `json:"ratings,omitempty"`
-	InputFields         []InputField     `json:"inputFields,omitempty"`
+	UpstreamProductID *string         `json:"upstreamProductId,omitempty"`
+	Stock             *int            `json:"stock,omitempty"`
+	Available         *bool           `json:"available,omitempty"`
+	Ratings           *RatingsSummary `json:"ratings,omitempty"`
+	InputFields       []InputField    `json:"inputFields,omitempty"`
 	// Verification configures the check_name ID-verification hook. A non-nil value
 	// with a non-empty App sets it; a non-nil value with an empty App clears it
 	// (disables verification). Nil leaves it unchanged.
@@ -380,7 +380,12 @@ type ListFilter struct {
 	// CategoryID is the taxonomy-node filter (raw hex from ?categoryId=). The
 	// service expands it to the node + its descendants and sets CategoryIDs,
 	// which buildFilter matches with $in (tree-aware listing).
-	CategoryID      string
+	CategoryID string
+	// CategoryDirect, when set alongside CategoryID, restricts the result to
+	// products assigned to that exact node — the service skips the descendant
+	// expansion, so buildFilter falls back to a single-id match. Used by the app
+	// to list products attached directly to a node that also has subcategories.
+	CategoryDirect  bool
 	CategoryIDs     []bson.ObjectID
 	RootDomain      string
 	Available       *bool

@@ -104,7 +104,9 @@ func NewProductService(repo Repository, opts ...ServiceOption) *ProductService {
 // product beneath it.
 func (s *ProductService) FindAll(ctx context.Context, f ListFilter, p pagination.Params) ([]Product, int64, error) {
 	// TODO: enforce visibility rules (e.g. hide unavailable products for non-admin callers).
-	if f.CategoryID != "" && s.categories != nil {
+	// CategoryDirect skips the tree expansion so buildFilter matches the exact node
+	// only (products attached directly to a node that also has subcategories).
+	if f.CategoryID != "" && s.categories != nil && !f.CategoryDirect {
 		ids, err := s.categories.DescendantIDs(ctx, f.CategoryID)
 		if err != nil {
 			return nil, 0, err

@@ -8,6 +8,12 @@
   "useCodeInstead": "Sign in with a code instead",
   "usePasswordInstead": "Sign in with a password instead",
   "catalogTitle": "Products",
+  "seeAllCount": "See all {count}",
+  "@seeAllCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
   "retry": "Retry",
   "logout": "Log out",
   "outOfStock": "Out of stock",

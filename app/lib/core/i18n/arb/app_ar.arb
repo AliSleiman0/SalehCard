@@ -8,6 +8,7 @@
   "useCodeInstead": "تسجيل الدخول برمز بدلاً من ذلك",
   "usePasswordInstead": "تسجيل الدخول بكلمة المرور بدلاً من ذلك",
   "catalogTitle": "المنتجات",
+  "seeAllCount": "عرض الكل {count}",
   "retry": "إعادة المحاولة",
   "logout": "تسجيل الخروج",
   "outOfStock": "غير متوفر",

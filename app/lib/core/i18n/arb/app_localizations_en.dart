@@ -33,6 +33,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get catalogTitle => 'Products';
 
   @override
+  String seeAllCount(int count) {
+    return 'See all $count';
+  }
+
+  @override
   String get retry => 'Retry';
 
   @override

@@ -12,9 +12,11 @@ abstract interface class CatalogRepository {
     String? categoryId,
     String? rootDomain,
     String? search,
+    bool directOnly,
   });
 
   /// One page of products plus the total count, for infinite-scroll callers.
+  /// [directOnly] restricts to products assigned to [categoryId] exactly.
   Future<Either<Failure, Paged<Product>>> getProductsPage({
     int page,
     int limit,
@@ -22,6 +24,7 @@ abstract interface class CatalogRepository {
     String? categoryId,
     String? rootDomain,
     String? search,
+    bool directOnly,
   });
 
   Future<Either<Failure, Product>> getProduct(String id);

@@ -19,6 +19,7 @@ class GetProductsPage {
     String? categoryId,
     String? rootDomain,
     String? search,
+    bool directOnly = false,
   }) {
     return _repository.getProductsPage(
       page: page,
@@ -27,6 +28,7 @@ class GetProductsPage {
       categoryId: categoryId,
       rootDomain: rootDomain,
       search: search,
+      directOnly: directOnly,
     );
   }
 }
