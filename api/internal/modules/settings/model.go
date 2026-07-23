@@ -56,7 +56,7 @@ type Settings struct {
 func defaults() *Settings {
 	return &Settings{
 		ID:                     settingsID,
-		StoreName:              "SalehCard",
+		StoreName:              "FlashCash Global",
 		DefaultLanguage:        "en",
 		DefaultCurrency:        "USD",
 		LowStockThreshold:      50,

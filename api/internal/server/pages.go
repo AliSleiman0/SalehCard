@@ -27,7 +27,7 @@ const fallbackSupportEmail = "support@salehcard.com"
 
 // legalLastUpdated is the "Last updated" date rendered on both pages. Bump it
 // whenever the page content changes materially.
-const legalLastUpdated = "2026-07-11"
+const legalLastUpdated = "2026-07-24"
 
 // legalPages renders the embedded legal documents with live settings data.
 type legalPages struct {

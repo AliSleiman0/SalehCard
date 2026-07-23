@@ -489,7 +489,7 @@ func TestRequestOTP_NormalizesPhoneAndSendsCode(t *testing.T) {
 	rec, err := otp.FindByPhone(context.Background(), "+96170123456")
 	require.NoError(t, err)
 	assert.NotEmpty(t, rec.CodeHash)
-	assert.Contains(t, sender.lastMessage, "SalehCard")
+	assert.Contains(t, sender.lastMessage, "FlashCash Global")
 }
 
 func TestRequestOTP_RejectsInvalidPhone(t *testing.T) {

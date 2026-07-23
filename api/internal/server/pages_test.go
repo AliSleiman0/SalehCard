@@ -31,7 +31,7 @@ func TestLegalPages_RenderWithConfiguredEmail(t *testing.T) {
 		marker  string
 	}{
 		{"privacy", p.privacy, "Privacy Policy"},
-		{"delete-account", p.deleteAccount, "Delete your SalehCard account"},
+		{"delete-account", p.deleteAccount, "Delete your FlashCash Global account"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rr := httptest.NewRecorder()
