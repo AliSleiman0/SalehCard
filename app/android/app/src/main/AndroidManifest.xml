@@ -4,7 +4,7 @@
     <!-- Push notifications (Android 13+ runtime permission, requested by FCM). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="SalehCard"
+        android:label="FlashCash Global"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
