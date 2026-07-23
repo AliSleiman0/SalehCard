@@ -16,6 +16,31 @@
       "api_key": [
         {
           "current_key": "AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ"
+        },
+        {
+          "current_key": "AIzaSyBulqkBTjKBFfc5GomKWYUc6YlpmHAVqm8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184899958988:android:1b1749afb3bcb962742a69",
+        "android_client_info": {
+          "package_name": "flashcash.global"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ"
+        },
+        {
+          "current_key": "AIzaSyBulqkBTjKBFfc5GomKWYUc6YlpmHAVqm8"
         }
       ],
       "services": {

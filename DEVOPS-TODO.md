@@ -413,22 +413,42 @@ notification arrives on the device. If the GMS plugin misbehaves under the new
 AGP, the guarded FlutterFire programmatic init is the fallback — the e2e check
 is required either way.
 
-## 21. Re-register the app package in Firebase after the `flashcash.global` rename (BLOCKS push)
+## 21. Re-register the app package in Firebase after the `flashcash.global` rename (partly DONE 2026-07-24)
 
 The Play Console app is registered under package **`flashcash.global`**, so the
 Android `applicationId` was changed from `com.salehcard.salehcard_app` →
 `flashcash.global` (2026-07-23, `app/android/app/build.gradle.kts`; `namespace`
 kept as the old value so R/MainActivity classes are untouched). The Firebase
-project **`salehcard-app`** only knows the OLD package, so `google-services.json`
-had no matching client and hard-failed the release build. **Interim fix:** the
-file was moved aside to `app/android/app/google-services.json.disabled` so the
-GMS plugin is skipped and the build compiles (back to the FlutterFire
-programmatic-init path). **Push (FCM) will NOT deliver to the new package until
-fixed.** To restore push: in the Firebase console, add an Android app with
-package `flashcash.global` to project `salehcard-app`, download the new
-`google-services.json`, restore it as `app/android/app/google-services.json`
-(delete the `.disabled` one), regenerate `firebase_options.dart` if needed
-(`flutterfire configure`), then rebuild + re-run item 19's push e2e check.
+project **`salehcard-app`** only knew the OLD package, so `google-services.json`
+had no matching client and hard-failed the release build; it was moved aside to
+`google-services.json.disabled` as an interim build fix.
+
+**Done 2026-07-24** (via `firebase-tools` CLI, logged in as `sleimana181@gmail.com`):
+- Added Android app **FlashCash Global** / package `flashcash.global` to project
+  `salehcard-app` → appId **`1:184899958988:android:1b1749afb3bcb962742a69`**.
+  The old `com.salehcard.salehcard_app` app (`…259dab2d…`) was left in place for
+  legacy installs.
+- Regenerated `app/android/app/google-services.json` (`firebase apps:sdkconfig
+  ANDROID <appId> --out …`) — it now carries **both** clients, so the GMS plugin
+  applies again. Deleted the `.disabled` copy.
+- Pointed `app/lib/firebase_options.dart` `appId` at the new client (hand-edited;
+  `flutterfire configure` would only have changed that one line).
+
+**STILL BLOCKS PUSH — do these two, both need a machine with the Android/Flutter
+toolchain (this dev box has neither, nor the keystores):**
+1. **Widen the API-key restriction** (interacts with item 3). Key
+   `AIzaSy…AuUsQ` is application-restricted to Android package
+   `com.salehcard.salehcard_app` + specific SHA-1s. Android key restrictions match
+   on **package + cert fingerprint**, so FCM/Installations calls from a
+   `flashcash.global` build get **rejected → no FCM token → no push**, even with
+   the config above correct. Add `flashcash.global` with the debug, upload, and
+   Play App Signing SHA-1s; `--allowed-application` **replaces** the whole list,
+   so re-pass every pair you want kept (see item 3 for the `gcloud` invocation).
+2. **Rebuild + re-run the item 19 push e2e check** on a Play-delivered build.
+
+SHA-1s were **not** registered on the new Firebase app — FCM does not need them
+(only Google Sign-In / Dynamic Links / App Check do, none of which this app
+uses), but the API-key restriction in step 1 does.
 
 ## 20. Upstream supplier integration — prod rollout (DESIGN-SUPPLIERS.md, all 4 phases)
 
