@@ -449,7 +449,7 @@ class _WalletCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 9),
                     const Text(
-                      'SalehCard',
+                      'FlashCash Global',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,

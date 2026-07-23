@@ -413,6 +413,23 @@ notification arrives on the device. If the GMS plugin misbehaves under the new
 AGP, the guarded FlutterFire programmatic init is the fallback — the e2e check
 is required either way.
 
+## 21. Re-register the app package in Firebase after the `flashcash.global` rename (BLOCKS push)
+
+The Play Console app is registered under package **`flashcash.global`**, so the
+Android `applicationId` was changed from `com.salehcard.salehcard_app` →
+`flashcash.global` (2026-07-23, `app/android/app/build.gradle.kts`; `namespace`
+kept as the old value so R/MainActivity classes are untouched). The Firebase
+project **`salehcard-app`** only knows the OLD package, so `google-services.json`
+had no matching client and hard-failed the release build. **Interim fix:** the
+file was moved aside to `app/android/app/google-services.json.disabled` so the
+GMS plugin is skipped and the build compiles (back to the FlutterFire
+programmatic-init path). **Push (FCM) will NOT deliver to the new package until
+fixed.** To restore push: in the Firebase console, add an Android app with
+package `flashcash.global` to project `salehcard-app`, download the new
+`google-services.json`, restore it as `app/android/app/google-services.json`
+(delete the `.disabled` one), regenerate `firebase_options.dart` if needed
+(`flutterfire configure`), then rebuild + re-run item 19's push e2e check.
+
 ## 20. Upstream supplier integration — prod rollout (DESIGN-SUPPLIERS.md, all 4 phases)
 
 The whole supplier stack (panel adapters jentel/speedcard/gift4card + async
