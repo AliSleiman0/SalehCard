@@ -1,4 +1,9 @@
-# Play Store Submission Playbook — SalehCard Customer App (`/app`)
+# Play Store Submission Playbook — FlashCash Global Customer App (`/app`)
+
+> **Rebrand (2026-07-24):** the app is now **FlashCash Global**, Play package
+> **`flashcash.global`** (NOT `com.salehcard.salehcard_app`, which only survives as the
+> Gradle `namespace`). References to the old package below are historical — see
+> DEVOPS-TODO items 3 + 21 for what the rename still owes.
 
 _Date: 2026-07-11 · Companion to `PLAYSTORE-READINESS.md`. Everything in this file happens
 in the Play Console / Firebase console / Google Cloud — none of it lives in the repo. The
@@ -131,7 +136,9 @@ flutter build appbundle --dart-define=API_BASE_URL=https://salehcard-api.azurewe
    hardening plan / `keytool -genkeypair`); record creds in the gitignored
    `DEPLOY-CREDS.local.md`; back the keystore up to `C:\Users\user\.salehcard-secrets\`.
 2. **Firebase console** (project `salehcard-app`): confirm/register the Android app
-   `com.salehcard.salehcard_app`, add the **debug + upload + Play App Signing SHA-1s**,
+   — **done 2026-07-24 for `flashcash.global`** (appId `1:184899958988:android:1b1749afb3bcb962742a69`;
+   the old `com.salehcard.salehcard_app` client is still in the project for legacy installs).
+   Add the **debug + upload + Play App Signing SHA-1s**,
    download `google-services.json` → commit to `app/android/app/` (client identifiers only,
    not secret — the same key is already committed in `firebase_options.dart`).
 3. **Google Cloud**: restrict the Android API key to the package + SHA-1s
