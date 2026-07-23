@@ -166,7 +166,7 @@ export default function DashboardPage() {
   // Export the current dashboard view (KPI summary + recent orders) to CSV.
   const handleExport = () => {
     const rows: (string | number)[][] = [
-      ['SalehCard dashboard export', formatLongDate()],
+      ['FlashCash Global dashboard export', formatLongDate()],
       [],
       ['Metric', 'Value'],
       ["Today's revenue", s ? s.revenueToday : ''],
@@ -188,7 +188,7 @@ export default function DashboardPage() {
       <PageHead
         // crumbs={[t('nav_dashboard')]}
         // title={`${greeting(new Date().getHours())}, ${user?.name ?? 'Admin'}`}
-        sub={`Here's what's happening across SalehCard today — ${formatLongDate()}.`} title={undefined}      >
+        sub={`Here's what's happening across FlashCash Global today — ${formatLongDate()}.`} title={undefined}      >
         <button className="abtn" onClick={handleExport}>
           <Icon name="download" size={15} /> {t('export')}
         </button>

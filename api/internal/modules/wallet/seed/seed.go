@@ -108,7 +108,7 @@ func seedMethods(ctx context.Context, db *mongo.Database) error {
 	defaults := []wallet.TopUpMethod{
 		{
 			Name:         "Bank Transfer",
-			Instructions: "Transfer the amount to account IBAN LB00 0000 0000 0000 0000 0000 0000 (SalehCard SARL), then upload your transfer receipt below.",
+			Instructions: "Transfer the amount to account IBAN LB00 0000 0000 0000 0000 0000 0000 (FlashCash Global SARL), then upload your transfer receipt below.",
 			Enabled:      true,
 			SortOrder:    10,
 			Fields: []wallet.MethodField{
@@ -127,7 +127,7 @@ func seedMethods(ctx context.Context, db *mongo.Database) error {
 		},
 		{
 			Name:         "OMT",
-			Instructions: "Send the amount via OMT to SalehCard, then upload the OMT slip.",
+			Instructions: "Send the amount via OMT to FlashCash Global, then upload the OMT slip.",
 			Enabled:      true,
 			SortOrder:    30,
 			Fields: []wallet.MethodField{

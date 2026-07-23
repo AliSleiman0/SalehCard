@@ -260,7 +260,7 @@ func (s *UserService) RequestOTP(ctx context.Context, input RequestOTPInput) err
 		return err
 	}
 
-	msg := fmt.Sprintf("Your SalehCard verification code is %s", code)
+	msg := fmt.Sprintf("Your FlashCash Global verification code is %s", code)
 	return s.sender.Send(ctx, phone, msg)
 }
 
@@ -545,7 +545,7 @@ func (s *UserService) begin2FAChallenge(ctx context.Context, user *User) (*AuthR
 	}); err != nil {
 		return nil, err
 	}
-	if err := s.sender.Send(ctx, phone, fmt.Sprintf("Your SalehCard admin verification code is %s", code)); err != nil {
+	if err := s.sender.Send(ctx, phone, fmt.Sprintf("Your FlashCash Global admin verification code is %s", code)); err != nil {
 		return nil, err
 	}
 
