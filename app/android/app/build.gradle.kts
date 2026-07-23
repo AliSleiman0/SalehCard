@@ -42,7 +42,10 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.salehcard.salehcard_app"
+        // Play Console app is registered under this package name. Kept
+        // distinct from `namespace` (which still owns the R/MainActivity
+        // classes) so only the store-facing package id changes.
+        applicationId = "flashcash.global"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
