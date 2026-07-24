@@ -43,7 +43,7 @@ export function Logo({
           lineHeight: 1,
         }}
       >
-        Saleh<span className="grad-text">Card</span>
+        Flash<span className="grad-text">Cash</span>
         {agent && (
           <span
             className="badge badge-agent"

@@ -91,7 +91,7 @@ export default function LoginPage() {
           </div>
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1 }}>
-              Saleh<span className="grad-text">Card</span>
+              Flash<span className="grad-text">Cash</span>
             </div>
             <div className="faint" style={{ fontSize: 12 }}>
               {t('login_title')}

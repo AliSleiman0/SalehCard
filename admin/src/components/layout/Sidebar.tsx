@@ -45,7 +45,7 @@ export function Sidebar() {
           </svg>
         </div>
         <div className="sb-word">
-          Saleh<span className="grad-text">Card</span>
+          Flash<span className="grad-text">Cash</span>
         </div>
       </div>
       <nav className="sb-scroll">
