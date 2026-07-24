@@ -439,7 +439,7 @@ class _WalletCard extends StatelessWidget {
                       ),
                       alignment: Alignment.center,
                       child: const Text(
-                        'S',
+                        'F',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
