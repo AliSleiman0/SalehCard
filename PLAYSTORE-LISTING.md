@@ -12,15 +12,19 @@ Constraints these drafts respect (from `PLAYSTORE-SUBMISSION.md`):
 
 ---
 
-## Short description (EN) — 76 chars
+## Short description (EN) — 74 chars
 
 ```
-Gaming gift cards, game top-ups and mobile recharge, paid from your wallet.
+Gaming gift cards, game credit and mobile recharge, paid from your wallet.
 ```
 
-Alternates:
-- `Buy game top-ups, gift cards and mobile recharge in seconds.` (60)
-- `Top up your game account, buy gift cards, recharge your line.` (61)
+> **Do NOT use the word "top" (as in "top-up").** Google's automated filter reads "top"
+> as a store-ranking claim ("top app / top-rated") and blocks promotion — same family as
+> best / #1 / popular / leading / trending. Say "game credit" or "recharge" instead.
+
+Alternates (all "top"-free):
+- `Buy game credit, gift cards and mobile recharge in minutes.` (58)
+- `Add game credit, buy gift cards, recharge your line — from your wallet.` (70)
 
 ## Short description (AR)
 
@@ -36,8 +40,8 @@ Alternates:
 FlashCash Global is a digital store for gamers in Lebanon. Buy game credit, gift cards and mobile recharge from your phone, pay from your in-app wallet, and get your code the moment the order completes.
 
 WHAT YOU CAN BUY
-• Game top-ups for popular mobile titles, credited to your game account
-• Gift cards and prepaid codes for well-known stores and platforms
+• Game credit for mobile titles, added straight to your game account
+• Gift cards and prepaid codes for the stores and platforms you use
 • Mobile recharge for local lines
 • A growing catalogue organised by category, with search and current offers
 
@@ -48,10 +52,10 @@ HOW IT WORKS
 4. Codes appear in your order right away; orders that need manual processing show a live status until they are done
 
 YOUR WALLET
-Your wallet holds prepaid balance that you can spend on products in the app or send to another FlashCash Global user. Top-ups are reviewed and approved by our team before the balance is added. There is no cash withdrawal — balance stays inside the app.
+Your wallet holds prepaid balance that you can spend on products in the app or send to another FlashCash Global user. Wallet funding is reviewed and approved by our team before the balance is added. There is no cash withdrawal — balance stays inside the app.
 
 PLAYER ID CHECK
-For supported games we look up your player ID and show the account nickname before you pay, so you can confirm you are topping up the right account.
+For supported games we look up your player ID and show the account nickname before you pay, so you can confirm you are adding credit to the right account.
 
 ORDERS AND HISTORY
 Every purchase is saved in your order history with its status, the details you entered, and the delivered code. Notifications let you know when an order completes.
@@ -77,8 +81,8 @@ FlashCash Global is intended for users aged 18 and over.
 «FlashCash Global» متجر رقمي للاعبين في لبنان. اشترِ رصيد الألعاب وبطاقات الهدايا وتعبئة الخطوط من هاتفك، وادفع من محفظتك داخل التطبيق، واستلم الكود فور اكتمال الطلب.
 
 ماذا يمكنك أن تشتري
-• شحن حسابات الألعاب لأشهر ألعاب الهاتف، يُضاف مباشرة إلى حسابك في اللعبة
-• بطاقات هدايا وأكواد مدفوعة مسبقًا لمتاجر ومنصات معروفة
+• رصيد الألعاب لألعاب الهاتف، يُضاف مباشرة إلى حسابك في اللعبة
+• بطاقات هدايا وأكواد مدفوعة مسبقًا للمتاجر والمنصات التي تستخدمها
 • تعبئة رصيد للخطوط المحلية
 • كتالوج يتوسّع باستمرار، مرتّب حسب الفئات، مع بحث وعروض حالية
 
