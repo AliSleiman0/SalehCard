@@ -45,7 +45,11 @@ android {
         // Play Console app is registered under this package name. Kept
         // distinct from `namespace` (which still owns the R/MainActivity
         // classes) so only the store-facing package id changes.
-        applicationId = "flashcash.global"
+        // NOTE: flashcash.global was already uploaded (and rejected) under a
+        // discarded Play developer account, which permanently claimed that
+        // package name — Google never releases it back to the pool. This app
+        // is submitted under a new org account, hence the new package id.
+        applicationId = "com.flashcashglobal.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

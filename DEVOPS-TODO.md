@@ -450,6 +450,46 @@ SHA-1s were **not** registered on the new Firebase app — FCM does not need the
 (only Google Sign-In / Dynamic Links / App Check do, none of which this app
 uses), but the API-key restriction in step 1 does.
 
+## 22. Re-register the app package (again) — `flashcash.global` → `com.flashcashglobal.app` (2026-08-07)
+
+`flashcash.global` was uploaded to Play under the (now discarded) individual
+developer account and got permanently claimed by it — Google never releases a
+package name back to the pool, even after the account is closed. Resubmission
+is happening under a **new organization Play developer account**, so the
+Android `applicationId` changed again, this time to **`com.flashcashglobal.app`**
+(`app/android/app/build.gradle.kts`; `namespace` kept as `com.salehcard.salehcard_app`
+so R/MainActivity classes are untouched, same trick as the first rename).
+
+**Done 2026-08-07** (via `firebase-tools` CLI, logged in as `sleimana181@gmail.com`):
+- Added Android app **FlashCash Global (org)** / package `com.flashcashglobal.app`
+  to project `salehcard-app` → appId **`1:184899958988:android:d242dff62ae6af75742a69`**.
+  Both older apps (`com.salehcard.salehcard_app` …259dab2d…, `flashcash.global`
+  …1b1749af…) left in place.
+- Regenerated `app/android/app/google-services.json` (now carries all three clients).
+- Pointed `app/lib/firebase_options.dart` `appId` at the new client.
+- Rebuilt the signed release AAB (`flutter build appbundle --release
+  --dart-define=API_BASE_URL=https://salehcard-api.azurewebsites.net/api/v1`),
+  verified the new package inside the bundle manifest. Copy at
+  `~/Downloads/flashcash-release/2026-08-07/flashcash-global-1.0.3+4-com.flashcashglobal.app.aab`.
+
+**Still open, same shape as item 21** (deliberately not touched this session —
+editing the API-key restriction is a replace-the-whole-list operation on a key
+that ALSO gates the still-live `com.salehcard.salehcard_app` production app;
+doing it by hand in Cloud Console without `gcloud` risks dropping an existing
+entry and breaking push for existing installs, so it needs the same careful
+`gcloud services api-keys update` treatment as item 21, ideally with `gcloud`
+actually available — it isn't on this box):
+1. Add `com.flashcashglobal.app` + its **debug and upload-key SHA-1s** to the
+   restricted API key (`AIzaSy…AuUsQ`, uid `406142c0-8556-403e-a84f-15427c52119a`,
+   project `salehcard-app`) **while re-passing every existing pair** (`--allowed-application`
+   replaces the whole list).
+2. The **Play App Signing SHA-1** for `com.flashcashglobal.app` doesn't exist
+   yet — it's only assigned after the first upload to the new Play Console app
+   listing. Add it to the same key once available (Play Console → Setup → App
+   signing), same as item 3/21.
+3. Not required for Play submission to succeed — only for push (FCM) to work
+   on the new package post-launch. Safe to submit without it.
+
 ## 20. Upstream supplier integration — prod rollout (DESIGN-SUPPLIERS.md, all 4 phases)
 
 The whole supplier stack (panel adapters jentel/speedcard/gift4card + async

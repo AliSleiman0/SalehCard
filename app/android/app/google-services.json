@@ -7,6 +7,28 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:184899958988:android:d242dff62ae6af75742a69",
+        "android_client_info": {
+          "package_name": "com.flashcashglobal.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBulqkBTjKBFfc5GomKWYUc6YlpmHAVqm8"
+        },
+        {
+          "current_key": "AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:184899958988:android:259dab2d7dd426b1742a69",
         "android_client_info": {
           "package_name": "com.salehcard.salehcard_app"
@@ -15,10 +37,10 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ"
+          "current_key": "AIzaSyBulqkBTjKBFfc5GomKWYUc6YlpmHAVqm8"
         },
         {
-          "current_key": "AIzaSyBulqkBTjKBFfc5GomKWYUc6YlpmHAVqm8"
+          "current_key": "AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ"
         }
       ],
       "services": {
@@ -37,10 +59,10 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ"
+          "current_key": "AIzaSyBulqkBTjKBFfc5GomKWYUc6YlpmHAVqm8"
         },
         {
-          "current_key": "AIzaSyBulqkBTjKBFfc5GomKWYUc6YlpmHAVqm8"
+          "current_key": "AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ"
         }
       ],
       "services": {

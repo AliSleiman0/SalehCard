@@ -9,9 +9,11 @@ import 'package:firebase_core/firebase_core.dart';
 class DefaultFirebaseOptions {
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ',
-    // The `flashcash.global` client. The old `com.salehcard.salehcard_app`
-    // client (…259dab2d…) still exists in the project for legacy installs.
-    appId: '1:184899958988:android:1b1749afb3bcb962742a69',
+    // The `com.flashcashglobal.app` client (new package — `flashcash.global`
+    // was permanently claimed by a discarded Play developer account and
+    // could not be reused; that old `com.salehcard.salehcard_app` client
+    // (…259dab2d…) still exists in the project for legacy installs).
+    appId: '1:184899958988:android:d242dff62ae6af75742a69',
     messagingSenderId: '184899958988',
     projectId: 'salehcard-app',
     storageBucket: 'salehcard-app.firebasestorage.app',
