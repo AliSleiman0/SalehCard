@@ -21,7 +21,7 @@ Future<void> initFirebase() async {
     return;
   }
   try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     // Background/killed "notification" messages are shown in the system tray
     // by FCM itself; the handler just has to exist.
     FirebaseMessaging.onBackgroundMessage(_onBackgroundMessage);

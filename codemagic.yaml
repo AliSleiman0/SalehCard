@@ -1,0 +1,47 @@
+workflows:
+  ios-release:
+    name: iOS Release (TestFlight)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    working_directory: app
+    environment:
+      flutter: 3.44.8
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.flashcashglobal.app
+      vars:
+        BUNDLE_ID: "com.flashcashglobal.app"
+      groups:
+        # Define this group in the Codemagic UI (Teams > Environment variables)
+        # once the Apple Developer Portal API key integration is set up.
+        - appstore_credentials
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+      # Codemagic's key for restricting a workflow to a path prefix has
+      # changed across versions (some releases use `included_files` on the
+      # trigger, others gate via a build-skip script) — verify the current
+      # syntax against docs.codemagic.io when wiring the account, and scope
+      # this workflow to changes under app/** so unrelated api/web/admin
+      # commits don't burn build minutes.
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Flutter build ipa
+        # No `pod install` step: this project uses Swift Package Manager for
+        # plugin integration (there is no ios/Podfile), so Xcode resolves
+        # Firebase/plugin dependencies itself as part of the build.
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
