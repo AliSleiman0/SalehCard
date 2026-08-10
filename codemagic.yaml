@@ -41,7 +41,12 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
+    # publishing.app_store_connect is deferred until the Apple Developer
+    # Portal API key integration exists in Codemagic (Teams > Integrations)
+    # — referencing it before it's configured fails config validation with
+    # `auth -> "integration" requires workflow -> integrations ->
+    # app_store_connect`. Re-add once the integration is set up:
+    # publishing:
+    #   app_store_connect:
+    #     auth: integration
+    #     submit_to_testflight: true
