@@ -1,32 +1,33 @@
 # Play Store listing copy — FlashCash Global
 
-Drafted 2026-07-24 for the `flashcash.global` listing. Paste into Play Console →
-Main store listing. Limits: short description **80 chars**, full description **4000 chars**.
+Drafted 2026-07-24 for the (now-abandoned) `flashcash.global` individual-account listing;
+**revised 2026-08-07** for the `com.flashcashglobal.app` org-account resubmission (Path B —
+financial features declared honestly, see `[[salehcard-playstore-org-account-path]]` memory).
+Paste into Play Console → Main store listing. Limits: short description **80 chars**, full
+description **4000 chars**.
 
-Constraints these drafts respect (from `PLAYSTORE-SUBMISSION.md`):
-- No "encrypted at rest" / security claims — only what the privacy policy states.
-- Wallet described as **prepaid, closed-loop, no cash-out** — never as a money-transfer
-  or remittance service (financial-features declaration, §3).
-- **No mention of crypto/USDT** while the gating decision is open (§1 readiness #7).
+Constraints these drafts respect (from `PLAYSTORE-SUBMISSION.md`, updated for Path B):
+- The wallet, USDT/crypto funding, and money-transfer products are now described **honestly**
+  — the Path-A version of this doc hid them, which would contradict the Financial features
+  declaration made in App content for this submission. Don't reintroduce the "closed-loop,
+  no cash-out" framing unless Path A is reopened.
 - Delivery described honestly: codes are immediate, manual fulfilment shows a live status.
+- No unlicensed/regulatory claims — the copy never asserts a license or regulatory status,
+  since that's still unresolved (see the memory note).
 
 ---
 
-## Short description (EN) — 74 chars
+## Short description (EN) — 66 chars
 
 ```
-Gaming gift cards, game credit and mobile recharge, paid from your wallet.
+Gaming gift cards, game credit, mobile recharge & money transfers.
 ```
 
 > **Do NOT use the word "top" (as in "top-up").** Google's automated filter reads "top"
 > as a store-ranking claim ("top app / top-rated") and blocks promotion — same family as
 > best / #1 / popular / leading / trending. Say "game credit" or "recharge" instead.
 
-Alternates (all "top"-free):
-- `Buy game credit, gift cards and mobile recharge in minutes.` (58)
-- `Add game credit, buy gift cards, recharge your line — from your wallet.` (70)
-
-## Short description (AR)
+## Short description (AR) — STALE, needs re-translation for the money-transfer/wallet mention
 
 ```
 بطاقات ألعاب وشحن حسابات الألعاب وتعبئة الخطوط، تُدفع من محفظتك داخل التطبيق.
@@ -34,7 +35,7 @@ Alternates (all "top"-free):
 
 ---
 
-## Full description (EN) — ~2,150 chars
+## Full description (EN) — ~2,350 chars
 
 ```
 FlashCash Global is a digital store for gamers in Lebanon. Buy game credit, gift cards and mobile recharge from your phone, pay from your in-app wallet, and get your code the moment the order completes.
@@ -43,6 +44,7 @@ WHAT YOU CAN BUY
 • Game credit for mobile titles, added straight to your game account
 • Gift cards and prepaid codes for the stores and platforms you use
 • Mobile recharge for local lines
+• Money transfer and currency-exchange products, at rates shown in the app
 • A growing catalogue organised by category, with search and current offers
 
 HOW IT WORKS
@@ -52,7 +54,10 @@ HOW IT WORKS
 4. Codes appear in your order right away; orders that need manual processing show a live status until they are done
 
 YOUR WALLET
-Your wallet holds prepaid balance that you can spend on products in the app or send to another FlashCash Global user. Wallet funding is reviewed and approved by our team before the balance is added. There is no cash withdrawal — balance stays inside the app.
+Your wallet holds prepaid balance that you can spend on products in the app or send to another FlashCash Global user. Fund it through our approved manual channels, or by depositing USDT (TRC20/BEP20) directly on-chain. Wallet funding is reviewed and approved by our team before the balance is added.
+
+MONEY TRANSFER
+Send money through our money-transfer products. Current buy/sell rates are shown in the app before you confirm.
 
 PLAYER ID CHECK
 For supported games we look up your player ID and show the account nickname before you pay, so you can confirm you are adding credit to the right account.
@@ -75,7 +80,7 @@ Questions about an order? Contact us from the app and our team will follow up.
 FlashCash Global is intended for users aged 18 and over.
 ```
 
-## Full description (AR) — needs a native-speaker pass before publishing
+## Full description (AR) — STALE, needs a full re-pass (wallet/transfer paragraphs unrevised)
 
 ```
 «FlashCash Global» متجر رقمي للاعبين في لبنان. اشترِ رصيد الألعاب وبطاقات الهدايا وتعبئة الخطوط من هاتفك، وادفع من محفظتك داخل التطبيق، واستلم الكود فور اكتمال الطلب.
@@ -93,7 +98,9 @@ FlashCash Global is intended for users aged 18 and over.
 ٤. تظهر الأكواد في طلبك فورًا، أما الطلبات التي تحتاج معالجة يدوية فتعرض حالتها أولًا بأول
 
 محفظتك
-تحتفظ المحفظة برصيد مدفوع مسبقًا يمكنك إنفاقه على منتجات التطبيق أو إرساله إلى مستخدم آخر في FlashCash Global. تراجع فرقنا طلبات التعبئة وتوافق عليها قبل إضافة الرصيد. لا يوجد سحب نقدي؛ يبقى الرصيد داخل التطبيق.
+تحتفظ المحفظة برصيد مدفوع مسبقًا يمكنك إنفاقه على منتجات التطبيق أو إرساله إلى مستخدم آخر في FlashCash Global. تراجع فرقنا طلبات التعبئة وتوافق عليها قبل إضافة الرصيد.
+
+[NEEDS ADDITION: USDT on-chain funding + money-transfer product paragraphs, native-speaker pass]
 
 التحقق من معرّف اللاعب
 في الألعاب المدعومة نعرض اسم الحساب المرتبط بمعرّف اللاعب قبل الدفع، لتتأكد أنك تشحن الحساب الصحيح.
@@ -124,8 +131,9 @@ FlashCash Global is intended for users aged 18 and over.
   naming PUBG Mobile / Free Fire / Mobile Legends. Naming them converts better but invites
   an impersonation/IP complaint if the listing reads as official. If you name them, keep it
   to a plain "top up your <game> account" phrasing and never use their logos in graphics.
-- **The AR full description is a first draft** — have a native speaker check it, especially
-  the wallet paragraph, which carries the "no cash-out" claim the financial-features
-  declaration depends on.
-- Keep the copy consistent with the privacy policy at `/privacy` and with the answers given
-  in the Data safety form.
+- **The AR full description needs a native-speaker pass** — it's the Path-A version with the
+  USDT/money-transfer paragraphs missing (marked with a `[NEEDS ADDITION]` placeholder).
+  Submitting with only the EN listing filled in is fine; add AR once translated.
+- Keep the copy consistent with the privacy policy at `/privacy`, the Data safety form answers,
+  and the Financial features declaration — this is what caused the account-type rejection last
+  time, so a mismatch here is the single most likely way to get flagged again.
