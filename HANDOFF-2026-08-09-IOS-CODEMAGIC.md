@@ -1,5 +1,7 @@
 # HANDOFF — FlashCash Global iOS build via Codemagic (2026-08-09)
 
+> **Superseded by `HANDOFF-2026-10-14-IOS-APPSTORE.md`** — the app was built and submitted from the individual Apple account on 2026-10-14.
+
 New track of work, unrelated to the Play Store saga (see `HANDOFF-2026-08-07-PLAYSTORE.md` +
 `[[salehcard-playstore-org-account-path]]` memory for that — Android is live: Alpha
 closed-testing approved, Production submitted for review, Lebanon-only for now). This session
