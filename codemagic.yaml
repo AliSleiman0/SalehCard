@@ -5,9 +5,9 @@ workflows:
     instance_type: mac_mini_m2
     working_directory: app
     # App Store Connect API key added in Codemagic (Teams > Integrations >
-    # Developer Portal). The key must be named exactly this.
+    # Developer Portal), referenced by its name there.
     integrations:
-      app_store_connect: FlashCash ASC
+      app_store_connect: Apple Distribution
     environment:
       flutter: 3.44.8
       xcode: latest
