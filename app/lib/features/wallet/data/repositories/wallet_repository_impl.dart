@@ -1,5 +1,6 @@
 import 'package:fpdart/fpdart.dart';
 
+import '../../../../core/config/regulated_finance.dart';
 import '../../../../core/error/failure.dart';
 import '../../domain/entities/wallet.dart';
 import '../../domain/repositories/wallet_repository.dart';
@@ -44,7 +45,11 @@ class WalletRepositoryImpl implements WalletRepository {
   Future<Either<Failure, List<TopUpMethod>>> listMethods() async {
     try {
       final dtos = await _remote.listMethods();
-      return Right([for (final dto in dtos) dto.toEntity()]);
+      return Right([
+        for (final method in dtos.map((d) => d.toEntity()))
+          if (!hideRegulatedFinance || !isCryptoTopUpMethodName(method.name))
+            method,
+      ]);
     } catch (error) {
       return Left(mapError(error));
     }

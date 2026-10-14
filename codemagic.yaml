@@ -4,6 +4,10 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     working_directory: app
+    # App Store Connect API key added in Codemagic (Teams > Integrations >
+    # Developer Portal). The key must be named exactly this.
+    integrations:
+      app_store_connect: FlashCash ASC
     environment:
       flutter: 3.44.8
       xcode: latest
@@ -12,41 +16,42 @@ workflows:
         bundle_identifier: com.flashcashglobal.app
       vars:
         BUNDLE_ID: "com.flashcashglobal.app"
-      groups:
-        # Define this group in the Codemagic UI (Teams > Environment variables)
-        # once the Apple Developer Portal API key integration is set up.
-        - appstore_credentials
+        # Without this the build bakes in the dev LAN API and hangs on real
+        # devices (see the Android APK note in project memory).
+        API_BASE_URL: "https://salehcard-api.azurewebsites.net/api/v1"
     triggering:
       events:
         - push
       branch_patterns:
         - pattern: main
           include: true
-      # Codemagic's key for restricting a workflow to a path prefix has
-      # changed across versions (some releases use `included_files` on the
-      # trigger, others gate via a build-skip script) — verify the current
-      # syntax against docs.codemagic.io when wiring the account, and scope
-      # this workflow to changes under app/** so unrelated api/web/admin
-      # commits don't burn build minutes.
+    # Only build when the Flutter app changed, so api/web/admin commits don't
+    # burn macOS minutes.
+    when:
+      changeset:
+        includes:
+          - 'app/'
+          - 'codemagic.yaml'
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
       - name: Flutter build ipa
         # No `pod install` step: this project uses Swift Package Manager for
         # plugin integration (there is no ios/Podfile), so Xcode resolves
         # Firebase/plugin dependencies itself as part of the build.
+        # Build number = Codemagic's per-workflow counter offset past the
+        # pubspec's +4, so every upload to App Store Connect is unique.
         script: |
           flutter build ipa --release \
+            --build-number=$((4 + BUILD_NUMBER)) \
+            --dart-define=API_BASE_URL=$API_BASE_URL \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-    # publishing.app_store_connect is deferred until the Apple Developer
-    # Portal API key integration exists in Codemagic (Teams > Integrations)
-    # — referencing it before it's configured fails config validation with
-    # `auth -> "integration" requires workflow -> integrations ->
-    # app_store_connect`. Re-add once the integration is set up:
-    # publishing:
-    #   app_store_connect:
-    #     auth: integration
-    #     submit_to_testflight: true
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

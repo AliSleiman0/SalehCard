@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/regulated_finance.dart';
 import '../../../core/network/paged.dart';
 import '../../../core/network/providers.dart';
 import '../data/datasources/catalog_remote_data_source.dart';
@@ -15,7 +16,10 @@ final catalogRemoteDataSourceProvider = Provider<CatalogRemoteDataSource>(
 );
 
 final catalogRepositoryProvider = Provider<CatalogRepository>(
-  (ref) => CatalogRepositoryImpl(ref.watch(catalogRemoteDataSourceProvider)),
+  (ref) => CatalogRepositoryImpl(
+    ref.watch(catalogRemoteDataSourceProvider),
+    ref.watch(regulatedCatalogFilterProvider),
+  ),
 );
 
 final getProductsUseCaseProvider = Provider<GetProducts>(
