@@ -148,7 +148,7 @@ A **separate** Vite + React + TS app (port **5174**) for the internal team — p
 - **Fulfillment color-coding** is consistent everywhere via `<FfBadge>`: blue = `code`, green = `account_credit` (`credit`), orange = `transfer`.
 
 ### What is wired vs mock
-- **The admin console is fully API-wired** — no mock data file remains (`lib/mock/demo.ts` is deleted). This section originally tracked the port from the prototype; see `admin/BACKLOG.md` for the current wired-vs-missing split.
+- **The admin console is fully API-wired** — no mock data file remains (`lib/mock/demo.ts` is deleted). This section originally tracked the port from the prototype.
 
 ### Admin backend (`/api`)
 - `internal/platform/auth/middleware.go` → `AdminOnly(secret)` guards the `/api/admin` group: requires `role == "admin"` on the JWT; **bypasses with a synthetic admin in dev when `JWT_SECRET` is empty** (logs a one-time warning), enforces when a secret is set.

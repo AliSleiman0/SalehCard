@@ -11,7 +11,7 @@ import (
 )
 
 // AzureStorage uploads to an Azure Blob Storage container over a connection
-// string (no managed identity in v1 — see PLAN-PRODUCT-IMAGES.md). The
+// string (no managed identity in v1). The
 // container must already exist with public blob-level read access; the
 // production container is provisioned once from Azure Cloud Shell (see
 // DEVOPS-TODO.md).
