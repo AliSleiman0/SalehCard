@@ -66,5 +66,5 @@ Hardest piece: dynamic `inputFields[]` renderer (type text\|amount\|quantity\|se
 ## Build order
 Foundation (Session 0) → **S1 Shop → S2 Orders** (shared Order types) → S3 Wallet · S4 Account · S5 Browse · S6 KYC (independent, parallelizable).
 
-## Stubs to track in `app/HANDOFF-DESIGN.md`
+## Stubs to track
 KYC · send-money · notifications · customer search · order refund (display-only) · USDT verify (poll-only) · profile name.

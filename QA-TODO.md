@@ -4,8 +4,7 @@ Everything in BL-1…BL-11 shipped on **green static gates only** (standing user
 choice: defer manual testing to the end of dev). This file is the single
 collection point for those deferred checks — it supersedes the "deferred /
 not yet tested" sections scattered across the handoff files. Run these before
-calling the backlog items closed. `MANUAL-TEST.md` (the full purchase-funnel
-script) still applies on top of this list.
+calling the backlog items closed.
 
 ## Test environment
 

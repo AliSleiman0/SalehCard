@@ -7,7 +7,7 @@ Paste this at the start of a fresh module session, replacing `<MODULE>` (Shop | 
 Implement the **<MODULE>** module of the SalehCard Flutter app.
 
 **Load context first:**
-1. `CLAUDE.md` and `app/HANDOFF-DESIGN.md` (run/verify gotchas, conventions).
+1. `CLAUDE.md` (run/verify gotchas, conventions).
 2. `app/design/MANIFEST.md` — find the `<MODULE>` section: screens, states, target file paths, routes, endpoints, ✅/🟡 status.
 3. The plan at `C:\Users\user\.claude\plans\use-the-claude-design-mcp-gentle-hartmanis.md` (module decomposition + wiring).
 4. The design source: `DesignSync get_file` on project `9c570d94-584a-41c6-9827-b072048e9688`, file `Phone<MODULE>.dc.html` (and `app/design/canvas/<MODULE>.dc.html` for the frame inventory).

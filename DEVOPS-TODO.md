@@ -5,9 +5,9 @@ Single collection point for all pending ops/infra work. Supersedes the scattered
 where it came from and how to verify it. Prod context: App Service
 **salehcard-api** in RG **salehcard-prod**, sub `1adb4811-6234-4822-b7f2-8411ed2cb999`.
 
-> **Corporate-proxy reminder:** local `az` cannot mint tokens (Python TLS rejects
-> the proxy CA). Use the **Azure portal** or **Cloud Shell** for everything below
-> that touches Azure. See `DEPLOYMENT.md`.
+> **Azure CLI:** local `az` works on this machine (the old TLS failures were Norton's
+> HTTPS interception, since removed). Cloud Shell is only a fallback. Older items below
+> that mention the Cloud Shell detour are historical.
 
 ## 1. FCM push app settings (BL-11) ✅ DONE 2026-07-05
 
@@ -71,8 +71,8 @@ app ships manually. Before launch decide + set up:
   keystore itself is generated manually; keystore location + creds live in the
   gitignored `DEPLOY-CREDS.local.md` (backup in `C:\Users\user\.salehcard-secrets\`).
 - ✅ Distribution channel decided: **Play Console** (internal → closed testing
-  first). The full Console-side playbook is `PLAYSTORE-SUBMISSION.md`; readiness
-  status in `PLAYSTORE-READINESS.md`.
+  first). The Console-side playbook is `PLAYSTORE-SUBMISSION.md`; current state
+  in `HANDOFF-2026-08-07-PLAYSTORE.md`.
 - Note: push notifications require the shipped app build to include the
   BL-11 code + real `firebase_options.dart` (already on `main`) — plus
   `google-services.json` (item 3 update) and the e2e check in item 19.

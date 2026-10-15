@@ -1,7 +1,6 @@
 # HANDOFF — FlashCash Global Play Store, closed testing setup (2026-08-07)
 
-Continues from `HANDOFF-2026-07-25-PLAYSTORE.md` (now superseded for the account/package
-questions it left open) and `[[salehcard-playstore-org-account-path]]` memory. This session
+Continues from the 2026-07-25 Play handoff (deleted 2026-10-16; in git history) and `[[salehcard-playstore-org-account-path]]` memory. This session
 did the full org-account resubmission end-to-end in Play Console via Claude-in-Chrome and
 figured out why "Send app for review" wouldn't enable. **Nothing has been submitted for
 review yet** — that's the next session's job, and it's a small, well-understood step.

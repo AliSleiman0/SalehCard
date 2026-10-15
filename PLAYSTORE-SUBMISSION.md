@@ -1,13 +1,13 @@
 # Play Store Submission Playbook — FlashCash Global Customer App (`/app`)
 
-> **Rebrand (2026-07-24):** the app is now **FlashCash Global**, Play package
-> **`flashcash.global`** (NOT `com.salehcard.salehcard_app`, which only survives as the
-> Gradle `namespace`). References to the old package below are historical — see
-> DEVOPS-TODO items 3 + 21 for what the rename still owes.
+> **Current package: `com.flashcashglobal.app`** under the **organization** Play account
+> "Entrizo" (since 2026-08-07). The earlier `flashcash.global` package is locked to a
+> discarded account, and `com.salehcard.salehcard_app` survives only as the Gradle
+> `namespace`. Live Console state and next steps: `HANDOFF-2026-08-07-PLAYSTORE.md`.
 
-_Date: 2026-07-11 · Companion to `PLAYSTORE-READINESS.md`. Everything in this file happens
-in the Play Console / Firebase console / Google Cloud — none of it lives in the repo. The
-repo-side blockers (readiness #1/#2/#4/#5 + the cleartext/FCM quick wins) shipped 2026-07-11._
+_Written 2026-07-11, refreshed 2026-10-16. Everything in this file happens in the Play
+Console / Firebase console / Google Cloud — none of it lives in the repo. Treat it as the
+reference for the Console answers; it is not a status tracker._
 
 ---
 
@@ -78,10 +78,10 @@ Google's financial-features declaration. Prepare with the owner **before** submi
 - A one-paragraph description ready to paste: prepaid **closed-loop** wallet funded via
   admin-approved out-of-band channels; balance spendable only on digital goods in-app plus
   peer transfer between app users; **no cash-out**.
-- **The USDT gating decision comes first** (readiness #7 — **still unmade**): if crypto
-  top-up ships in the Play build, the declaration surface grows to crypto ("facilitating an
-  exchange") and rejection risk rises sharply. The standing recommendation is to gate USDT
-  **out** of the v1 Play build.
+- **Decided 2026-08-07:** Android ships the real financial features (wallet, USDT, money
+  transfer) from the **organization** account and declares them honestly. The financial
+  features declaration is filed (see the Aug 7 handoff). iOS is different: it hides crypto
+  and money transfer (`HANDOFF-2026-10-14-IOS-APPSTORE.md`).
 
 ---
 
@@ -100,10 +100,8 @@ Google's financial-features declaration. Prepare with the owner **before** submi
 
 ## 5. Testing timeline
 
-- **Personal developer account** (created after Nov 2023): Google requires a **closed test
-  running 14 days with ≥12 opted-in testers** before production access can even be
-  requested. **Organization accounts are exempt.** Start the closed track immediately after
-  the first AAB upload.
+- We publish from an **organization** account, so the personal-account rule (14-day closed
+  test with ≥12 testers before production) does **not** apply.
 - Run the **internal testing** track first — the pre-launch report's automated device crawl
   catches crashes before any human tester (or reviewer) sees them.
 
@@ -120,7 +118,7 @@ flutter build appbundle --dart-define=API_BASE_URL=https://salehcard-api.azurewe
 - Requires `app/android/upload-keystore.jks` + `app/android/key.properties` (manual step
   §7.1, both gitignored) — the release build **fails loudly** without them (no debug
   fallback). Debug builds are unaffected.
-- **versionCode bump rule:** `app/pubspec.yaml` → `version: 1.0.0+1`. The number after `+`
+- **versionCode bump rule:** `app/pubspec.yaml` → `version: 1.0.3+4`. The number after `+`
   is the Android `versionCode` and **must strictly increase on every Play upload** (Play
   rejects a reused code); the `1.0.0` part is the user-visible `versionName`. Bump `+N`
   every upload; bump the semantic part on user-facing releases.
@@ -130,27 +128,15 @@ flutter build appbundle --dart-define=API_BASE_URL=https://salehcard-api.azurewe
 
 ---
 
-## 7. Manual steps — the full Console-side checklist (in order)
+## 7. Still-relevant one-time setup
 
-1. **Keystore**: generate the upload keystore + `app/android/key.properties` (recipe in the
-   hardening plan / `keytool -genkeypair`); record creds in the gitignored
-   `DEPLOY-CREDS.local.md`; back the keystore up to `C:\Users\user\.salehcard-secrets\`.
-2. **Firebase console** (project `salehcard-app`): confirm/register the Android app
-   — **done 2026-07-24 for `flashcash.global`** (appId `1:184899958988:android:1b1749afb3bcb962742a69`;
-   the old `com.salehcard.salehcard_app` client is still in the project for legacy installs).
-   Add the **debug + upload + Play App Signing SHA-1s**,
-   download `google-services.json` → commit to `app/android/app/` (client identifiers only,
-   not secret — the same key is already committed in `firebase_options.dart`).
-3. **Google Cloud**: restrict the Android API key to the package + SHA-1s
-   (`DEVOPS-TODO.md` #3).
-4. **Play Console**: create the app, enroll in **Play App Signing** on first upload, set
-   the privacy-policy URL, complete Data Safety (§1), content rating (§2), the financial
-   declaration (§3), upload assets (§4), then internal → closed testing (§5).
-5. **Prod admin Settings**: set the real support email — the public legal pages fall back
-   to a placeholder until then (`DEVOPS-TODO.md` #18).
-6. **Legal review**: owner/legal read-through of the EN+AR privacy + deletion page copy
-   before submission.
-7. **USDT gating decision** (readiness #7): decide whether crypto top-up ships in the Play
-   build — the top remaining rejection risk.
-8. **Push e2e**: validate push end-to-end on a **Play-signed release build**
-   (`DEVOPS-TODO.md` #19) — or drop the push claim from the listing for v1.
+- **Keystore**: `app/android/upload-keystore.jks` + `app/android/key.properties` (both
+  gitignored; creds in `DEPLOY-CREDS.local.md`, backup in `C:\Users\user\.salehcard-secrets\`).
+- **Firebase** (project `salehcard-app`): the Android client must match the current package
+  `com.flashcashglobal.app`, with debug + upload + Play App Signing SHA-1s, and
+  `google-services.json` in `app/android/app/`. Then restrict the Android API key to that
+  package + SHA-1s (`DEVOPS-TODO.md` #3, #21).
+- **Prod admin Settings**: set the real support email — the public legal pages fall back to
+  a placeholder until then (`DEVOPS-TODO.md` #18).
+- **Push e2e** on a Play-signed release build (`DEVOPS-TODO.md` #19), or drop the push claim
+  from the listing.

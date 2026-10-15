@@ -1,6 +1,6 @@
 # HANDOFF — FlashCash Global iOS: first App Store submission (2026-10-14)
 
-Supersedes `HANDOFF-2026-08-09-IOS-CODEMAGIC.md`. Memory: `[[salehcard-ios-codemagic-plan]]`.
+Supersedes the 2026-08-09 Codemagic handoff (deleted 2026-10-16; in git history). Memory: `[[salehcard-ios-codemagic-plan]]`.
 
 ## TL;DR
 

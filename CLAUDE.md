@@ -10,28 +10,32 @@ money transfers). Monorepo:
 
 - **`/api`** — Go 1.22 + chi + MongoDB (driver v2). Module path `github.com/AliSleiman0/salehcard/api`.
 - **`/app`** — **Flutter customer mobile client** (Riverpod, go_router) on the Go API — the
-  customer-facing app going forward (supersedes the `/web` storefront). See `app/HANDOFF-DESIGN.md`.
+  customer-facing app going forward (supersedes the `/web` storefront). Ships as **FlashCash Global**
+  on Android (Play, org account "Entrizo") and iOS (App Store, individual account).
 - **`/web`** — React 18 + TS + Vite storefront (customer-facing), port **5173** (legacy; being retired).
 - **`/admin`** — React 18 + TS + Vite admin console, port **5174** (separate app).
 - **`/deploy`** — docker-compose for MongoDB + env examples.
 
-> **Live in production on Azure** (CI/CD auto-deploys on push to `main`). See `DEPLOYMENT.md`,
-> `HANDOFF-OTP-DEPLOY.md`, and the latest session handoff (`HANDOFF-2026-06-27.md`).
+> **Live in production on Azure** (CI/CD auto-deploys on push to `main`). See `DEPLOYMENT.md`
+> and `HANDOFF-OTP-DEPLOY.md`. Public site **https://www.flashcashglobal.com**, admin console
+> **https://admin.flashcashglobal.com**, API `https://salehcard-api.azurewebsites.net/api/v1`.
 
 ## Read these first
 
-- **`BACKLOG.md`** — the prioritized product backlog (BL-1…BL-15). When asked to
+- **`BACKLOG.md`** — the product backlog (open: BL-15, BL-16). When asked to
   work on a backlog item, start from its entry there.
 - **`DEVOPS-TODO.md`** / **`QA-TODO.md`** — ALL pending ops work and ALL deferred
   manual/e2e checks, consolidated (to be done at the end of dev). Add new
   deferred items to these files, not to handoff docs.
 - **`README.md`** — stack, prerequisites, quick start.
 - **`CONVENTIONS.md`** — backend module layout, response envelope, frontend design-system rules. **Follow it.**
-- **`HANDOFF-2026-06-27.md`** — **latest session state** (mobile app, phone-OTP + Monty SMS live, CI/CD, NAT). Start here.
-- **`app/HANDOFF-DESIGN.md`** — the Flutter mobile client: modules, what's stubbed, run/verify.
+- **`HANDOFF-2026-10-14-IOS-APPSTORE.md`** — **latest state, iOS**: App Store submission, Codemagic, iOS-only feature gate.
+- **`HANDOFF-2026-08-07-PLAYSTORE.md`** — **latest state, Android**: Play Console (org account), testing tracks.
+- **`PLAYSTORE-SUBMISSION.md`** / **`PLAYSTORE-LISTING.md`** — Play Console answers (Data Safety, IARC, release build) + listing copy.
+- **`BUILD-MACHINE.md`** — building the Flutter app (APK/AAB) on this Windows box.
 - **`DEPLOYMENT.md`** + **`HANDOFF-OTP-DEPLOY.md`** — Azure prod resources, redeploy recipes, OTP/SMS rollout.
-- **`HANDOFF.md`** — earlier funnel state (Step 3: refunds, admin manual-completion, etc.).
-- **`MANUAL-TEST.md`** / **`PURCHASE-FUNNEL.md`** — manual funnel test + assessment.
+- **`BRIDGE-PLAN.md`** (+ `bridge/CLAUDE.md`) — the Android SIM bridge that automates Touch/Alfa recharges.
+- **`HANDOFF-SUPPLIERS.md`** — upstream supplier integration (code live; prod rollout pending, DEVOPS-TODO §20).
 
 ## Build / run / test
 
@@ -212,8 +216,8 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   .tbl .bdg .st-* .ff-*` etc.). Theme via `[data-theme]`; locale forced to English on load.
 - **Frontend data**: catalog + orders + wallet are wired to the API via React-Query hooks
   + `adapt*` mappers (`features/*/lib/adapt*.ts`). **The `/admin` console is fully
-  API-wired** (no mock data file; the old `admin/src/lib/mock/demo.ts` is deleted) —
-  see `admin/BACKLOG.md` for the honest wired-vs-missing split. **The settings module
+  API-wired** (no mock data file; the old `admin/src/lib/mock/demo.ts` is deleted).
+  **The settings module
   backend is real** (GET/PUT `/api/admin/settings` over the `app_settings` singleton —
   store config, loyalty, admin SMS-2FA); the Settings page also lists admins from
   `/api/admin/users?role=admin`. `/web` still has

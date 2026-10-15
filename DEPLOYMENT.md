@@ -137,7 +137,6 @@ cd api && MONGO_URI="<vcore-srv-uri>" DB_NAME=salehcard go run ./cmd/loadseed
 
 ## Useful pointers
 
-- Earlier handoff (catalog migration): **`HANDOFF.md`**. Conventions: **`CONVENTIONS.md`**.
-  Production-readiness notes: **`MIGRATION-READINESS.md`**.
+- Conventions: **`CONVENTIONS.md`**. Pending ops work: **`DEVOPS-TODO.md`**.
 - The `git status` shows persistent CRLF-only "modifications" on several `*.go` files
   (autocrlf, no content change) — ignore them; they never enter commits.
