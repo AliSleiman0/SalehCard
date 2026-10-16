@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -96,6 +97,24 @@ func (f *fakeOrderRepo) UpdateFulfillment(_ context.Context, id bson.ObjectID, s
 		return nil
 	}
 	return apperrors.ErrNotFound
+}
+
+func (f *fakeOrderRepo) UpdateFulfillmentWithCodes(_ context.Context, id bson.ObjectID, status OrderStatus, fulfillment Fulfillment, itemCodes [][]string) error {
+	o, ok := f.byID[id]
+	if !ok {
+		return apperrors.ErrNotFound
+	}
+	if o.Status != OrderStatusPending && o.Status != OrderStatusProcessing {
+		return apperrors.ErrConflict
+	}
+	o.Status = status
+	o.Fulfillment = fulfillment
+	for i, c := range itemCodes {
+		if c != nil {
+			o.Items[i].Codes = c
+		}
+	}
+	return nil
 }
 
 func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error) {
@@ -282,6 +301,7 @@ func (f *fakeProductSvc) Bulk(context.Context, product.BulkInput) (int64, error)
 type fakeCodeSvc struct {
 	available  map[string]int
 	failClaim  bool
+	failFor    map[string]bool // per-product claim failure (a mid-cart shortage)
 	released   []string
 	claimCalls int
 }
@@ -291,7 +311,7 @@ func (f *fakeCodeSvc) CountAvailable(_ context.Context, productID string) (int, 
 }
 func (f *fakeCodeSvc) ClaimForOrder(_ context.Context, productID, orderID, _ string, qty int) ([]code.Code, error) {
 	f.claimCalls++
-	if f.failClaim {
+	if f.failClaim || f.failFor[productID] {
 		return nil, code.ErrOutOfStock
 	}
 	if f.available[productID] < qty {
@@ -300,7 +320,7 @@ func (f *fakeCodeSvc) ClaimForOrder(_ context.Context, productID, orderID, _ str
 	f.available[productID] -= qty
 	out := make([]code.Code, qty)
 	for i := range out {
-		out[i] = code.Code{ProductID: productID, OrderID: orderID, Code: "CODE-" + orderID, Status: code.StatusDelivered}
+		out[i] = code.Code{ProductID: productID, OrderID: orderID, Code: fmt.Sprintf("CODE-%s-%s-%d", orderID, productID, f.claimCalls*100+i), Status: code.StatusDelivered}
 	}
 	return out, nil
 }
@@ -907,21 +927,149 @@ func TestPlaceOrder_BridgeModeParks(t *testing.T) {
 	assert.True(t, hasTimelineNote(order, "queued for bridge device"))
 }
 
-func TestPlaceOrder_MixedCartGoesProcessing(t *testing.T) {
+func TestPlaceOrder_MixedCartDeliversCodesAndParksManualLines(t *testing.T) {
 	codeP := codeProduct(10, nil)
-	transferP := transferProduct(20)
+	creditP := creditProduct(20)
 	codeSvc := &fakeCodeSvc{available: map[string]int{codeP.ID.Hex(): 5}}
 	walletSvc := &fakeWalletSvc{balance: 100}
-	svc, _ := newSUTMulti([]*product.Product{codeP, transferP}, codeSvc, walletSvc)
+	svc, _ := newSUTMulti([]*product.Product{codeP, creditP}, codeSvc, walletSvc)
+	aw := svc.loyalty.(*fakeAwarder)
 
+	credit := itemFor(creditP, 1)
+	credit.PlayerID = "5123456789"
 	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
-		Items:         []PlaceOrderItemInput{itemFor(codeP, 1), itemFor(transferP, 1)},
+		Items:         []PlaceOrderItemInput{itemFor(codeP, 2), credit},
 		PaymentMethod: PaymentMethodWallet,
 	})
 	require.NoError(t, err)
-	// A mixed cart parks the whole order; no partial code delivery.
+	// Codes are delivered now; the order waits on the manual credit line.
 	assert.Equal(t, OrderStatusProcessing, order.Status)
-	assert.Equal(t, 0, codeSvc.claimCalls)
+	assert.Equal(t, 1, codeSvc.claimCalls) // only the code line claims
+	assert.Equal(t, 3, codeSvc.available[codeP.ID.Hex()])
+	require.Len(t, order.Items[0].Codes, 2)
+	assert.NotEqual(t, order.Items[0].Codes[0], order.Items[0].Codes[1])
+	assert.Equal(t, order.Items[0].Codes[0], order.Fulfillment.DeliveredCode)
+	assert.Empty(t, order.Items[1].Codes) // credit line untouched
+	assert.Equal(t, "5123456789", order.Fulfillment.CreditedToID)
+	assert.Equal(t, 60.0, walletSvc.balance) // charged once, not refunded
+	assert.Equal(t, 0, walletSvc.refundCalls)
+	assert.Equal(t, 0, aw.calls) // loyalty waits for the admin completion
+	tl := order.Fulfillment.StatusTimeline
+	require.NotEmpty(t, tl)
+	assert.Equal(t, "processing", tl[len(tl)-1].Status)
+	assert.Equal(t, "codes delivered for 1 line(s)", tl[len(tl)-1].Note)
+}
+
+func TestPlaceOrder_MixedCartShortageFailsAndRefunds(t *testing.T) {
+	codeA := codeProduct(10, nil)
+	codeB := codeProduct(5, nil)
+	transferP := transferProduct(20)
+	// Both pools pass the pre-check, but codeB's claim loses a race.
+	codeSvc := &fakeCodeSvc{
+		available: map[string]int{codeA.ID.Hex(): 5, codeB.ID.Hex(): 5},
+		failFor:   map[string]bool{codeB.ID.Hex(): true},
+	}
+	walletSvc := &fakeWalletSvc{balance: 100}
+	svc, repo := newSUTMulti([]*product.Product{codeA, codeB, transferP}, codeSvc, walletSvc)
+
+	_, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(codeA, 1), itemFor(codeB, 1), itemFor(transferP, 1)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.Error(t, err)
+	require.Len(t, repo.byID, 1)
+	var o *Order
+	for _, v := range repo.byID {
+		o = v
+	}
+	assert.Equal(t, OrderStatusFailed, o.Status)
+	assert.Equal(t, 100.0, walletSvc.balance) // full charge refunded
+	assert.Equal(t, 35.0, walletSvc.refunded)
+	assert.Equal(t, []string{o.ID.Hex()}, codeSvc.released) // codes released
+	for _, it := range o.Items {
+		assert.Empty(t, it.Codes)
+	}
+	assert.Empty(t, o.Fulfillment.DeliveredCode)
+}
+
+func TestPlaceOrder_CodeOrderRecordsCodesPerLine(t *testing.T) {
+	a := codeProduct(10, nil)
+	b := codeProduct(5, nil)
+	codeSvc := &fakeCodeSvc{available: map[string]int{a.ID.Hex(): 5, b.ID.Hex(): 5}}
+	svc, _ := newSUTMulti([]*product.Product{a, b}, codeSvc, &fakeWalletSvc{balance: 100})
+
+	order, err := svc.PlaceOrder(context.Background(), bson.NewObjectID(), false, "k1", PlaceOrderInput{
+		Items:         []PlaceOrderItemInput{itemFor(a, 2), itemFor(b, 2)},
+		PaymentMethod: PaymentMethodWallet,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusCompleted, order.Status)
+	require.Len(t, order.Items[0].Codes, 2)
+	require.Len(t, order.Items[1].Codes, 2)
+	seen := map[string]bool{}
+	for _, it := range order.Items {
+		for _, c := range it.Codes {
+			assert.False(t, seen[c], "duplicate code %s", c)
+			seen[c] = true
+		}
+	}
+	assert.Contains(t, order.Items[1].Codes[0], b.ID.Hex())
+	assert.Equal(t, order.Items[0].Codes[0], order.Fulfillment.DeliveredCode)
+}
+
+func TestFulfillPaidOrder_MixedCartDeliversCodes(t *testing.T) {
+	codeP := codeProduct(10, nil)
+	transferP := transferProduct(20)
+	codeSvc := &fakeCodeSvc{available: map[string]int{codeP.ID.Hex(): 5}}
+	svc, repo := newSUTMulti([]*product.Product{codeP, transferP}, codeSvc, &fakeWalletSvc{})
+	o := &Order{
+		ID:            bson.NewObjectID(),
+		UserID:        bson.NewObjectID(),
+		Status:        OrderStatusPending,
+		PaymentMethod: PaymentMethodUSDT,
+		Total:         30,
+		Items: []OrderItem{
+			{ProductID: codeP.ID, Qty: 1, FulfillmentType: string(product.FulfillmentCode), FulfillmentMode: string(product.FulfillmentModeInventory)},
+			{ProductID: transferP.ID, Qty: 1, FulfillmentType: string(product.FulfillmentTransfer), FulfillmentMode: string(product.FulfillmentModeManualOperator)},
+		},
+	}
+	repo.byID[o.ID] = o
+
+	require.NoError(t, svc.FulfillPaidOrder(context.Background(), o.ID, 30, "tx1"))
+	got := repo.byID[o.ID]
+	assert.Equal(t, OrderStatusProcessing, got.Status)
+	require.Len(t, got.Items[0].Codes, 1)
+	assert.Equal(t, got.Items[0].Codes[0], got.Fulfillment.DeliveredCode)
+	assert.Empty(t, got.Items[1].Codes)
+}
+
+func TestOrderItemCodes_JSONContract(t *testing.T) {
+	o := Order{Items: []OrderItem{
+		{Codes: []string{"AAA", "BBB"}},
+		{PlayerID: "123"},
+	}}
+	raw, err := json.Marshal(o)
+	require.NoError(t, err)
+	var out struct {
+		Items []map[string]any `json:"items"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &out))
+	assert.Equal(t, []any{"AAA", "BBB"}, out.Items[0]["codes"])
+	_, has := out.Items[1]["codes"]
+	assert.False(t, has, "codes is omitted on lines without codes")
+}
+
+func TestResolveOrderMode(t *testing.T) {
+	inv := OrderItem{FulfillmentMode: string(product.FulfillmentModeInventory)}
+	man := OrderItem{FulfillmentMode: string(product.FulfillmentModeManualOperator)}
+	legacyCode := OrderItem{FulfillmentType: string(product.FulfillmentCode)}
+	api := OrderItem{FulfillmentMode: string(product.FulfillmentModeAPI)}
+	assert.Equal(t, product.FulfillmentModeInventory, resolveOrderMode([]OrderItem{inv, legacyCode}))
+	assert.Equal(t, product.FulfillmentModeManualOperator, resolveOrderMode([]OrderItem{man, man}))
+	assert.Equal(t, orderModeMixed, resolveOrderMode([]OrderItem{man, inv}))
+	assert.Equal(t, orderModeMixed, resolveOrderMode([]OrderItem{legacyCode, man}))
+	assert.Equal(t, product.FulfillmentModeManualOperator, resolveOrderMode([]OrderItem{inv, api}))
+	assert.Equal(t, product.FulfillmentModeManualOperator, resolveOrderMode([]OrderItem{inv, man, api}))
 }
 
 func TestPlaceOrder_EmptyModeFallsBackToInventory(t *testing.T) {

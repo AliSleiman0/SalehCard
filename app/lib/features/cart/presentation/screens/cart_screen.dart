@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/format/localized_digits.dart';
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
@@ -207,12 +208,18 @@ class _CartRow extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _MiniStepper(
-                      qty: item.qty,
-                      min: qtyMin,
-                      max: qtyMax,
-                      onChanged: onSetQty,
-                    ),
+                    // A per-unit (by-amount) line is always qty 1 — its
+                    // amount (shown above as the variant label) is fixed once
+                    // typed on the product page, so no stepper.
+                    if (item.isAmountLine)
+                      const SizedBox.shrink()
+                    else
+                      _MiniStepper(
+                        qty: item.qty,
+                        min: qtyMin,
+                        max: qtyMax,
+                        onChanged: onSetQty,
+                      ),
                     if (item.hasOffer)
                       StruckPriceRow(
                         original: item.originalLineTotal,
@@ -343,6 +350,7 @@ class _MiniStepperState extends State<_MiniStepper> {
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
               inputFormatters: [
+                const LocalizedDigitsFormatter(),
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(4),
               ],

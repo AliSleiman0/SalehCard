@@ -33,6 +33,12 @@ type Repository interface {
 	SetPrice(ctx context.Context, userID bson.ObjectID, productID, variantID string, price float64) (*ResellerPrice, error)
 	// DeletePrice removes a per-reseller variant price override.
 	DeletePrice(ctx context.Context, userID bson.ObjectID, variantID string) error
+	// CountPricesForVariants counts every reseller's overrides on the given
+	// variants (all resellers).
+	CountPricesForVariants(ctx context.Context, variantIDs []string) (int64, error)
+	// DeletePricesForVariants removes every reseller's overrides on the given
+	// variants and returns how many were removed.
+	DeletePricesForVariants(ctx context.Context, variantIDs []string) (int64, error)
 }
 
 // MongoRepository is a MongoDB-backed implementation of Repository.
@@ -256,6 +262,31 @@ func (r *MongoRepository) SetPrice(ctx context.Context, userID bson.ObjectID, pr
 func (r *MongoRepository) DeletePrice(ctx context.Context, userID bson.ObjectID, variantID string) error {
 	_, err := r.prices.DeleteOne(ctx, bson.D{{Key: "userId", Value: userID}, {Key: "variantId", Value: variantID}})
 	return err
+}
+
+// CountPricesForVariants counts every reseller's price overrides on the given
+// variant ids (0 for an empty list).
+func (r *MongoRepository) CountPricesForVariants(ctx context.Context, variantIDs []string) (int64, error) {
+	if len(variantIDs) == 0 {
+		return 0, nil
+	}
+	return r.prices.CountDocuments(ctx, bson.D{{Key: "variantId", Value: bson.D{{Key: "$in", Value: variantIDs}}}})
+}
+
+// DeletePricesForVariants removes every reseller's price overrides on the given
+// variant ids. It is used when a product switches to per-unit pricing, where an
+// old override (a flat package price) would now be read as a per-block price
+// and undercharge. Each removal is document-atomic and the delete is
+// idempotent, so a partial failure is safely retried; no transaction is needed.
+func (r *MongoRepository) DeletePricesForVariants(ctx context.Context, variantIDs []string) (int64, error) {
+	if len(variantIDs) == 0 {
+		return 0, nil
+	}
+	res, err := r.prices.DeleteMany(ctx, bson.D{{Key: "variantId", Value: bson.D{{Key: "$in", Value: variantIDs}}}})
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
 }
 
 // CountByTier aggregates the number of reseller users grouped by their tier name.

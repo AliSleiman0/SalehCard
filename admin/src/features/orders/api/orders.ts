@@ -14,12 +14,17 @@ export interface AdminOrderItem {
   denomination?: string
   category: string
   qty: number
+  /** Per-unit line: the amount the customer typed (e.g. 45000). qty is then 1
+   *  and price is the whole line price; denomination reads "45,000". */
+  amount?: number
   price: number
   fulfillmentType: FulfillmentType
   playerId?: string
   recipient?: { name: string; country: string; detail: string }
   /** Labeled customer inputs captured at checkout (Account ID, Zone ID, Email…). */
   fields?: { key: string; label: I18nString; value: string }[]
+  /** Delivered codes for an inventory/code line, one per unit (omitted when none). */
+  codes?: string[]
 }
 
 export interface OrderFulfillment {

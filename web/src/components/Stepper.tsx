@@ -19,6 +19,9 @@ export function Stepper({
   const [draft, setDraft] = useState<string | null>(null)
 
   const clamp = (n: number) => Math.min(max, Math.max(min, n))
+  // Size the field to the largest allowed value (bounds can exceed 99); no
+  // maxLength — over-long input is clamped on commit instead.
+  const digits = String(Math.max(Math.abs(max), Math.abs(min))).length
 
   // Commit the typed value. Stepper is the single clamp point — callers store
   // whatever `set` receives verbatim — so clamp here; revert empty/NaN to `value`.
@@ -61,7 +64,7 @@ export function Stepper({
           if (e.key === 'Enter') e.currentTarget.blur()
         }}
         style={{
-          width: 40,
+          width: Math.max(40, digits * 11 + 6),
           padding: 0,
           textAlign: 'center',
           fontWeight: 700,

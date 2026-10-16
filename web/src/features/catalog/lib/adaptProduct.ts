@@ -1,4 +1,5 @@
 import { artForCategory } from '@/lib/art'
+import { qtyBounds, unitAmountField, unitLinePrice, type QtyBounds } from '@/lib/productFields'
 import type { InputField, OfferInfo, Product } from '@/types'
 
 export interface ViewVariant {
@@ -7,6 +8,16 @@ export interface ViewVariant {
   p: number
   offerP?: number
   agentP?: number
+}
+
+export interface ViewUnitPricing {
+  fieldKey: string
+  blockUnits: number
+  /** driving amount field's label (locale-resolved) */
+  label: string
+  /** amount bounds; max <= 0 = unbounded */
+  minAmount: number
+  maxAmount: number
 }
 
 export interface ViewOffer {
@@ -38,8 +49,13 @@ export interface ViewProduct {
   idLabel?: string
   fulfill: 'code' | 'credit' | 'transfer'
   agentDisc: number
-  /** non-quantity checkout fields defined on the product (legacy `quantity` rows dropped) */
+  /** customer-typed checkout fields defined on the product (legacy `quantity`
+   * rows and a unit-priced product's driving amount field dropped) */
   inputFields: InputField[]
+  /** purchase-quantity bounds (from the legacy `quantity` field, else 1..99) */
+  qty: QtyBounds
+  /** per-unit ("sold by amount") pricing, when the product is validly configured for it */
+  unit?: ViewUnitPricing
   verifyEnabled: boolean
   offer?: ViewOffer
 }
@@ -74,6 +90,10 @@ function discountLabel(o: OfferInfo): string {
   return `-$${v}`
 }
 
+function unitFrom(blockPrice: number, u: ViewUnitPricing): number {
+  return unitLinePrice(blockPrice, u.minAmount > 0 ? u.minAmount : u.blockUnits, u.blockUnits)
+}
+
 export function adaptProduct(api: Product, locale: 'en' | 'ar' | 'tr'): ViewProduct {
   const brand = api.title[locale] || api.title.en
   const variants: ViewVariant[] = api.variants.map((v) => ({
@@ -91,7 +111,27 @@ export function adaptProduct(api: Product, locale: 'en' | 'ar' | 'tr'): ViewProd
         ? 'transfer'
         : 'code'
 
-  const needsId = fulfill !== 'code'
+  const amountField = unitAmountField(api)
+  const unit: ViewUnitPricing | undefined =
+    amountField && api.unitPricing
+      ? {
+          fieldKey: amountField.key,
+          blockUnits: api.unitPricing.blockUnits,
+          label: amountField.label[locale] || amountField.label.en || amountField.key,
+          minAmount: Math.max(0, amountField.constraints?.min ?? 0),
+          maxAmount: Math.max(0, amountField.constraints?.max ?? 0),
+        }
+      : undefined
+
+  // Customer-typed fields: legacy `quantity` rows (driven by the stepper) and a
+  // unit-priced product's driving amount field (the amount box) are not typed.
+  const inputFields = (api.inputFields ?? []).filter(
+    (f) => f.type !== 'quantity' && f.key !== unit?.fieldKey,
+  )
+  // The hardcoded ID box is the fallback for products with no customer-typed
+  // field of their own — counted after the filter above, so a product whose
+  // only field is the amount (or a quantity row) still collects the player ID.
+  const needsId = fulfill !== 'code' && inputFields.length === 0
   const v0 = api.variants[0]
   const agentDisc =
     v0 && v0.resellerPrice !== undefined && v0.price > 0
@@ -113,17 +153,21 @@ export function adaptProduct(api: Product, locale: 'en' | 'ar' | 'tr'): ViewProd
     instant: api.fulfillmentType !== 'transfer',
     available: api.available,
     needsId,
-    idLabel: fulfill === 'credit' ? 'Account / Player ID' : undefined,
+    idLabel: needsId && fulfill === 'credit' ? 'Account / Player ID' : undefined,
     fulfill,
     agentDisc,
-    inputFields: (api.inputFields ?? []).filter((f) => f.type !== 'quantity'),
+    inputFields,
+    qty: qtyBounds(api),
+    unit,
     verifyEnabled: !!api.verification,
     offer: api.offer
       ? {
           label: discountLabel(api.offer),
           endsAt: api.offer.endsAt,
-          from: api.offer.offerFromPrice,
-          wasFrom: api.offer.originalFromPrice,
+          // Unit-priced: the server's from-prices are per block; rescale them to
+          // the minimum amount so they line up with fromPrice() on the card.
+          from: unit && v0 ? unitFrom(v0.offerPrice ?? v0.price, unit) : api.offer.offerFromPrice,
+          wasFrom: unit && v0 ? unitFrom(v0.price, unit) : api.offer.originalFromPrice,
         }
       : undefined,
   }

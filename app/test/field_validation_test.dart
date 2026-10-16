@@ -75,9 +75,10 @@ void main() {
   });
 
   group('formatBound', () {
-    test('drops a trailing .0 and keeps real decimals', () {
+    test('drops a trailing .0, groups thousands, keeps real decimals', () {
       expect(formatBound(5.0), '5');
-      expect(formatBound(5000.0), '5000');
+      expect(formatBound(5000.0), '5,000');
+      expect(formatBound(1000000.0), '1,000,000');
       expect(formatBound(0.5), '0.5');
     });
   });

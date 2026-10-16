@@ -218,6 +218,18 @@ type MoneyTransfer struct {
 	MaxAmount     float64 `bson:"maxAmount,omitempty" json:"maxAmount,omitempty"`
 }
 
+// UnitPricing makes the customer-typed value of one amount-type input field
+// drive the price (live-app coin/diamond recharge: "enter the number of coins").
+// The product's single variant prices one block of BlockUnits units, so a line
+// costs round2(variantPrice × amount ÷ BlockUnits), with reseller/offer layers
+// applied to the variant price first. The amount's min/max and label come from
+// the driving field's own constraints. Admin-owned — never written by the
+// catalog importer. BlockUnits == 0 is the clear sentinel on update.
+type UnitPricing struct {
+	FieldKey   string  `bson:"fieldKey"   json:"fieldKey"`
+	BlockUnits float64 `bson:"blockUnits" json:"blockUnits"`
+}
+
 // Product is the root entity for a digital gift-card or top-up item.
 type Product struct {
 	ID    bson.ObjectID `bson:"_id,omitempty" json:"id"`
@@ -268,8 +280,11 @@ type Product struct {
 	// MoneyTransfer holds the buy/sell rate board for a FulfillmentTransfer
 	// product; nil for all other products.
 	MoneyTransfer *MoneyTransfer `bson:"moneyTransfer,omitempty"     json:"moneyTransfer,omitempty"`
-	Stock         int            `bson:"stock"     json:"stock"`
-	Available     bool           `bson:"available" json:"available"`
+	// UnitPricing switches the product to per-unit pricing (customer enters an
+	// amount); nil = fixed packages.
+	UnitPricing *UnitPricing `bson:"unitPricing,omitempty" json:"unitPricing,omitempty"`
+	Stock       int          `bson:"stock"     json:"stock"`
+	Available   bool         `bson:"available" json:"available"`
 	// Migration: status fidelity + ordering + review markers.
 	Status    string         `bson:"status,omitempty"    json:"status,omitempty"`
 	SortOrder int            `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
@@ -349,10 +364,12 @@ type CreateProductInput struct {
 	Bridge            *BridgeSpec `json:"bridge,omitempty"`
 	// MoneyTransfer sets the buy/sell rate board; only valid on a transfer product.
 	MoneyTransfer *MoneyTransfer `json:"moneyTransfer,omitempty"`
-	InputFields   []InputField   `json:"inputFields,omitempty"`
-	Stock         int            `json:"stock"`
-	Available     bool           `json:"available"`
-	Ratings       RatingsSummary `json:"ratings"`
+	// UnitPricing switches on per-unit pricing (see UnitPricing).
+	UnitPricing *UnitPricing   `json:"unitPricing,omitempty"`
+	InputFields []InputField   `json:"inputFields,omitempty"`
+	Stock       int            `json:"stock"`
+	Available   bool           `json:"available"`
+	Ratings     RatingsSummary `json:"ratings"`
 }
 
 // UpdateProductInput carries the optional fields that can be patched on a product.
@@ -395,6 +412,9 @@ type UpdateProductInput struct {
 	// non-empty currency (and at least one rate) sets it; a non-nil value with both
 	// currencies empty and both rates zero clears it. Nil leaves it unchanged.
 	MoneyTransfer *MoneyTransfer `json:"moneyTransfer,omitempty"`
+	// UnitPricing patches per-unit pricing. BlockUnits == 0 clears it (back to
+	// fixed packages); nil leaves it unchanged.
+	UnitPricing *UnitPricing `json:"unitPricing,omitempty"`
 }
 
 // ListFilter holds the optional query filters for listing products.

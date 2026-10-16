@@ -35,6 +35,8 @@ class OrderItemDto {
     this.fulfillmentType = 'code',
     this.playerId,
     this.recipient,
+    this.amount,
+    this.codes,
   });
 
   final String productId;
@@ -47,6 +49,10 @@ class OrderItemDto {
   final String fulfillmentType;
   final String? playerId;
   final RecipientDto? recipient;
+  final double? amount;
+
+  /// One delivered code per unit on code lines; omitted by the API when none.
+  final List<String>? codes;
 
   factory OrderItemDto.fromJson(Map<String, dynamic> json) =>
       _$OrderItemDtoFromJson(json);
@@ -64,6 +70,8 @@ class OrderItemDto {
         fulfillmentType: fulfillmentType,
         playerId: playerId,
         recipient: recipient?.toEntity(),
+        amount: amount,
+        codes: codes ?? const [],
       );
 }
 

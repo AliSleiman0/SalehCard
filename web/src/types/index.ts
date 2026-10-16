@@ -49,6 +49,14 @@ export interface RatingsSummary {
   count: number
 }
 
+// Per-unit ("sold by amount") pricing: the product's single variant price is
+// the price of `blockUnits` units; `fieldKey` names the amount-type input field
+// the customer types the amount into (its constraints.min/max bound it).
+export interface UnitPricing {
+  fieldKey: string
+  blockUnits: number
+}
+
 export type FulfillmentType = 'code' | 'account_credit' | 'transfer'
 
 export interface Product {
@@ -68,6 +76,7 @@ export interface Product {
   inputFields?: InputField[]
   verification?: Verification
   offer?: OfferInfo
+  unitPricing?: UnitPricing
   createdAt: string
   updatedAt: string
 }
@@ -132,6 +141,10 @@ export interface OrderItem {
   fulfillmentType: FulfillmentType
   playerId?: string
   recipient?: Recipient
+  // Customer-entered amount on a unit-priced line (denomination echoes it, e.g. "45,000").
+  amount?: number
+  // Delivered codes for an inventory/code line, one per unit (omitted when none).
+  codes?: string[]
 }
 
 export interface TimelineEvent {
@@ -172,6 +185,8 @@ export interface PlaceOrderItemInput {
   // Structured per-field capture for account_credit lines; labels are
   // resolved server-side from the product's inputFields spec.
   fields?: { key: string; value: string }[]
+  // Required on unit-priced products (qty must then be 1): the typed amount.
+  amount?: number
 }
 
 export interface PlaceOrderInput {

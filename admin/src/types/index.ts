@@ -86,6 +86,16 @@ export interface MoneyTransferSpec {
   maxAmount?: number
 }
 
+// Per-unit ("customer enters amount") pricing. The product's single variant
+// prices one block of `blockUnits` units; the customer types the amount into
+// the amount-type input field named by `fieldKey` (bounded by its min/max), and
+// the line costs round2(price × amount ÷ blockUnits). Mirrors the Go
+// `UnitPricing`. Absent = fixed packages.
+export interface UnitPricing {
+  fieldKey: string
+  blockUnits: number
+}
+
 export interface Product {
   id: string
   title: I18nString
@@ -111,6 +121,8 @@ export interface Product {
   verification?: Verification
   /** Buy/sell rate board on a money-transfer product; absent otherwise. */
   moneyTransfer?: MoneyTransferSpec
+  /** Per-unit pricing (customer enters an amount); absent = fixed packages. */
+  unitPricing?: UnitPricing
   /** Economics. Only `cost` (admin-set unit cost) is editable in the console;
    *  retail/currency come from the legacy catalog importer. Absent = no cost set. */
   pricing?: { cost?: number; retail?: number; currency?: string }

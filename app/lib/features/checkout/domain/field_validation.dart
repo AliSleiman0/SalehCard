@@ -1,3 +1,4 @@
+import '../../../core/format/money.dart';
 import '../../catalog/domain/entities/product.dart';
 
 /// Outcome of checking an `amount`-type field's value against its constraints.
@@ -37,7 +38,8 @@ bool hasActiveBounds(InputFieldConstraints? c) {
   return true;
 }
 
-/// Formats a bound for display, dropping a trailing `.0` (5.0 → "5").
+/// Formats a bound for display with thousands grouping in Western digits,
+/// dropping a trailing `.0` (5.0 → "5", 1000000.0 → "1,000,000").
 String formatBound(double n) {
-  return n == n.roundToDouble() ? n.round().toString() : n.toString();
+  return n == n.roundToDouble() ? formatUnits(n) : n.toString();
 }

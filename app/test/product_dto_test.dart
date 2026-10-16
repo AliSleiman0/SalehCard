@@ -145,5 +145,32 @@ void main() {
       expect(product.imageUrl, isNull);
       expect(product.thumbUrl, isNull);
     });
+  
+    test('parses unitPricing; from price = block price x min / blockUnits', () {
+      final product = ProductDto.fromJson(<String, dynamic>{
+        'id': 'p-coins',
+        'fulfillmentType': 'account_credit',
+        'available': true,
+        'variants': [
+          {'id': 'v1', 'denomination': '1000 coins', 'price': 0.45},
+        ],
+        'inputFields': [
+          {'key': 'playerId', 'type': 'text'},
+          {
+            'key': 'coins',
+            'label': {'en': 'Enter Amount'},
+            'type': 'amount',
+            'constraints': {'min': 2000, 'max': 500000},
+          },
+        ],
+        'unitPricing': {'fieldKey': 'coins', 'blockUnits': 1000},
+      }).toEntity();
+
+      expect(product.unitPricing!.fieldKey, 'coins');
+      expect(product.unitPricing!.blockUnits, 1000.0);
+      expect(product.unitAmountField!.key, 'coins');
+      expect(product.fromPrice, 0.9); // 0.45 x 2000 / 1000
+      expect(product.unitLinePriceFor(45000), 20.25);
+    });
   });
 }

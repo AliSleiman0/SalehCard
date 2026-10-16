@@ -321,5 +321,14 @@
   "no_results_sub": "جرّب بحثاً مختلفاً أو عدّل الفلاتر.",
   "empty_orders": "لا طلبات بعد",
   "empty_orders_sub": "ستظهر مشترياتك وأكوادك هنا.",
-  "start_shopping": "ابدأ التسوّق"
+  "start_shopping": "ابدأ التسوّق",
+  "amount_range": "{{min}} – {{max}}",
+  "amount_min": "الحد الأدنى {{min}}",
+  "amount_out_of_range": "أدخل كمية بين {{min}} و {{max}}",
+  "amount_below_min": "أدخل كمية لا تقل عن {{min}}",
+  "amount_rate": "{{price}} لكل {{units}}",
+  "amount_units": "وحدة",
+  "amount_whole_only": "أدخل عددًا صحيحًا (بدون كسور)",
+  "amount_too_small": "الكمية صغيرة جدًا — يجب ألا يقل الإجمالي عن 0.01$",
+  "cart_updated": "تم تحديث السلة"
 }

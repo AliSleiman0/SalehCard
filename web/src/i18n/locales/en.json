@@ -321,5 +321,14 @@
   "no_results_sub": "Try a different search or adjust your filters.",
   "empty_orders": "No orders yet",
   "empty_orders_sub": "Your purchases and codes will appear here.",
-  "start_shopping": "Start shopping"
+  "start_shopping": "Start shopping",
+  "amount_range": "{{min}} – {{max}}",
+  "amount_min": "Min {{min}}",
+  "amount_out_of_range": "Enter an amount between {{min}} and {{max}}",
+  "amount_below_min": "Enter an amount of at least {{min}}",
+  "amount_rate": "{{price}} per {{units}}",
+  "amount_units": "units",
+  "amount_whole_only": "Enter a whole number (no decimals)",
+  "amount_too_small": "This amount is too small — the total must be at least $0.01",
+  "cart_updated": "Cart updated"
 }

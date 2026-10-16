@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/format/localized_digits.dart';
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
@@ -41,6 +42,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   int _qty = 1;
   bool _qtyInitialized = false;
   final _field = TextEditingController();
+  // Typed units for a per-unit (by-amount) product, e.g. 45000 coins.
+  final _amount = TextEditingController();
 
   // Purchase-time ID verification (only used for products configured for it).
   VerifyState _verify = const VerifyState();
@@ -51,6 +54,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   void dispose() {
     _verifyDebounce?.cancel();
     _field.dispose();
+    _amount.dispose();
     super.dispose();
   }
 
@@ -154,8 +158,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     // the generic dynamic-input preview, but use its constraints to bound the
     // stepper (a {min:0,max:0} constraint is a known legacy-import corruption
     // shape, not a real bound, and is treated the same as "absent").
-    final nonQuantityFields =
-        product.inputFields.where((f) => f.type != 'quantity').toList();
+    // A per-unit product's driving amount field gets its own input (in place
+    // of the denomination chips + qty stepper), so it's excluded here too.
+    final nonQuantityFields = product.inputFields
+        .where((f) =>
+            f.type != 'quantity' && f.key != product.unitPricing?.fieldKey)
+        .toList();
     InputField? quantityField;
     for (final f in product.inputFields) {
       if (f.type == 'quantity') {
@@ -174,7 +182,34 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       _qtyInitialized = true;
     }
 
-    final total = unitPrice * _qty;
+    // Per-unit (by-amount) pricing: the typed amount drives the price. A
+    // unit-priced product whose spec is broken (no driving amount field / not
+    // exactly one variant) can't be priced -- buying is disabled.
+    final unitField = product.unitAmountField;
+    final unitBroken = product.isUnitPriced && unitField == null;
+    final amountText = _amount.text.trim();
+    final amountValue =
+        amountText.isEmpty ? null : double.tryParse(amountText);
+    final amountLinePrice = (unitField != null && amountValue != null)
+        ? product.unitLinePriceFor(amountValue)
+        : null;
+    String? amountError;
+    if (unitField != null && amountText.isNotEmpty) {
+      amountError =
+          amountIssueMessage(l10n, unitField.constraints, amountText);
+      if (amountError == null &&
+          (amountValue == null || amountValue <= 0)) {
+        amountError = l10n.amountNotANumber;
+      } else if (amountError == null && (amountLinePrice ?? 0) < 0.01) {
+        amountError = l10n.amountTooSmall;
+      }
+    }
+    final amountValid =
+        unitField != null && amountValue != null && amountError == null;
+
+    final total = product.isUnitPriced
+        ? (amountValid ? amountLinePrice! : 0.0)
+        : unitPrice * _qty;
     final tint = ProductChip.tintFor(product.id.hashCode.abs());
     final title = product.title.resolve(localeCode);
     final needsInput =
@@ -279,7 +314,41 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   l10n: l10n,
                 ),
               ],
-              if (hasVariants) ...[
+              if (unitField != null) ...[
+                const SizedBox(height: 22),
+                DynamicInputField(
+                  field: unitField,
+                  localeCode: localeCode,
+                  controller: _amount,
+                  digitsOnly: true,
+                  hintText: unitField.label.resolve(localeCode).isEmpty
+                      ? l10n.amountLabel
+                      : unitField.label.resolve(localeCode),
+                  onChanged: (_) => setState(() {}),
+                  errorText: amountError,
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Text(
+                    l10n.unitRateLine(
+                      formatUsd(variants.single.effectivePrice),
+                      formatUnits(product.unitPricing!.blockUnits),
+                    ),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: colors.textDim,
+                    ),
+                  ),
+                ),
+              ] else if (unitBroken) ...[
+                const SizedBox(height: 22),
+                Text(
+                  l10n.unitPricedUnavailable,
+                  style: TextStyle(color: colors.textDim),
+                ),
+              ] else if (hasVariants) ...[
                 const SizedBox(height: 22),
                 Text(
                   l10n.chooseAmount,
@@ -296,39 +365,42 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   onSelect: (i) => setState(() => _variantIndex = i),
                 ),
               ],
-              const SizedBox(height: 22),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    l10n.quantityLabel,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: colors.text,
+              if (!product.isUnitPriced) ...[
+                const SizedBox(height: 22),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      l10n.quantityLabel,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: colors.text,
+                      ),
                     ),
-                  ),
-                  _QtyStepper(
-                    qty: _qty,
-                    min: qtyMin,
-                    max: qtyMax,
-                    onChanged: (v) => setState(() => _qty = v),
+                    _QtyStepper(
+                      qty: _qty,
+                      min: qtyMin,
+                      max: qtyMax,
+                      onChanged: (v) => setState(() => _qty = v),
+                    ),
+                  ],
+                ),
+                if (_qty > 1) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      l10n.qtyTotalLine(
+                          _qty, formatUsd(unitPrice), formatUsd(total)),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textDim,
+                      ),
+                    ),
                   ),
                 ],
-              ),
-              if (_qty > 1) ...[
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    l10n.qtyTotalLine(_qty, formatUsd(unitPrice), formatUsd(total)),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textDim,
-                    ),
-                  ),
-                ),
               ],
               if (firstField != null) ...[
                 const SizedBox(height: 22),
@@ -372,6 +444,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           total: total,
           enabled: inStock &&
               hasVariants &&
+              !unitBroken &&
+              (unitField == null || amountValid) &&
               (verifyActive ? _verify.allowsPurchase : true),
           l10n: l10n,
           colors: colors,
@@ -380,6 +454,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             selected!,
             firstField,
             localeCode,
+            amount: amountValid ? amountValue : null,
             goCheckout: false,
           ),
           onBuyNow: () => _addToCart(
@@ -387,6 +462,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             selected!,
             firstField,
             localeCode,
+            amount: amountValid ? amountValue : null,
             goCheckout: true,
           ),
         ),
@@ -400,6 +476,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     InputField? firstField,
     String localeCode, {
     required bool goCheckout,
+    double? amount,
   }) {
     final playerId = firstField != null && _field.text.trim().isNotEmpty
         ? _field.text.trim()
@@ -411,6 +488,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     if (goCheckout) {
       ref.read(cartControllerProvider.notifier).clear();
     }
+    // A per-unit (by-amount) line is one purchase of [amount] units: qty 1,
+    // the whole line's price, and the formatted amount as its label (matching
+    // the server's denomination snapshot, e.g. "45,000").
+    final unitBlocks = product.unitPricing?.blockUnits;
+    final isAmountLine = amount != null && unitBlocks != null;
     ref
         .read(cartControllerProvider.notifier)
         .add(
@@ -419,12 +501,20 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             variantId: variant.id,
             title: product.title,
             category: product.category,
-            variantLabel: variant.denomination,
-            price: variant.effectivePrice,
-            originalPrice: variant.hasOffer ? variant.price : null,
-            qty: _qty,
+            variantLabel:
+                isAmountLine ? formatUnits(amount) : variant.denomination,
+            price: isAmountLine
+                ? unitLinePrice(variant.effectivePrice, amount, unitBlocks)
+                : variant.effectivePrice,
+            originalPrice: variant.hasOffer
+                ? (isAmountLine
+                    ? unitLinePrice(variant.price, amount, unitBlocks)
+                    : variant.price)
+                : null,
+            qty: isAmountLine ? 1 : _qty,
             fulfillmentType: product.fulfillmentType,
             playerId: playerId,
+            amount: isAmountLine ? amount : null,
           ),
         );
     if (goCheckout) {
@@ -513,6 +603,7 @@ class _MoneyTransferCalculatorCardState
             controller: _amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
+              const LocalizedDigitsFormatter(),
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
             ],
             onChanged: (_) => setState(() {}),
@@ -1098,6 +1189,7 @@ class _QtyStepperState extends State<_QtyStepper> {
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
               inputFormatters: [
+                const LocalizedDigitsFormatter(),
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(4),
               ],

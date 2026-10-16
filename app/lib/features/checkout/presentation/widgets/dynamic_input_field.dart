@@ -1,11 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/format/localized_digits.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../catalog/domain/entities/product.dart';
 import '../../domain/field_validation.dart';
+
+/// Maps an amount-bounds violation of [value] against [c] to its localized
+/// inline message, or null when the value is fine (or the field carries no
+/// enforceable bounds).
+String? amountIssueMessage(
+  AppLocalizations l10n,
+  InputFieldConstraints? c,
+  String value,
+) {
+  switch (checkAmountBounds(c, value)) {
+    case AmountBoundsIssue.none:
+      return null;
+    case AmountBoundsIssue.notANumber:
+      return l10n.amountNotANumber;
+    case AmountBoundsIssue.belowMin:
+    case AmountBoundsIssue.aboveMax:
+      final min = c?.min;
+      final max = c?.max;
+      if (min != null && max != null) {
+        return l10n.amountOutOfRange(formatBound(min), formatBound(max));
+      }
+      if (min != null) return l10n.amountAtLeast(formatBound(min));
+      return l10n.amountAtMost(formatBound(max!));
+  }
+}
 
 /// Renders one dynamic product [InputField] (`text | amount | quantity |
 /// select`) at checkout. Sensitive fields are masked. The parent owns the value:
@@ -20,6 +46,8 @@ class DynamicInputField extends StatelessWidget {
     this.onChanged,
     this.errorText,
     this.showRequiredBadge = true,
+    this.digitsOnly = false,
+    this.hintText,
   });
 
   final InputField field;
@@ -29,6 +57,13 @@ class DynamicInputField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final String? errorText;
   final bool showRequiredBadge;
+
+  /// Restricts a text-like input to whole numbers (digits keyboard + filter) —
+  /// used for per-unit amounts (coins), which are always integers.
+  final bool digitsOnly;
+
+  /// Overrides the default "Enter {label}" placeholder.
+  final String? hintText;
 
   @override
   Widget build(BuildContext context) {
@@ -79,19 +114,31 @@ class DynamicInputField extends StatelessWidget {
       input = TextField(
         controller: controller,
         obscureText: field.sensitive,
-        keyboardType: _keyboardType(field.type, field.key),
+        keyboardType: digitsOnly
+            ? TextInputType.number
+            : _keyboardType(field.type, field.key),
         // Amount fields take a plain number — keep junk untypeable; bounds are
         // validated on submit (and re-validated server-side).
-        inputFormatters: isAmount
-            ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))]
-            : null,
+        // Arabic-Indic / Persian digits are mapped to 0-9 first, or an Arabic
+        // keyboard could type nothing into a numeric box.
+        inputFormatters: digitsOnly
+            ? [
+                const LocalizedDigitsFormatter(),
+                FilteringTextInputFormatter.digitsOnly,
+              ]
+            : isAmount
+                ? [
+                    const LocalizedDigitsFormatter(),
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ]
+                : null,
         onChanged: onChanged,
         style: TextStyle(fontSize: 15, color: colors.text),
         cursorColor: AppTokens.brand1,
         decoration: InputDecoration(
           filled: true,
           fillColor: colors.surface,
-          hintText: l10n.enterValue(label),
+          hintText: hintText ?? l10n.enterValue(label),
           hintStyle: TextStyle(color: colors.textFaint),
           helperText: isAmount ? _rangeHint(l10n) : null,
           helperStyle: TextStyle(fontSize: 12, color: colors.textFaint),

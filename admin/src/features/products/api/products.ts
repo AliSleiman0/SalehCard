@@ -9,6 +9,7 @@ import type {
   InputField,
   Verification,
   MoneyTransferSpec,
+  UnitPricing,
 } from '@/types'
 
 export interface ProductListParams {
@@ -65,6 +66,10 @@ export interface ProductInput {
   // at least one rate sets it; `{baseCurrency:'', quoteCurrency:''}` (no rates)
   // clears it. Omitted = leave unchanged.
   moneyTransfer?: MoneyTransferSpec | { baseCurrency: ''; quoteCurrency: '' }
+  // Per-unit pricing. A positive `blockUnits` sets it (the single variant is the
+  // block price); `{fieldKey:'', blockUnits:0}` clears it back to fixed
+  // packages. Omitted = leave unchanged.
+  unitPricing?: UnitPricing
 }
 
 const ADMIN = '/api/admin/products'

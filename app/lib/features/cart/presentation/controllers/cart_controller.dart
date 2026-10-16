@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/cart_item.dart';
 
 /// Local, in-memory cart (no backend until order submit). Items are keyed by
-/// `productId|variantId`; adding an existing key merges quantity.
+/// `productId|variantId|amount|playerId`; adding an existing key merges
+/// quantity — except per-unit (by-amount) lines, which are always qty 1:
+/// re-adding the same amount for the same player ID replaces the line instead
+/// of doubling it. A different player ID always gets its own line.
 class CartController extends Notifier<List<CartItem>> {
   @override
   List<CartItem> build() => const [];
@@ -13,7 +16,9 @@ class CartController extends Notifier<List<CartItem>> {
     if (index >= 0) {
       final existing = state[index];
       final next = [...state];
-      next[index] = existing.copyWith(qty: existing.qty + item.qty);
+      next[index] = existing.isAmountLine
+          ? item
+          : existing.copyWith(qty: existing.qty + item.qty);
       state = next;
     } else {
       state = [...state, item];
@@ -27,7 +32,8 @@ class CartController extends Notifier<List<CartItem>> {
   void setQty(String key, int qty) {
     if (qty <= 0) return remove(key);
     state = [
-      for (final e in state) if (e.key == key) e.copyWith(qty: qty) else e,
+      for (final e in state)
+        if (e.key == key && !e.isAmountLine) e.copyWith(qty: qty) else e,
     ];
   }
 

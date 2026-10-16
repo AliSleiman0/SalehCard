@@ -72,12 +72,18 @@ class OrderItem {
     required this.fulfillmentType,
     this.playerId,
     this.recipient,
+    this.amount,
+    this.codes = const [],
   });
 
   final String productId;
   final String variantId;
   final I18nString title;
   final String denomination;
+
+  /// Units bought on a per-unit (by-amount) line, e.g. 45000 coins; null for
+  /// fixed-package lines. [denomination] already carries it formatted.
+  final double? amount;
   final String category;
   final int qty;
   final double price;
@@ -85,7 +91,33 @@ class OrderItem {
   final String? playerId;
   final OrderRecipient? recipient;
 
+  /// Codes delivered for this line — one per unit on inventory/code lines;
+  /// empty for manual (account_credit / transfer) lines and for responses from
+  /// API builds that predate per-line codes.
+  final List<String> codes;
+
   double get lineTotal => price * qty;
+}
+
+/// One product line's delivered codes, as shown on the success/detail screens.
+class OrderCodeLine {
+  const OrderCodeLine({
+    required this.title,
+    required this.denomination,
+    required this.codes,
+  });
+
+  final I18nString title;
+  final String denomination;
+  final List<String> codes;
+
+  /// "Title · denomination" in [localeCode]; empty when the title is unknown
+  /// (callers fall back to a generic "Gift card" label).
+  String label(String localeCode) {
+    final t = title.resolve(localeCode);
+    if (t.isEmpty) return '';
+    return denomination.isEmpty ? t : '$t · $denomination';
+  }
 }
 
 /// Root aggregate for a customer purchase.
@@ -147,6 +179,41 @@ class Order {
       fulfillment.deliveredCode != null &&
       fulfillment.deliveredCode!.isNotEmpty;
 
+  /// True when the order has lines fulfilled manually by an admin
+  /// (account_credit / transfer) rather than from code inventory.
+  bool get hasManualLines => items.any((i) => i.fulfillmentType != 'code');
+
+  /// Delivered codes grouped per line (one entry per item carrying codes). For
+  /// older responses with no per-line `codes`, falls back to a single line built
+  /// from `fulfillment.deliveredCode` and the first code item's title. Empty
+  /// when nothing was delivered.
+  List<OrderCodeLine> get codeLines {
+    final lines = <OrderCodeLine>[
+      for (final i in items)
+        if (i.codes.isNotEmpty)
+          OrderCodeLine(
+            title: i.title,
+            denomination: i.denomination,
+            codes: i.codes,
+          ),
+    ];
+    if (lines.isNotEmpty || !hasDeliveredCode) return lines;
+    OrderItem? first;
+    for (final i in items) {
+      if (i.fulfillmentType == 'code') {
+        first = i;
+        break;
+      }
+    }
+    return [
+      OrderCodeLine(
+        title: first?.title ?? const I18nString({}),
+        denomination: first?.denomination ?? '',
+        codes: [fulfillment.deliveredCode!],
+      ),
+    ];
+  }
+
   /// Short, human-friendly order reference (last 6 chars of the id, upper-cased).
   String get reference {
     if (id.length <= 6) return id.toUpperCase();
@@ -173,11 +240,16 @@ class PlaceOrderLine {
     this.playerId,
     this.recipient,
     this.fields = const [],
+    this.amount,
   });
 
   final String productId;
   final String variantId;
   final int qty;
+
+  /// Typed units for a per-unit (by-amount) product — required by the server
+  /// for those products (with [qty] == 1), absent otherwise.
+  final double? amount;
   final String? playerId;
   final OrderRecipient? recipient;
 

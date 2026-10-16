@@ -5,10 +5,20 @@ import { Icon, ImageArt, Stars, Price, Stepper, LoadingSpinner, ErrorState, useT
 import { rootMeta } from '@/lib/categoryPresentation'
 import { fmtPrice } from '@/lib/utils'
 import { priceFor } from '@/lib/pricing'
+import {
+  amountHasFraction,
+  amountInRange,
+  clampQty,
+  fmtAmount,
+  lineBelowMinimum,
+  parseAmount,
+  sanitizeAmountInput,
+  unitLinePrice,
+} from '@/lib/productFields'
 import { useUiStore } from '@/stores/ui'
 import { useCurrencyStore } from '@/stores/currency'
 import { useLocaleStore } from '@/stores/locale'
-import { useCartStore } from '@/stores/cart'
+import { cartKey, useCartStore, type CartItem } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { useProduct } from '../hooks/useProduct'
 import { useProducts } from '../hooks/useProducts'
@@ -45,6 +55,9 @@ export default function ProductDetailPage() {
 
   const [vi, setVi] = useState(0)
   const [qty, setQty] = useState(1)
+  // Typed amount (sanitised: ASCII digits + at most one '.') for unit-priced
+  // ("sold by amount") products.
+  const [amountRaw, setAmountRaw] = useState('')
   const [pid, setPid] = useState('')
   const [pickId, setPickId] = useState(false)
   const [rName, setRName] = useState('')
@@ -100,8 +113,37 @@ export default function ProductDetailPage() {
   const vIndex = Math.min(vi, p.variants.length - 1)
   const v = p.variants[vIndex]
   const unit = priceFor(p, v, agent)
-  const total = unit * qty
-  const savings = agent ? (v.p - unit) * qty : 0
+  const up = p.unit
+  // Quantity is clamped into the product's bounds (initial value = min).
+  const q = clampQty(qty, p.qty)
+  const amount = up ? parseAmount(amountRaw) : NaN
+  const amountFraction = !!up && amountHasFraction(amountRaw)
+  const amountValid = up ? amountInRange(amount, up.minAmount, up.maxAmount) : true
+  const amountBounds = up
+    ? { min: fmtAmount(up.minAmount), max: fmtAmount(up.maxAmount) }
+    : { min: '', max: '' }
+  const amountHint = up
+    ? up.maxAmount > 0
+      ? t('amount_range', amountBounds)
+      : up.minAmount > 0
+        ? t('amount_min', amountBounds)
+        : ''
+    : ''
+  const total = up
+    ? amountValid
+      ? unitLinePrice(unit, amount, up.blockUnits)
+      : 0
+    : unit * q
+  // Mirrors the server's minimum line price (a tiny amount can round to $0.00).
+  const totalTooSmall = !!up && amountValid && lineBelowMinimum(total)
+  const amountError = !!up && amountRaw !== '' && (!amountValid || totalTooSmall)
+  const savings = !agent
+    ? 0
+    : up
+      ? amountValid
+        ? unitLinePrice(v.p, amount, up.blockUnits) - total
+        : 0
+      : (v.p - unit) * q
   const catDomain = p.rootDomain || p.cat
   const catLabel = rootMeta(p.rootDomain).label || p.cat
 
@@ -110,7 +152,8 @@ export default function ProductDetailPage() {
   const hasFields = p.inputFields.length > 0 && fulfill !== 'code'
   const verifyActive = p.verifyEnabled && isAuthenticated
   const verifyGuestBlock = p.verifyEnabled && !isAuthenticated
-  const buyDisabled = !p.available || (verifyActive && !verify.allowsPurchase)
+  const buyDisabled =
+    !p.available || (verifyActive && !verify.allowsPurchase) || !amountValid || totalTooSmall
   const reviewed = myReview.data?.reviewed === true
 
   const buy = (toCartFlag: boolean) => {
@@ -128,23 +171,31 @@ export default function ProductDetailPage() {
       toast(t('field_required'), 'user')
       return
     }
-    addToCart({
+    const line: Omit<CartItem, 'key'> = {
       id: p.id,
       variantId: v.id,
       brand: p.brand,
       title: p.title,
       art: p.art,
       image: p.image,
-      variant: v.l,
-      price: unit,
-      qty,
+      variant: up ? fmtAmount(amount) : v.l,
+      // amount lines: price is the whole line price and qty is always 1
+      price: up ? total : unit,
+      qty: up ? 1 : q,
+      qtyMin: up ? undefined : p.qty.min,
+      qtyMax: up ? undefined : p.qty.max,
+      amount: up ? amount : undefined,
       pid,
       fulfill,
       // transfer-with-schema builds its recipient at checkout from the fields;
       // only the legacy no-schema transfer carries a recipient on the cart line.
       recipient: !hasFields && fulfill === 'transfer' ? { name: rName, country, detail: '' } : null,
-    })
-    if (toCartFlag) toast(t('add_cart'), 'cart')
+    }
+    // Same amount + same ID refreshes the existing amount line rather than adding one.
+    const replaces =
+      line.amount !== undefined && useCartStore.getState().items.some((x) => x.key === cartKey(line))
+    addToCart(line)
+    if (toCartFlag) toast(replaces ? t('cart_updated') : t('add_cart'), 'cart')
     else navigate('/checkout')
   }
 
@@ -246,28 +297,63 @@ export default function ProductDetailPage() {
             </div>
           </div>
 
-          {/* variants */}
-          <div>
-            <div className="label">{t('choose_amount')}</div>
-            <div className="variants">
-              {p.variants.map((vv, i) => (
-                <div
-                  key={i}
-                  className={'variant' + (i === vIndex ? ' on' : '')}
-                  onClick={() => setVi(i)}
-                >
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>{vv.l}</div>
-                  <div className="row center" style={{ gap: 6, marginTop: 4 }}>
-                    <Price usd={priceFor(p, vv, agent)} cur={cur} className="small num" />
-                    {agent && <Price usd={vv.p} cur={cur} strike className="tiny" />}
-                    {!agent && vv.offerP !== undefined && (
-                      <Price usd={vv.p} cur={cur} strike className="tiny" />
-                    )}
-                  </div>
-                </div>
-              ))}
+          {/* amount entry (unit-priced) or variants */}
+          {up ? (
+            <div className="col" style={{ gap: 8 }}>
+              <div className="row between" style={{ gap: 8 }}>
+                <span className="label" style={{ margin: 0 }}>
+                  {up.label}
+                </span>
+                <span className="tiny faint num">{amountHint}</span>
+              </div>
+              <input
+                className="field num"
+                inputMode="numeric"
+                aria-label={up.label}
+                placeholder={amountHint}
+                value={amountRaw}
+                onChange={(e) => setAmountRaw(sanitizeAmountInput(e.target.value))}
+                style={amountError ? { borderColor: 'var(--danger)' } : undefined}
+              />
+              {amountError ? (
+                <span className="tiny" style={{ color: 'var(--danger)', fontWeight: 700 }}>
+                  {amountFraction
+                    ? t('amount_whole_only')
+                    : totalTooSmall
+                      ? t('amount_too_small')
+                      : up.maxAmount > 0
+                        ? t('amount_out_of_range', amountBounds)
+                        : t('amount_below_min', amountBounds)}
+                </span>
+              ) : (
+                <span className="tiny faint">
+                  {t('amount_rate', { price: fmtPrice(unit, cur), units: fmtAmount(up.blockUnits) })}
+                </span>
+              )}
             </div>
-          </div>
+          ) : (
+            <div>
+              <div className="label">{t('choose_amount')}</div>
+              <div className="variants">
+                {p.variants.map((vv, i) => (
+                  <div
+                    key={i}
+                    className={'variant' + (i === vIndex ? ' on' : '')}
+                    onClick={() => setVi(i)}
+                  >
+                    <div style={{ fontWeight: 800, fontSize: 15 }}>{vv.l}</div>
+                    <div className="row center" style={{ gap: 6, marginTop: 4 }}>
+                      <Price usd={priceFor(p, vv, agent)} cur={cur} className="small num" />
+                      {agent && <Price usd={vv.p} cur={cur} strike className="tiny" />}
+                      {!agent && vv.offerP !== undefined && (
+                        <Price usd={vv.p} cur={cur} strike className="tiny" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* fulfillment input — schema-driven first field, legacy fallbacks */}
           {hasFields ? (
@@ -350,7 +436,7 @@ export default function ProductDetailPage() {
                   className="field"
                   placeholder={t('id_ph')}
                   value={pid}
-                  onChange={(e) => setPid(e.target.value)}
+                  onChange={(e) => setPlayerId(e.target.value)}
                 />
                 {pickId && (
                   <div className="panel card-pad" style={{ marginTop: 8, padding: 10 }}>
@@ -360,7 +446,7 @@ export default function ProductDetailPage() {
                         className="lrow clickable"
                         style={{ padding: '10px 6px' }}
                         onClick={() => {
-                          setPid(sv.value)
+                          setPlayerId(sv.value)
                           setPickId(false)
                         }}
                       >
@@ -380,13 +466,17 @@ export default function ProductDetailPage() {
 
           {/* qty + price + actions */}
           <div className="panel card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="row between">
-              <span className="label" style={{ margin: 0 }}>
-                {t('quantity')}
-              </span>
-              <Stepper value={qty} set={setQty} />
-            </div>
-            <hr className="divider" />
+            {!up && (
+              <>
+                <div className="row between">
+                  <span className="label" style={{ margin: 0 }}>
+                    {t('quantity')}
+                  </span>
+                  <Stepper value={q} set={setQty} min={p.qty.min} max={p.qty.max} />
+                </div>
+                <hr className="divider" />
+              </>
+            )}
             <div className="row between">
               <span className="muted">{t('total')}</span>
               <div className="col" style={{ alignItems: 'flex-end', gap: 2 }}>

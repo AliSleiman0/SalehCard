@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
-import { Icon, Card, Button, Badge, CodeVault, LoadingSpinner, ErrorState } from '@/components'
-import { OrderHead, CreditConfirm, TransferDetail } from '@/features/orders/components/OrderParts'
+import { Icon, Card, Button, Badge, LoadingSpinner, ErrorState } from '@/components'
+import { OrderHead, CreditConfirm, TransferDetail, OrderCodes } from '@/features/orders/components/OrderParts'
 import type { OrderView } from '@/features/orders/types'
 import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useCurrencyStore } from '@/stores/currency'
@@ -38,6 +38,9 @@ export default function OrderSuccessPage() {
 
   const order = stateOrder ?? adaptOrder(query.data!, locale)
   const f = order.fulfill
+  // Code lines are delivered even when the order is still processing its
+  // manual (credit/transfer) lines, so both blocks can render together.
+  const hasCodes = (order.codeLines?.length ?? 0) > 0
 
   const title =
     f === 'credit' ? t('credited_title') : f === 'transfer' ? t('transfer_title') : t('success_title')
@@ -70,14 +73,19 @@ export default function OrderSuccessPage() {
       <Card style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <OrderHead o={order} />
         <hr className="divider" />
-        {f === 'code' && (
+        {hasCodes && (
           <>
-            <CodeVault label={t('your_code')} code={order.code ?? ''} pin={order.pin} />
+            <OrderCodes o={order} />
             <p className="tiny faint">{t('redeem_note')}</p>
           </>
         )}
-        {f === 'credit' && <CreditConfirm o={order} />}
-        {f === 'transfer' && <TransferDetail o={order} />}
+        {!hasCodes && f === 'code' && (
+          <div className="slot" style={{ padding: 24 }}>
+            {t('processing')}…
+          </div>
+        )}
+        {order.manualKind === 'credit' && <CreditConfirm o={order} />}
+        {order.manualKind === 'transfer' && <TransferDetail o={order} />}
         <div className="row" style={{ gap: 12 }}>
           <Button variant="ghost" block onClick={() => navigate('/orders')}>
             <Icon name="shield" size={17} />
@@ -90,7 +98,7 @@ export default function OrderSuccessPage() {
       </Card>
 
       <div className="row center" style={{ gap: 10, marginTop: 20 }}>
-        {f === 'code' && (
+        {hasCodes && (
           <Badge variant="secure">
             <Icon name="shield" size={12} />
             {t('secure_vault')}

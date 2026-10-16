@@ -848,6 +848,12 @@ abstract class AppLocalizations {
   /// **'We\'ll notify you the moment it\'s done. You can track its status from the order page.'**
   String get orderProcessingNote;
 
+  /// No description provided for @orderRemainingProcessingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your codes are ready above. The remaining items are being processed — we\'ll notify you the moment they\'re done.'**
+  String get orderRemainingProcessingNote;
+
   /// No description provided for @viewOrderCta.
   ///
   /// In en, this message translates to:
@@ -1807,6 +1813,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You have a wallet top-up awaiting approval. Please wait for its decision, then try again.'**
   String get deleteAccountTopUpsPending;
+
+  /// No description provided for @unitRateLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{price} per {units}'**
+  String unitRateLine(String price, String units);
+
+  /// No description provided for @amountTooSmall.
+  ///
+  /// In en, this message translates to:
+  /// **'This amount is too small to purchase.'**
+  String get amountTooSmall;
+
+  /// No description provided for @unitPricedUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This product can\'t be bought right now. Please try again later.'**
+  String get unitPricedUnavailable;
 }
 
 class _AppLocalizationsDelegate

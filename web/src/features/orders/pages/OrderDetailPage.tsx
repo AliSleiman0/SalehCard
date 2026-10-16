@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Icon, Card, Button, CodeVault, LoadingSpinner, ErrorState } from '@/components'
-import { OrderHead, CreditConfirm, TransferDetail, StatusNotice } from '@/features/orders/components/OrderParts'
+import { Icon, Card, Button, LoadingSpinner, ErrorState } from '@/components'
+import { OrderHead, CreditConfirm, TransferDetail, StatusNotice, OrderCodes } from '@/features/orders/components/OrderParts'
 import { useLocaleStore } from '@/stores/locale'
 import { useOrder } from '../hooks/useOrder'
 import { adaptOrder } from '../lib/adaptOrder'
@@ -45,16 +45,18 @@ export default function OrderDetailPage() {
           <StatusNotice status={o.status} />
         ) : (
           <>
-            {(!o.fulfill || o.fulfill === 'code') &&
-              (o.code ? (
-                <CodeVault label={t('your_code')} code={o.code} pin={o.pin} />
-              ) : (
+            {/* Code lines show even while manual lines of a mixed order are processing. */}
+            {o.codeLines.length > 0 ? (
+              <OrderCodes o={o} />
+            ) : (
+              (!o.fulfill || o.fulfill === 'code') && (
                 <div className="slot" style={{ padding: 24 }}>
                   {t('processing')}…
                 </div>
-              ))}
-            {o.fulfill === 'credit' && <CreditConfirm o={o} />}
-            {o.fulfill === 'transfer' && <TransferDetail o={o} />}
+              )
+            )}
+            {o.manualKind === 'credit' && <CreditConfirm o={o} />}
+            {o.manualKind === 'transfer' && <TransferDetail o={o} />}
           </>
         )}
         <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>

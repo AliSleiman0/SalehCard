@@ -20,7 +20,7 @@ class OrderRemoteDataSource {
   }) async {
     final response = await _dio.post<dynamic>(
       '/orders',
-      data: _toRequestJson(input),
+      data: placeOrderRequestJson(input),
       options: Options(headers: {'Idempotency-Key': idempotencyKey}),
     );
     final map = unwrap(response) as Map<String, dynamic>;
@@ -44,35 +44,38 @@ class OrderRemoteDataSource {
         .map((e) => OrderDto.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+}
 
-  Map<String, dynamic> _toRequestJson(PlaceOrderInput input) {
-    return {
-      'items': [
-        for (final line in input.items)
-          {
-            'productId': line.productId,
-            'variantId': line.variantId,
-            'qty': line.qty,
-            if (line.playerId != null && line.playerId!.isNotEmpty)
-              'playerId': line.playerId,
-            if (line.recipient != null)
-              'recipient': {
-                'name': line.recipient!.name,
-                'country': line.recipient!.country,
-                'detail': line.recipient!.detail,
-              },
-            if (line.fields.isNotEmpty)
-              'fields': [
-                for (final f in line.fields) {'key': f.key, 'value': f.value},
-              ],
-          },
-      ],
-      'currency': input.currency,
-      'paymentMethod': input.paymentMethod,
-      if (input.paymentMethod == 'usdt' && input.usdtNetwork.isNotEmpty)
-        'usdtNetwork': input.usdtNetwork,
-      if (input.promoCode != null && input.promoCode!.isNotEmpty)
-        'promoCode': input.promoCode,
-    };
-  }
+/// The `POST /orders` request body for [input]. Public (and pure) so the wire
+/// shape is unit-testable.
+Map<String, dynamic> placeOrderRequestJson(PlaceOrderInput input) {
+  return {
+    'items': [
+      for (final line in input.items)
+        {
+          'productId': line.productId,
+          'variantId': line.variantId,
+          'qty': line.qty,
+          if (line.amount != null) 'amount': line.amount,
+          if (line.playerId != null && line.playerId!.isNotEmpty)
+            'playerId': line.playerId,
+          if (line.recipient != null)
+            'recipient': {
+              'name': line.recipient!.name,
+              'country': line.recipient!.country,
+              'detail': line.recipient!.detail,
+            },
+          if (line.fields.isNotEmpty)
+            'fields': [
+              for (final f in line.fields) {'key': f.key, 'value': f.value},
+            ],
+        },
+    ],
+    'currency': input.currency,
+    'paymentMethod': input.paymentMethod,
+    if (input.paymentMethod == 'usdt' && input.usdtNetwork.isNotEmpty)
+      'usdtNetwork': input.usdtNetwork,
+    if (input.promoCode != null && input.promoCode!.isNotEmpty)
+      'promoCode': input.promoCode,
+  };
 }

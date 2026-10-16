@@ -32,6 +32,8 @@ OrderItemDto _$OrderItemDtoFromJson(Map<String, dynamic> json) => OrderItemDto(
   recipient: json['recipient'] == null
       ? null
       : RecipientDto.fromJson(json['recipient'] as Map<String, dynamic>),
+  amount: (json['amount'] as num?)?.toDouble(),
+  codes: (json['codes'] as List<dynamic>?)?.map((e) => e as String).toList(),
 );
 
 Map<String, dynamic> _$OrderItemDtoToJson(OrderItemDto instance) =>
@@ -46,6 +48,8 @@ Map<String, dynamic> _$OrderItemDtoToJson(OrderItemDto instance) =>
       'fulfillmentType': instance.fulfillmentType,
       'playerId': instance.playerId,
       'recipient': instance.recipient?.toJson(),
+      'amount': instance.amount,
+      'codes': instance.codes,
     };
 
 TimelineEventDto _$TimelineEventDtoFromJson(Map<String, dynamic> json) =>

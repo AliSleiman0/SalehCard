@@ -18,7 +18,7 @@ import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
 import { useOrder } from '../hooks/useOrders'
 import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrderMutations'
-import { adaptOrder } from '../lib/adaptOrder'
+import { adaptOrder, codeLines, creditLines, itemQtyLabel } from '../lib/adaptOrder'
 import type { AdminOrder } from '../api/orders'
 
 export default function OrderDetailPage() {
@@ -28,7 +28,8 @@ export default function OrderDetailPage() {
   const can = useCan()
   const canManage = can('orders.manage')
   const { data, isLoading, isError, refetch } = useOrder(id)
-  const [masked, setMasked] = useState(true)
+  // Codes start masked; each one is revealed on its own.
+  const [revealed, setRevealed] = useState<Set<string>>(() => new Set())
   const [refundOpen, setRefundOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [failOpen, setFailOpen] = useState(false)
@@ -45,6 +46,22 @@ export default function OrderDetailPage() {
   const o = data.data
   const v = adaptOrder(o)
   const item = o.items[0]
+  const credit = creditLines(o.items)
+  const codes = codeLines(o.items, o.fulfillment.deliveredCode)
+  const codeCount = codes.reduce((n, l) => n + l.codes.length, 0)
+  // Each fulfillment card shows whenever the order has lines of that kind, so a
+  // mixed order (codes delivered + manual lines processing) shows both.
+  const showCodes = codes.length > 0 || v.ff === 'code'
+  const showCredit = credit.lines.length > 0 || v.ff === 'credit'
+  const transferItem = o.items.find((it) => it.fulfillmentType === 'transfer')
+  const showTransfer = !!transferItem || v.ff === 'transfer'
+  const toggleCode = (key: string) =>
+    setRevealed((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   // Mirrors the server's transition rules: refund allows processing|completed,
   // manual completion allows processing only, and the pending→failed cleanup
   // (money-neutral) allows pending only.
@@ -91,8 +108,9 @@ export default function OrderDetailPage() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 800, fontSize: 15 }}>{it.title.en}</div>
                     <div className="faint" style={{ fontSize: 12.5 }}>
-                      Qty {it.qty} · {o.currency}
-                      {it.denomination ? ` · ${it.denomination}` : ''}
+                      {itemQtyLabel(it)} · {o.currency}
+                      {/* A per-unit line's denomination just repeats the amount. */}
+                      {it.denomination && it.amount == null ? ` · ${it.denomination}` : ''}
                     </div>
                     {it.fields && it.fields.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 6 }}>
@@ -113,7 +131,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
-          {v.ff === 'code' && (
+          {showCodes && (
             <div className="acard" style={{ borderColor: 'var(--ff-code-bd)' }}>
               <div className="panelhead">
                 <span className="bdg ff-code">
@@ -127,31 +145,56 @@ export default function OrderDetailPage() {
                       Refunded
                     </span>
                   ) : (
-                    <span className={o.fulfillment.deliveredCode ? 'st st-ok' : 'st st-warn'}>
+                    <span className={codeCount > 0 ? 'st st-ok' : 'st st-warn'}>
                       <i className="d" />
-                      {o.fulfillment.deliveredCode ? 'Delivered' : 'Pending'}
+                      {codeCount > 0 ? (codeCount > 1 ? `${codeCount} delivered` : 'Delivered') : 'Pending'}
                     </span>
                   )}
                 </div>
               </div>
               <div style={{ padding: 18 }}>
                 {refunded && <RefundedNotice order={o} />}
-                <label className="alabel">Delivered code (admin view)</label>
-                <div className={'avault' + (masked ? ' masked' : '')}>
-                  <span className="vc">{o.fulfillment.deliveredCode || '— not yet delivered —'}</span>
-                  {o.fulfillment.deliveredCode && (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="abtn xs" onClick={() => setMasked(!masked)}>
-                        <Icon name={masked ? 'eye' : 'eyeoff'} size={13} /> {masked ? 'Reveal' : 'Hide'}
-                      </button>
+                {codes.length === 0 ? (
+                  <>
+                    <label className="alabel">Delivered code (admin view)</label>
+                    <div className="avault masked">
+                      <span className="vc">— not yet delivered —</span>
                     </div>
-                  )}
-                </div>
+                  </>
+                ) : (
+                  codes.map((line, li) => (
+                    <div key={li} style={{ marginTop: li > 0 ? 14 : 0 }}>
+                      <label className="alabel">
+                        {codes.length > 1 || line.codes.length > 1
+                          ? `${line.title} · ${line.codes.length} code${line.codes.length > 1 ? 's' : ''} (admin view)`
+                          : 'Delivered code (admin view)'}
+                      </label>
+                      {line.codes.map((code, ci) => {
+                        const key = `${li}-${ci}`
+                        const masked = !revealed.has(key)
+                        return (
+                          <div
+                            key={key}
+                            className={'avault' + (masked ? ' masked' : '')}
+                            style={{ marginTop: ci > 0 ? 8 : 0 }}
+                          >
+                            <span className="vc">{code}</span>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button className="abtn xs" onClick={() => toggleCode(key)}>
+                                <Icon name={masked ? 'eye' : 'eyeoff'} size={13} /> {masked ? 'Reveal' : 'Hide'}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
 
-          {v.ff === 'credit' && (
+          {showCredit && (
             <div className="acard" style={{ borderColor: 'var(--ff-credit-bd)' }}>
               <div className="panelhead">
                 <span className="bdg ff-credit">
@@ -174,13 +217,27 @@ export default function OrderDetailPage() {
               </div>
               <div style={{ padding: 18 }}>
                 {refunded && <RefundedNotice order={o} />}
-                <div className="deflist">
-                  <div className="defrow">
-                    <span className="dk">Player / Account ID</span>
-                    <span className="dv mono">{item?.playerId || o.fulfillment.creditedToId || '—'}</span>
+                {credit.distinctIds > 1 && o.status === 'processing' && (
+                  <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
+                    This order credits {credit.distinctIds} different accounts — credit every line below before
+                    completing.
                   </div>
+                )}
+                <div className="deflist">
+                  {credit.lines.map((l, i) => (
+                    <div className="defrow" key={i}>
+                      <span className="dk">
+                        {credit.lines.length > 1 ? `${l.title} · ` : 'Player / Account ID · '}
+                        {l.qtyLabel}
+                      </span>
+                      <span className="dv">
+                        <span className="mono">{l.playerId || (i === 0 && o.fulfillment.creditedToId) || '—'}</span>
+                        {credit.lines.length > 1 && <span className="faint"> · {money(l.total, v.cur)}</span>}
+                      </span>
+                    </div>
+                  ))}
                   <div className="defrow">
-                    <span className="dk">Amount</span>
+                    <span className="dk">Order total</span>
                     <span className="dv">{money(o.total, v.cur)}</span>
                   </div>
                 </div>
@@ -196,7 +253,7 @@ export default function OrderDetailPage() {
             </div>
           )}
 
-          {v.ff === 'transfer' && (
+          {showTransfer && (
             <div className="acard" style={{ borderColor: 'var(--ff-transfer-bd)' }}>
               <div className="panelhead">
                 <span className="bdg ff-transfer">
@@ -216,11 +273,11 @@ export default function OrderDetailPage() {
                   </div>
                   <div className="defrow">
                     <span className="dk">Recipient</span>
-                    <span className="dv">{item?.recipient?.name || '—'}</span>
+                    <span className="dv">{(transferItem ?? item)?.recipient?.name || '—'}</span>
                   </div>
                   <div className="defrow">
                     <span className="dk">Country</span>
-                    <span className="dv">{item?.recipient?.country || '—'}</span>
+                    <span className="dv">{(transferItem ?? item)?.recipient?.country || '—'}</span>
                   </div>
                 </div>
                 {completable && (
@@ -471,8 +528,15 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
   const [transferRef, setTransferRef] = useState('')
   const [error, setError] = useState('')
   const completeM = useCompleteOrder()
+  // Completion is order-level, so with several credit lines the operator ticks
+  // each one off before the order can be marked done (local only — not sent).
+  const { lines } = creditLines(order.items)
+  const needsChecklist = lines.length > 1
+  const [ticked, setTicked] = useState<boolean[]>(() => lines.map(() => false))
+  const allTicked = !needsChecklist || ticked.every(Boolean)
 
   const apply = () => {
+    if (!allTicked) return
     setError('')
     completeM.mutate(
       { id: order.id, note: note.trim(), transferRef: transferRef.trim() },
@@ -493,6 +557,26 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
           Confirm the credit/transfer was delivered outside the platform. The order moves to
           <b> completed</b> and the customer sees it immediately.
         </p>
+        {needsChecklist && (
+          <div style={{ marginBottom: 16 }}>
+            <label className="alabel">Tick each account you credited</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {lines.map((l, i) => (
+                <label key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={ticked[i]}
+                    onChange={(e) => setTicked((t) => t.map((x, j) => (j === i ? e.target.checked : x)))}
+                  />
+                  <span>
+                    Credited {l.qtyLabel.replace(/^Qty /, '× ')} of {l.title} to{' '}
+                    <b className="mono">{l.playerId || '—'}</b>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <label className="alabel">Reference (optional)</label>
         <input
           className="afield"
@@ -512,7 +596,12 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
           <button className="abtn" onClick={onClose} disabled={completeM.isPending}>
             {t('cancel')}
           </button>
-          <button className="abtn ok" onClick={apply} disabled={completeM.isPending}>
+          <button
+            className="abtn ok"
+            onClick={apply}
+            disabled={completeM.isPending || !allTicked}
+            title={allTicked ? undefined : 'Tick every credited account first'}
+          >
             <Icon name="check" size={15} /> {completeM.isPending ? 'Completing…' : 'Mark completed'}
           </button>
         </div>

@@ -1,4 +1,6 @@
+import { useTranslation } from 'react-i18next'
 import { Icon, ImageArt, Price, Stepper } from '@/components'
+import { fmtAmount } from '@/lib/productFields'
 import { useCurrencyStore } from '@/stores/currency'
 import type { CartItem } from '@/stores/cart'
 
@@ -11,6 +13,7 @@ export function LineItem({
   onQty?: (key: string, qty: number) => void
   onRemove?: (key: string) => void
 }) {
+  const { t } = useTranslation()
   const cur = useCurrencyStore((s) => s.currency)
   return (
     <div className="lrow">
@@ -30,8 +33,16 @@ export function LineItem({
         </span>
         {it.pid && <span className="tiny faint num">ID: {it.pid}</span>}
       </div>
-      {onQty ? (
-        <Stepper value={it.qty} set={(q) => onQty(it.key, q)} />
+      {it.amount !== undefined ? (
+        // amount lines are a single typed amount — no quantity stepper
+        <div className="col" style={{ alignItems: 'flex-end', gap: 0 }}>
+          <span className="num" style={{ fontWeight: 700 }}>
+            {fmtAmount(it.amount)}
+          </span>
+          <span className="tiny faint">{t('amount_units')}</span>
+        </div>
+      ) : onQty ? (
+        <Stepper value={it.qty} set={(q) => onQty(it.key, q)} min={it.qtyMin} max={it.qtyMax} />
       ) : (
         <span className="num muted">×{it.qty}</span>
       )}

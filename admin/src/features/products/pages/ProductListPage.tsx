@@ -30,6 +30,7 @@ import { useProducts, useDeleteProduct, useBulkProductAction } from '../hooks/us
 import { useSoldByProduct } from '../hooks/useSoldByProduct'
 import { listProducts, type ProductListParams } from '../api/products'
 import { productStatus, priceRange } from '../lib/view'
+import { amountIgnoredByPrice } from '../lib/unitPricing'
 import type { FulfillmentType, Product } from '@/types'
 
 const FF_DOT: Record<FfKey, string> = {
@@ -316,6 +317,16 @@ export default function ProductListPage() {
                         <div className="pn">
                           <b>{p.title.en}</b>
                           <span className="mono">{p.id.slice(-8)}</span>
+                          {amountIgnoredByPrice(p).length > 0 && (
+                            <span
+                              className="st st-warn"
+                              style={{ fontSize: 11, marginTop: 2, width: 'fit-content' }}
+                              title={`Customers type "${amountIgnoredByPrice(p).join('", "')}" but pay the fixed package price — open the product and switch to Per unit, or change the field type.`}
+                            >
+                              <i className="d" />
+                              Price ignores amount
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>

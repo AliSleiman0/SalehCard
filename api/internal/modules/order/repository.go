@@ -28,6 +28,11 @@ type Repository interface {
 	// SetPaymentRef stores the gateway transaction id on a card/usdt order.
 	SetPaymentRef(ctx context.Context, id bson.ObjectID, ref string) error
 	UpdateFulfillment(ctx context.Context, id bson.ObjectID, status OrderStatus, fulfillment Fulfillment) error
+	// UpdateFulfillmentWithCodes is UpdateFulfillment plus the per-line
+	// delivered codes (itemCodes[i] → items.i.codes; nil entries untouched), in
+	// ONE single-document update guarded on the order still being pending or
+	// processing (ErrConflict otherwise) so it never rewrites a settled order.
+	UpdateFulfillmentWithCodes(ctx context.Context, id bson.ObjectID, status OrderStatus, fulfillment Fulfillment, itemCodes [][]string) error
 	// TransitionStatus atomically moves an order from one of `from` to `to`,
 	// appending a timeline event (and optionally setting extra fields). It
 	// returns the PRE-transition document — callers need the original status,
@@ -120,7 +125,10 @@ func (f OrderFilter) build() bson.D {
 	} else if f.SearchRaw != "" {
 		// Non-hex search: match a delivered code exactly, or any order owned by
 		// a user whose email matched the term.
-		or := bson.A{bson.D{{Key: "fulfillment.deliveredCode", Value: f.SearchRaw}}}
+		or := bson.A{
+			bson.D{{Key: "fulfillment.deliveredCode", Value: f.SearchRaw}},
+			bson.D{{Key: "items.codes", Value: f.SearchRaw}},
+		}
 		if len(f.UserIDs) > 0 {
 			or = append(or, bson.D{{Key: "userId", Value: bson.D{{Key: "$in", Value: f.UserIDs}}}})
 		}
@@ -289,6 +297,40 @@ func (r *MongoRepository) UpdateFulfillment(ctx context.Context, id bson.ObjectI
 	}
 	if res.MatchedCount == 0 {
 		return apperrors.ErrNotFound
+	}
+	return nil
+}
+
+// UpdateFulfillmentWithCodes sets status, fulfillment and each code line's
+// items.<i>.codes in a single guarded UpdateOne — document-atomic, so a reader
+// never sees the status flip without the codes (or vice versa).
+func (r *MongoRepository) UpdateFulfillmentWithCodes(ctx context.Context, id bson.ObjectID, status OrderStatus, fulfillment Fulfillment, itemCodes [][]string) error {
+	set := bson.D{
+		{Key: "status", Value: status},
+		{Key: "fulfillment", Value: fulfillment},
+		{Key: "updatedAt", Value: time.Now().UTC()},
+	}
+	for i, codes := range itemCodes {
+		if codes == nil {
+			continue
+		}
+		set = append(set, bson.E{Key: fmt.Sprintf("items.%d.codes", i), Value: codes})
+	}
+	res, err := r.collection.UpdateOne(ctx,
+		bson.D{
+			{Key: "_id", Value: id},
+			{Key: "status", Value: bson.D{{Key: "$in", Value: bson.A{OrderStatusPending, OrderStatusProcessing}}}},
+		},
+		bson.D{{Key: "$set", Value: set}},
+	)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		if _, ferr := r.FindByID(ctx, id); ferr != nil {
+			return ferr
+		}
+		return apperrors.ErrConflict
 	}
 	return nil
 }

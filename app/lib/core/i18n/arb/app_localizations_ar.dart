@@ -426,6 +426,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'سنُعلمك فور اكتمال الطلب. يمكنك متابعة حالته من صفحة الطلب.';
 
   @override
+  String get orderRemainingProcessingNote =>
+      'رموزك جاهزة أعلاه. باقي العناصر قيد المعالجة — سنُعلمك فور اكتمالها.';
+
+  @override
   String get viewOrderCta => 'عرض الطلب';
 
   @override
@@ -960,4 +964,16 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get deleteAccountTopUpsPending =>
       'لديك طلب شحن للمحفظة بانتظار الموافقة. يرجى انتظار البتّ فيه ثم المحاولة مرة أخرى.';
+
+  @override
+  String unitRateLine(String price, String units) {
+    return '$price لكل $units';
+  }
+
+  @override
+  String get amountTooSmall => 'هذه الكمية صغيرة جداً للشراء.';
+
+  @override
+  String get unitPricedUnavailable =>
+      'لا يمكن شراء هذا المنتج حالياً. يرجى المحاولة لاحقاً.';
 }

@@ -449,6 +449,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		InputFields:         in.InputFields,
 		Bridge:              in.Bridge,
 		MoneyTransfer:       in.MoneyTransfer,
+		UnitPricing:         in.UnitPricing,
 		Pricing:             pricing,
 		Stock:               in.Stock,
 		Available:           in.Available,
@@ -518,7 +519,7 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 	// and any resellerPrice) and overlay the refreshed price/denomination; on
 	// first insert build a new one. The denomination is $literal-wrapped for the
 	// same "$"-prefix reason as the top-level fields.
-	variantExpr := bson.D{{Key: "$cond", Value: bson.D{
+	refreshed := bson.D{{Key: "$cond", Value: bson.D{
 		{Key: "if", Value: bson.D{{Key: "$gt", Value: bson.A{
 			bson.D{{Key: "$size", Value: bson.D{{Key: "$ifNull", Value: bson.A{"$variants", bson.A{}}}}}}, 0,
 		}}}},
@@ -532,6 +533,23 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 			{Key: "price", Value: price},
 		}}},
 	}}}
+	// A per-unit product (unitPricing set by cmd/unitpricing or the editor) is
+	// admin-owned in everything its pricing depends on: keep the stored value
+	// of field instead of the re-import's. Its variant is the block price (the
+	// legacy placeholder would reprice it), its inputFields carry the driving
+	// amount field (a refresh could drop/rename it → "not configured"), and its
+	// fulfillment type/mode + pricing are validated invariants (account_credit,
+	// manual, unit_balance) a refresh could silently revert.
+	keepIfUnitPriced := func(field string, refreshedValue any) bson.D {
+		return bson.D{{Key: "$cond", Value: bson.D{
+			{Key: "if", Value: bson.D{{Key: "$ne", Value: bson.A{
+				bson.D{{Key: "$ifNull", Value: bson.A{"$unitPricing", nil}}}, nil,
+			}}}},
+			{Key: "then", Value: "$" + field},
+			{Key: "else", Value: refreshedValue},
+		}}}
+	}
+	variantExpr := keepIfUnitPriced("variants", refreshed)
 
 	ifNull := func(field string, fallback any) bson.D {
 		return bson.D{{Key: "$ifNull", Value: bson.A{"$" + field, fallback}}}
@@ -549,8 +567,8 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		{Key: "images", Value: lit(in.Images)},
 		{Key: "description", Value: lit(in.Description)},
 		{Key: "descriptionHadMarkup", Value: lit(in.DescriptionHadMarkup)},
-		{Key: "fulfillmentType", Value: lit(in.FulfillmentType)},
-		{Key: "fulfillmentMode", Value: lit(mode)},
+		{Key: "fulfillmentType", Value: keepIfUnitPriced("fulfillmentType", lit(in.FulfillmentType))},
+		{Key: "fulfillmentMode", Value: keepIfUnitPriced("fulfillmentMode", lit(mode))},
 		{Key: "fulfillmentProvider", Value: lit(in.FulfillmentProvider)},
 		// upstreamProductId is deliberately ABSENT here: supplier mappings are
 		// admin-owned, and a legacy-catalog re-import must never wipe them
@@ -559,9 +577,9 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		// loader has no rate data), so a re-import leaves any stored rates intact.
 		{Key: "fulfillmentConfidence", Value: lit(in.FulfillmentConfidence)},
 		{Key: "fulfillmentCancellable", Value: lit(in.FulfillmentCancellable)},
-		{Key: "pricing", Value: lit(in.Pricing)},
+		{Key: "pricing", Value: keepIfUnitPriced("pricing", lit(in.Pricing))},
 		{Key: "amountConstraints", Value: lit(in.AmountConstraints)},
-		{Key: "inputFields", Value: lit(in.InputFields)},
+		{Key: "inputFields", Value: keepIfUnitPriced("inputFields", lit(in.InputFields))},
 		{Key: "verification", Value: lit(in.Verification)},
 		{Key: "status", Value: lit(in.Status)},
 		{Key: "sortOrder", Value: lit(in.SortOrder)},
@@ -691,6 +709,14 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 			set = append(set, bson.E{Key: "moneyTransfer", Value: nil})
 		} else {
 			set = append(set, bson.E{Key: "moneyTransfer", Value: in.MoneyTransfer})
+		}
+	}
+	if in.UnitPricing != nil {
+		// BlockUnits == 0 means "back to fixed packages" → clear.
+		if in.UnitPricing.BlockUnits == 0 {
+			set = append(set, bson.E{Key: "unitPricing", Value: nil})
+		} else {
+			set = append(set, bson.E{Key: "unitPricing", Value: in.UnitPricing})
 		}
 	}
 
