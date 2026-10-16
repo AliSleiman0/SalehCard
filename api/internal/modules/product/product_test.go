@@ -585,6 +585,45 @@ func TestHandler_GetByID_NotFound(t *testing.T) {
 	assert.Equal(t, "NOT_FOUND", errObj["code"])
 }
 
+// The customer-facing list never returns hidden products, even when the caller
+// asks for available=false.
+func TestHandler_ListPublic_ForcesAvailable(t *testing.T) {
+	repo := &mockRepo{}
+	h := product.NewHandler(product.NewProductService(repo))
+	for _, url := range []string{"/api/v1/products", "/api/v1/products?available=false"} {
+		rec := httptest.NewRecorder()
+		h.ListPublic(rec, httptest.NewRequest(http.MethodGet, url, nil))
+		assert.Equal(t, http.StatusOK, rec.Code, url)
+		require.NotNil(t, repo.lastFilter.Available, url)
+		assert.True(t, *repo.lastFilter.Available, url)
+	}
+}
+
+// A hidden product reads as not found on the public detail route; the admin
+// route (GetByID) still returns it.
+func TestHandler_GetByIDPublic_HidesUnavailable(t *testing.T) {
+	for _, tc := range []struct {
+		available bool
+		public    int
+		admin     int
+	}{{true, http.StatusOK, http.StatusOK}, {false, http.StatusNotFound, http.StatusOK}} {
+		repo := &mockRepo{products: []product.Product{{Available: tc.available}}}
+		h := product.NewHandler(product.NewProductService(repo))
+		req := func() *http.Request {
+			r := httptest.NewRequest(http.MethodGet, "/api/v1/products/x", nil)
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", "000000000000000000000000")
+			return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+		}
+		pub := httptest.NewRecorder()
+		h.GetByIDPublic(pub, req())
+		adm := httptest.NewRecorder()
+		h.GetByID(adm, req())
+		assert.Equal(t, tc.public, pub.Code, "public, available=%v", tc.available)
+		assert.Equal(t, tc.admin, adm.Code, "admin, available=%v", tc.available)
+	}
+}
+
 // A bridge (mobile-recharge) product with transfer_credit but a variant missing
 // its face value is a validation (bad-request) error, not a server fault. The
 // Create/Update handlers must surface it as HTTP 400 with the real message — a

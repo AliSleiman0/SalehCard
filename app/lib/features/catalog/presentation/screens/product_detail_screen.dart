@@ -447,6 +447,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               !unitBroken &&
               (unitField == null || amountValid) &&
               (verifyActive ? _verify.allowsPurchase : true),
+          outOfStock: !inStock,
           l10n: l10n,
           colors: colors,
           onAddToCart: () => _addToCart(
@@ -1218,6 +1219,7 @@ class _BottomBar extends StatelessWidget {
   const _BottomBar({
     required this.total,
     required this.enabled,
+    required this.outOfStock,
     required this.l10n,
     required this.colors,
     required this.onAddToCart,
@@ -1226,6 +1228,7 @@ class _BottomBar extends StatelessWidget {
 
   final double total;
   final bool enabled;
+  final bool outOfStock;
   final AppLocalizations l10n;
   final AppColors colors;
   final VoidCallback onAddToCart;
@@ -1307,7 +1310,10 @@ class _BottomBar extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  child: Text(enabled ? l10n.buyNow : l10n.outOfStock),
+                  // Disabled for any reason (amount not entered yet, ID check
+                  // pending…) still reads "Buy now"; only a real stock-out
+                  // says so.
+                  child: Text(outOfStock ? l10n.outOfStock : l10n.buyNow),
                 ),
               ),
             ],

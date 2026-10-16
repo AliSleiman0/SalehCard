@@ -104,6 +104,35 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, product)
 }
 
+// ListPublic handles the customer-facing GET /api/v1/products: hidden (draft /
+// unavailable) products are never listed, whatever the caller asks for. Admins
+// list everything through the admin route, which keeps the plain List.
+func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	q.Set("available", "true")
+	r.URL.RawQuery = q.Encode()
+	h.List(w, r)
+}
+
+// GetByIDPublic handles the customer-facing GET /api/v1/products/{id}: a hidden
+// product reads as not found, so a stale link or cached id can't surface it.
+func (h *Handler) GetByIDPublic(w http.ResponseWriter, r *http.Request) {
+	product, err := h.svc.FindByID(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			response.NotFound(w)
+			return
+		}
+		response.InternalError(w)
+		return
+	}
+	if !product.Available {
+		response.NotFound(w)
+		return
+	}
+	response.OK(w, product)
+}
+
 // verifyAccountRequest is the POST /products/{id}/verify-account body.
 type verifyAccountRequest struct {
 	PlayerID string `json:"playerId"`

@@ -65,8 +65,8 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, offers
 	// AuthRequired simply overwrites the same context key — harmless.)
 	r.Route("/api/v1/products", func(r chi.Router) {
 		r.Use(auth.Optional(cfg.JWTSecret))
-		r.Get("/", h.List)
-		r.Get("/{id}", h.GetByID)
+		r.Get("/", h.ListPublic)
+		r.Get("/{id}", h.GetByIDPublic)
 		// Authenticated + rate-limited: resolve a game player ID to its nickname
 		// before purchase. RequireActive too — each call is a billed third-party
 		// request, so a suspended/deleted account's lingering token must not
