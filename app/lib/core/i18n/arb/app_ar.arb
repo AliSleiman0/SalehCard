@@ -361,7 +361,7 @@
   "deleteAccountWarnPermanent": "هذا الإجراء نهائي — لا يمكن استعادة حسابك، وسيتم تسجيل خروجك من جميع الأجهزة.",
   "deleteAccountWarnKycDeleted": "تُحذف صور هويتك (مستندات التحقق) نهائياً.",
   "deleteAccountWarnOrdersKept": "تُحفظ طلباتك السابقة بصورة مجهولة الهوية وفق المتطلبات المحاسبية.",
-  "deleteAccountWarnWalletEmpty": "يجب أن تكون محفظتك فارغة قبل حذف حسابك.",
+  "deleteAccountWarnWalletEmpty": "سيُفقد أي رصيد متبقٍ في محفظتك إذا اخترت الحذف رغم ذلك.",
   "deleteAccountConfirmPrompt": "للتأكيد، اكتب \"{word}\" أدناه.",
   "@deleteAccountConfirmPrompt": {
     "placeholders": { "word": { "type": "String" } }
@@ -372,6 +372,16 @@
   "deleteAccountOrdersInFlight": "لديك طلبات قيد المعالجة. يرجى الانتظار حتى اكتمالها ثم المحاولة مرة أخرى.",
   "deleteAccountPaymentsPending": "لديك عملية دفع قيد التنفيذ. يرجى الانتظار حتى اكتمالها أو انتهاء مهلتها ثم المحاولة مرة أخرى.",
   "deleteAccountTopUpsPending": "لديك طلب شحن للمحفظة بانتظار الموافقة. يرجى انتظار البتّ فيه ثم المحاولة مرة أخرى.",
+  "deleteAccountDeleteAnyway": "الحذف رغم ذلك",
+  "deleteAccountForceTitle": "الحذف رغم ذلك؟",
+  "deleteAccountForceBalanceAmount": "سيُفقد رصيد محفظتك المتبقي ({amount}) ولا يمكن استرداده.",
+  "@deleteAccountForceBalanceAmount": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "deleteAccountForceBalance": "سيُفقد رصيد محفظتك المتبقي ولا يمكن استرداده.",
+  "deleteAccountForceOrders": "ستُستكمل الطلبات التي لا تزال قيد المعالجة إلى معرّفات اللاعبين التي أدخلتها؛ وإذا تعذّر تنفيذ أحدها فلا يمكن إعادة المبلغ المسترد إليك.",
+  "deleteAccountForceCta": "نعم، احذف رغم ذلك",
+  "deleteAccountGoBack": "رجوع",
   "unitRateLine": "{price} لكل {units}",
   "@unitRateLine": {
     "placeholders": { "price": { "type": "String" }, "units": { "type": "String" } }

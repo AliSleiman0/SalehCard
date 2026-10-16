@@ -938,7 +938,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deleteAccountWarnWalletEmpty =>
-      'Your wallet must be empty before you can delete your account.';
+      'Any remaining wallet balance will be lost if you choose to delete anyway.';
 
   @override
   String deleteAccountConfirmPrompt(String word) {
@@ -966,6 +966,31 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deleteAccountTopUpsPending =>
       'You have a wallet top-up awaiting approval. Please wait for its decision, then try again.';
+
+  @override
+  String get deleteAccountDeleteAnyway => 'Delete anyway';
+
+  @override
+  String get deleteAccountForceTitle => 'Delete anyway?';
+
+  @override
+  String deleteAccountForceBalanceAmount(String amount) {
+    return 'Your remaining wallet balance ($amount) will be lost and can\'t be refunded.';
+  }
+
+  @override
+  String get deleteAccountForceBalance =>
+      'Your remaining wallet balance will be lost and can\'t be refunded.';
+
+  @override
+  String get deleteAccountForceOrders =>
+      'Orders still being processed will be completed to the player IDs you entered; if one can\'t be fulfilled, its refund can\'t be returned to you.';
+
+  @override
+  String get deleteAccountForceCta => 'Yes, delete anyway';
+
+  @override
+  String get deleteAccountGoBack => 'Go back';
 
   @override
   String unitRateLine(String price, String units) {

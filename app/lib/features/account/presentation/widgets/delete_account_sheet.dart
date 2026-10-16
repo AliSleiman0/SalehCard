@@ -2,15 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/error/failure.dart';
+import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../wallet/presentation/providers.dart' show walletProvider;
 import '../providers.dart';
 
 /// Opens the destructive delete-account bottom sheet: a consequences explainer
-/// (stage 1) followed by a type-to-confirm step (stage 2). On success the
+/// (stage 1) followed by a type-to-confirm step (stage 2). If the server
+/// refuses over a leftover wallet balance or orders still processing, stage 2
+/// offers "Delete anyway", which opens an explicit forfeit confirmation
+/// (stage 3) and retries with `force: true`. On success the
 /// sheet pops itself and signs the user out — the router's auth guard then
 /// evicts to the login screen.
 Future<void> showDeleteAccountSheet(BuildContext context) {
@@ -37,9 +42,11 @@ class DeleteAccountSheet extends ConsumerStatefulWidget {
   ConsumerState<DeleteAccountSheet> createState() => _DeleteAccountSheetState();
 }
 
+enum _Stage { explainer, confirm, forceConfirm }
+
 class _DeleteAccountSheetState extends ConsumerState<DeleteAccountSheet> {
   final _confirm = TextEditingController();
-  bool _confirmStage = false;
+  _Stage _stage = _Stage.explainer;
 
   @override
   void initState() {
@@ -58,9 +65,10 @@ class _DeleteAccountSheetState extends ConsumerState<DeleteAccountSheet> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final ok =
-        await ref.read(deleteAccountControllerProvider.notifier).submit();
+  Future<void> _submit({bool force = false}) async {
+    final ok = await ref
+        .read(deleteAccountControllerProvider.notifier)
+        .submit(force: force);
     // On failure the sheet stays open and renders the inline error via state.
     if (!mounted || !ok) return;
     // Capture the auth notifier before popping — the sheet's ref is unusable
@@ -115,7 +123,9 @@ class _DeleteAccountSheetState extends ConsumerState<DeleteAccountSheet> {
               ),
               const SizedBox(height: 10),
               Text(
-                l10n.deleteAccountTitle,
+                _stage == _Stage.forceConfirm
+                    ? l10n.deleteAccountForceTitle
+                    : l10n.deleteAccountTitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 18,
@@ -124,10 +134,12 @@ class _DeleteAccountSheetState extends ConsumerState<DeleteAccountSheet> {
                 ),
               ),
               const SizedBox(height: 14),
-              if (!_confirmStage)
-                ..._explainerStage(l10n, colors)
-              else
-                ..._confirmStageWidgets(l10n, colors, state),
+              ...switch (_stage) {
+                _Stage.explainer => _explainerStage(l10n, colors),
+                _Stage.confirm => _confirmStageWidgets(l10n, colors, state),
+                _Stage.forceConfirm =>
+                  _forceConfirmStageWidgets(l10n, colors, state),
+              },
             ],
           ),
         ),
@@ -165,7 +177,7 @@ class _DeleteAccountSheetState extends ConsumerState<DeleteAccountSheet> {
           const SizedBox(width: 12),
           Expanded(
             child: FilledButton(
-              onPressed: () => setState(() => _confirmStage = true),
+              onPressed: () => setState(() => _stage = _Stage.confirm),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
                 backgroundColor: AppTokens.danger,
@@ -282,6 +294,110 @@ class _DeleteAccountSheetState extends ConsumerState<DeleteAccountSheet> {
         child: state.submitting
             ? const AppSpinner(size: 22, color: Colors.white)
             : Text(l10n.deleteAccountCta),
+      ),
+      // Wallet balance / orders in flight can be overridden explicitly; pending
+      // payments and top-ups can't (no "Delete anyway" for those).
+      if (canForceDelete(failure) && !state.submitting) ...[
+        const SizedBox(height: 10),
+        OutlinedButton(
+          onPressed: () => setState(() => _stage = _Stage.forceConfirm),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            foregroundColor: AppTokens.danger,
+            side: const BorderSide(color: AppTokens.danger),
+            shape: const StadiumBorder(),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          child: Text(l10n.deleteAccountDeleteAnyway),
+        ),
+      ],
+    ];
+  }
+
+  // ---- Stage 3: explicit forfeit confirmation ("Delete anyway") ----
+
+  List<Widget> _forceConfirmStageWidgets(
+    AppLocalizations l10n,
+    AppColors colors,
+    DeleteAccountState state,
+  ) {
+    // Prefer the live wallet balance; fall back to the auth snapshot. Only a
+    // balance worth showing (>= one cent) is quoted.
+    final authBalance = ref.watch(authControllerProvider).user?.walletBalance;
+    final balance = ref.watch(walletProvider).maybeWhen(
+          data: (w) => w.balance,
+          orElse: () => authBalance,
+        );
+    // The forceable failure that led here is already explained; only surface
+    // a failure of the forced attempt itself (payment/top-up pending, network).
+    final failure = canForceDelete(state.failure) ? null : state.failure;
+    return [
+      _bullet(
+        colors,
+        (balance != null && balance >= 0.01)
+            ? l10n.deleteAccountForceBalanceAmount(formatUsd(balance))
+            : l10n.deleteAccountForceBalance,
+      ),
+      _bullet(colors, l10n.deleteAccountForceOrders),
+      if (failure != null) ...[
+        const SizedBox(height: 4),
+        Text(
+          _failureMessage(l10n, failure),
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: AppTokens.danger,
+          ),
+        ),
+      ],
+      const SizedBox(height: 18),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: state.submitting
+                  ? null
+                  : () => setState(() => _stage = _Stage.confirm),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                foregroundColor: colors.text,
+                side: BorderSide(color: colors.borderStrong),
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              child: Text(l10n.deleteAccountGoBack),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              onPressed: state.submitting ? null : () => _submit(force: true),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                backgroundColor: AppTokens.danger,
+                disabledBackgroundColor: colors.borderStrong,
+                foregroundColor: Colors.white,
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: state.submitting
+                  ? const AppSpinner(size: 22, color: Colors.white)
+                  : Text(
+                      l10n.deleteAccountForceCta,
+                      textAlign: TextAlign.center,
+                    ),
+            ),
+          ),
+        ],
       ),
     ];
   }

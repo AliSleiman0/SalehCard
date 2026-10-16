@@ -366,7 +366,7 @@
   "deleteAccountWarnPermanent": "This is permanent — your account can't be recovered, and you'll be signed out on all devices.",
   "deleteAccountWarnKycDeleted": "Your identity (ID) photos are permanently deleted.",
   "deleteAccountWarnOrdersKept": "Past orders are kept anonymized, as required for accounting.",
-  "deleteAccountWarnWalletEmpty": "Your wallet must be empty before you can delete your account.",
+  "deleteAccountWarnWalletEmpty": "Any remaining wallet balance will be lost if you choose to delete anyway.",
   "deleteAccountConfirmPrompt": "To confirm, type \"{word}\" below.",
   "@deleteAccountConfirmPrompt": {
     "placeholders": { "word": { "type": "String" } }
@@ -377,6 +377,16 @@
   "deleteAccountOrdersInFlight": "You have orders still being processed. Please wait until they finish, then try again.",
   "deleteAccountPaymentsPending": "You have a payment in progress. Please wait until it completes or expires, then try again.",
   "deleteAccountTopUpsPending": "You have a wallet top-up awaiting approval. Please wait for its decision, then try again.",
+  "deleteAccountDeleteAnyway": "Delete anyway",
+  "deleteAccountForceTitle": "Delete anyway?",
+  "deleteAccountForceBalanceAmount": "Your remaining wallet balance ({amount}) will be lost and can't be refunded.",
+  "@deleteAccountForceBalanceAmount": {
+    "placeholders": { "amount": { "type": "String" } }
+  },
+  "deleteAccountForceBalance": "Your remaining wallet balance will be lost and can't be refunded.",
+  "deleteAccountForceOrders": "Orders still being processed will be completed to the player IDs you entered; if one can't be fulfilled, its refund can't be returned to you.",
+  "deleteAccountForceCta": "Yes, delete anyway",
+  "deleteAccountGoBack": "Go back",
   "unitRateLine": "{price} per {units}",
   "@unitRateLine": {
     "placeholders": { "price": { "type": "String" }, "units": { "type": "String" } }

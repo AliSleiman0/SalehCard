@@ -83,6 +83,13 @@ final profileControllerProvider =
     NotifierProvider<ProfileController, ProfileEditState>(
         ProfileController.new);
 
+/// Whether a delete-account [failure] may be overridden with an explicit
+/// "Delete anyway" (`force: true`). Only a leftover wallet balance or orders
+/// still processing qualify — the server forfeits the balance and leaves the
+/// orders for the operator. Pending payments / top-ups always block.
+bool canForceDelete(Failure? failure) =>
+    failure is WalletNotEmptyFailure || failure is OrdersInFlightFailure;
+
 /// Submit state for the destructive delete-account flow.
 class DeleteAccountState {
   const DeleteAccountState({this.submitting = false, this.failure});
@@ -99,10 +106,13 @@ class DeleteAccountController extends Notifier<DeleteAccountState> {
   /// the sheet pops itself and then signs out via the auth controller (the UI
   /// must go first: logout flips the router to /login) — or `false` on failure
   /// (surfaced via [state] so the sheet stays open with an inline error).
-  Future<bool> submit() async {
+  ///
+  /// [force] is the explicit "Delete anyway" path (see [canForceDelete]).
+  Future<bool> submit({bool force = false}) async {
     if (state.submitting) return false;
     state = const DeleteAccountState(submitting: true);
-    final result = await ref.read(deleteAccountUseCaseProvider).call();
+    final result =
+        await ref.read(deleteAccountUseCaseProvider).call(force: force);
     return result.match(
       (failure) {
         state = DeleteAccountState(failure: failure);

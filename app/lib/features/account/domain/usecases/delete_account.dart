@@ -8,5 +8,6 @@ class DeleteAccount {
 
   final ProfileRepository _repository;
 
-  Future<Either<Failure, Unit>> call() => _repository.deleteAccount();
+  Future<Either<Failure, Unit>> call({bool force = false}) =>
+      _repository.deleteAccount(force: force);
 }

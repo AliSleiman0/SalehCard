@@ -129,7 +129,7 @@ export const apiClient = {
   patch<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
     return request<T>('PATCH', path, body)
   },
-  delete<T>(path: string): Promise<ApiResponse<T>> {
-    return request<T>('DELETE', path)
+  delete<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
+    return request<T>('DELETE', path, body)
   },
 }

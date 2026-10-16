@@ -16,5 +16,9 @@ abstract interface class ProfileRepository {
   });
 
   /// Permanently deletes the authenticated account (`DELETE /users/me`).
-  Future<Either<Failure, Unit>> deleteAccount();
+  ///
+  /// [force] forfeits any remaining wallet balance and ignores orders still
+  /// processing (only offered after a [WalletNotEmptyFailure] /
+  /// [OrdersInFlightFailure]); pending payments / top-ups still block.
+  Future<Either<Failure, Unit>> deleteAccount({bool force = false});
 }

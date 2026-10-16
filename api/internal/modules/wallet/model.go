@@ -14,6 +14,9 @@ const (
 	TxTypePurchase   TxType = "purchase"
 	TxTypeRefund     TxType = "refund"
 	TxTypeAdjustment TxType = "adjustment"
+	// TxTypeForfeit is the balance zeroed when a customer deletes their account
+	// (a forced "Delete anyway", or sub-cent rounding dust). Amount is negative.
+	TxTypeForfeit TxType = "forfeit"
 )
 
 // WalletTransaction records a single credit or debit against a user wallet.

@@ -72,8 +72,9 @@ type Service interface {
 	GetProfile(ctx context.Context, id bson.ObjectID) (*User, error)
 	UpdateProfile(ctx context.Context, id bson.ObjectID, input UpdateProfileInput) (*User, error)
 	// DeleteAccount permanently retires the caller's own account (see
-	// delete.go); hadKyc reports whether a KYC submission was purged with it.
-	DeleteAccount(ctx context.Context, id bson.ObjectID) (hadKyc bool, err error)
+	// delete.go); force forfeits the wallet balance and ignores in-flight
+	// orders. The result feeds the audit summary (no PII).
+	DeleteAccount(ctx context.Context, id bson.ObjectID, force bool) (DeletionResult, error)
 }
 
 // settingsSource reads the app-settings singleton (kept narrow so the service can

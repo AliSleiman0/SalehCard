@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +51,19 @@ func (f *fakeKYCPurger) PurgeByUser(context.Context, bson.ObjectID) (bool, error
 	return f.hadKyc, f.err
 }
 
+type fakeLedger struct {
+	forfeits []float64
+	err      error
+}
+
+func (f *fakeLedger) RecordForfeit(_ context.Context, _ bson.ObjectID, amount float64) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.forfeits = append(f.forfeits, amount)
+	return nil
+}
+
 type fakeTokenPurger struct{ called bool }
 
 func (f *fakeTokenPurger) DeleteAllForUser(context.Context, bson.ObjectID) (int64, error) {
@@ -67,6 +82,7 @@ type deletionFixture struct {
 	topups  *fakeTopUpGuard
 	kyc     *fakeKYCPurger
 	tokens  *fakeTokenPurger
+	ledger  *fakeLedger
 }
 
 func newDeletionFixture() *deletionFixture {
@@ -78,10 +94,11 @@ func newDeletionFixture() *deletionFixture {
 		topups:  &fakeTopUpGuard{},
 		kyc:     &fakeKYCPurger{hadKyc: true},
 		tokens:  &fakeTokenPurger{},
+		ledger:  &fakeLedger{},
 	}
 	f.svc = NewUserService(f.repo, f.refresh, newFakeOTPRepo(), sms.LogSender{}, testOTPConfig(),
 		"test-secret", 15*time.Minute, 24*time.Hour,
-		WithDeletionPorts(DeletionPorts{Orders: f.orders, Payments: f.pays, TopUps: f.topups, KYC: f.kyc, Tokens: f.tokens}))
+		WithDeletionPorts(DeletionPorts{Orders: f.orders, Payments: f.pays, TopUps: f.topups, KYC: f.kyc, Tokens: f.tokens, Ledger: f.ledger}))
 	return f
 }
 
@@ -102,9 +119,9 @@ func TestDeleteAccount_HappyPath(t *testing.T) {
 	u, reg := f.seedCustomer(t)
 	u.SavedPlayerIDs = []SavedPlayerID{{Label: "PUBG", Value: "12345"}}
 
-	hadKyc, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	res, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	require.NoError(t, err)
-	assert.True(t, hadKyc)
+	assert.True(t, res.HadKyc)
 
 	assert.Equal(t, StatusDeleted, u.Status)
 	assert.NotNil(t, u.DeletedAt)
@@ -127,7 +144,7 @@ func TestDeleteAccount_WalletNotEmpty(t *testing.T) {
 	u, _ := f.seedCustomer(t)
 	u.WalletBalance = 12.5
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	assert.ErrorIs(t, err, apperrors.ErrConflict)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
@@ -141,7 +158,7 @@ func TestDeleteAccount_OrdersInFlight(t *testing.T) {
 	u, _ := f.seedCustomer(t)
 	f.orders.inFlight = 1
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
 	assert.Equal(t, "ORDERS_IN_FLIGHT", appErr.Code)
@@ -153,7 +170,7 @@ func TestDeleteAccount_PaymentsPending(t *testing.T) {
 	u, _ := f.seedCustomer(t)
 	f.pays.open = 1
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
 	assert.Equal(t, "PAYMENTS_PENDING", appErr.Code)
@@ -167,7 +184,7 @@ func TestDeleteAccount_TopUpsPending(t *testing.T) {
 	u, _ := f.seedCustomer(t)
 	f.topups.pending = 1
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
 	assert.Equal(t, "TOPUPS_PENDING", appErr.Code)
@@ -181,7 +198,7 @@ func TestDeleteAccount_SuspendedRefused(t *testing.T) {
 	u, _ := f.seedCustomer(t)
 	u.Status = StatusSuspended
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	assert.ErrorIs(t, err, apperrors.ErrForbidden)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
@@ -197,7 +214,7 @@ func TestDeleteAccount_GuardRaceDuringPurgeRejected(t *testing.T) {
 	u, _ := f.seedCustomer(t)
 	f.svc.deletion.KYC = &purgeRacer{topups: f.topups}
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
 	assert.Equal(t, "TOPUPS_PENDING", appErr.Code)
@@ -218,7 +235,7 @@ func TestDeleteAccount_AdminRefused(t *testing.T) {
 	u, _ := f.seedCustomer(t)
 	u.Role = RoleAdmin
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	assert.ErrorIs(t, err, apperrors.ErrForbidden)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
@@ -232,9 +249,9 @@ func TestDeleteAccount_AlreadyDeletedIsIdempotent(t *testing.T) {
 	u.Status = StatusDeleted
 	f.kyc.hadKyc = false
 
-	hadKyc, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	res, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	require.NoError(t, err)
-	assert.False(t, hadKyc)
+	assert.False(t, res.HadKyc)
 	// The double-tap still re-runs the KYC purge: a submission that raced in
 	// around the original deletion must not survive the account.
 	assert.True(t, f.kyc.called, "double-tap must re-purge KYC")
@@ -245,7 +262,7 @@ func TestDeleteAccount_KycPurgeFailureAborts(t *testing.T) {
 	u, _ := f.seedCustomer(t)
 	f.kyc.err = errors.New("blob storage down")
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	require.Error(t, err)
 	assert.NotEqual(t, StatusDeleted, u.Status, "account must stay intact for a retry")
 	assert.False(t, f.tokens.called, "no cleanup on an aborted deletion")
@@ -263,7 +280,7 @@ func TestDeleteAccount_BalanceRaceRejected(t *testing.T) {
 	raceKyc := &racingKYCPurger{user: u}
 	f.svc.deletion.KYC = raceKyc
 
-	_, err := f.svc.DeleteAccount(context.Background(), u.ID)
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
 	assert.Equal(t, "WALLET_NOT_EMPTY", appErr.Code)
@@ -286,7 +303,7 @@ func TestDeleteAccount_UnwiredPortsFailClosed(t *testing.T) {
 	_ = res
 	u := repo.byEmail["c@d.com"]
 
-	_, err = svc.DeleteAccount(context.Background(), u.ID)
+	_, err = svc.DeleteAccount(context.Background(), u.ID, false)
 	assert.ErrorIs(t, err, apperrors.ErrInternal)
 	assert.NotEqual(t, StatusDeleted, u.Status)
 }
@@ -308,14 +325,14 @@ func TestRefresh_DeletedIsRejected(t *testing.T) {
 func TestGetProfile_DeletedIsRejected(t *testing.T) {
 	f := newDeletionFixture()
 	u, _ := f.seedCustomer(t)
-	require.NoError(t, errFrom(f.svc.DeleteAccount(context.Background(), u.ID)))
+	require.NoError(t, errFrom(f.svc.DeleteAccount(context.Background(), u.ID, false)))
 
 	_, err := f.svc.GetProfile(context.Background(), u.ID)
 	assert.ErrorIs(t, err, apperrors.ErrUnauthorized)
 }
 
 // errFrom drops a leading value from a (T, error) return for require.NoError.
-func errFrom(_ bool, err error) error { return err }
+func errFrom(_ DeletionResult, err error) error { return err }
 
 // --- handler tests ----------------------------------------------------------
 
@@ -359,5 +376,187 @@ func TestDeleteMe_Handler(t *testing.T) {
 		h.DeleteMe(rr, newDeleteMeRequest(t, u.ID))
 		assert.Equal(t, http.StatusOK, rr.Code)
 		assert.Equal(t, StatusDeleted, u.Status)
+	})
+}
+
+// --- dust + force ("Delete anyway") -----------------------------------------
+
+func TestDeleteAccount_DustBalanceDeletes(t *testing.T) {
+	// Sub-cent rounding dust (seen on prod) must not block a normal deletion;
+	// it is zeroed by the flip and ledgered.
+	f := newDeletionFixture()
+	u, _ := f.seedCustomer(t)
+	u.WalletBalance = 0.002999999999997449
+
+	res, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
+	require.NoError(t, err)
+	assert.Equal(t, StatusDeleted, u.Status)
+	assert.Zero(t, u.WalletBalance)
+	assert.InDelta(t, 0.003, res.ForfeitedBalance, 1e-9)
+	assert.Equal(t, []float64{0.002999999999997449}, f.ledger.forfeits)
+}
+
+func TestDeleteAccount_OneCentStillBlocks(t *testing.T) {
+	f := newDeletionFixture()
+	u, _ := f.seedCustomer(t)
+	u.WalletBalance = 0.01
+
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, false)
+	var appErr *apperrors.AppError
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "WALLET_NOT_EMPTY", appErr.Code)
+	assert.NotEqual(t, StatusDeleted, u.Status)
+}
+
+func TestDeleteAccount_ForceForfeitsBalance(t *testing.T) {
+	f := newDeletionFixture()
+	u, _ := f.seedCustomer(t)
+	u.WalletBalance = 12.5
+
+	res, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+	require.NoError(t, err)
+	assert.Equal(t, StatusDeleted, u.Status)
+	assert.Zero(t, u.WalletBalance)
+	assert.Equal(t, 12.5, res.ForfeitedBalance)
+	assert.Equal(t, []float64{12.5}, f.ledger.forfeits, "forfeit must be ledgered")
+}
+
+func TestDeleteAccount_ForceZeroBalanceWritesNoLedgerRow(t *testing.T) {
+	f := newDeletionFixture()
+	u, _ := f.seedCustomer(t)
+
+	res, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+	require.NoError(t, err)
+	assert.Zero(t, res.ForfeitedBalance)
+	assert.Empty(t, f.ledger.forfeits)
+}
+
+func TestDeleteAccount_ForceLedgerFailureStillDeletes(t *testing.T) {
+	// The flip is authoritative; the ledger row is best-effort after it.
+	f := newDeletionFixture()
+	u, _ := f.seedCustomer(t)
+	u.WalletBalance = 4
+	f.ledger.err = errors.New("ledger down")
+
+	res, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+	require.NoError(t, err)
+	assert.Equal(t, StatusDeleted, u.Status)
+	assert.Equal(t, 4.0, res.ForfeitedBalance, "amount still reaches the audit summary")
+}
+
+func TestDeleteAccount_ForceWithOrdersInFlight(t *testing.T) {
+	f := newDeletionFixture()
+	u, _ := f.seedCustomer(t)
+	f.orders.inFlight = 2
+
+	res, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+	require.NoError(t, err)
+	assert.Equal(t, StatusDeleted, u.Status)
+	assert.Equal(t, int64(2), res.InFlightOrders)
+}
+
+func TestDeleteAccount_ForceStillBlockedByMoneyInTransit(t *testing.T) {
+	t.Run("pending top-up", func(t *testing.T) {
+		f := newDeletionFixture()
+		u, _ := f.seedCustomer(t)
+		u.WalletBalance = 3
+		f.topups.pending = 1
+
+		_, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+		var appErr *apperrors.AppError
+		require.ErrorAs(t, err, &appErr)
+		assert.Equal(t, "TOPUPS_PENDING", appErr.Code)
+		assert.NotEqual(t, StatusDeleted, u.Status)
+		assert.Equal(t, 3.0, u.WalletBalance)
+		assert.Empty(t, f.ledger.forfeits)
+	})
+	t.Run("pending payment", func(t *testing.T) {
+		f := newDeletionFixture()
+		u, _ := f.seedCustomer(t)
+		f.pays.open = 1
+
+		_, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+		var appErr *apperrors.AppError
+		require.ErrorAs(t, err, &appErr)
+		assert.Equal(t, "PAYMENTS_PENDING", appErr.Code)
+		assert.NotEqual(t, StatusDeleted, u.Status)
+	})
+	t.Run("admin", func(t *testing.T) {
+		f := newDeletionFixture()
+		u, _ := f.seedCustomer(t)
+		u.Role = RoleAdmin
+		_, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+		assert.ErrorIs(t, err, apperrors.ErrForbidden)
+	})
+	t.Run("suspended", func(t *testing.T) {
+		f := newDeletionFixture()
+		u, _ := f.seedCustomer(t)
+		u.Status = StatusSuspended
+		_, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+		assert.ErrorIs(t, err, ErrAccountSuspended)
+	})
+}
+
+func TestDeleteAccount_ForceBalanceRaceRejected(t *testing.T) {
+	// The customer agreed to forfeit 3; a credit lands after the check (balance
+	// now 5). The flip's <= observed filter misses and the deletion is refused
+	// — a forced delete never forfeits money the customer was not shown.
+	f := newDeletionFixture()
+	u, _ := f.seedCustomer(t)
+	u.WalletBalance = 3
+	f.svc.deletion.KYC = &racingKYCPurger{user: u}
+
+	_, err := f.svc.DeleteAccount(context.Background(), u.ID, true)
+	var appErr *apperrors.AppError
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "WALLET_NOT_EMPTY", appErr.Code)
+	assert.NotEqual(t, StatusDeleted, u.Status)
+	assert.Equal(t, 5.0, u.WalletBalance)
+	assert.Empty(t, f.ledger.forfeits)
+}
+
+func TestDeleteMe_HandlerForceBody(t *testing.T) {
+	newReq := func(t *testing.T, id bson.ObjectID, body string) *http.Request {
+		req := newDeleteMeRequest(t, id)
+		req.Body = io.NopCloser(strings.NewReader(body))
+		return req
+	}
+
+	t.Run("empty body → force false (unchanged)", func(t *testing.T) {
+		f := newDeletionFixture()
+		u, _ := f.seedCustomer(t)
+		u.WalletBalance = 3
+		rr := httptest.NewRecorder()
+		NewHandler(f.svc, false, 24*time.Hour).DeleteMe(rr, newReq(t, u.ID, ""))
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), "WALLET_NOT_EMPTY")
+	})
+	t.Run("force false → 409 ORDERS_IN_FLIGHT", func(t *testing.T) {
+		f := newDeletionFixture()
+		u, _ := f.seedCustomer(t)
+		f.orders.inFlight = 1
+		rr := httptest.NewRecorder()
+		NewHandler(f.svc, false, 24*time.Hour).DeleteMe(rr, newReq(t, u.ID, `{"force":false}`))
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), "ORDERS_IN_FLIGHT")
+	})
+	t.Run("force true → 200 and forfeits", func(t *testing.T) {
+		f := newDeletionFixture()
+		u, _ := f.seedCustomer(t)
+		u.WalletBalance = 3
+		f.orders.inFlight = 1
+		rr := httptest.NewRecorder()
+		NewHandler(f.svc, false, 24*time.Hour).DeleteMe(rr, newReq(t, u.ID, `{"force":true}`))
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, StatusDeleted, u.Status)
+		assert.Equal(t, []float64{3}, f.ledger.forfeits)
+	})
+	t.Run("malformed body → 400", func(t *testing.T) {
+		f := newDeletionFixture()
+		u, _ := f.seedCustomer(t)
+		rr := httptest.NewRecorder()
+		NewHandler(f.svc, false, 24*time.Hour).DeleteMe(rr, newReq(t, u.ID, `{"force":`))
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.NotEqual(t, StatusDeleted, u.Status)
 	})
 }

@@ -936,7 +936,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get deleteAccountWarnWalletEmpty =>
-      'يجب أن تكون محفظتك فارغة قبل حذف حسابك.';
+      'سيُفقد أي رصيد متبقٍ في محفظتك إذا اخترت الحذف رغم ذلك.';
 
   @override
   String deleteAccountConfirmPrompt(String word) {
@@ -964,6 +964,31 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get deleteAccountTopUpsPending =>
       'لديك طلب شحن للمحفظة بانتظار الموافقة. يرجى انتظار البتّ فيه ثم المحاولة مرة أخرى.';
+
+  @override
+  String get deleteAccountDeleteAnyway => 'الحذف رغم ذلك';
+
+  @override
+  String get deleteAccountForceTitle => 'الحذف رغم ذلك؟';
+
+  @override
+  String deleteAccountForceBalanceAmount(String amount) {
+    return 'سيُفقد رصيد محفظتك المتبقي ($amount) ولا يمكن استرداده.';
+  }
+
+  @override
+  String get deleteAccountForceBalance =>
+      'سيُفقد رصيد محفظتك المتبقي ولا يمكن استرداده.';
+
+  @override
+  String get deleteAccountForceOrders =>
+      'ستُستكمل الطلبات التي لا تزال قيد المعالجة إلى معرّفات اللاعبين التي أدخلتها؛ وإذا تعذّر تنفيذ أحدها فلا يمكن إعادة المبلغ المسترد إليك.';
+
+  @override
+  String get deleteAccountForceCta => 'نعم، احذف رغم ذلك';
+
+  @override
+  String get deleteAccountGoBack => 'رجوع';
 
   @override
   String unitRateLine(String price, String units) {
