@@ -66,8 +66,11 @@ export async function logout(): Promise<ApiResponse<{ success: boolean }>> {
 
 // deleteAccount self-deletes the current user (server anonymizes + revokes all
 // sessions). Returns 200 {deleted:true}; 409 on money/orders still in flight.
-export async function deleteAccount(): Promise<ApiResponse<{ deleted: boolean }>> {
-  return apiClient.delete<{ deleted: boolean }>('/api/v1/users/me')
+// `force` sends {"force": true}: the server then forfeits any remaining wallet
+// balance and leaves processing orders for the operator (pending payments /
+// top-ups still block). Without it no body is sent.
+export async function deleteAccount(force = false): Promise<ApiResponse<{ deleted: boolean }>> {
+  return apiClient.delete<{ deleted: boolean }>('/api/v1/users/me', force ? { force: true } : undefined)
 }
 
 export async function fetchMe(): Promise<ApiResponse<User>> {

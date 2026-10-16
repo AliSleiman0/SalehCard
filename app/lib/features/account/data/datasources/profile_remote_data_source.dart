@@ -39,7 +39,14 @@ class ProfileRemoteDataSource {
   /// DELETE /users/me → permanently deletes (anonymizes) the account. The
   /// server rejects it while the wallet holds a balance or orders/payments are
   /// in flight (409s, surfaced as typed [Failure]s by the repository).
-  Future<void> deleteMe() async {
-    await _dio.delete<dynamic>('/users/me');
+  ///
+  /// [force] sends `{"force": true}`: the server then forfeits any remaining
+  /// wallet balance and leaves processing orders for the operator (pending
+  /// payments / top-ups still block). Without it no body is sent at all.
+  Future<void> deleteMe({bool force = false}) async {
+    await _dio.delete<dynamic>(
+      '/users/me',
+      data: force ? const {'force': true} : null,
+    );
   }
 }

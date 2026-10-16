@@ -42,10 +42,12 @@ type Repository interface {
 	// SoftDelete anonymizes an account in place (status=deleted, PII unset).
 	SoftDelete(ctx context.Context, id bson.ObjectID) (*User, error)
 	// SoftDeleteSelf is SoftDelete for the customer self-service path: it also
-	// unsets the customer-facing PII (name, saved game IDs) and only matches a
-	// live, zero-balance account — ErrNotFound signals the account was already
+	// unsets the customer-facing PII (name, saved game IDs), zeroes the wallet,
+	// and only matches a live account whose balance is <= maxBalance (the value
+	// the caller observed) — ErrNotFound signals the account was already
 	// deleted or has since been credited (caller re-fetches to tell them apart).
-	SoftDeleteSelf(ctx context.Context, id bson.ObjectID) (*User, error)
+	// Returns the PRE-update document (its balance = the amount zeroed).
+	SoftDeleteSelf(ctx context.Context, id bson.ObjectID, maxBalance float64) (*User, error)
 	UpdateResellerTier(ctx context.Context, id bson.ObjectID, tier string) (*User, error)
 	// CountActiveSuperAdmins counts non-suspended super admins — admins with no
 	// custom RBAC role (the last-super-admin demotion/suspension guard).
@@ -448,26 +450,33 @@ func (r *MongoRepository) SoftDelete(ctx context.Context, id bson.ObjectID) (*Us
 
 // SoftDeleteSelf performs the customer self-deletion flavor of SoftDelete: the
 // same anonymizing update plus the customer-facing PII (name, saved game IDs),
-// guarded so it only fires on a live account whose wallet holds nothing. The
-// balance filter closes the race where a credit (top-up approval, USDT watcher)
-// lands between the service's guard check and this write; $not/$gt keeps
-// legacy documents with no walletBalance field matching. Suspended is excluded
-// too — deletion frees the unique email/phone indexes, which would let a
-// banned person re-register — so a suspension racing in mid-request still
-// blocks. ErrNotFound means the filter missed — already deleted, suspended, or
+// guarded so it only fires on a live account whose wallet holds no more than
+// maxBalance — the balance the service observed (and accepted) at its guard
+// check: sub-cent dust on a normal deletion, or the whole balance being
+// forfeited on a forced one. The same update zeroes walletBalance, so the
+// forfeit and the flip are one document-atomic write. The balance filter
+// closes the race where a credit (top-up approval, USDT watcher) lands between
+// the service's guard check and this write; $not/$gt keeps legacy documents
+// with no walletBalance field matching. Suspended is excluded too — deletion
+// frees the unique email/phone indexes, which would let a banned person
+// re-register — so a suspension racing in mid-request still blocks.
+// ErrNotFound means the filter missed — already deleted, suspended, or
 // credited since the guard — and the caller re-fetches to disambiguate.
-func (r *MongoRepository) SoftDeleteSelf(ctx context.Context, id bson.ObjectID) (*User, error) {
+// The PRE-update document is returned so the caller learns the exact balance
+// that was zeroed (for the forfeit ledger row + audit).
+func (r *MongoRepository) SoftDeleteSelf(ctx context.Context, id bson.ObjectID, maxBalance float64) (*User, error) {
 	now := time.Now().UTC()
 	var u User
 	err := r.collection.FindOneAndUpdate(ctx,
 		bson.D{
 			{Key: "_id", Value: id},
 			{Key: "status", Value: bson.D{{Key: "$nin", Value: bson.A{StatusDeleted, StatusSuspended}}}},
-			{Key: "walletBalance", Value: bson.D{{Key: "$not", Value: bson.D{{Key: "$gt", Value: 0}}}}},
+			{Key: "walletBalance", Value: bson.D{{Key: "$not", Value: bson.D{{Key: "$gt", Value: maxBalance}}}}},
 		},
 		bson.D{
 			{Key: "$set", Value: bson.D{
 				{Key: "status", Value: StatusDeleted},
+				{Key: "walletBalance", Value: 0.0},
 				{Key: "deletedAt", Value: now},
 				{Key: "updatedAt", Value: now},
 			}},
@@ -481,7 +490,7 @@ func (r *MongoRepository) SoftDeleteSelf(ctx context.Context, id bson.ObjectID) 
 				{Key: "savedPlayerIds", Value: ""},
 			}},
 		},
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
+		options.FindOneAndUpdate().SetReturnDocument(options.Before),
 	).Decode(&u)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {

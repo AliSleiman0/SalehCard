@@ -38,9 +38,9 @@ class ProfileRepositoryImpl implements ProfileRepository {
   }
 
   @override
-  Future<Either<Failure, Unit>> deleteAccount() async {
+  Future<Either<Failure, Unit>> deleteAccount({bool force = false}) async {
     try {
-      await _remote.deleteMe();
+      await _remote.deleteMe(force: force);
       return const Right(unit);
     } catch (error) {
       return Left(mapError(error));

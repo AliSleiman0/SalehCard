@@ -173,6 +173,7 @@ func (s *Server) Routes() {
 		TopUps:   wallet.NewTopUpRepo(s.db),
 		KYC:      kyc.NewPurger(kyc.NewMongoRepository(s.db.Collection("kyc_submissions"), s.db.Collection("users")), store),
 		Tokens:   notification.NewMongoRepository(s.db.Collection("notifications"), s.db.Collection("device_tokens")),
+		Ledger:   wallet.NewForfeitLedger(s.db),
 	})
 
 	// Customer-facing notifications are fanned out through the notifier: an

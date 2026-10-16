@@ -3,6 +3,7 @@ package user
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -231,15 +232,26 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteMe handles DELETE /api/v1/users/me — customer self-service account
-// deletion (Play Store requirement). Guard refusals surface as 409/403
-// AppErrors via writeAuthError; success is idempotent.
+// deletion (Play Store requirement). Optional JSON body {"force": true}
+// ("Delete anyway") forfeits the wallet balance and ignores in-flight orders;
+// no/empty body = force false (backward compatible). Guard refusals surface as
+// 409/403 AppErrors via writeAuthError; success is idempotent.
 func (h *Handler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	id, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
 		response.Unauthorized(w, "authentication required")
 		return
 	}
-	hadKyc, err := h.service.DeleteAccount(r.Context(), id)
+	var body struct {
+		Force bool `json:"force"`
+	}
+	if r.Body != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+			response.BadRequest(w, "invalid request body")
+			return
+		}
+	}
+	res, err := h.service.DeleteAccount(r.Context(), id, body.Force)
 	if err != nil {
 		writeAuthError(w, err)
 		return
@@ -254,7 +266,12 @@ func (h *Handler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 			Action:     audit.ActionUserSelfDelete,
 			TargetType: "user",
 			TargetID:   id.Hex(),
-			Summary:    map[string]any{"hadKyc": hadKyc},
+			Summary: map[string]any{
+				"hadKyc":           res.HadKyc,
+				"force":            body.Force,
+				"forfeitedBalance": res.ForfeitedBalance,
+				"inFlightOrders":   res.InFlightOrders,
+			},
 		})
 	}
 	response.OK(w, map[string]bool{"deleted": true})

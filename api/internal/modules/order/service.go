@@ -304,6 +304,18 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			in.Fields = withFieldValue(in.Fields, p.UnitPricing.FieldKey, strconv.FormatFloat(a, 'f', -1, 64))
 		} else if in.Amount != nil {
 			return nil, badRequest("this product is not sold by amount")
+		} else {
+			// Charge exactly what clients display: catalog/reseller/offer prices
+			// can carry 3 decimals (15.063), but every client renders cents
+			// ($15.06). Round the resolved unit price BEFORE multiplying by qty
+			// so the line, subtotal, total and wallet debit all derive from the
+			// displayed price — otherwise each order leaves sub-cent wallet
+			// dust. (Per-unit lines are already cent-rounded by UnitLinePrice.)
+			raw := price
+			price = product.RoundCents(price)
+			if raw > 0 && price < 0.01 {
+				return nil, badRequest("this item's price is too small to purchase")
+			}
 		}
 		if err := validateQuantityField(p, in.Qty); err != nil {
 			return nil, err
@@ -328,7 +340,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			Recipient:           in.Recipient,
 			Fields:              resolveOrderFields(p, in.Fields, in.Qty),
 		})
-		subtotal += price * float64(in.Qty)
+		subtotal = product.RoundCents(subtotal + price*float64(in.Qty))
 	}
 	// Apply a promo code when supplied: re-validated server-side against the
 	// re-priced subtotal (never trust the client). An invalid/expired/below-min
@@ -342,8 +354,8 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		if err != nil {
 			return nil, err
 		}
-		discount = promo.DiscountFor(p, subtotal)
-		total = subtotal - discount
+		discount = product.RoundCents(promo.DiscountFor(p, subtotal))
+		total = product.RoundCents(subtotal - discount)
 		if total < 0 {
 			total = 0
 		}

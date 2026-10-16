@@ -1769,7 +1769,7 @@ abstract class AppLocalizations {
   /// No description provided for @deleteAccountWarnWalletEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Your wallet must be empty before you can delete your account.'**
+  /// **'Any remaining wallet balance will be lost if you choose to delete anyway.'**
   String get deleteAccountWarnWalletEmpty;
 
   /// No description provided for @deleteAccountConfirmPrompt.
@@ -1813,6 +1813,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You have a wallet top-up awaiting approval. Please wait for its decision, then try again.'**
   String get deleteAccountTopUpsPending;
+
+  /// No description provided for @deleteAccountDeleteAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete anyway'**
+  String get deleteAccountDeleteAnyway;
+
+  /// No description provided for @deleteAccountForceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete anyway?'**
+  String get deleteAccountForceTitle;
+
+  /// No description provided for @deleteAccountForceBalanceAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Your remaining wallet balance ({amount}) will be lost and can\'t be refunded.'**
+  String deleteAccountForceBalanceAmount(String amount);
+
+  /// No description provided for @deleteAccountForceBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Your remaining wallet balance will be lost and can\'t be refunded.'**
+  String get deleteAccountForceBalance;
+
+  /// No description provided for @deleteAccountForceOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders still being processed will be completed to the player IDs you entered; if one can\'t be fulfilled, its refund can\'t be returned to you.'**
+  String get deleteAccountForceOrders;
+
+  /// No description provided for @deleteAccountForceCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, delete anyway'**
+  String get deleteAccountForceCta;
+
+  /// No description provided for @deleteAccountGoBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Go back'**
+  String get deleteAccountGoBack;
 
   /// No description provided for @unitRateLine.
   ///
