@@ -78,6 +78,14 @@ type OrderItem struct {
 	// Fields are the labeled customer inputs for this line (Account ID, Zone ID,
 	// Email, …), shown to the operator who fulfills the order.
 	Fields []OrderField `bson:"fields,omitempty" json:"fields,omitempty"`
+	// Amount is the customer-entered unit count on a per-unit-priced line
+	// (e.g. 45000 coins); Price is then the whole line's price and Qty is 1.
+	Amount *float64 `bson:"amount,omitempty" json:"amount,omitempty"`
+	// Codes are the inventory codes delivered for THIS line (one per unit),
+	// set when the line is fulfilled from the code pool — on a pure code order
+	// and on the code lines of a mixed cart alike. Fulfillment.DeliveredCode
+	// still mirrors the order's first code for older clients.
+	Codes []string `bson:"codes,omitempty" json:"codes,omitempty"`
 }
 
 // TimelineEvent records a status transition on a fulfillment.
@@ -140,6 +148,9 @@ type PlaceOrderItemInput struct {
 	PlayerID  string            `json:"playerId,omitempty"`
 	Recipient *RecipientInput   `json:"recipient,omitempty"`
 	Fields    []OrderFieldInput `json:"fields,omitempty"`
+	// Amount is the unit count for a per-unit-priced product (required there,
+	// rejected elsewhere). The server prices it; the client never sends a price.
+	Amount *float64 `json:"amount,omitempty"`
 }
 
 // PlaceOrderInput carries the data needed to create a new order.

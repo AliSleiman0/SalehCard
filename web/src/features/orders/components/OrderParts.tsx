@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Icon, ImageArt, Price, Badge, Button, useToast } from '@/components'
+import { Icon, ImageArt, Price, Badge, Button, CodeVault, useToast } from '@/components'
 import { useCurrencyStore } from '@/stores/currency'
 import type { OrderView } from '../types'
 
@@ -112,7 +112,35 @@ export function CreditConfirm({ o }: { o: OrderView }) {
         <span className="muted small">{t('credited_at')}</span>
         <span className="num small">{o.ts}</span>
       </div>
-      <p className="tiny faint">{t('no_code_note')}</p>
+      {/* A mixed order's code lines are delivered above — "no code needed" would lie. */}
+      {o.codeLines.length === 0 && <p className="tiny faint">{t('no_code_note')}</p>}
+    </div>
+  )
+}
+
+// OrderCodes renders every delivered code, one vault per code, grouped per
+// line. A single-code order keeps the classic "Your code" label; otherwise each
+// vault is labelled with its line title (and its position when a line has
+// several units).
+export function OrderCodes({ o }: { o: OrderView }) {
+  const { t } = useTranslation()
+  const single = o.codeLines.length === 1 && o.codeLines[0].codes.length === 1
+  return (
+    <div className="col" style={{ gap: 14 }}>
+      {o.codeLines.map((line, li) =>
+        line.codes.map((code, ci) => (
+          <CodeVault
+            key={`${li}-${ci}`}
+            label={
+              single
+                ? t('your_code')
+                : `${line.title || t('your_code')}${line.codes.length > 1 ? ` · ${ci + 1}/${line.codes.length}` : ''}`
+            }
+            code={code}
+            pin={single ? o.pin : undefined}
+          />
+        )),
+      )}
     </div>
   )
 }

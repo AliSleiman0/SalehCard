@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/regulated_finance.dart';
 import '../../../core/error/failure.dart';
 import '../../../core/network/providers.dart';
 import '../data/datasources/offers_remote_data_source.dart';
@@ -13,7 +14,13 @@ final offersRemoteDataSourceProvider = Provider<OffersRemoteDataSource>(
 /// UI can render it via the AsyncValue error state (parity with the catalog).
 final offersProvider = FutureProvider<List<Offer>>((ref) async {
   try {
-    return await ref.watch(offersRemoteDataSourceProvider).getOffers();
+    final offers = await ref.watch(offersRemoteDataSourceProvider).getOffers();
+    final blocked =
+        await ref.watch(regulatedCatalogFilterProvider).blockedCategorySlugs();
+    return [
+      for (final offer in offers)
+        if (!blocked.contains(offer.category)) offer,
+    ];
   } catch (error) {
     throw mapError(error);
   }

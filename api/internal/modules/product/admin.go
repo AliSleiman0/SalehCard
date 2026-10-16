@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/reseller"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
@@ -24,7 +25,9 @@ import (
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, store blob.Storage, categories CategoryResolver, providers []FulfillmentProviderOption) {
 	repo := NewMongoRepository(db)
 	_ = EnsureIndexes(context.Background(), db)
-	svc := NewProductService(repo, WithCategoryResolver(categories))
+	// The reseller repository drops stale per-reseller custom prices when an
+	// admin switches a product to per-unit pricing.
+	svc := NewProductService(repo, WithCategoryResolver(categories), WithResellerPriceCleaner(reseller.NewMongoRepository(db)))
 	h := NewHandler(svc)
 	h.rec = rec
 	h.store = store

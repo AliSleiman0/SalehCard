@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useParams } from 'react-router-dom'
 import Layout from './Layout'
 import { RequireAuth, RequireReseller, RedirectIfAuthed } from './RequireAuth'
 
@@ -25,6 +25,15 @@ const OffersPage = lazy(() => import('@/features/offers/pages/OffersPage'))
 const UsdtDepositPage = lazy(() => import('@/features/payments/pages/UsdtDepositPage'))
 const NotificationsPage = lazy(() => import('@/features/notifications/pages/NotificationsPage'))
 
+// Remount the product page per product: its typed player ID, amount and
+// quantity are local state, and a product→product navigation (related items)
+// must not carry them over — they key cart lines and would leak onto the
+// next product's order.
+function ProductDetailRoute() {
+  const { id } = useParams<{ id: string }>()
+  return <ProductDetailPage key={id} />
+}
+
 const fallback = (
   <div className="flex items-center justify-center h-screen">Loading...</div>
 )
@@ -37,7 +46,7 @@ export default function AppRouter() {
           <Route path="/" element={<HomePage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />
-          <Route path="/product/:id" element={<ProductDetailPage />} />
+          <Route path="/product/:id" element={<ProductDetailRoute />} />
           <Route path="/search" element={<SearchPage />} />
           <Route
             path="/offers"

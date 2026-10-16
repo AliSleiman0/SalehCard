@@ -51,6 +51,15 @@ type ResellerPricing interface {
 	PricesForUser(ctx context.Context, userID bson.ObjectID) (map[string]float64, error)
 }
 
+// ResellerPriceCleaner is the narrow port used to drop per-reseller custom
+// prices when a product switches to per-unit pricing: those prices were set
+// for a flat package and would otherwise be read as a per-block price (lowest
+// wins in ResellerUnitPrice), undercharging resellers. Satisfied by
+// reseller.MongoRepository and wired in admin.go.
+type ResellerPriceCleaner interface {
+	DeletePricesForVariants(ctx context.Context, variantIDs []string) (int64, error)
+}
+
 // CategoryResolver is the narrow port the catalog uses to make a category filter
 // tree-aware (a node lists its own + descendants' products) and to denormalize a
 // product's flat category/rootDomain from an assigned taxonomy node. Satisfied by
@@ -64,9 +73,10 @@ type CategoryResolver interface {
 // ProductService is the concrete implementation of Service.
 type ProductService struct {
 	repo       Repository
-	offers     OfferLookup      // optional; nil disables offer enrichment
-	resellers  ResellerPricing  // optional; nil disables reseller catalog pricing
-	categories CategoryResolver // optional; nil disables tree-aware category filtering
+	offers     OfferLookup          // optional; nil disables offer enrichment
+	resellers  ResellerPricing      // optional; nil disables reseller catalog pricing
+	categories CategoryResolver     // optional; nil disables tree-aware category filtering
+	priceClean ResellerPriceCleaner // optional; nil skips custom-price cleanup on per-unit conversion
 }
 
 // ServiceOption configures a ProductService.
@@ -81,6 +91,12 @@ func WithOffers(o OfferLookup) ServiceOption {
 // callers whose context claims carry role "reseller".
 func WithResellerPricing(rp ResellerPricing) ServiceOption {
 	return func(s *ProductService) { s.resellers = rp }
+}
+
+// WithResellerPriceCleaner drops stale per-reseller custom prices when a
+// product is switched to per-unit pricing.
+func WithResellerPriceCleaner(c ResellerPriceCleaner) ServiceOption {
+	return func(s *ProductService) { s.priceClean = c }
 }
 
 // WithCategoryResolver enables tree-aware category filtering (a node lists its
@@ -213,15 +229,16 @@ func (s *ProductService) enrichOffers(ctx context.Context, ps []*Product) {
 	}
 	for _, p := range ps {
 		d, ok := disc[p.ID.Hex()]
-		if !ok {
+		// A fixed-amount offer never applies to a per-unit product (checkout
+		// ignores it too — see AcceptsDiscount), so don't advertise it.
+		if !ok || !p.AcceptsDiscount(d.Type) {
 			continue
 		}
-		from := fromPrice(p)
 		p.Offer = &OfferInfo{
 			DiscountType:      d.Type,
 			DiscountValue:     d.Value,
-			OriginalFromPrice: from,
-			OfferFromPrice:    applyDiscount(d, from),
+			OriginalFromPrice: FromPrice(p),
+			OfferFromPrice:    FromPriceWith(p, func(v float64) float64 { return applyDiscount(d, v) }),
 			EndsAt:            d.EndsAt,
 		}
 		for i := range p.Variants {
@@ -256,17 +273,6 @@ func applyDiscount(d Discount, original float64) float64 {
 	return original - off
 }
 
-// fromPrice returns the lowest variant price (0 when there are no variants).
-func fromPrice(p *Product) float64 {
-	from := 0.0
-	for i, v := range p.Variants {
-		if i == 0 || v.Price < from {
-			from = v.Price
-		}
-	}
-	return from
-}
-
 // Create persists a new product built from in.
 func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Product, error) {
 	// TODO: validate that at least one variant is supplied.
@@ -298,6 +304,22 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 		return nil, err
 	}
 	in.InputFields = fields
+	in.UnitPricing = normalizeUnitPricing(in.UnitPricing)
+	if in.UnitPricing.isClear() {
+		in.UnitPricing = nil
+	}
+	if err := validateUnitPricing(in.UnitPricing, unitPricingTarget{
+		Type: in.FulfillmentType, Mode: mode, Variants: in.Variants, Fields: in.InputFields,
+	}); err != nil {
+		return nil, err
+	}
+	if in.UnitPricing != nil {
+		// Variant ids are normally generated on insert, but a client-supplied
+		// id could already carry flat-price reseller overrides.
+		if err := s.dropResellerPrices(ctx, variantIDs(in.Variants)); err != nil {
+			return nil, err
+		}
+	}
 	// Assigned to a taxonomy node → denormalize the flat category slug + rootDomain
 	// so the legacy flat filters keep finding it.
 	if in.CategoryID != nil && *in.CategoryID != "" && s.categories != nil {
@@ -363,6 +385,18 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 		}
 		in.InputFields = fields
 	}
+	in.UnitPricing = normalizeUnitPricing(in.UnitPricing)
+	stale, err := s.validateUnitPricingUpdate(ctx, id, in)
+	if err != nil {
+		return nil, err
+	}
+	// Switching to per-unit: drop the variants' flat-price reseller overrides
+	// BEFORE the write, so a cleanup failure leaves the product on fixed
+	// pricing (where those overrides are still correct) instead of converting
+	// it with prices that would undercharge.
+	if err := s.dropResellerPrices(ctx, stale); err != nil {
+		return nil, err
+	}
 	// Re-assigned to a taxonomy node → denormalize the flat category slug +
 	// rootDomain from it (repository persists categoryId + rootDomain together).
 	if in.CategoryID != nil && *in.CategoryID != "" && s.categories != nil {
@@ -374,6 +408,82 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 		in.RootDomain = &root
 	}
 	return s.repo.Update(ctx, id, in)
+}
+
+// validateUnitPricingUpdate checks per-unit pricing against the product as it
+// will look after a partial update: the stored product overlaid with whichever
+// of type/mode/variants/fields/unitPricing the update carries. It only reads the
+// stored product when the result could be unit-priced and the update touches
+// something the invariants depend on. When the update switches the product
+// from fixed to per-unit pricing it returns the variant ids (stored and
+// incoming) whose per-reseller custom prices must be dropped.
+func (s *ProductService) validateUnitPricingUpdate(ctx context.Context, id string, in UpdateProductInput) ([]string, error) {
+	if in.UnitPricing.isClear() {
+		return nil, nil
+	}
+	touches := in.UnitPricing != nil || in.InputFields != nil || in.Variants != nil ||
+		in.FulfillmentType != nil || in.FulfillmentMode != nil
+	if !touches {
+		return nil, nil
+	}
+	cur, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	up := cur.UnitPricing
+	if in.UnitPricing != nil {
+		up = in.UnitPricing
+	}
+	if up == nil {
+		return nil, nil
+	}
+	t := unitPricingTarget{Type: cur.FulfillmentType, Mode: cur.FulfillmentMode, Variants: cur.Variants, Fields: cur.InputFields}
+	if in.FulfillmentType != nil {
+		t.Type = *in.FulfillmentType
+	}
+	if in.FulfillmentMode != nil {
+		t.Mode = *in.FulfillmentMode
+	}
+	if in.Variants != nil {
+		t.Variants = in.Variants
+	}
+	if in.InputFields != nil {
+		t.Fields = in.InputFields
+	}
+	if err := validateUnitPricing(up, t); err != nil {
+		return nil, err
+	}
+	if cur.UnitPricing != nil {
+		return nil, nil // already per-unit: its overrides are per-block by design
+	}
+	return append(variantIDs(cur.Variants), variantIDs(in.Variants)...), nil
+}
+
+// variantIDs returns the hex ids of the variants that have one.
+func variantIDs(vs []Variant) []string {
+	out := make([]string, 0, len(vs))
+	for _, v := range vs {
+		if !v.ID.IsZero() {
+			out = append(out, v.ID.Hex())
+		}
+	}
+	return out
+}
+
+// dropResellerPrices removes every reseller's custom price on the given
+// variants (no-op without a cleaner or ids). Removals are logged.
+func (s *ProductService) dropResellerPrices(ctx context.Context, ids []string) error {
+	if s.priceClean == nil || len(ids) == 0 {
+		return nil
+	}
+	n, err := s.priceClean.DeletePricesForVariants(ctx, ids)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		slog.Info("product: dropped reseller custom prices on per-unit conversion", "variants", ids, "removed", n)
+	}
+	return nil
 }
 
 // badRequest builds a 400-class validation error with a machine code.

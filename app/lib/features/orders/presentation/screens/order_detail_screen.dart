@@ -132,6 +132,7 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final (label, color) = _status(context);
+    final codeLines = order.codeLines;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -152,11 +153,25 @@ class _Body extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 20),
-        if (order.hasDeliveredCode) ...[
-          _CodeCard(code: order.fulfillment.deliveredCode!, l10n: l10n),
-          const SizedBox(height: 20),
+        if (codeLines.isNotEmpty) ...[
+          for (final line in codeLines) ...[
+            _CodeCard(
+              label: line.label(localeCode).isEmpty
+                  ? l10n.giftCardLabel
+                  : line.label(localeCode),
+              codes: line.codes,
+              l10n: l10n,
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Mixed order: codes are out, manual lines still pending.
+          if (order.isProcessing && order.hasManualLines) ...[
+            _ProcessingNote(text: l10n.orderRemainingProcessingNote),
+            const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 8),
         ] else if (order.isProcessing) ...[
-          _ProcessingNote(l10n: l10n),
+          _ProcessingNote(text: l10n.orderProcessingNote),
           const SizedBox(height: 20),
         ] else if (order.status == OrderStatus.refunded) ...[
           _RefundedNote(amount: order.total, l10n: l10n),
@@ -212,7 +227,11 @@ class _Body extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${item.title.resolve(localeCode)}  ×${item.qty}',
+                              // A per-unit (by-amount) line is always qty 1;
+                              // its amount shows as the denomination below.
+                              item.amount != null
+                                  ? item.title.resolve(localeCode)
+                                  : '${item.title.resolve(localeCode)}  ×${item.qty}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -434,10 +453,17 @@ class _Timeline extends StatelessWidget {
   }
 }
 
+/// One line's delivered codes: header + product label, then each code with its
+/// own copy button.
 class _CodeCard extends StatelessWidget {
-  const _CodeCard({required this.code, required this.l10n});
+  const _CodeCard({
+    required this.label,
+    required this.codes,
+    required this.l10n,
+  });
 
-  final String code;
+  final String label;
+  final List<String> codes;
   final AppLocalizations l10n;
 
   @override
@@ -461,48 +487,59 @@ class _CodeCard extends StatelessWidget {
               color: colors.textDim,
             ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  code,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: colors.text,
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: code));
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(l10n.copiedLabel)));
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: AppTokens.brandGradient,
-                    borderRadius: BorderRadius.circular(AppTokens.rPill),
-                  ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: colors.textFaint,
+            ),
+          ),
+          for (final code in codes) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
                   child: Text(
-                    l10n.copyLabel,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
+                    code,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
+                      color: colors.text,
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(l10n.copiedLabel)));
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: AppTokens.brandGradient,
+                      borderRadius: BorderRadius.circular(AppTokens.rPill),
+                    ),
+                    child: Text(
+                      l10n.copyLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -510,9 +547,9 @@ class _CodeCard extends StatelessWidget {
 }
 
 class _ProcessingNote extends StatelessWidget {
-  const _ProcessingNote({required this.l10n});
+  const _ProcessingNote({required this.text});
 
-  final AppLocalizations l10n;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -530,7 +567,7 @@ class _ProcessingNote extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              l10n.orderProcessingNote,
+              text,
               style: TextStyle(
                 fontSize: 13,
                 height: 1.4,

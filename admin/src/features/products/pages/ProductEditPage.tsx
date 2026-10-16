@@ -15,6 +15,22 @@ import {
 } from '../hooks/useProducts'
 import { reconcileBridgePhoneField } from '../lib/bridgeFields'
 import { toRows, fromRows, rowIssues, type InputFieldRow } from '../lib/fieldRows'
+import {
+  toForm as toUnitForm,
+  fromForm as fromUnitForm,
+  issues as unitIssues,
+  amountRows,
+  amountIgnoredByPrice,
+  driverRow,
+  enableRows,
+  disableRows,
+  droppedPackages,
+  fixedDenomination,
+  preview as unitPreview,
+  unitDenomination,
+  type UnitPricingForm,
+  type UnitRowsStash,
+} from '../lib/unitPricing'
 import { useCan } from '@/stores/auth'
 import type { FulfillmentType, Locale, InputFieldType } from '@/types'
 
@@ -117,6 +133,14 @@ export default function ProductEditPage() {
   // partial typing (currencies, "89." …) stays literal; parsed on save.
   const [mt, setMt] = useState({ base: '', quote: '', buy: '', sell: '', min: '', max: '' })
   const [mtError, setMtError] = useState('')
+  // Per-unit ("customer enters amount") pricing: the single variant prices a
+  // block of N units and an amount-type input field drives the line price.
+  // String-backed (unitPricing.ts); only honored on manual account-credit.
+  const [unit, setUnit] = useState<UnitPricingForm>(() => toUnitForm())
+  const [unitNotice, setUnitNotice] = useState('')
+  // What switching to per-unit changed in the input fields (removed quantity
+  // rows, auto-added amount row), kept until save so switching back restores it.
+  const [unitStash, setUnitStash] = useState<UnitRowsStash | null>(null)
   const [images, setImages] = useState<string[]>([])
   const [thumbnail, setThumbnail] = useState('')
   const [imageError, setImageError] = useState('')
@@ -166,6 +190,9 @@ export default function ProductEditPage() {
       min: m?.minAmount != null ? String(m.minAmount) : '',
       max: m?.maxAmount != null ? String(m.maxAmount) : '',
     })
+    setUnit(toUnitForm(p))
+    setUnitNotice('')
+    setUnitStash(null)
     setImages(p.images ?? [])
     setThumbnail(p.thumbnail ?? '')
   }, [data])
@@ -182,6 +209,50 @@ export default function ProductEditPage() {
     if (category && !values.includes(category)) values.unshift(category)
     return values
   }, [cats, category])
+
+  // Per-unit pricing is offered only on manually fulfilled account-credit
+  // products (the server rejects it with the bridge or a supplier API); any
+  // other configuration is forced back to fixed packages.
+  const unitEligible = ff === 'credit' && !bridgeOn && !apiOn
+  const perUnit = unit.enabled && unitEligible
+  const unitForm: UnitPricingForm = { ...unit, enabled: perUnit }
+  // A fixed-price credit product that still collects an amount charges the
+  // package price whatever the customer types — warn while editing.
+  const ignoredAmounts = amountIgnoredByPrice({
+    fulfillmentType: ff === 'credit' ? 'account_credit' : ff,
+    unitPricing: perUnit ? { blockUnits: 1 } : null,
+    inputFields,
+  })
+
+  // Switching to per-unit preps the input fields: quantity fields are removed
+  // (pack count contradicts typed amount) and an amount field is added when
+  // there is none, for the admin to bound.
+  const setPricingMode = (toPerUnit: boolean) => {
+    if (toPerUnit === perUnit) return
+    setUnitNotice('')
+    if (!toPerUnit) {
+      // Undo what per-unit changed before it was saved, and drop the auto
+      // "per N" label from the remaining package (an admin-typed label stays).
+      setInputFields((rows) => disableRows(rows, unitStash))
+      setUnitStash(null)
+      setVariants((vs) =>
+        vs.length ? [{ ...vs[0], denomination: fixedDenomination(vs[0].denomination, unit) }, ...vs.slice(1)] : vs,
+      )
+      setUnit((u) => ({ ...u, enabled: false }))
+      return
+    }
+    const { rows, removed, stash } = enableRows(inputFields)
+    setInputFields(rows)
+    setUnitStash(stash)
+    const driver = driverRow(unit, rows)
+    setUnit((u) => ({ ...u, enabled: true, fieldKey: driver?.key ?? '' }))
+    if (removed.length)
+      setUnitNotice(
+        `Removed the quantity field${removed.length > 1 ? 's' : ''} ${removed.map((k) => `"${k}"`).join(', ')} — per-unit products are bought by amount.`,
+      )
+  }
+  // Per-unit keeps only the first price row: warn about the packages a save deletes.
+  const droppedPkgs = perUnit ? droppedPackages(variants) : []
 
   const pending = create.isPending || update.isPending || uploadImage.isPending
   const error = create.error || update.error
@@ -301,6 +372,20 @@ export default function ProductEditPage() {
         ? { baseCurrency: '' as const, quoteCurrency: '' as const }
         : undefined
 
+    // Per-unit pricing: send the spec when on; the clear sentinel when a product
+    // that had it is back on fixed packages (incl. a switch to bridge/API/another
+    // type); omit otherwise. Per-unit keeps only the first variant row (its id
+    // preserved) and stamps its denomination ("per 1,000").
+    const hadUnit = !!data?.data?.unitPricing
+    const unitPricing = perUnit
+      ? fromUnitForm(unitForm, inputFields)
+      : hadUnit
+        ? { fieldKey: '', blockUnits: 0 }
+        : undefined
+    const variantRows = perUnit
+      ? [{ ...(variants[0] ?? { denomination: '', price: '', resellerPrice: '', faceValue: '' }), denomination: unitDenomination(unitForm) }]
+      : variants
+
     return {
       title,
       description,
@@ -336,7 +421,7 @@ export default function ProductEditPage() {
       stock,
       // Unit cost: send only when filled so a blank preserves the stored value.
       ...(cost.trim() !== '' ? { cost: Math.max(0, parseFloat(cost) || 0) } : {}),
-      variants: variants
+      variants: variantRows
         .filter((v) => v.denomination.trim() && v.price.trim())
         .map((v) => ({
           // Echo the existing variant id so the backend keeps it; omit for new
@@ -355,6 +440,7 @@ export default function ProductEditPage() {
       ...(fields.length || data?.data?.inputFields?.length ? { inputFields: fields } : {}),
       ...(verification ? { verification } : {}),
       ...(moneyTransfer ? { moneyTransfer } : {}),
+      ...(unitPricing ? { unitPricing } : {}),
     }
   }
 
@@ -410,7 +496,7 @@ export default function ProductEditPage() {
     // Block the save on input-field problems the admin can fix in the table
     // (duplicate keys, min>max, optionless select …) — mirrors the server's
     // validation so a submit never bounces on a 400 the UI could have caught.
-    const issues = rowIssues(inputFields)
+    const issues = [...rowIssues(inputFields), ...unitIssues(unitForm, inputFields, variants)]
     setFieldIssues(issues)
     if (issues.length) return
     const mtErr = mtIssue()
@@ -600,15 +686,125 @@ export default function ProductEditPage() {
             <div className="panelhead">
               <Icon name="layers" size={17} />
               <h3>Variants &amp; pricing</h3>
-              <div className="ph-act">
-                <button
-                  className="abtn xs"
-                  onClick={() => setVariants([...variants, { denomination: '', price: '', resellerPrice: '', faceValue: '' }])}
-                >
-                  <Icon name="plus" size={13} /> Add variant
-                </button>
-              </div>
+              {!perUnit && (
+                <div className="ph-act">
+                  <button
+                    className="abtn xs"
+                    onClick={() => setVariants([...variants, { denomination: '', price: '', resellerPrice: '', faceValue: '' }])}
+                  >
+                    <Icon name="plus" size={13} /> Add variant
+                  </button>
+                </div>
+              )}
             </div>
+            {unitEligible && (
+              <div style={{ padding: '0 18px 12px' }}>
+                <div className="aseg">
+                  <button className={!perUnit ? 'on' : ''} onClick={() => setPricingMode(false)}>
+                    Fixed packages
+                  </button>
+                  <button className={perUnit ? 'on' : ''} onClick={() => setPricingMode(true)}>
+                    Per unit (customer enters amount)
+                  </button>
+                </div>
+                <div className="ahint" style={{ margin: '6px 0 0' }}>
+                  {perUnit
+                    ? 'For coin/diamond recharges sold by amount: the customer types how many units they want and pays the price below pro-rata.'
+                    : 'The customer picks one of the packages below.'}
+                </div>
+                {unitNotice && (
+                  <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{unitNotice}</div>
+                )}
+                {droppedPkgs.length > 0 && (
+                  <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>
+                    {`Saving will delete ${droppedPkgs.length} other package${droppedPkgs.length > 1 ? 's' : ''} (${droppedPkgs.map((d) => `"${d}"`).join(', ')}) — per-unit products keep a single price. Switch back to Fixed packages to keep ${droppedPkgs.length > 1 ? 'them' : 'it'}.`}
+                  </div>
+                )}
+              </div>
+            )}
+            {ignoredAmounts.length > 0 && (
+              <div
+                style={{ padding: '0 18px 12px', color: 'var(--warn)', fontSize: 12.5, fontWeight: 600 }}
+                role="alert"
+              >
+                {`Customers type ${ignoredAmounts.map((l) => `"${l}"`).join(', ')} at checkout but pay the package price — `}
+                {unitEligible
+                  ? 'switch to Per unit, or change the field type in Input fields below.'
+                  : 'change the field type in Input fields below (Per unit isn’t available with the bridge or a supplier API).'}
+              </div>
+            )}
+            {perUnit ? (
+              <div style={{ padding: '0 18px 18px' }}>
+                {(() => {
+                  const v = variants[0] ?? { denomination: '', price: '', resellerPrice: '', faceValue: '' }
+                  const setV = (u: Partial<VariantRow>) => setVariants([{ ...v, ...u }, ...variants.slice(1)])
+                  const amounts = amountRows(inputFields)
+                  const driver = driverRow(unit, inputFields)
+                  const line = unitPreview(unitForm, inputFields, v.price)
+                  return (
+                    <>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                        <div>
+                          <label className="alabel">Customer price</label>
+                          <input
+                            className="afield"
+                            style={{ width: 110 }}
+                            inputMode="decimal"
+                            value={v.price}
+                            onChange={(e) => setV({ price: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="alabel">Reseller price</label>
+                          <input
+                            className="afield"
+                            style={{ width: 110 }}
+                            inputMode="decimal"
+                            value={v.resellerPrice}
+                            onChange={(e) => setV({ resellerPrice: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="alabel">Per … units</label>
+                          <input
+                            className="afield"
+                            style={{ width: 110 }}
+                            inputMode="decimal"
+                            placeholder="1000"
+                            value={unit.blockUnits}
+                            onChange={(e) => setUnit((u) => ({ ...u, blockUnits: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="alabel">Amount field</label>
+                          <select
+                            className="select"
+                            value={driver?.key ?? ''}
+                            onChange={(e) => setUnit((u) => ({ ...u, fieldKey: e.target.value }))}
+                          >
+                            {amounts.length === 0 && <option value="">— add an amount field —</option>}
+                            {amounts.map((f, i) => (
+                              <option key={i} value={f.key}>
+                                {f.label.en || f.key || `field #${i + 1}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ paddingBottom: 8 }}>
+                          <span className="st st-ok" style={{ fontSize: 11 }}>
+                            {margin(v)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="ahint" style={{ margin: '10px 0 0' }}>
+                        {line ||
+                          'Set the price, the units it buys, and the amount field’s min/max (Input fields below) to see a preview.'}
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+            ) : (
             <div className="tablewrap">
               <table className="tbl">
                 <thead>
@@ -695,6 +891,7 @@ export default function ProductEditPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
 
           {/* Input fields — define what the customer enters at checkout */}
@@ -721,7 +918,9 @@ export default function ProductEditPage() {
               attached to the order for fulfillment. Keys must be unique. <b>Sensitive</b> fields
               are masked and never stored on the order. <b>Constraints</b>: <code>quantity</code>/
               <code>amount</code> take an optional min–max range; <code>select</code> takes the
-              choices shown to the customer.
+              choices shown to the customer. <b>quantity</b> = how many packages the customer buys;{' '}
+              <b>amount</b> = a number the customer types (it drives the price when <b>Per unit</b>{' '}
+              pricing is on).
             </div>
             {inputFields.length === 0 ? (
               <div className="ahint" style={{ margin: 0 }}>
@@ -766,11 +965,15 @@ export default function ProductEditPage() {
                               value={f.type}
                               onChange={(e) => patch({ type: e.target.value as InputFieldType })}
                             >
-                              {(['text', 'select', 'amount', 'quantity'] as const).map((t) => (
-                                <option key={t} value={t}>
-                                  {t}
-                                </option>
-                              ))}
+                              {(['text', 'select', 'amount', 'quantity'] as const)
+                                // Per-unit products are bought by amount — no pack
+                                // count (kept only so a stray row still renders).
+                                .filter((t) => t !== 'quantity' || !perUnit || f.type === 'quantity')
+                                .map((t) => (
+                                  <option key={t} value={t}>
+                                    {t === 'quantity' ? 'quantity (number of packs)' : t}
+                                  </option>
+                                ))}
                             </select>
                           </td>
                           <td>

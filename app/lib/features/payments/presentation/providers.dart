@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/regulated_finance.dart';
 import '../../../core/error/failure.dart';
 import '../../../core/network/providers.dart';
 import '../data/datasources/payment_remote_data_source.dart';
@@ -19,6 +20,7 @@ final paymentRepositoryProvider = Provider<PaymentRepository>(
 /// checkout screens read it to decide whether to offer the USDT option. A
 /// failure resolves to "disabled" so the UI degrades gracefully.
 final paymentConfigProvider = FutureProvider<PaymentConfig>((ref) async {
+  if (hideRegulatedFinance) return const PaymentConfig(usdtEnabled: false);
   final result = await ref.watch(paymentRepositoryProvider).getConfig();
   return result.match(
     (_) => const PaymentConfig(usdtEnabled: false),

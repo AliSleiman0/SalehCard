@@ -118,6 +118,18 @@ Map<String, dynamic> _$MoneyTransferDtoToJson(MoneyTransferDto instance) =>
       'maxAmount': instance.maxAmount,
     };
 
+UnitPricingDto _$UnitPricingDtoFromJson(Map<String, dynamic> json) =>
+    UnitPricingDto(
+      fieldKey: json['fieldKey'] as String? ?? '',
+      blockUnits: (json['blockUnits'] as num?)?.toDouble() ?? 0,
+    );
+
+Map<String, dynamic> _$UnitPricingDtoToJson(UnitPricingDto instance) =>
+    <String, dynamic>{
+      'fieldKey': instance.fieldKey,
+      'blockUnits': instance.blockUnits,
+    };
+
 ProductDto _$ProductDtoFromJson(Map<String, dynamic> json) => ProductDto(
   id: json['id'] as String,
   title: json['title'] as Map<String, dynamic>?,
@@ -141,6 +153,9 @@ ProductDto _$ProductDtoFromJson(Map<String, dynamic> json) => ProductDto(
       : MoneyTransferDto.fromJson(
           json['moneyTransfer'] as Map<String, dynamic>,
         ),
+  unitPricing: json['unitPricing'] == null
+      ? null
+      : UnitPricingDto.fromJson(json['unitPricing'] as Map<String, dynamic>),
   ratings: json['ratings'] == null
       ? null
       : RatingsDto.fromJson(json['ratings'] as Map<String, dynamic>),
@@ -163,6 +178,7 @@ Map<String, dynamic> _$ProductDtoToJson(ProductDto instance) =>
       'inputFields': instance.inputFields?.map((e) => e.toJson()).toList(),
       'verification': instance.verification?.toJson(),
       'moneyTransfer': instance.moneyTransfer?.toJson(),
+      'unitPricing': instance.unitPricing?.toJson(),
       'ratings': instance.ratings?.toJson(),
       'offer': instance.offer?.toJson(),
     };

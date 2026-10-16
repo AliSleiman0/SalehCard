@@ -24,3 +24,10 @@ String formatUsdtAmount(double amount) {
   }
   return s;
 }
+
+/// Formats a unit count (coins, points…) with thousands grouping in Western
+/// digits, matching the server's denomination snapshot: 45000 → "45,000",
+/// 1500.5 → "1,500.5".
+String formatUnits(double units) {
+  return NumberFormat('#,##0.##', 'en_US').format(units);
+}

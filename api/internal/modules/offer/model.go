@@ -82,15 +82,29 @@ type productSummary struct {
 	InStock   bool               `json:"inStock"`
 }
 
-// fromPrice returns a product's lowest variant price (0 when it has no variants).
+// fromPrice returns a product's lowest list price (0 when it has no variants);
+// a per-unit product quotes its minimum amount (see product.FromPrice).
 func fromPrice(p *product.Product) float64 {
-	min := 0.0
-	for i, v := range p.Variants {
-		if i == 0 || v.Price < min {
-			min = v.Price
-		}
+	return product.FromPrice(p)
+}
+
+// AppliesTo reports whether o's discount may apply to p: a fixed-amount offer
+// never applies to a per-unit product (it would be taken off every block).
+// Checkout (order.PlaceOrder), the catalog enrichment and the offer views
+// share this rule.
+func AppliesTo(o *Offer, p *product.Product) bool {
+	return o != nil && p.AcceptsDiscount(string(o.DiscountType))
+}
+
+// offerFromPrice is p's "from" price with o applied: the discount is taken off
+// each variant's (block) price before a per-unit product is rescaled to its
+// minimum amount — the same order checkout prices a line in. An offer that
+// does not apply leaves the original from price.
+func offerFromPrice(o *Offer, p *product.Product) float64 {
+	if !AppliesTo(o, p) {
+		return fromPrice(p)
 	}
-	return min
+	return product.FromPriceWith(p, func(v float64) float64 { return OfferPriceFor(o, v) })
 }
 
 // summarize projects a product into the offer view shape.

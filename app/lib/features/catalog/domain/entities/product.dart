@@ -120,6 +120,31 @@ class MoneyTransfer {
   bool get hasSell => (sellRate ?? 0) > 0;
 }
 
+/// Per-unit ("by amount") pricing for live-app recharge products (Up Live,
+/// Bigo, Soul Star coins…): the customer types an amount into the
+/// [fieldKey] input field and pays the single variant's effective price per
+/// [blockUnits] units — see [unitLinePrice].
+class UnitPricing {
+  const UnitPricing({required this.fieldKey, required this.blockUnits});
+
+  /// Key of the `amount`-type [InputField] that drives the price.
+  final String fieldKey;
+
+  /// How many units the single variant's price buys (e.g. 1000 coins).
+  final double blockUnits;
+}
+
+/// Rounds a USD amount to the nearest cent, matching the API's `RoundCents`.
+double roundCents(double v) => (v * 100).round() / 100;
+
+/// Price of one per-unit line: the block price (already offer/reseller
+/// adjusted) scaled to [amount] units, rounded to the cent — the same formula
+/// the server charges (`blockPrice * amount / blockUnits`).
+double unitLinePrice(double blockPrice, double amount, double blockUnits) {
+  if (blockUnits <= 0) return 0;
+  return roundCents(blockPrice * amount / blockUnits);
+}
+
 /// Catalog product (domain entity).
 class Product {
   const Product({
@@ -135,6 +160,7 @@ class Product {
     this.inputFields = const [],
     this.verification,
     this.moneyTransfer,
+    this.unitPricing,
     this.rating,
     this.ratingCount = 0,
     this.offer,
@@ -200,6 +226,45 @@ class Product {
       moneyTransfer != null &&
       (moneyTransfer!.hasBuy || moneyTransfer!.hasSell);
 
+  /// Per-unit pricing spec, or null for normal (fixed-package) products.
+  final UnitPricing? unitPricing;
+
+  /// Whether the product is sold by a typed amount (coins etc.) rather than
+  /// fixed packages. True even when misconfigured — check [unitAmountField]
+  /// before allowing a purchase.
+  bool get isUnitPriced => unitPricing != null;
+
+  /// The `amount`-type input field that drives a per-unit product's price, or
+  /// null when the product is not unit-priced or is misconfigured (block size
+  /// not positive, driving field missing / not an amount, or not exactly one
+  /// variant). A misconfigured unit-priced product must not be bought — the
+  /// server would refuse it anyway.
+  InputField? get unitAmountField {
+    final u = unitPricing;
+    if (u == null || u.blockUnits <= 0 || variants.length != 1) return null;
+    for (final f in inputFields) {
+      if (f.key == u.fieldKey && f.type == 'amount') return f;
+    }
+    return null;
+  }
+
+  /// Price of a unit-priced line for [amount] units, using the single
+  /// variant's effective (offer/reseller) price, or null when the product is
+  /// not validly unit-priced.
+  double? unitLinePriceFor(double amount) {
+    if (unitAmountField == null) return null;
+    return unitLinePrice(
+        variants.single.effectivePrice, amount, unitPricing!.blockUnits);
+  }
+
+  /// Units a unit-priced "from" price is quoted for: the driving field's
+  /// minimum when set and positive, else one block.
+  double? get _unitFromAmount {
+    if (unitAmountField == null) return null;
+    final min = unitAmountField!.constraints?.min;
+    return (min != null && min > 0) ? min : unitPricing!.blockUnits;
+  }
+
   final double? rating;
   final int ratingCount;
 
@@ -212,6 +277,11 @@ class Product {
   /// Lowest variant price, or null when there are no variants.
   double? get fromPrice {
     if (variants.isEmpty) return null;
+    final unitFrom = _unitFromAmount;
+    if (unitFrom != null) {
+      return unitLinePrice(
+          variants.single.price, unitFrom, unitPricing!.blockUnits);
+    }
     return variants
         .map((v) => v.price)
         .reduce((a, b) => a < b ? a : b);
@@ -221,6 +291,15 @@ class Product {
   /// server-computed [ProductOffer.offerFromPrice]; falls back to the lowest
   /// variant offer price.
   double? get offerFromPrice {
+    final unitFrom = _unitFromAmount;
+    if (unitFrom != null) {
+      // The server's offer block quotes the block price — rescale it to the
+      // minimum purchasable amount like [fromPrice].
+      final p = variants.single.offerPrice;
+      return p == null
+          ? null
+          : unitLinePrice(p, unitFrom, unitPricing!.blockUnits);
+    }
     if (offer != null) return offer!.offerFromPrice;
     final priced = variants.where((v) => v.offerPrice != null);
     if (priced.isEmpty) return null;

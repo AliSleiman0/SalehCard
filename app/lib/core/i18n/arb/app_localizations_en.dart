@@ -427,6 +427,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'We\'ll notify you the moment it\'s done. You can track its status from the order page.';
 
   @override
+  String get orderRemainingProcessingNote =>
+      'Your codes are ready above. The remaining items are being processed — we\'ll notify you the moment they\'re done.';
+
+  @override
   String get viewOrderCta => 'View order';
 
   @override
@@ -962,4 +966,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deleteAccountTopUpsPending =>
       'You have a wallet top-up awaiting approval. Please wait for its decision, then try again.';
+
+  @override
+  String unitRateLine(String price, String units) {
+    return '$price per $units';
+  }
+
+  @override
+  String get amountTooSmall => 'This amount is too small to purchase.';
+
+  @override
+  String get unitPricedUnavailable =>
+      'This product can\'t be bought right now. Please try again later.';
 }

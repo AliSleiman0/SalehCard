@@ -2,9 +2,14 @@ import type { CartItem } from '@/stores/cart'
 import type { InputField, PlaceOrderItemInput, Product, Recipient } from '@/types'
 
 // Non-quantity fields are the customer-editable delivery inputs; the legacy
-// `quantity` type is a read-only echo of the cart qty (server derives it).
+// `quantity` type is a read-only echo of the cart qty (server derives it), and
+// a unit-priced product's driving amount field is entered on the product page
+// (sent as the line's `amount`; the server overwrites the field from it).
 export function nonQuantityFields(product?: Product): InputField[] {
-  return (product?.inputFields ?? []).filter((f) => f.type !== 'quantity')
+  const amountKey = product?.unitPricing?.fieldKey
+  return (product?.inputFields ?? []).filter(
+    (f) => f.type !== 'quantity' && !(amountKey && f.key === amountKey && f.type === 'amount'),
+  )
 }
 
 // isValidLebaneseMobile mirrors the API's normalization (strip separators /
@@ -46,6 +51,17 @@ export function buildRecipient(values: Record<string, string>): Recipient {
 // `itemValues` is a fieldKey → value map for this line. Transfer lines with no
 // schema fields are handled by the caller (legacy name+country fallback).
 export function buildOrderLine(
+  item: CartItem,
+  product: Product | undefined,
+  itemValues: Record<string, string>,
+): PlaceOrderItemInput {
+  const line = buildBaseLine(item, product, itemValues)
+  // Unit-priced lines carry the typed amount and are always a single unit.
+  if (item.amount !== undefined) return { ...line, qty: 1, amount: item.amount }
+  return line
+}
+
+function buildBaseLine(
   item: CartItem,
   product: Product | undefined,
   itemValues: Record<string, string>,

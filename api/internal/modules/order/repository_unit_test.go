@@ -51,21 +51,21 @@ func TestOrderFilter_build(t *testing.T) {
 		assert.False(t, ok)
 	})
 
-	t.Run("non-hex search builds $or over deliveredCode and userId", func(t *testing.T) {
+	t.Run("non-hex search builds $or over deliveredCode, item codes and userId", func(t *testing.T) {
 		uid := bson.NewObjectID()
 		d := OrderFilter{SearchRaw: "DEMO-0001", UserIDs: []bson.ObjectID{uid}}.build()
 		v, ok := get(d, "$or")
 		require.True(t, ok)
 		or, ok := v.(bson.A)
 		require.True(t, ok)
-		assert.Len(t, or, 2) // deliveredCode + userId clauses
+		assert.Len(t, or, 3) // deliveredCode + items.codes + userId clauses
 	})
 
 	t.Run("search with no matching users still matches by deliveredCode", func(t *testing.T) {
 		d := OrderFilter{SearchRaw: "DEMO-0001", UserIDs: []bson.ObjectID{}}.build()
 		v, _ := get(d, "$or")
 		or, _ := v.(bson.A)
-		assert.Len(t, or, 1) // only the deliveredCode clause
+		assert.Len(t, or, 2) // deliveredCode + items.codes clauses
 	})
 }
 

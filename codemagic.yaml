@@ -1,0 +1,59 @@
+workflows:
+  ios-release:
+    name: iOS Release (TestFlight)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    working_directory: app
+    # App Store Connect API key added in Codemagic (Teams > Integrations >
+    # Developer Portal), referenced by its name there.
+    integrations:
+      app_store_connect: Apple Distribution
+    environment:
+      flutter: 3.44.8
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.flashcashglobal.app
+      vars:
+        BUNDLE_ID: "com.flashcashglobal.app"
+        # Without this the build bakes in the dev LAN API and hangs on real
+        # devices (see the Android APK note in project memory).
+        API_BASE_URL: "https://salehcard-api.azurewebsites.net/api/v1"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    # Only build when the Flutter app changed, so api/web/admin commits don't
+    # burn macOS minutes.
+    when:
+      changeset:
+        includes:
+          - 'app/'
+          - 'codemagic.yaml'
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+      - name: Flutter build ipa
+        # No `pod install` step: this project uses Swift Package Manager for
+        # plugin integration (there is no ios/Podfile), so Xcode resolves
+        # Firebase/plugin dependencies itself as part of the build.
+        # Build number = Codemagic's per-workflow counter offset past the
+        # pubspec's +4, so every upload to App Store Connect is unique.
+        script: |
+          flutter build ipa --release \
+            --build-number=$((4 + BUILD_NUMBER)) \
+            --dart-define=API_BASE_URL=$API_BASE_URL \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Uploads land in TestFlight for internal testers automatically;
+        # external beta review is not needed for now.
+        submit_to_testflight: false

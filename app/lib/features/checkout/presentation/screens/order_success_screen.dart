@@ -13,8 +13,9 @@ import '../providers.dart';
 
 /// Order success / processing screen. Uses the [order] passed via router `extra`
 /// when available (avoids a refetch right after placing it); otherwise loads it
-/// by [id]. Completed code orders show the delivered code with a copy button;
-/// account_credit / transfer orders show the processing variant.
+/// by [id]. Delivered codes show per line with a copy button (also on a mixed
+/// order that is still processing its manual lines); account_credit / transfer
+/// orders show the processing variant.
 class OrderSuccessScreen extends ConsumerWidget {
   const OrderSuccessScreen({super.key, required this.id, this.order});
 
@@ -97,14 +98,15 @@ class _SuccessBody extends ConsumerStatefulWidget {
 }
 
 class _SuccessBodyState extends ConsumerState<_SuccessBody> {
-  bool _copied = false;
+  /// The code most recently copied (drives that row's "Copied" pill).
+  String? _copiedCode;
 
   Future<void> _copy(String code) async {
     await Clipboard.setData(ClipboardData(text: code));
     if (!mounted) return;
-    setState(() => _copied = true);
+    setState(() => _copiedCode = code);
     Future.delayed(const Duration(milliseconds: 1600), () {
-      if (mounted) setState(() => _copied = false);
+      if (mounted && _copiedCode == code) setState(() => _copiedCode = null);
     });
   }
 
@@ -114,7 +116,11 @@ class _SuccessBodyState extends ConsumerState<_SuccessBody> {
     final colors = context.colors;
     final order = widget.order;
     final localeCode = ref.watch(localeControllerProvider).languageCode;
-    final processing = order.isProcessing || !order.hasDeliveredCode;
+    final codeLines = order.codeLines;
+    final processing = order.isProcessing || codeLines.isEmpty;
+    // Codes delivered but manual (credit/transfer) lines still pending.
+    final partial =
+        codeLines.isNotEmpty && order.isProcessing && order.hasManualLines;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
@@ -170,16 +176,29 @@ class _SuccessBodyState extends ConsumerState<_SuccessBody> {
           ),
         ),
         const SizedBox(height: 24),
-        if (!processing && order.hasDeliveredCode)
-          _CodeCard(
-            label: _codeLabel(order, localeCode, l10n),
-            code: order.fulfillment.deliveredCode!,
-            copied: _copied,
-            onCopy: () => _copy(order.fulfillment.deliveredCode!),
-            l10n: l10n,
-          )
-        else
-          _ProcessingNote(l10n: l10n),
+        if (codeLines.isNotEmpty) ...[
+          Text(l10n.deliveredCodesLabel,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: colors.text)),
+          const SizedBox(height: 11),
+          for (var i = 0; i < codeLines.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            _CodeCard(
+              label: _codeLabel(codeLines[i], localeCode, l10n),
+              codes: codeLines[i].codes,
+              copiedCode: _copiedCode,
+              onCopy: _copy,
+              l10n: l10n,
+            ),
+          ],
+          if (partial) ...[
+            const SizedBox(height: 14),
+            _ProcessingNote(text: l10n.orderRemainingProcessingNote),
+          ],
+        ] else
+          _ProcessingNote(text: l10n.orderProcessingNote),
         const SizedBox(height: 26),
         OutlinedButton(
           onPressed: () => context.go('/orders/${order.id}'),
@@ -211,16 +230,10 @@ class _SuccessBodyState extends ConsumerState<_SuccessBody> {
     );
   }
 
-  String _codeLabel(Order order, String localeCode, AppLocalizations l10n) {
-    for (final item in order.items) {
-      if (item.fulfillmentType == 'code') {
-        final title = item.title.resolve(localeCode);
-        final denom = item.denomination;
-        if (title.isEmpty) return l10n.giftCardLabel;
-        return denom.isEmpty ? title : '$title · $denom';
-      }
-    }
-    return l10n.giftCardLabel;
+  String _codeLabel(
+      OrderCodeLine line, String localeCode, AppLocalizations l10n) {
+    final label = line.label(localeCode);
+    return label.isEmpty ? l10n.giftCardLabel : label;
   }
 }
 
@@ -254,89 +267,82 @@ class _StatusCircle extends StatelessWidget {
   }
 }
 
+/// One line's delivered codes: the product label, then each code with its own
+/// copy pill.
 class _CodeCard extends StatelessWidget {
   const _CodeCard({
     required this.label,
-    required this.code,
-    required this.copied,
+    required this.codes,
+    required this.copiedCode,
     required this.onCopy,
     required this.l10n,
   });
 
   final String label;
-  final String code;
-  final bool copied;
-  final VoidCallback onCopy;
+  final List<String> codes;
+  final String? copiedCode;
+  final ValueChanged<String> onCopy;
   final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(AppTokens.rMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textDim)),
+          for (final code in codes) ...[
+            const SizedBox(height: 8),
+            _codeRow(code, copiedCode == code, colors),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _codeRow(String code, bool copied, AppColors colors) {
+    return Row(
       children: [
-        Text(l10n.deliveredCodesLabel,
+        Expanded(
+          child: Text(
+            code,
             style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: colors.text)),
-        const SizedBox(height: 11),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: colors.surface,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(AppTokens.rMd),
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: colors.text,
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textDim)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      code,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        color: colors.text,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: onCopy,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: copied
-                            ? const Color(0x293FA37A)
-                            : AppTokens.cta,
-                        borderRadius: BorderRadius.circular(AppTokens.rPill),
-                      ),
-                      child: Text(
-                        copied ? l10n.copiedLabel : l10n.copyLabel,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                          color:
-                              copied ? const Color(0xFF3FA37A) : Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+        ),
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: () => onCopy(code),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: copied ? const Color(0x293FA37A) : AppTokens.cta,
+              borderRadius: BorderRadius.circular(AppTokens.rPill),
+            ),
+            child: Text(
+              copied ? l10n.copiedLabel : l10n.copyLabel,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                color: copied ? const Color(0xFF3FA37A) : Colors.white,
               ),
-            ],
+            ),
           ),
         ),
       ],
@@ -345,9 +351,9 @@ class _CodeCard extends StatelessWidget {
 }
 
 class _ProcessingNote extends StatelessWidget {
-  const _ProcessingNote({required this.l10n});
+  const _ProcessingNote({required this.text});
 
-  final AppLocalizations l10n;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -367,7 +373,7 @@ class _ProcessingNote extends StatelessWidget {
           const SizedBox(width: 11),
           Expanded(
             child: Text(
-              l10n.orderProcessingNote,
+              text,
               style: TextStyle(
                   fontSize: 13, height: 1.5, color: colors.textDim),
             ),

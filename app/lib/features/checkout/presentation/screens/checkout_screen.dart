@@ -22,7 +22,6 @@ import '../../../kyc/presentation/providers.dart' show kycProfileProvider;
 import '../../../payments/presentation/providers.dart' show paymentConfigProvider;
 import '../../../wallet/presentation/providers.dart' show walletProvider;
 import '../../domain/entities/order.dart';
-import '../../domain/field_validation.dart';
 import '../providers.dart';
 import '../widgets/dynamic_input_field.dart';
 
@@ -200,13 +199,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final products = productsAsync.asData?.value ?? const <String, Product>{};
     // The legacy "quantity"-type field (if any) is a read-only echo of the
     // cart's real qty, not an editable delivery-detail input — the product
-    // page's stepper is the only place quantity is chosen.
+    // page's stepper is the only place quantity is chosen. Likewise the
+    // amount field driving a per-unit product's price was already typed on the
+    // product page (it rides the line as `amount`).
     final needing = [
       for (final item in items)
         if ((products[item.productId]?.fulfillmentType ?? item.fulfillmentType) !=
                 'code' &&
             (products[item.productId]?.inputFields
-                    .any((f) => f.type != 'quantity') ??
+                    .any((f) => _isCheckoutField(products[item.productId]!, f)) ??
                 false))
           item,
     ];
@@ -221,8 +222,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     ];
     for (final item in needing) {
       final product = products[item.productId]!;
-      final fields =
-          product.inputFields.where((f) => f.type != 'quantity').toList();
+      final fields = product.inputFields
+          .where((f) => _isCheckoutField(product, f))
+          .toList();
       if (showTitles) {
         widgets.add(Padding(
           padding: const EdgeInsets.only(top: 14),
@@ -269,7 +271,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final product = products[item.productId];
       if (product == null || product.fulfillmentType == 'code') continue;
       for (final field in product.inputFields) {
-        if (field.type == 'quantity') continue; // server derives this from qty
+        // Server derives the quantity field from qty, and a per-unit product's
+        // driving amount field from the line's amount.
+        if (!_isCheckoutField(product, field)) continue;
         final key = '${item.key}|${field.key}';
         final value = _valueFor(key, field).trim();
         if (value.isEmpty) {
@@ -283,7 +287,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           // Amount fields carry optional min/max bounds — enforce them here so
           // the customer gets an inline message instead of a server 400 (the
           // server re-validates regardless).
-          final msg = _amountIssueMessage(l10n, field.constraints, value);
+          final msg = amountIssueMessage(l10n, field.constraints, value);
           if (msg != null) errors[key] = msg;
         }
       }
@@ -299,9 +303,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     for (final item in items) {
       final product = products[item.productId];
       // Exclude the legacy "quantity"-type field — it's not customer-editable
-      // data; the server derives its value from the line's real qty.
+      // data; the server derives its value from the line's real qty — and a
+      // per-unit product's driving amount field (sent as the line's amount).
       final fields = (product?.inputFields ?? const <InputField>[])
-          .where((f) => f.type != 'quantity')
+          .where((f) => _isCheckoutField(product!, f))
           .toList();
       String? playerId;
       OrderRecipient? recipient;
@@ -334,6 +339,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         productId: item.productId,
         variantId: item.variantId,
         qty: item.qty,
+        amount: item.amount,
         playerId: playerId,
         recipient: recipient,
         fields: fieldList,
@@ -372,6 +378,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  /// Whether [field] is collected in checkout's delivery form: not the legacy
+  /// quantity echo, and not a per-unit product's driving amount field.
+  static bool _isCheckoutField(Product product, InputField field) =>
+      field.type != 'quantity' && field.key != product.unitPricing?.fieldKey;
+
   /// Validates a Lebanese mobile number, mirroring the API's normalization
   /// (strip separators / international / trunk prefixes, re-expand the legacy 03
   /// range) and prefix check (03 / 70 / 71 / 76 / 78 / 79 / 81 + 6 digits).
@@ -385,30 +396,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (d.startsWith('0')) d = d.substring(1);
     if (d.length == 7 && d.startsWith('3')) d = '0$d';
     return RegExp(r'^(03|70|71|76|78|79|81)\d{6}$').hasMatch(d);
-  }
-
-  /// Maps an amount-bounds violation to its localized inline message, or null
-  /// when the value is fine (or the field carries no enforceable bounds).
-  static String? _amountIssueMessage(
-    AppLocalizations l10n,
-    InputFieldConstraints? c,
-    String value,
-  ) {
-    switch (checkAmountBounds(c, value)) {
-      case AmountBoundsIssue.none:
-        return null;
-      case AmountBoundsIssue.notANumber:
-        return l10n.amountNotANumber;
-      case AmountBoundsIssue.belowMin:
-      case AmountBoundsIssue.aboveMax:
-        final min = c?.min;
-        final max = c?.max;
-        if (min != null && max != null) {
-          return l10n.amountOutOfRange(formatBound(min), formatBound(max));
-        }
-        if (min != null) return l10n.amountAtLeast(formatBound(min));
-        return l10n.amountAtMost(formatBound(max!));
-    }
   }
 
   OrderRecipient _buildRecipient(Map<String, String> values) {
@@ -595,7 +582,9 @@ class _OrderSummary extends StatelessWidget {
                   const SizedBox(width: 11),
                   Expanded(
                     child: Text(
-                      '${item.title.resolve(localeCode)}  ×${item.qty}',
+                      item.isAmountLine
+                          ? '${item.title.resolve(localeCode)}  ${item.variantLabel}'
+                          : '${item.title.resolve(localeCode)}  ×${item.qty}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

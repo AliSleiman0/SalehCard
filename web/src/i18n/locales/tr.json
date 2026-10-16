@@ -321,5 +321,14 @@
   "no_results_sub": "Farklı bir arama deneyin veya filtreleri değiştirin.",
   "empty_orders": "Henüz sipariş yok",
   "empty_orders_sub": "Satın alımların ve kodların burada görünür.",
-  "start_shopping": "Alışverişe başla"
+  "start_shopping": "Alışverişe başla",
+  "amount_range": "{{min}} – {{max}}",
+  "amount_min": "En az {{min}}",
+  "amount_out_of_range": "{{min}} ile {{max}} arasında bir miktar girin",
+  "amount_below_min": "En az {{min}} miktar girin",
+  "amount_rate": "{{units}} başına {{price}}",
+  "amount_units": "birim",
+  "amount_whole_only": "Tam sayı girin (ondalık yok)",
+  "amount_too_small": "Bu miktar çok küçük — toplam en az 0,01$ olmalı",
+  "cart_updated": "Sepet güncellendi"
 }

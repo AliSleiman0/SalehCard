@@ -1,5 +1,6 @@
 import 'package:fpdart/fpdart.dart';
 
+import '../../../../core/config/regulated_finance.dart';
 import '../../../../core/error/failure.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/repositories/category_repository.dart';
@@ -24,7 +25,12 @@ class CategoryRepositoryImpl implements CategoryRepository {
         rootDomain: rootDomain,
         parentId: parentId,
       );
-      return Right(dtos.map((d) => d.toEntity()).toList());
+      return Right([
+        for (final category in dtos.map((d) => d.toEntity()))
+          if (!hideRegulatedFinance ||
+              !regulatedRootDomains.contains(category.rootDomain))
+            category,
+      ]);
     } catch (error) {
       return Left(mapError(error));
     }

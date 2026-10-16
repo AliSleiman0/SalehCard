@@ -13,8 +13,10 @@ class Recipient {
   final String detail;
 }
 
-/// A line item in the local cart. Mirrors `web/src/stores/cart.ts`: identified by
-/// the composite `productId|variantId` key so the same denomination merges.
+/// A line item in the local cart. Identified by the composite
+/// `productId|variantId|amount|playerId` key so the same denomination (or the
+/// same typed amount of a per-unit product) for the same account merges, while
+/// a purchase for a different player ID stays a separate line.
 class CartItem {
   const CartItem({
     required this.productId,
@@ -28,6 +30,7 @@ class CartItem {
     this.originalPrice,
     this.playerId,
     this.recipient,
+    this.amount,
   });
 
   final String productId;
@@ -48,8 +51,18 @@ class CartItem {
   final String? playerId;
   final Recipient? recipient;
 
-  /// Composite key used for merge-on-add and removal.
-  String get key => '$productId|$variantId';
+  /// Typed units on a per-unit (by-amount) line, e.g. 45000 coins; null for
+  /// fixed-package lines. Such lines are always [qty] 1 and [price] is the
+  /// whole line's price.
+  final double? amount;
+
+  /// Whether this is a per-unit (by-amount) line.
+  bool get isAmountLine => amount != null;
+
+  /// Composite key used for merge-on-add and removal. Includes the player ID
+  /// (the first entered field) so two purchases for different accounts never
+  /// collapse into one line.
+  String get key => '$productId|$variantId|${amount ?? ''}|${playerId ?? ''}';
 
   double get lineTotal => price * qty;
 
@@ -72,6 +85,7 @@ class CartItem {
       originalPrice: originalPrice,
       playerId: playerId ?? this.playerId,
       recipient: recipient ?? this.recipient,
+      amount: amount,
     );
   }
 }

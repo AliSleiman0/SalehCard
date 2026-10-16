@@ -179,6 +179,7 @@
   "copyLabel": "Copy",
   "copiedLabel": "Copied",
   "orderProcessingNote": "We'll notify you the moment it's done. You can track its status from the order page.",
+  "orderRemainingProcessingNote": "Your codes are ready above. The remaining items are being processed — we'll notify you the moment they're done.",
   "viewOrderCta": "View order",
   "backToHomeCta": "Back to home",
 
@@ -375,5 +376,11 @@
   "deleteAccountWalletNotEmpty": "Your wallet still has a balance. Spend or use it first, then try again.",
   "deleteAccountOrdersInFlight": "You have orders still being processed. Please wait until they finish, then try again.",
   "deleteAccountPaymentsPending": "You have a payment in progress. Please wait until it completes or expires, then try again.",
-  "deleteAccountTopUpsPending": "You have a wallet top-up awaiting approval. Please wait for its decision, then try again."
+  "deleteAccountTopUpsPending": "You have a wallet top-up awaiting approval. Please wait for its decision, then try again.",
+  "unitRateLine": "{price} per {units}",
+  "@unitRateLine": {
+    "placeholders": { "price": { "type": "String" }, "units": { "type": "String" } }
+  },
+  "amountTooSmall": "This amount is too small to purchase.",
+  "unitPricedUnavailable": "This product can't be bought right now. Please try again later."
 }

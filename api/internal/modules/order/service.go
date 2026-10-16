@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -238,8 +239,10 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			price = product.ResellerUnitPrice(variant, resellerMargin, resellerCustom)
 		} else if s.offers != nil {
 			// Honor a live sale-price offer on the retail price. Absence of an
-			// offer (ErrNotFound) leaves the price unchanged.
-			if off, oerr := s.offers.FindLiveByProduct(ctx, p.ID, time.Now().UTC()); oerr == nil {
+			// offer (ErrNotFound) leaves the price unchanged; a fixed-amount
+			// offer is ignored on a per-unit product (it would come off every
+			// block of the typed amount — the catalog doesn't show it either).
+			if off, oerr := s.offers.FindLiveByProduct(ctx, p.ID, time.Now().UTC()); oerr == nil && offer.AppliesTo(off, p) {
 				price = offer.OfferPriceFor(off, price)
 			}
 		}
@@ -281,6 +284,27 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 				return nil, badRequest("this recharge denomination is missing its amount")
 			}
 		}
+		// Per-unit products (live-app coins): the typed amount drives the price.
+		// The block price above already carries the reseller/offer layer; scale
+		// it to the amount, and mirror the amount into its driving field so the
+		// operator sees exactly what was paid for.
+		denomination := variant.Denomination
+		var amount *float64
+		if p.UnitPricing != nil {
+			a, err := unitAmount(p, in)
+			if err != nil {
+				return nil, err
+			}
+			price = product.UnitLinePrice(price, a, p.UnitPricing.BlockUnits)
+			if price < 0.01 {
+				return nil, badRequest("this amount is too small to purchase")
+			}
+			amount = &a
+			denomination = formatUnits(a)
+			in.Fields = withFieldValue(in.Fields, p.UnitPricing.FieldKey, strconv.FormatFloat(a, 'f', -1, 64))
+		} else if in.Amount != nil {
+			return nil, badRequest("this product is not sold by amount")
+		}
 		if err := validateQuantityField(p, in.Qty); err != nil {
 			return nil, err
 		}
@@ -291,7 +315,8 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			ProductID:           p.ID,
 			VariantID:           variant.ID,
 			Title:               p.Title,
-			Denomination:        variant.Denomination,
+			Denomination:        denomination,
+			Amount:              amount,
 			Category:            p.Category,
 			Qty:                 in.Qty,
 			Price:               price,
@@ -409,8 +434,13 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 	return s.dispatchFulfillment(ctx, userID, order, charged)
 }
 
-// dispatchFulfillment routes an order down one of the four fulfillment paths
-// keyed on its resolved mode (spec §2.2). Shared by PlaceOrder (wallet/card,
+// orderModeMixed is the internal (never persisted) resolved mode of a cart
+// that mixes inventory (code) lines with manual_operator lines: the codes are
+// delivered immediately and the order stays processing for the manual lines.
+const orderModeMixed product.FulfillmentMode = "mixed"
+
+// dispatchFulfillment routes an order down one of the fulfillment paths keyed
+// on its resolved mode (spec §2.2). Shared by PlaceOrder (wallet/card,
 // synchronously) and FulfillPaidOrder (usdt, after the on-chain payment
 // confirms). `charged` tells the compensation path whether a wallet/gateway
 // charge must be reversed on failure.
@@ -418,46 +448,73 @@ func (s *OrderService) dispatchFulfillment(ctx context.Context, userID bson.Obje
 	switch resolveOrderMode(order.Items) {
 	case product.FulfillmentModeInventory:
 		return s.fulfillInventory(ctx, userID, order, charged)
+	case orderModeMixed:
+		return s.fulfillMixed(ctx, userID, order, charged)
 	case product.FulfillmentModeAPI:
 		return s.fulfillAPI(ctx, userID, order, charged)
 	case product.FulfillmentModeBridgeDevice:
 		return s.fulfillBridge(ctx, userID, order, charged)
-	default: // manual_operator (and the safe fallback for mixed carts)
+	default: // manual_operator (and the safe fallback for any other mix)
 		return s.fulfillProcessing(ctx, order)
 	}
 }
 
+// itemMode is a line's snapshotted fulfillment mode, derived from its type
+// when the snapshot is empty (legacy-order safety).
+func itemMode(it OrderItem) product.FulfillmentMode {
+	m := product.FulfillmentMode(it.FulfillmentMode)
+	if m == "" {
+		m = product.DeriveMode(product.FulfillmentType(it.FulfillmentType))
+	}
+	return m
+}
+
 // resolveOrderMode collapses a cart's per-item modes into the single path the
-// order takes. A homogeneous cart routes down its shared mode; a mixed cart
-// falls back to manual_operator (preserving today's "park the whole order"
-// behavior — no auto-delivery of part of a mixed order). Item modes are derived
-// from the type when an item's snapshot is empty (legacy-order safety).
+// order takes. A homogeneous cart routes down its shared mode. A cart of
+// inventory + manual_operator lines resolves to orderModeMixed (codes now,
+// manual lines parked). Any other mix — api/bridge lines are refused in mixed
+// carts by PlaceOrder, so this is only legacy safety — falls back to
+// manual_operator ("park the whole order").
 func resolveOrderMode(items []OrderItem) product.FulfillmentMode {
 	var mode product.FulfillmentMode
+	hasInventory, hasManual, other := false, false, false
 	for i, it := range items {
-		m := product.FulfillmentMode(it.FulfillmentMode)
-		if m == "" {
-			m = product.DeriveMode(product.FulfillmentType(it.FulfillmentType))
+		m := itemMode(it)
+		switch m {
+		case product.FulfillmentModeInventory:
+			hasInventory = true
+		case product.FulfillmentModeManualOperator:
+			hasManual = true
+		default:
+			other = true
 		}
 		if i == 0 {
 			mode = m
-			continue
-		}
-		if m != mode {
-			return product.FulfillmentModeManualOperator
+		} else if m != mode {
+			mode = ""
 		}
 	}
-	return mode
+	if mode != "" || len(items) == 0 {
+		return mode
+	}
+	if hasInventory && hasManual && !other {
+		return orderModeMixed
+	}
+	return product.FulfillmentModeManualOperator
 }
 
-// fulfillInventory claims a code per unit for every item, compensating on
-// failure (releasing claimed codes and refunding any wallet charge). It loops
-// all order items unconditionally — safe because resolveOrderMode only routes
-// here when every item is inventory-mode (so every product has a code pool).
-func (s *OrderService) fulfillInventory(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
+// claimInventoryLines claims a code per unit for every inventory-mode line and
+// returns the claimed code strings indexed like order.Items (nil for non-code
+// lines). On ANY claim failure it compensates the whole order (releases every
+// code claimed so far, reverses the charge, marks it failed) and returns the
+// error — all-or-nothing, so a mixed cart never half-delivers.
+func (s *OrderService) claimInventoryLines(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) ([][]string, error) {
+	itemCodes := make([][]string, len(order.Items))
 	claimedProducts := make([]string, 0, len(order.Items))
-	var firstCode string
-	for _, it := range order.Items {
+	for i, it := range order.Items {
+		if itemMode(it) != product.FulfillmentModeInventory {
+			continue
+		}
 		pid := it.ProductID.Hex()
 		codes, err := s.codes.ClaimForOrder(ctx, pid, order.ID.Hex(), userID.Hex(), it.Qty)
 		if err != nil {
@@ -465,20 +522,78 @@ func (s *OrderService) fulfillInventory(ctx context.Context, userID bson.ObjectI
 			return nil, err
 		}
 		claimedProducts = append(claimedProducts, pid)
-		if firstCode == "" && len(codes) > 0 {
-			firstCode = codes[0].Code
+		line := make([]string, 0, len(codes))
+		for _, c := range codes {
+			line = append(line, c.Code)
 		}
+		itemCodes[i] = line
+	}
+	return itemCodes, nil
+}
+
+// firstCode returns the first claimed code across all lines — mirrored onto
+// Fulfillment.DeliveredCode for clients that predate per-line Codes.
+func firstCode(itemCodes [][]string) string {
+	for _, line := range itemCodes {
+		if len(line) > 0 {
+			return line[0]
+		}
+	}
+	return ""
+}
+
+// fulfillInventory claims a code per unit for every item, compensating on
+// failure (releasing claimed codes and refunding any wallet charge), then
+// records each line's codes and completes the order. resolveOrderMode only
+// routes here when every item is inventory-mode.
+func (s *OrderService) fulfillInventory(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
+	itemCodes, err := s.claimInventoryLines(ctx, userID, order, charged)
+	if err != nil {
+		return nil, err
 	}
 
 	fulfillment := order.Fulfillment
-	fulfillment.DeliveredCode = firstCode
+	fulfillment.DeliveredCode = firstCode(itemCodes)
 	fulfillment.StatusTimeline = append(fulfillment.StatusTimeline, TimelineEvent{Status: "delivered", At: time.Now().UTC()})
-	if err := s.repo.UpdateFulfillment(ctx, order.ID, OrderStatusCompleted, fulfillment); err != nil {
+	if err := s.repo.UpdateFulfillmentWithCodes(ctx, order.ID, OrderStatusCompleted, fulfillment, itemCodes); err != nil {
 		return nil, err
 	}
 	s.ntf.Notify(ctx, userID, orderCompletedNote(order.ID.Hex(), order.Total, order.Currency))
 	if s.loyalty != nil {
 		s.loyalty.Award(ctx, userID, order.Total)
+	}
+	return s.repo.FindByID(ctx, order.ID)
+}
+
+// fulfillMixed fulfills a cart of code lines + manual (account_credit /
+// transfer) lines: it claims the code lines' codes now (all-or-nothing, with
+// full compensation on any shortage), records them per line, and parks the
+// order as processing for an admin to complete the manual lines — the
+// fulfillProcessing shape plus a "codes delivered" timeline note. Loyalty and
+// the completed notification wait for the admin completion, as for any
+// processing order.
+func (s *OrderService) fulfillMixed(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
+	itemCodes, err := s.claimInventoryLines(ctx, userID, order, charged)
+	if err != nil {
+		return nil, err
+	}
+	lines := 0
+	for _, line := range itemCodes {
+		if len(line) > 0 {
+			lines++
+		}
+	}
+
+	fulfillment := order.Fulfillment
+	fulfillment.DeliveredCode = firstCode(itemCodes)
+	fulfillment.CreditedToID = firstCreditTarget(order.Items, fulfillment.CreditedToID)
+	now := time.Now().UTC()
+	fulfillment.StatusTimeline = append(fulfillment.StatusTimeline,
+		TimelineEvent{Status: "submitted", At: now},
+		TimelineEvent{Status: "processing", Note: fmt.Sprintf("codes delivered for %d line(s)", lines), At: now},
+	)
+	if err := s.repo.UpdateFulfillmentWithCodes(ctx, order.ID, OrderStatusProcessing, fulfillment, itemCodes); err != nil {
+		return nil, err
 	}
 	return s.repo.FindByID(ctx, order.ID)
 }
@@ -503,12 +618,7 @@ func orderCompletedNote(orderID string, total float64, currency string) notifica
 // account_credit / transfer items. No codes are claimed.
 func (s *OrderService) fulfillProcessing(ctx context.Context, order *Order) (*Order, error) {
 	fulfillment := order.Fulfillment
-	for _, it := range order.Items {
-		if it.FulfillmentType == string(product.FulfillmentCredit) && it.PlayerID != "" {
-			fulfillment.CreditedToID = it.PlayerID
-			break
-		}
-	}
+	fulfillment.CreditedToID = firstCreditTarget(order.Items, fulfillment.CreditedToID)
 	now := time.Now().UTC()
 	fulfillment.StatusTimeline = append(fulfillment.StatusTimeline,
 		TimelineEvent{Status: "submitted", At: now},
@@ -518,6 +628,17 @@ func (s *OrderService) fulfillProcessing(ctx context.Context, order *Order) (*Or
 		return nil, err
 	}
 	return s.repo.FindByID(ctx, order.ID)
+}
+
+// firstCreditTarget returns the player id of the first account_credit line
+// that carries one, else fallback.
+func firstCreditTarget(items []OrderItem, fallback string) string {
+	for _, it := range items {
+		if it.FulfillmentType == string(product.FulfillmentCredit) && it.PlayerID != "" {
+			return it.PlayerID
+		}
+	}
+	return fallback
 }
 
 // park records an order as processing with an explanatory timeline note. It is
@@ -803,6 +924,70 @@ func resolveOrderFields(p *product.Product, in []OrderFieldInput, qty int) []Ord
 		out = append(out, OrderField{Key: def.Key, Label: def.Label, Value: v})
 	}
 	return out
+}
+
+// unitAmount validates the customer-entered amount on a per-unit line: the
+// product must still be validly configured (its driving amount field present),
+// the amount is required (an old app build that never sends it gets a clear
+// error instead of being charged a price it didn't show), the line is a single
+// unit of purchase, and the amount sits within the field's min/max.
+func unitAmount(p *product.Product, in PlaceOrderItemInput) (float64, error) {
+	field, ok := p.UnitAmountField()
+	if !ok {
+		return 0, badRequest("this product is not configured for amount entry")
+	}
+	if in.Amount == nil {
+		return 0, badRequest("enter the amount you want — update the app if this keeps happening")
+	}
+	if in.Qty != 1 {
+		return 0, badRequest("an amount-based product must have quantity 1")
+	}
+	a := *in.Amount
+	if math.IsNaN(a) || math.IsInf(a, 0) || a <= 0 {
+		return 0, badRequest(fmt.Sprintf("%s must be a positive number", fieldName(field)))
+	}
+	if a != math.Trunc(a) {
+		return 0, badRequest(fmt.Sprintf("%s must be a whole number", fieldName(field)))
+	}
+	if c := field.Constraints; c != nil {
+		if c.Min != nil && a < *c.Min {
+			return 0, badRequest(fmt.Sprintf("%s must be at least %s", fieldName(field), fmtBound(*c.Min)))
+		}
+		if c.Max != nil && a > *c.Max {
+			return 0, badRequest(fmt.Sprintf("%s must be at most %s", fieldName(field), fmtBound(*c.Max)))
+		}
+	}
+	return a, nil
+}
+
+// withFieldValue returns fields with key's value set to v (replacing any
+// client-sent value, appending when absent). The input slice is not mutated.
+func withFieldValue(fields []OrderFieldInput, key, v string) []OrderFieldInput {
+	out := make([]OrderFieldInput, 0, len(fields)+1)
+	for _, f := range fields {
+		if f.Key != key {
+			out = append(out, f)
+		}
+	}
+	return append(out, OrderFieldInput{Key: key, Value: v})
+}
+
+// formatUnits renders a unit count for the line's denomination snapshot,
+// grouping thousands ("45,000"); fractional amounts keep their decimals.
+func formatUnits(a float64) string {
+	s := strconv.FormatFloat(a, 'f', -1, 64)
+	intPart, frac, _ := strings.Cut(s, ".")
+	var b strings.Builder
+	for i, r := range intPart {
+		if i > 0 && (len(intPart)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(r)
+	}
+	if frac != "" {
+		b.WriteString("." + frac)
+	}
+	return b.String()
 }
 
 // validateQuantityField rejects an order line whose qty falls outside the

@@ -39,6 +39,16 @@ const cartItem: CartItem = {
 }
 
 describe('nonQuantityFields', () => {
+  it('drops the driving amount field of a unit-priced product', () => {
+    const p = product({
+      inputFields: [field('amount', 'amount'), field('id')],
+      unitPricing: { fieldKey: 'amount', blockUnits: 1000 },
+    })
+    expect(nonQuantityFields(p).map((f) => f.key)).toEqual(['id'])
+    // an amount field that does not drive pricing stays a typed field
+    const q = product({ inputFields: [field('amount', 'amount'), field('id')] })
+    expect(nonQuantityFields(q).map((f) => f.key)).toEqual(['amount', 'id'])
+  })
   it('drops legacy quantity fields', () => {
     const p = product({ inputFields: [field('id'), field('qty', 'quantity'), field('zone')] })
     expect(nonQuantityFields(p).map((f) => f.key)).toEqual(['id', 'zone'])
@@ -103,5 +113,43 @@ describe('buildOrderLine', () => {
     const line = buildOrderLine({ ...cartItem, pid: 'CODE1' }, p, {})
     expect(line.playerId).toBe('CODE1')
     expect(line.fields).toBeUndefined()
+  })
+  it('unit-priced → sends amount, qty 1, and never the amount field', () => {
+    const p = product({
+      fulfillmentType: 'account_credit',
+      inputFields: [field('amount', 'amount'), field('playerId')],
+      unitPricing: { fieldKey: 'amount', blockUnits: 1000 },
+    })
+    const item: CartItem = { ...cartItem, key: 'p1|v1|45000', qty: 1, amount: 45000, price: 67.5 }
+    const line = buildOrderLine(item, p, { playerId: '900123' })
+    expect(line.amount).toBe(45000)
+    expect(line.qty).toBe(1)
+    expect(line.variantId).toBe('v1')
+    expect(line.playerId).toBe('900123')
+    expect(line.fields).toEqual([{ key: 'playerId', value: '900123' }])
+  })
+  it('unit-priced with no other fields still sends the amount', () => {
+    const p = product({
+      fulfillmentType: 'account_credit',
+      inputFields: [field('amount', 'amount')],
+      unitPricing: { fieldKey: 'amount', blockUnits: 1000 },
+    })
+    const line = buildOrderLine({ ...cartItem, qty: 1, amount: 500 }, p, {})
+    expect(line.amount).toBe(500)
+    expect(line.qty).toBe(1)
+  })
+  it('unit-priced with no other fields sends the PDP player ID as playerId', () => {
+    const p = product({
+      fulfillmentType: 'account_credit',
+      inputFields: [field('amount', 'amount')],
+      unitPricing: { fieldKey: 'amount', blockUnits: 1000 },
+    })
+    const line = buildOrderLine({ ...cartItem, qty: 1, amount: 500, pid: '777' }, p, {})
+    expect(line.playerId).toBe('777')
+    expect(line.amount).toBe(500)
+  })
+  it('non-amount lines carry no amount', () => {
+    const p = product({ fulfillmentType: 'account_credit', inputFields: [field('playerId')] })
+    expect(buildOrderLine(cartItem, p, { playerId: '1' }).amount).toBeUndefined()
   })
 })

@@ -30,9 +30,15 @@ func TestBuildUpsertSet_LiteralWrapsDollarValues(t *testing.T) {
 	}
 
 	// A representative sample of the other data fields is wrapped too.
-	for _, k := range []string{"category", "status", "inputFields", "pricing", "images"} {
+	for _, k := range []string{"category", "status", "images"} {
 		if v := valueFor(set, k); v != nil && !isLiteral(v) {
 			t.Fatalf("%s not $literal-wrapped: %#v", k, v)
+		}
+	}
+	// Unit-pricing-guarded fields wrap their refreshed (else) value.
+	for _, k := range []string{"inputFields", "pricing", "fulfillmentType", "fulfillmentMode"} {
+		if v := condElse(t, set, k); !isLiteral(v) {
+			t.Fatalf("%s refreshed value not $literal-wrapped: %#v", k, v)
 		}
 	}
 
@@ -67,6 +73,56 @@ func TestBuildFilter_CategoryDirectVsTree(t *testing.T) {
 	if !ok || len(d) != 1 || d[0].Key != "$in" {
 		t.Fatalf("tree categoryId = %#v, want $in expression", tv)
 	}
+}
+
+// A loadseed re-import must not touch what a per-unit product's pricing
+// depends on: for a stored doc with unitPricing set, variants, inputFields,
+// fulfillmentType/Mode and pricing keep their stored values ($cond on
+// unitPricing ≠ null → "$field"); catalog fields like title still refresh.
+func TestBuildUpsertSet_PreservesUnitPricedProduct(t *testing.T) {
+	in := UpsertProductInput{
+		LegacyID:        42,
+		Title:           I18nString{En: "Up Live"},
+		FulfillmentType: FulfillmentCode,
+		InputFields:     []InputField{{Key: "id", Type: InputFieldText}},
+		Pricing:         &Pricing{Mode: PricingModeFixedPackage},
+		Variants:        []Variant{{Denomination: "10", Price: 100}},
+	}
+	set := buildUpsertSet(in, time.Now().UTC(), bson.NewObjectID())
+	for _, k := range []string{"variants", "inputFields", "fulfillmentType", "fulfillmentMode", "pricing"} {
+		cond := condOf(t, set, k)
+		ifExpr := cond[0].Value.(bson.D)[0]
+		if ifExpr.Key != "$ne" {
+			t.Fatalf("%s: if = %#v, want $ne on unitPricing", k, ifExpr)
+		}
+		ne := ifExpr.Value.(bson.A)
+		ifNull := ne[0].(bson.D)[0]
+		if ifNull.Key != "$ifNull" || ifNull.Value.(bson.A)[0] != "$unitPricing" || ne[1] != nil {
+			t.Fatalf("%s: guard = %#v, want unitPricing ≠ null", k, ne)
+		}
+		if then := cond[1]; then.Key != "then" || then.Value != "$"+k {
+			t.Fatalf("%s: then = %#v, want stored $%s", k, then, k)
+		}
+	}
+	if !isLiteral(valueFor(set, "title")) {
+		t.Fatal("title must still refresh unconditionally")
+	}
+}
+
+// condOf returns the {if, then, else} body of set[key]'s $cond.
+func condOf(t *testing.T, set bson.D, key string) bson.D {
+	t.Helper()
+	d, ok := valueFor(set, key).(bson.D)
+	if !ok || len(d) != 1 || d[0].Key != "$cond" {
+		t.Fatalf("%s is not a $cond: %#v", key, valueFor(set, key))
+	}
+	return d[0].Value.(bson.D)
+}
+
+// condElse returns the else branch of set[key]'s $cond.
+func condElse(t *testing.T, set bson.D, key string) any {
+	t.Helper()
+	return condOf(t, set, key)[2].Value
 }
 
 func valueFor(d bson.D, key string) any {

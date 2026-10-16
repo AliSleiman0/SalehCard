@@ -36,7 +36,8 @@ type publicOffer struct {
 
 // List handles GET /api/v1/offers — every live offer joined with its product.
 // Offers whose product is missing or unavailable are skipped so the storefront
-// never shows a deal it can't fulfil. Resellers get an empty list: sale offers
+// never shows a deal it can't fulfil, as are fixed-amount offers on per-unit
+// products (checkout ignores those — see AppliesTo). Resellers get an empty list: sale offers
 // don't stack on reseller pricing (order.PlaceOrder ignores them), so
 // advertising retail deals a reseller can't buy at those prices would mislead.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +53,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	out := make([]publicOffer, 0, len(offers))
 	for _, o := range offers {
 		p, err := h.products.FindByID(r.Context(), o.ProductID.Hex())
-		if err != nil || !p.Available {
+		if err != nil || !p.Available || !AppliesTo(o, p) {
 			continue
 		}
 		s := summarize(p)
@@ -64,7 +65,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			EndsAt:            o.EndsAt,
 			Product:           s,
 			OriginalFromPrice: s.FromPrice,
-			OfferFromPrice:    OfferPriceFor(o, s.FromPrice),
+			OfferFromPrice:    offerFromPrice(o, p),
 		})
 	}
 	response.OK(w, out)

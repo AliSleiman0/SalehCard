@@ -172,6 +172,22 @@ class MoneyTransferDto {
       );
 }
 
+@JsonSerializable()
+class UnitPricingDto {
+  const UnitPricingDto({this.fieldKey = '', this.blockUnits = 0});
+
+  final String fieldKey;
+  final double blockUnits;
+
+  factory UnitPricingDto.fromJson(Map<String, dynamic> json) =>
+      _$UnitPricingDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$UnitPricingDtoToJson(this);
+
+  UnitPricing toEntity() =>
+      UnitPricing(fieldKey: fieldKey, blockUnits: blockUnits);
+}
+
 @JsonSerializable(explicitToJson: true)
 class ProductDto {
   const ProductDto({
@@ -187,6 +203,7 @@ class ProductDto {
     this.inputFields,
     this.verification,
     this.moneyTransfer,
+    this.unitPricing,
     this.ratings,
     this.offer,
   });
@@ -203,6 +220,7 @@ class ProductDto {
   final List<InputFieldDto>? inputFields;
   final VerificationDto? verification;
   final MoneyTransferDto? moneyTransfer;
+  final UnitPricingDto? unitPricing;
   final RatingsDto? ratings;
   final ProductOfferDto? offer;
 
@@ -226,6 +244,7 @@ class ProductDto {
             (inputFields ?? const []).map((f) => f.toEntity()).toList(),
         verification: verification?.toEntity(),
         moneyTransfer: moneyTransfer?.toEntity(),
+        unitPricing: unitPricing?.toEntity(),
         rating: ratings?.average,
         ratingCount: ratings?.count ?? 0,
         offer: offer?.toEntity(),

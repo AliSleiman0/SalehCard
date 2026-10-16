@@ -59,7 +59,7 @@ func (a *adminHandler) view(ctx context.Context, o *Offer) offerView {
 		s := summarize(p)
 		v.Product = &s
 		v.OriginalFromPrice = s.FromPrice
-		v.OfferFromPrice = OfferPriceFor(o, s.FromPrice)
+		v.OfferFromPrice = offerFromPrice(o, p)
 	}
 	return v
 }
@@ -127,6 +127,10 @@ func (a *adminHandler) create(w http.ResponseWriter, r *http.Request) {
 		writeOfferError(w, err)
 		return
 	}
+	if err := a.checkProduct(r.Context(), b); err != nil {
+		writeOfferError(w, err)
+		return
+	}
 	o := b.toOffer()
 	if err := a.repo.Create(r.Context(), o); err != nil {
 		writeOfferError(w, err)
@@ -147,6 +151,10 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := b.validate(); err != nil {
+		writeOfferError(w, err)
+		return
+	}
+	if err := a.checkProduct(r.Context(), b); err != nil {
 		writeOfferError(w, err)
 		return
 	}
@@ -238,6 +246,31 @@ func (b offerBody) toUpdate() OfferUpdate {
 	}
 }
 
+// ErrCodeFixedUnitPriced is the machine code for a fixed-amount offer aimed at
+// a per-unit product.
+const ErrCodeFixedUnitPriced = "OFFER_FIXED_UNIT_PRICED"
+
+// checkProduct enforces the product-dependent offer rules: a fixed-amount offer
+// cannot target a per-unit product (it would come off every block of the
+// typed amount). An unresolvable product is left to the existing behavior.
+func (a *adminHandler) checkProduct(ctx context.Context, b offerBody) error {
+	if b.DiscountType != DiscountFixed || a.products == nil {
+		return nil
+	}
+	p, err := a.products.FindByID(ctx, b.ProductID)
+	if err != nil {
+		return nil
+	}
+	if !p.AcceptsDiscount(string(b.DiscountType)) {
+		return &apperrors.AppError{
+			Code:    ErrCodeFixedUnitPriced,
+			Message: "this product is priced per unit — use a percentage discount instead of a fixed amount",
+			Err:     apperrors.ErrBadRequest,
+		}
+	}
+	return nil
+}
+
 // badRequest builds a 400-class AppError with the BAD_REQUEST machine code.
 func badRequest(msg string) error {
 	return &apperrors.AppError{Code: "BAD_REQUEST", Message: msg, Err: apperrors.ErrBadRequest}
@@ -260,12 +293,15 @@ func writeOfferError(w http.ResponseWriter, err error) {
 	case errors.Is(err, apperrors.ErrNotFound):
 		response.NotFound(w)
 	case errors.Is(err, apperrors.ErrBadRequest):
-		msg := err.Error()
+		msg, code := err.Error(), "BAD_REQUEST"
 		var appErr *apperrors.AppError
 		if errors.As(err, &appErr) {
 			msg = appErr.Message
+			if appErr.Code != "" {
+				code = appErr.Code
+			}
 		}
-		response.BadRequest(w, msg)
+		response.Error(w, http.StatusBadRequest, code, msg)
 	default:
 		response.InternalError(w)
 	}

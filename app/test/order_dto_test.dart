@@ -66,4 +66,95 @@ void main() {
       expect(order.items, isEmpty);
     });
   });
+
+  group('per-line codes', () {
+    Map<String, dynamic> item(String title, String type,
+            {List<String>? codes, int qty = 1, String denom = ''}) =>
+        <String, dynamic>{
+          'productId': 'p-$title',
+          'title': {'en': title},
+          'denomination': denom,
+          'qty': qty,
+          'price': 5.0,
+          'fulfillmentType': type,
+          'codes': ?codes,
+        };
+
+    Order parse(String status, List<Map<String, dynamic>> items,
+            {String? deliveredCode}) =>
+        OrderDto.fromJson(<String, dynamic>{
+          'id': 'o1',
+          'status': status,
+          'items': items,
+          'fulfillment': {'deliveredCode': ?deliveredCode},
+        }).toEntity();
+
+    test('item DTO parses codes when present and defaults to empty', () {
+      final withCodes = OrderItemDto.fromJson(
+              item('Google Play', 'code', codes: ['A-1', 'A-2'], qty: 2))
+          .toEntity();
+      expect(withCodes.codes, ['A-1', 'A-2']);
+
+      final without = OrderItemDto.fromJson(item('LAKA', 'account_credit'))
+          .toEntity();
+      expect(without.codes, isEmpty);
+    });
+
+    test('mixed processing order exposes the code line + manual lines', () {
+      final order = parse(
+        'processing',
+        [
+          item('LAKA', 'account_credit'),
+          item('Google Play', 'code', codes: ['GP-1'], denom: 'USD 25'),
+        ],
+        deliveredCode: 'GP-1',
+      );
+      expect(order.isProcessing, isTrue);
+      expect(order.hasManualLines, isTrue);
+      final lines = order.codeLines;
+      expect(lines, hasLength(1));
+      expect(lines.single.codes, ['GP-1']);
+      expect(lines.single.label('en'), 'Google Play · USD 25');
+    });
+
+    test('pure code order with several lines gives one entry per line', () {
+      final order = parse(
+        'completed',
+        [
+          item('Roblox', 'code', codes: ['R-1', 'R-2'], qty: 2),
+          item('Steam', 'code', codes: ['S-1']),
+        ],
+        deliveredCode: 'R-1',
+      );
+      expect(order.hasManualLines, isFalse);
+      expect(order.codeLines.map((l) => l.codes).toList(), [
+        ['R-1', 'R-2'],
+        ['S-1'],
+      ]);
+      expect(order.codeLines.map((l) => l.label('en')).toList(),
+          ['Roblox', 'Steam']);
+    });
+
+    test('old response shape falls back to deliveredCode + first code item',
+        () {
+      final order = parse(
+        'completed',
+        [
+          item('LAKA', 'account_credit'),
+          item('Roblox', 'code', qty: 2),
+        ],
+        deliveredCode: 'RBLX-OLD',
+      );
+      final lines = order.codeLines;
+      expect(lines, hasLength(1));
+      expect(lines.single.codes, ['RBLX-OLD']);
+      expect(lines.single.label('en'), 'Roblox');
+    });
+
+    test('pure credit order has no code lines', () {
+      final order = parse('processing', [item('LAKA', 'account_credit')]);
+      expect(order.codeLines, isEmpty);
+      expect(order.hasManualLines, isTrue);
+    });
+  });
 }
