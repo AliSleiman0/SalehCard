@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/config/regulated_finance.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
@@ -110,6 +111,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final colors = context.colors;
     final profileAsync = ref.watch(profileProvider);
     final submitting = ref.watch(profileControllerProvider).submitting;
+    // Saved player IDs (and the edit mode, which only edits them) are game
+    // features; restricted builds sell mobile recharge only.
+    final showPlayerIds = !restrictToRealWorldServices;
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -117,19 +121,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         backgroundColor: colors.topbar,
         title: Text(l10n.profileTitle),
         actions: [
-          profileAsync.maybeWhen(
-            data: (user) => _editing
-                ? TextButton(
-                    onPressed: submitting ? null : _cancelEdit,
-                    child: Text(l10n.cancel),
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    tooltip: l10n.editProfile,
-                    onPressed: () => _enterEdit(user),
-                  ),
-            orElse: () => const SizedBox.shrink(),
-          ),
+          if (showPlayerIds)
+            profileAsync.maybeWhen(
+              data: (user) => _editing
+                  ? TextButton(
+                      onPressed: submitting ? null : _cancelEdit,
+                      child: Text(l10n.cancel),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      tooltip: l10n.editProfile,
+                      onPressed: () => _enterEdit(user),
+                    ),
+              orElse: () => const SizedBox.shrink(),
+            ),
         ],
       ),
       body: profileAsync.when(
@@ -184,38 +189,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   // Verification (KYC) summary. Rendered from its own provider so
                   // a KYC fetch error/loading never breaks the profile page.
                   ..._verificationSection(l10n),
-                  _SectionLabel(l10n.savedPlayerIds),
-                  const SizedBox(height: 10),
-                  if (_editing)
-                    _PlayerIdEditor(
-                      labelController: _labelController,
-                      valueController: _valueController,
-                      ids: _draftIds,
-                      onAdd: _addId,
-                      onRemove: _removeId,
-                    )
-                  else if (user.savedPlayerIds.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: EmptyState(
-                        icon: Icons.badge_outlined,
-                        title: l10n.savedPlayerIdsEmptyTitle,
-                        message: l10n.savedPlayerIdsEmptySub,
-                        actionLabel: l10n.editProfile,
-                        onAction: () => _enterEdit(user),
+                  if (showPlayerIds) ...[
+                    _SectionLabel(l10n.savedPlayerIds),
+                    const SizedBox(height: 10),
+                    if (_editing)
+                      _PlayerIdEditor(
+                        labelController: _labelController,
+                        valueController: _valueController,
+                        ids: _draftIds,
+                        onAdd: _addId,
+                        onRemove: _removeId,
+                      )
+                    else if (user.savedPlayerIds.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: EmptyState(
+                          icon: Icons.badge_outlined,
+                          title: l10n.savedPlayerIdsEmptyTitle,
+                          message: l10n.savedPlayerIdsEmptySub,
+                          actionLabel: l10n.editProfile,
+                          onAction: () => _enterEdit(user),
+                        ),
+                      )
+                    else
+                      _InfoCard(
+                        rows: [
+                          for (final id in user.savedPlayerIds)
+                            _InfoRow(
+                              label: id.label,
+                              value: id.value,
+                              leading: Icons.badge_outlined,
+                            ),
+                        ],
                       ),
-                    )
-                  else
-                    _InfoCard(
-                      rows: [
-                        for (final id in user.savedPlayerIds)
-                          _InfoRow(
-                            label: id.label,
-                            value: id.value,
-                            leading: Icons.badge_outlined,
-                          ),
-                      ],
-                    ),
+                  ],
                 ],
               ),
             ),

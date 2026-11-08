@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/regulated_finance.dart';
 import '../../../core/error/failure.dart';
 import '../../../core/network/providers.dart';
 import '../../cart/presentation/controllers/cart_controller.dart';
@@ -35,8 +36,28 @@ final getOrderUseCaseProvider = Provider<GetOrder>(
 final orderDetailProvider =
     FutureProvider.family<Order, String>((ref, id) async {
   final result = await ref.watch(getOrderUseCaseProvider).call(id);
-  return result.match((failure) => throw failure, (order) => order);
+  final order = result.match((failure) => throw failure, (order) => order);
+  if (!(await _orderVisible(ref))(order)) {
+    throw const ServerFailure('NOT_FOUND', 'This order is not available.', 404);
+  }
+  return order;
 });
+
+/// On restricted builds (see [restrictToRealWorldServices]) an order is shown
+/// only when every line is in an allowed category, so purchases from catalog
+/// sections this build doesn't offer never appear. Always true elsewhere.
+Future<bool Function(Order)> _orderVisible(Ref ref) async {
+  if (!restrictToRealWorldServices) return (_) => true;
+  final bool Function(String?) allowed;
+  try {
+    allowed = await ref.read(regulatedCatalogFilterProvider).categoryAllowed();
+  } catch (error) {
+    throw mapError(error);
+  }
+  return (order) =>
+      order.items.isNotEmpty &&
+      order.items.every((item) => allowed(item.category));
+}
 
 final getOrdersUseCaseProvider = Provider<GetOrders>(
   (ref) => GetOrders(ref.watch(orderRepositoryProvider)),
@@ -48,7 +69,8 @@ final getOrdersUseCaseProvider = Provider<GetOrders>(
 final ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   final result = await ref.watch(getOrdersUseCaseProvider).call();
   final orders = result.match((failure) => throw failure, (orders) => orders);
-  final sorted = [...orders]..sort((a, b) {
+  final visible = await _orderVisible(ref);
+  final sorted = [...orders.where(visible)]..sort((a, b) {
       final bDate = b.createdAt;
       final aDate = a.createdAt;
       if (aDate == null && bDate == null) return 0;

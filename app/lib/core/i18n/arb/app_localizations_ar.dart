@@ -196,7 +196,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get promoTitle => 'تسليم فوري';
 
   @override
-  String get promoSubtitle => 'تُسلَّم أكواد بطاقات الهدايا فوراً بعد الدفع.';
+  String get promoSubtitle => 'تُسلَّم عمليات التعبئة فوراً بعد الدفع.';
 
   @override
   String get featured => 'مميّز';
@@ -286,7 +286,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cartEmptyTitle => 'سلتك فارغة';
 
   @override
-  String get cartEmptySub => 'تصفّح الكتالوج وأضف بطاقات الهدايا والتعبئة.';
+  String get cartEmptySub => 'تصفّح الكتالوج وأضف عمليات التعبئة.';
 
   @override
   String get browseCatalog => 'تصفّح الكتالوج';
@@ -413,7 +413,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get deliveredCodesLabel => 'الرموز المُسلّمة';
 
   @override
-  String get giftCardLabel => 'بطاقة هدية';
+  String get giftCardLabel => 'منتج';
 
   @override
   String get copyLabel => 'نسخ';
@@ -629,8 +629,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get searchPromptTitle => 'ابحث في الكتالوج';
 
   @override
-  String get searchPromptSub =>
-      'اكتب للعثور على بطاقات الهدايا والتعبئة والمزيد.';
+  String get searchPromptSub => 'اكتب للعثور على التعبئة والمزيد.';
 
   @override
   String get searchEmptyTitle => 'لا نتائج';
@@ -695,7 +694,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get notifPromoTitle => 'عرض لفترة محدودة';
 
   @override
-  String get notifPromoBody => 'اكتشف أحدث بطاقات الهدايا والعروض.';
+  String get notifPromoBody => 'اكتشف أحدث العروض.';
 
   @override
   String get kycTitle => 'التحقق';

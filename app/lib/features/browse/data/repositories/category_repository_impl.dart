@@ -27,9 +27,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
       );
       return Right([
         for (final category in dtos.map((d) => d.toEntity()))
-          if (!hideRegulatedFinance ||
-              !regulatedRootDomains.contains(category.rootDomain))
-            category,
+          if (isRootDomainAllowed(category.rootDomain)) category,
       ]);
     } catch (error) {
       return Left(mapError(error));

@@ -47,7 +47,8 @@ class WalletRepositoryImpl implements WalletRepository {
       final dtos = await _remote.listMethods();
       return Right([
         for (final method in dtos.map((d) => d.toEntity()))
-          if (!hideRegulatedFinance || !isCryptoTopUpMethodName(method.name))
+          if (!restrictToRealWorldServices ||
+              !isTopUpMethodHiddenOnRestricted(method.name))
             method,
       ]);
     } catch (error) {

@@ -65,10 +65,12 @@ dev_dependencies:
   flutter_native_splash: ^2.4.1
 
 # Launcher icon: the gamepad mark on a dark brand tile. Regenerate with
-# `dart run flutter_launcher_icons`.
+# `dart run flutter_launcher_icons`. Android only: the iOS icon (phone +
+# lightning, ios/Runner/Assets.xcassets/AppIcon.appiconset) is hand-made for
+# the recharge-only App Store build and must not be overwritten.
 flutter_launcher_icons:
   android: true
-  ios: true
+  ios: false
   remove_alpha_ios: true
   image_path: "assets/branding/logo_mark.png"
   adaptive_icon_background: "#0D0D17"
@@ -84,7 +86,9 @@ flutter_native_splash:
     image: assets/branding/logo_mark.png
     color: "#0D0D17"
   android: true
-  ios: true
+  # iOS LaunchImage is the recharge-only lockup (logo_lockup_ios.png); don't
+  # regenerate it from the gamepad lockup.
+  ios: false
   web: false
 
 # For information on the generic Dart part of this file, see the

@@ -198,8 +198,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get promoTitle => 'Instant digital delivery';
 
   @override
-  String get promoSubtitle =>
-      'Gift card codes delivered instantly after checkout.';
+  String get promoSubtitle => 'Top-ups delivered instantly after checkout.';
 
   @override
   String get featured => 'Featured';
@@ -286,7 +285,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cartEmptyTitle => 'Your cart is empty';
 
   @override
-  String get cartEmptySub => 'Browse the catalog and add gift cards & top-ups.';
+  String get cartEmptySub => 'Browse the catalog and add top-ups.';
 
   @override
   String get browseCatalog => 'Browse catalog';
@@ -414,7 +413,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deliveredCodesLabel => 'Delivered codes';
 
   @override
-  String get giftCardLabel => 'Gift card';
+  String get giftCardLabel => 'Item';
 
   @override
   String get copyLabel => 'Copy';
@@ -628,7 +627,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchPromptTitle => 'Search the catalog';
 
   @override
-  String get searchPromptSub => 'Type to find gift cards, top-ups & more.';
+  String get searchPromptSub => 'Type to find top-ups & more.';
 
   @override
   String get searchEmptyTitle => 'No results';
@@ -695,7 +694,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifPromoTitle => 'Limited-time offer';
 
   @override
-  String get notifPromoBody => 'Discover the latest gift cards and offers.';
+  String get notifPromoBody => 'Discover the latest offers.';
 
   @override
   String get kycTitle => 'Verification';

@@ -461,7 +461,7 @@ abstract class AppLocalizations {
   /// No description provided for @promoSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Gift card codes delivered instantly after checkout.'**
+  /// **'Top-ups delivered instantly after checkout.'**
   String get promoSubtitle;
 
   /// No description provided for @featured.
@@ -605,7 +605,7 @@ abstract class AppLocalizations {
   /// No description provided for @cartEmptySub.
   ///
   /// In en, this message translates to:
-  /// **'Browse the catalog and add gift cards & top-ups.'**
+  /// **'Browse the catalog and add top-ups.'**
   String get cartEmptySub;
 
   /// No description provided for @browseCatalog.
@@ -827,7 +827,7 @@ abstract class AppLocalizations {
   /// No description provided for @giftCardLabel.
   ///
   /// In en, this message translates to:
-  /// **'Gift card'**
+  /// **'Item'**
   String get giftCardLabel;
 
   /// No description provided for @copyLabel.
@@ -1205,7 +1205,7 @@ abstract class AppLocalizations {
   /// No description provided for @searchPromptSub.
   ///
   /// In en, this message translates to:
-  /// **'Type to find gift cards, top-ups & more.'**
+  /// **'Type to find top-ups & more.'**
   String get searchPromptSub;
 
   /// No description provided for @searchEmptyTitle.
@@ -1319,7 +1319,7 @@ abstract class AppLocalizations {
   /// No description provided for @notifPromoBody.
   ///
   /// In en, this message translates to:
-  /// **'Discover the latest gift cards and offers.'**
+  /// **'Discover the latest offers.'**
   String get notifPromoBody;
 
   /// No description provided for @kycTitle.
