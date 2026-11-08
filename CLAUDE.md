@@ -27,6 +27,8 @@ money transfers). Monorepo:
   deferred items to these files, not to handoff docs.
 - **`README.md`** — stack, prerequisites, quick start.
 - **`CONVENTIONS.md`** — backend module layout, response envelope, frontend design-system rules. **Follow it.**
+- **`HANDOFF-2026-11-08-IOS-RECHARGE.md`** — **iOS / App Store state**: iOS is recharge-only (telecom
+  allowlist) after the 3.1.1 rejection; 1.0.6 (9) resubmitted 2026-11-08. Read before touching iOS.
 - **`HANDOFF-2026-06-27.md`** — **latest session state** (mobile app, phone-OTP + Monty SMS live, CI/CD, NAT). Start here.
 - **`app/HANDOFF-DESIGN.md`** — the Flutter mobile client: modules, what's stubbed, run/verify.
 - **`DEPLOYMENT.md`** + **`HANDOFF-OTP-DEPLOY.md`** — Azure prod resources, redeploy recipes, OTP/SMS rollout.
@@ -183,6 +185,11 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   `local` on Azure misconfig; audited as `product.image_upload`. Prod needs an Azure Storage account +
   public `product-images` container (see DEVOPS-TODO.md §13). Old blobs are **not deleted on replace**
   in v1 (orphans are pennies).
+- **iOS store scope** (`app/lib/core/config/regulated_finance.dart`): iOS builds show **only the `telecom`
+  root domain** (App Review 3.1.1: no game currency / gift cards without IAP) and hide crypto, money
+  transfer, player IDs and Whish/crypto top-up methods. It's a build-time platform check (never a remote flag,
+  per 2.3.1); catalog queries are pinned server-side to `rootDomain=telecom`. Android is unaffected. Debug:
+  `--dart-define=FORCE_IOS_SCOPE=true`. Never mention crypto/money transfer/Whish in Apple-facing text.
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout
