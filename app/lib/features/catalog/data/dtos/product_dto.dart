@@ -194,6 +194,7 @@ class ProductDto {
     required this.id,
     this.title,
     this.category,
+    this.rootDomain,
     this.images,
     this.thumbnail,
     this.variants,
@@ -211,6 +212,7 @@ class ProductDto {
   final String id;
   final Map<String, dynamic>? title;
   final String? category;
+  final String? rootDomain;
   final List<String>? images;
   final String? thumbnail;
   final List<VariantDto>? variants;
@@ -233,6 +235,7 @@ class ProductDto {
         id: id,
         title: I18nString.fromJson(title),
         category: category ?? '',
+        rootDomain: rootDomain,
         images: images ?? const [],
         thumbnail: thumbnail,
         variants:

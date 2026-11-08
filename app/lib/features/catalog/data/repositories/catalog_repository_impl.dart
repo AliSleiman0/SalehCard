@@ -13,15 +13,32 @@ class CatalogRepositoryImpl implements CatalogRepository {
   final CatalogRemoteDataSource _remote;
   final RegulatedCatalogFilter _regulated;
 
-  /// Drops crypto and money-transfer products on builds that hide them (see
-  /// [hideRegulatedFinance]).
+  /// Backstop filter for restricted builds (see [restrictToRealWorldServices]).
+  /// Queries are already pinned server-side to [catalogRootDomainScope]; this
+  /// drops anything that still slips through. A product is judged by its
+  /// `rootDomain`, or by its category slug when the server omitted the domain.
   Future<bool Function(Product)> _visible() async {
-    if (!hideRegulatedFinance) return (_) => true;
-    final blocked = await _regulated.blockedCategorySlugs();
+    if (!restrictToRealWorldServices) return (_) => true;
+    final categoryAllowed = await _regulated.categoryAllowed();
     return (p) =>
         p.fulfillmentType != 'transfer' &&
         !p.isMoneyTransfer &&
-        !blocked.contains(p.category);
+        (p.rootDomain != null
+            ? isRootDomainAllowed(p.rootDomain)
+            : categoryAllowed(p.category));
+  }
+
+  /// The root domain to send to the server: pinned to the store scope on
+  /// restricted builds, so pagination and totals only count allowed products.
+  /// `ok` is false when the caller asked for a domain outside the scope (the
+  /// result must then be empty).
+  ({bool ok, String? rootDomain}) _scope(String? requested) {
+    final scope = catalogRootDomainScope;
+    if (scope == null) return (ok: true, rootDomain: requested);
+    if (requested != null && requested.isNotEmpty && requested != scope) {
+      return (ok: false, rootDomain: null);
+    }
+    return (ok: true, rootDomain: scope);
   }
 
   @override
@@ -34,13 +51,15 @@ class CatalogRepositoryImpl implements CatalogRepository {
     String? search,
     bool directOnly = false,
   }) async {
+    final scope = _scope(rootDomain);
+    if (!scope.ok) return const Right([]);
     try {
       final dtos = await _remote.getProducts(
         page: page,
         limit: limit,
         category: category,
         categoryId: categoryId,
-        rootDomain: rootDomain,
+        rootDomain: scope.rootDomain,
         search: search,
         directOnly: directOnly,
       );
@@ -61,13 +80,15 @@ class CatalogRepositoryImpl implements CatalogRepository {
     String? search,
     bool directOnly = false,
   }) async {
+    final scope = _scope(rootDomain);
+    if (!scope.ok) return const Right(Paged(items: [], total: 0));
     try {
       final page0 = await _remote.getProductsPage(
         page: page,
         limit: limit,
         category: category,
         categoryId: categoryId,
-        rootDomain: rootDomain,
+        rootDomain: scope.rootDomain,
         search: search,
         directOnly: directOnly,
       );

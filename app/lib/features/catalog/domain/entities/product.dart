@@ -155,6 +155,7 @@ class Product {
     required this.variants,
     required this.stock,
     required this.available,
+    this.rootDomain,
     this.thumbnail,
     this.fulfillmentType = 'code',
     this.inputFields = const [],
@@ -169,6 +170,11 @@ class Product {
   final String id;
   final I18nString title;
   final String category;
+
+  /// Top-level catalog domain (`games`, `telecom`, ...); null when the server
+  /// didn't send one. Restricted builds hide anything outside their allowlist.
+  final String? rootDomain;
+
   final List<String> images;
 
   /// 256px compressed preview URL, or null. Lists/chips prefer it via

@@ -134,6 +134,7 @@ ProductDto _$ProductDtoFromJson(Map<String, dynamic> json) => ProductDto(
   id: json['id'] as String,
   title: json['title'] as Map<String, dynamic>?,
   category: json['category'] as String?,
+  rootDomain: json['rootDomain'] as String?,
   images: (json['images'] as List<dynamic>?)?.map((e) => e as String).toList(),
   thumbnail: json['thumbnail'] as String?,
   variants: (json['variants'] as List<dynamic>?)
@@ -169,6 +170,7 @@ Map<String, dynamic> _$ProductDtoToJson(ProductDto instance) =>
       'id': instance.id,
       'title': instance.title,
       'category': instance.category,
+      'rootDomain': instance.rootDomain,
       'images': instance.images,
       'thumbnail': instance.thumbnail,
       'variants': instance.variants?.map((e) => e.toJson()).toList(),

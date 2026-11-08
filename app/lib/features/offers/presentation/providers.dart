@@ -15,11 +15,11 @@ final offersRemoteDataSourceProvider = Provider<OffersRemoteDataSource>(
 final offersProvider = FutureProvider<List<Offer>>((ref) async {
   try {
     final offers = await ref.watch(offersRemoteDataSourceProvider).getOffers();
-    final blocked =
-        await ref.watch(regulatedCatalogFilterProvider).blockedCategorySlugs();
+    final allowed =
+        await ref.watch(regulatedCatalogFilterProvider).categoryAllowed();
     return [
       for (final offer in offers)
-        if (!blocked.contains(offer.category)) offer,
+        if (allowed(offer.category)) offer,
     ];
   } catch (error) {
     throw mapError(error);

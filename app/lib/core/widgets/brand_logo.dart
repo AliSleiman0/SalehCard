@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../config/regulated_finance.dart';
+
 /// The SalehCard logo — the gamepad + lightning brand mark, optionally the full
 /// "SALEH CARD" lockup. Backed by the shipped PNG assets in `assets/branding/`
 /// so the launcher icon, splash, and in-app brand all share one mark.
+///
+/// Restricted (iOS) builds sell mobile recharge only, so they use the phone +
+/// lightning mark that matches their App Store icon instead of the gamepad.
 class BrandLogo extends StatelessWidget {
   const BrandLogo({super.key, this.size = 44, this.showWordmark = false});
 
@@ -18,13 +23,17 @@ class BrandLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     if (showWordmark) {
       return Image.asset(
-        'assets/branding/logo_lockup.png',
+        restrictToRealWorldServices
+            ? 'assets/branding/logo_lockup_ios.png'
+            : 'assets/branding/logo_lockup.png',
         height: size,
         fit: BoxFit.contain,
       );
     }
     return Image.asset(
-      'assets/branding/logo_mark.png',
+      restrictToRealWorldServices
+          ? 'assets/branding/logo_mark_ios.png'
+          : 'assets/branding/logo_mark.png',
       height: size,
       width: size,
       fit: BoxFit.contain,
