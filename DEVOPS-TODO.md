@@ -540,3 +540,16 @@ resolves to the parking stub with no env, which is exactly today's behavior
 
 Verify after setting creds: `/suppliers` renders live balances (not
 `unreachable`/`ip_blocked`), and the dashboard shows the supplier balance strip.
+
+## 23. Codemagic iOS build didn't auto-trigger on push to `main` (2026-11-08)
+
+`codemagic.yaml` → `ios-release` declares `triggering: push` on `main`, but merging PR #110 (`60cef37`)
+started **no** build. Build #5 had to be started by hand (Applications → SalehCard → Start new build →
+`main` / "iOS Release (TestFlight)").
+
+- Check the GitHub webhook in Codemagic. The repo was renamed to `AliSleiman0/SalehCard` (capital S/C),
+  so re-connect it if the webhook points at the old name.
+- Also check the `when: changeset` path filter in `codemagic.yaml`.
+- Until it's fixed, start iOS builds by hand after merging app changes. Build number = `4 + Codemagic
+  index`.
+

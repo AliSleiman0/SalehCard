@@ -287,3 +287,24 @@ submitting to Play.
    fails at `:app:validateSigningRelease` while debug builds still work.
 7. **Push on a release build**: FCM delivery on a Play-signed AAB after
    `google-services.json` + SHA-1s land (DEVOPS-TODO #19).
+
+## iOS recharge-only build — 1.0.6 (9) (2026-11-08, PR #110)
+
+See `HANDOFF-2026-11-08-IOS-RECHARGE.md`. Spot-checked on a real iPhone via the screen recording; still to
+check:
+
+1. **The demo recording's order #1E280E** (MTC Validity 1 Year, $14.50, to the owner's line) is
+   **Processing** in prod admin. Complete it (a real recharge) or refund it to the review account.
+2. **iOS (TestFlight build 9), signed in as the review account:**
+   - searching "pubg" or "gift" finds nothing;
+   - the Offers tab shows only telecom offers, or an empty state;
+   - old gift-card orders don't appear in order history;
+   - Profile has no player-ID section and no edit pencil;
+   - Wallet → top-up methods include no USDT/crypto or Whish;
+   - the splash shows the new phone + lightning lockup.
+3. **Android regression on the next APK/AAB:** the full catalogue, player IDs, crypto/transfer and Whish
+   still appear. Only the reworded strings change: promo "Top-ups delivered instantly…", empty cart,
+   search prompt, notification promo.
+4. **The Android emulator can mimic iOS:** `flutter run --dart-define=FORCE_IOS_SCOPE=true`
+   (debug only) shows the iOS scope.
+

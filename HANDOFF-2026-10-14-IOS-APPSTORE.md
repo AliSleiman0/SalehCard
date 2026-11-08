@@ -73,6 +73,9 @@ transfer or Whish. Whish is a third-party Lebanese payment provider to be integr
 
 ## If App Review rejects
 
+> **Superseded:** it did (3.1.1, 2026-10-29). See `HANDOFF-2026-11-08-IOS-RECHARGE.md`: iOS is now
+> recharge-only, and 1.0.6 (9) was resubmitted 2026-11-08.
+
 Most likely guideline **3.1.1**: digital goods bought with a wallet funded outside Apple's IAP. The review
 notes say codes are redeemed outside the app in the third-party stores and games they belong to. Bring the
 rejection text back and decide the response; don't revisit the account decision.
