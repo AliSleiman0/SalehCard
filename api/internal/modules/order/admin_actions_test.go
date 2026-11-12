@@ -40,7 +40,7 @@ func (fakeCustomers) FindByID(_ context.Context, _ bson.ObjectID) (*user.User, e
 func (fakeCustomers) FindByIDs(_ context.Context, _ []bson.ObjectID) ([]*user.User, error) {
 	return nil, nil
 }
-func (fakeCustomers) FindByEmailLike(_ context.Context, _ string) ([]*user.User, error) {
+func (fakeCustomers) FindByContactLike(_ context.Context, _ string) ([]*user.User, error) {
 	return nil, nil
 }
 

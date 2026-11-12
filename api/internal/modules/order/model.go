@@ -119,7 +119,10 @@ type Fulfillment struct {
 
 // Order is the root aggregate for a customer purchase.
 type Order struct {
-	ID            bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	ID bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	// Ref is the hex id as a string so admins can search by the short id the UI
+	// shows ("2f1e2818"); stamped on create, backfilled for older orders.
+	Ref           string        `bson:"ref,omitempty" json:"-"`
 	UserID        bson.ObjectID `bson:"userId"        json:"userId"`
 	Items         []OrderItem   `bson:"items"         json:"items"`
 	Subtotal      float64       `bson:"subtotal"      json:"subtotal"`

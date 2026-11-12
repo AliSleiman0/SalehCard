@@ -199,18 +199,31 @@ func (r *MongoRepository) FindByIDs(ctx context.Context, ids []bson.ObjectID) ([
 	return out, nil
 }
 
-// FindByEmailLike returns users whose email contains q (case-insensitive). Used
-// by admin order search. An empty/whitespace term returns an empty slice.
-func (r *MongoRepository) FindByEmailLike(ctx context.Context, q string) ([]*User, error) {
+// FindByContactLike returns users whose email, phone or name contains q
+// (case-insensitive). Used by admin order search, so an operator can find a
+// customer's orders by any of the identifiers they actually see ("71363772"
+// matches "+96171363772"). An empty/whitespace term returns an empty slice.
+func (r *MongoRepository) FindByContactLike(ctx context.Context, q string) ([]*User, error) {
 	q = strings.TrimSpace(q)
 	if q == "" {
 		return []*User{}, nil
 	}
-	pattern := regexp.QuoteMeta(strings.ToLower(q))
-	cur, err := r.collection.Find(ctx, bson.D{{Key: "email", Value: bson.D{
-		{Key: "$regex", Value: pattern},
-		{Key: "$options", Value: "i"},
-	}}})
+	rx := bson.D{{Key: "$regex", Value: regexp.QuoteMeta(strings.ToLower(q))}, {Key: "$options", Value: "i"}}
+	or := bson.A{
+		bson.D{{Key: "email", Value: rx}},
+		bson.D{{Key: "name", Value: rx}},
+	}
+	// Phones are stored E.164 ("+961…"); match on the typed digits so spaces,
+	// dashes or a missing country code don't hide the customer.
+	if digits := strings.Map(func(c rune) rune {
+		if c >= '0' && c <= '9' {
+			return c
+		}
+		return -1
+	}, q); len(digits) >= 4 {
+		or = append(or, bson.D{{Key: "phone", Value: bson.D{{Key: "$regex", Value: digits}}}})
+	}
+	cur, err := r.collection.Find(ctx, bson.D{{Key: "$or", Value: or}})
 	if err != nil {
 		return nil, err
 	}

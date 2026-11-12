@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -34,6 +35,17 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("order: failed to ensure indexes", "error", err)
 	}
+	// Older orders predate the searchable ref field; stamp them in the
+	// background (idempotent, a no-op once done) so boot is not delayed.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		if n, err := BackfillRefs(ctx, db); err != nil {
+			slog.Warn("order: ref backfill failed", "error", err, "stamped", n)
+		} else if n > 0 {
+			slog.Info("order: backfilled order refs", "count", n)
+		}
+	}()
 	// Deliberately option-less (no offer/reseller enrichment): PlaceOrder
 	// re-prices from raw variant.Price and applies offer/reseller pricing
 	// itself — an enriched service here could silently double-discount.
