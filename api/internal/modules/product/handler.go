@@ -56,6 +56,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	f.CategoryID = q.Get("categoryId")
 	f.RootDomain = q.Get("rootDomain")
 	f.Search = q.Get("q")
+	if q.Get("sort") == SortByName {
+		f.Sort = SortByName
+	}
 
 	if raw := q.Get("directOnly"); raw != "" {
 		v, err := strconv.ParseBool(raw)

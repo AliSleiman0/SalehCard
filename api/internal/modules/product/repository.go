@@ -217,6 +217,10 @@ func (r *MongoRepository) FindAll(ctx context.Context, f ListFilter, p paginatio
 		return nil, 0, err
 	}
 
+	if f.Sort == SortByName {
+		return r.findAllByName(ctx, filter, p)
+	}
+
 	skip := pagination.Skip(p)
 	limit := int64(p.Limit)
 
@@ -244,6 +248,36 @@ func (r *MongoRepository) FindAll(ctx context.Context, f ListFilter, p paginatio
 	}
 
 	return products, total, nil
+}
+
+// findAllByName serves an A to Z page: loads the match set (capped), sorts it
+// naturally in Go, then slices the requested page. See nameSortCap.
+func (r *MongoRepository) findAllByName(ctx context.Context, filter bson.D, p pagination.Params) ([]Product, int64, error) {
+	cursor, err := r.col.Find(ctx, filter, options.Find().
+		SetSort(bson.D{{Key: "_id", Value: 1}}).
+		SetLimit(nameSortCap))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+	var all []Product
+	if err := cursor.All(ctx, &all); err != nil {
+		return nil, 0, err
+	}
+	for i := range all {
+		all[i].normalize()
+	}
+	sortProductsByName(all)
+	total := int64(len(all))
+	start := int(pagination.Skip(p))
+	if start > len(all) {
+		start = len(all)
+	}
+	end := start + p.Limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[start:end], total, nil
 }
 
 // FindByID retrieves a single product by its hex ObjectID string.

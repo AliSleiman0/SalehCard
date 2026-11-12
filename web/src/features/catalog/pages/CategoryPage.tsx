@@ -13,7 +13,9 @@ import { adaptProduct } from '../lib/adaptProduct'
 import { adaptRootCategory } from '../lib/adaptCategory'
 import { ProductGrid } from '../components/ProductGrid'
 
-type Sort = 'pop' | 'low' | 'high' | 'rating'
+import { sortAZ } from '../lib/sortAZ'
+
+type Sort = 'az' | 'pop' | 'low' | 'high' | 'rating'
 
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -25,7 +27,8 @@ export default function CategoryPage() {
   const agent = useUiStore((s) => s.agent)
   const locale = useLocaleStore((s) => s.locale)
 
-  const [sort, setSort] = useState<Sort>('pop')
+  // A to Z by default (client feedback #68/#104: "sort everything A to Z").
+  const [sort, setSort] = useState<Sort>('az')
   // null = no cap (show everything). The slider's ceiling is derived from the
   // actual product prices below, so high-priced items are never hidden by default.
   const [maxP, setMaxP] = useState<number | null>(null)
@@ -52,6 +55,7 @@ export default function CategoryPage() {
 
   const items = useMemo(() => {
     let r = all.filter((p) => fromPrice(p, agent) <= effectiveMax)
+    if (sort === 'az') r = sortAZ(r)
     if (sort === 'low') r = [...r].sort((a, b) => fromPrice(a, agent) - fromPrice(b, agent))
     if (sort === 'high') r = [...r].sort((a, b) => fromPrice(b, agent) - fromPrice(a, agent))
     if (sort === 'rating') r = [...r].sort((a, b) => b.rating - a.rating)
@@ -84,6 +88,7 @@ export default function CategoryPage() {
           value={sort}
           onChange={setSort}
           options={[
+            { value: 'az', label: t('sort_az') },
             { value: 'pop', label: t('sort_pop') },
             { value: 'low', label: t('sort_low') },
             { value: 'high', label: t('sort_high') },
@@ -105,7 +110,7 @@ export default function CategoryPage() {
               style={{ color: 'var(--brand-1)', fontWeight: 700 }}
               onClick={() => {
                 setMaxP(null)
-                setSort('pop')
+                setSort('az')
               }}
             >
               {t('clear')}

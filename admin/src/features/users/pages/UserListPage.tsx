@@ -14,6 +14,8 @@ import {
   LoadingSpinner,
   ErrorState,
   EmptyState,
+  SortTh,
+  type Sort,
 } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
 import { money, downloadCsv } from '@/lib/utils'
@@ -41,6 +43,12 @@ export default function UserListPage() {
 
   const [role, setRole] = useState<'all' | UserRole>('all')
   const [status, setStatus] = useState<'all' | UserStatus>('all')
+  // Server-side column sort (client feedback #47); null = newest first.
+  const [sort, setSortState] = useState<Sort | null>(null)
+  const setSort = (s: Sort) => {
+    setSortState(s)
+    setPage(1)
+  }
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [page, setPage] = useState(1)
@@ -67,6 +75,7 @@ export default function UserListPage() {
     role: role === 'all' ? ('' as const) : role,
     status: status === 'all' ? ('' as const) : status,
     q: debouncedSearch.trim(),
+    sort: sort ? (sort.dir === 'desc' ? '-' : '') + sort.k : undefined,
   }
 
   const { data, isLoading, isError, refetch } = useUsers({ page, ...filters })
@@ -196,13 +205,13 @@ export default function UserListPage() {
                     <th style={{ width: 36 }}>
                       <Checkbox on={bulk.all} onClick={bulk.toggleAll} />
                     </th>
-                    <th>User</th>
+                    <SortTh label="User" k="name" sort={sort} setSort={setSort} />
                     <th>Role</th>
-                    <th>Wallet</th>
+                    <SortTh label="Wallet" k="wallet" sort={sort} setSort={setSort} />
                     <th>Orders</th>
                     <th>Total spent</th>
-                    <th>Points</th>
-                    <th>Joined</th>
+                    <SortTh label="Points" k="points" sort={sort} setSort={setSort} />
+                    <SortTh label="Joined" k="joined" sort={sort} setSort={setSort} />
                     <th>{t('status')}</th>
                     <th></th>
                   </tr>

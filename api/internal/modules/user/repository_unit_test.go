@@ -65,3 +65,10 @@ func TestUserFilter_Build_SearchTextMatchesEmailOrPhone(t *testing.T) {
 	assert.Len(t, or, 2)
 	assert.NotContains(t, m, "_id")
 }
+
+func TestUserFilterSortDoc(t *testing.T) {
+	assert.Equal(t, bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}}, UserFilter{}.sortDoc())
+	assert.Equal(t, bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}}, UserFilter{Sort: "bogus"}.sortDoc())
+	assert.Equal(t, bson.D{{Key: "name", Value: 1}, {Key: "email", Value: 1}, {Key: "_id", Value: 1}}, UserFilter{Sort: "name"}.sortDoc())
+	assert.Equal(t, bson.D{{Key: "walletBalance", Value: -1}, {Key: "_id", Value: -1}}, UserFilter{Sort: "-wallet"}.sortDoc())
+}

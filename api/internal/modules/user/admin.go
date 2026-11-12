@@ -57,10 +57,10 @@ const maxDetailTransactions = 10
 // the orders collection — the order package imports user, so user must not import
 // order; a direct aggregation over the collection keeps the dependency one-way.
 type adminHandler struct {
-	repo       Repository
-	wallet     wallet.Repository
-	orders     *mongo.Collection
-	roles      *mongo.Collection
+	repo        Repository
+	wallet      wallet.Repository
+	orders      *mongo.Collection
+	roles       *mongo.Collection
 	rec         audit.Recorder
 	smsSender   sms.Sender
 	maxBulkSMS  int
@@ -106,6 +106,7 @@ func (a *adminHandler) list(w http.ResponseWriter, r *http.Request) {
 		Role:   Role(strings.TrimSpace(q.Get("role"))),
 		Status: Status(strings.TrimSpace(q.Get("status"))),
 		Search: strings.TrimSpace(q.Get("q")),
+		Sort:   strings.TrimSpace(q.Get("sort")),
 	}
 
 	users, total, err := a.repo.ListAll(r.Context(), f, p)

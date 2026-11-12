@@ -60,6 +60,37 @@ type UserFilter struct {
 	Status       Status
 	ResellerTier string // exact tier name (reseller listing)
 	Search       string // matches an ObjectID hex, or email/phone (case-insensitive)
+	// Sort is a column key (name, email, phone, wallet, points, joined), with a
+	// leading "-" for descending; empty/unknown keeps the newest-first default.
+	Sort string
+}
+
+// sortFields maps an admin column key to the user field(s) it sorts on.
+var sortFields = map[string][]string{
+	"name":   {"name", "email"},
+	"email":  {"email"},
+	"phone":  {"phone"},
+	"wallet": {"walletBalance"},
+	"points": {"loyaltyPoints"},
+	"joined": {"createdAt"},
+}
+
+// sortDoc is the Mongo sort for f.Sort, always ending on _id so paging over
+// equal values (e.g. many $0.00 wallets) is stable.
+func (f UserFilter) sortDoc() bson.D {
+	key, dir := strings.TrimSpace(f.Sort), 1
+	if strings.HasPrefix(key, "-") {
+		key, dir = key[1:], -1
+	}
+	fields, ok := sortFields[key]
+	if !ok {
+		return bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}}
+	}
+	d := bson.D{}
+	for _, fld := range fields {
+		d = append(d, bson.E{Key: fld, Value: dir})
+	}
+	return append(d, bson.E{Key: "_id", Value: dir})
 }
 
 // build assembles the MongoDB filter document for f.
@@ -340,7 +371,7 @@ func (r *MongoRepository) ListAll(ctx context.Context, f UserFilter, p paginatio
 	opts := options.Find().
 		SetSkip(pagination.Skip(p)).
 		SetLimit(int64(p.Limit)).
-		SetSort(bson.D{{Key: "createdAt", Value: -1}})
+		SetSort(f.sortDoc())
 	cur, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, 0, err

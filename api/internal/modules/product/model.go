@@ -438,6 +438,8 @@ type ListFilter struct {
 	FulfillmentMode FulfillmentMode
 	Status          string // "active" | "draft" | "out"
 	Search          string
+	// Sort: SortByName for a natural A to Z listing; empty = newest first.
+	Sort string
 }
 
 // BulkAction is a bulk operation applied to a set of product IDs.
