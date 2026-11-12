@@ -57,10 +57,10 @@ const maxDetailTransactions = 10
 // the orders collection — the order package imports user, so user must not import
 // order; a direct aggregation over the collection keeps the dependency one-way.
 type adminHandler struct {
-	repo        Repository
-	wallet      wallet.Repository
-	orders      *mongo.Collection
-	roles       *mongo.Collection
+	repo       Repository
+	wallet     wallet.Repository
+	orders     *mongo.Collection
+	roles      *mongo.Collection
 	rec         audit.Recorder
 	smsSender   sms.Sender
 	maxBulkSMS  int
