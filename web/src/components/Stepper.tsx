@@ -57,7 +57,15 @@ export function Stepper({
         inputMode="numeric"
         aria-label="Quantity"
         value={draft ?? String(value)}
-        onChange={(e) => setDraft(e.target.value.replace(/\D/g, ''))}
+        onChange={(e) => {
+          const d = e.target.value.replace(/\D/g, '')
+          setDraft(d)
+          // Push in-range values live so the caller's total tracks the typing;
+          // out-of-range / partial values wait for the clamp on blur (typing "5"
+          // on the way to "50" must not snap up to a min of 10 mid-keystroke).
+          const n = parseInt(d, 10)
+          if (!Number.isNaN(n) && n >= min && n <= max) set(n)
+        }}
         onFocus={(e) => e.currentTarget.select()}
         onBlur={(e) => commit(e.target.value)}
         onKeyDown={(e) => {

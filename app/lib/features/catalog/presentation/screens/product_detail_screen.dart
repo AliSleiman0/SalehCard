@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/format/grouping_formatter.dart';
 import '../../../../core/format/localized_digits.dart';
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
@@ -187,7 +188,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     // exactly one variant) can't be priced -- buying is disabled.
     final unitField = product.unitAmountField;
     final unitBroken = product.isUnitPriced && unitField == null;
-    final amountText = _amount.text.trim();
+    final amountText = stripGrouping(_amount.text).trim();
     final amountValue =
         amountText.isEmpty ? null : double.tryParse(amountText);
     final amountLinePrice = (unitField != null && amountValue != null)

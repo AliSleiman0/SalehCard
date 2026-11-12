@@ -7,7 +7,7 @@ export function fmtPrice(usd: number, cur: Currency): string {
   const v = usd * (RATES[cur] || 1)
   const s = SYM[cur] || '$'
   const grouped = Number(v).toLocaleString('en-US', {
-    minimumFractionDigits: v >= 100 ? 0 : 2,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
   return cur === 'TRY' ? `${grouped} ${s}` : `${s}${grouped}`
