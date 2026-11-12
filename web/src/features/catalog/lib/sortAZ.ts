@@ -3,6 +3,14 @@
  * "JAWAKER 1,000"). Stable for equal names; does not mutate the input. */
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
+// Leading punctuation is ignored ("(Sigma Plus" files under S); blanks go last.
+const key = (s: string) => s.trim().replace(/^[^\p{L}\p{N}]+/u, '')
+
 export function sortAZ<T extends { brand: string }>(items: T[]): T[] {
-  return [...items].sort((a, b) => collator.compare(a.brand.trim(), b.brand.trim()))
+  return [...items].sort((a, b) => {
+    const ka = key(a.brand)
+    const kb = key(b.brand)
+    if (!ka !== !kb) return ka ? -1 : 1
+    return collator.compare(ka, kb)
+  })
 }

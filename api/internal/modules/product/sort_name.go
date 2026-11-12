@@ -16,12 +16,14 @@ const SortByName = "name"
 // over the whole match set, then paged. Catalog subsets are far below this.
 const nameSortCap = 5000
 
-// sortKey is the name a product sorts by: its English title, else Arabic.
+// sortKey is the name a product sorts by: its English title, else Arabic,
+// with leading punctuation dropped so "(Sigma Plus…" files under S.
 func sortKey(p *Product) string {
-	if s := strings.TrimSpace(p.Title.En); s != "" {
-		return s
+	s := strings.TrimSpace(p.Title.En)
+	if s == "" {
+		s = strings.TrimSpace(p.Title.Ar)
 	}
-	return strings.TrimSpace(p.Title.Ar)
+	return strings.TrimLeftFunc(s, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }
 
 // naturalLess compares two names case-insensitively, treating runs of digits
@@ -76,7 +78,13 @@ func readNumber(r []rune, i int) (string, int) {
 	return s, i
 }
 
-// sortProductsByName orders products A→Z in place (stable).
+// sortProductsByName orders products A→Z in place (stable); untitled last.
 func sortProductsByName(ps []Product) {
-	sort.SliceStable(ps, func(i, j int) bool { return naturalLess(sortKey(&ps[i]), sortKey(&ps[j])) })
+	sort.SliceStable(ps, func(i, j int) bool {
+		a, b := sortKey(&ps[i]), sortKey(&ps[j])
+		if (a == "") != (b == "") {
+			return b == "" // untitled products go last
+		}
+		return naturalLess(a, b)
+	})
 }

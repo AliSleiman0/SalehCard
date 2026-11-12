@@ -22,11 +22,13 @@ func TestSortProductsByName(t *testing.T) {
 		{Title: I18nString{En: "", Ar: "باقة"}},
 		{Title: I18nString{En: "bigo live 1000"}},
 		{Title: I18nString{En: "Bigo Live 200"}},
+		{Title: I18nString{}},
+		{Title: I18nString{En: "(Sigma Plus 1 Year"}},
 	}
 	sortProductsByName(ps)
 	got := []string{}
 	for i := range ps {
 		got = append(got, sortKey(&ps[i]))
 	}
-	assert.Equal(t, []string{"Bigo Live 200", "bigo live 1000", "Yalla Ludo", "باقة"}, got)
+	assert.Equal(t, []string{"Bigo Live 200", "bigo live 1000", "Sigma Plus 1 Year", "Yalla Ludo", "باقة", ""}, got)
 }
