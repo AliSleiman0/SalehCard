@@ -25,6 +25,7 @@ import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import { useRoles } from '@/features/roles/hooks/useRoles'
 import { useUser, useUpdateUserRole, useUpdateUserStatus, useAdjustWallet, useDeleteUser } from '../hooks/useUsers'
 import { adaptUser } from '../lib/adaptUser'
+import { AccountEditCard } from '../components/AccountEditCard'
 import type { AdminUserDetail, UserStatus } from '../api/users'
 import type { UserRole } from '@/types'
 
@@ -39,7 +40,9 @@ export default function UserDetailPage() {
   const [adjOpen, setAdjOpen] = useState(false)
   // The Order-history tab reads the orders domain — hide it (and its fetch) when
   // the admin's role lacks orders.view.
-  const canViewOrders = useCan()('orders.view')
+  const can = useCan()
+  const isSuper = useIsSuperAdmin()
+  const canViewOrders = can('orders.view')
 
   const detail = data?.data
   const view = detail ? adaptUser(detail) : null
@@ -158,6 +161,9 @@ export default function UserDetailPage() {
                 <Icon name="edit" size={14} /> Adjust balance
               </button>
             </div>
+            {can('users.manage') && view.status !== 'deleted' && (view.role !== 'admin' || isSuper) && (
+              <AccountEditCard id={view.id} name={view.name} />
+            )}
             <div className="acard pad">
               <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Loyalty</h3>
               <div className="deflist">

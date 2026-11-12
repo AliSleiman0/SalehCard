@@ -71,6 +71,7 @@ type Service interface {
 	Logout(ctx context.Context, rawToken string) error
 	GetProfile(ctx context.Context, id bson.ObjectID) (*User, error)
 	UpdateProfile(ctx context.Context, id bson.ObjectID, input UpdateProfileInput) (*User, error)
+	ChangePassword(ctx context.Context, id bson.ObjectID, in ChangePasswordInput) error
 	// DeleteAccount permanently retires the caller's own account (see
 	// delete.go); force forfeits the wallet balance and ignores in-flight
 	// orders. The result feeds the audit summary (no PII).

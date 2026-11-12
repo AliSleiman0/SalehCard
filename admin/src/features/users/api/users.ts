@@ -125,3 +125,21 @@ export function bulkPushUsers(
 ): Promise<ApiResponse<{ queued: number }>> {
   return apiClient.post<{ queued: number }>(`${ADMIN}/bulk-push`, { ids, title, body })
 }
+
+/** Edit a customer's display name (super admin needed for admin accounts). */
+export function updateUserProfile(id: string, name: string): Promise<ApiResponse<AdminUser>> {
+  return apiClient.put<AdminUser>(`${ADMIN}/${id}/profile`, { name })
+}
+
+/** Set a new password for a user; all of their sessions are signed out. */
+export function setUserPassword(id: string, newPassword: string): Promise<ApiResponse<{ changed: boolean }>> {
+  return apiClient.post<{ changed: boolean }>(`${ADMIN}/${id}/password`, { newPassword })
+}
+
+/** Change the signed-in admin's own password. */
+export function changeOwnPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ApiResponse<{ changed: boolean }>> {
+  return apiClient.post<{ changed: boolean }>('/api/v1/users/me/password', { currentPassword, newPassword })
+}

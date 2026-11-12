@@ -57,10 +57,12 @@ const maxDetailTransactions = 10
 // the orders collection — the order package imports user, so user must not import
 // order; a direct aggregation over the collection keeps the dependency one-way.
 type adminHandler struct {
-	repo       Repository
-	wallet     wallet.Repository
-	orders     *mongo.Collection
-	roles      *mongo.Collection
+	repo        Repository
+	wallet      wallet.Repository
+	orders      *mongo.Collection
+	roles       *mongo.Collection
+	users       *mongo.Collection
+	refresh     RefreshRepository
 	rec         audit.Recorder
 	smsSender   sms.Sender
 	maxBulkSMS  int
@@ -78,6 +80,8 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, s
 		wallet:      wallet.NewMongoRepository(db),
 		orders:      db.Collection("orders"),
 		roles:       db.Collection("roles"),
+		users:       db.Collection("users"),
+		refresh:     NewMongoRefreshRepository(db),
 		rec:         rec,
 		smsSender:   smsSender,
 		maxBulkSMS:  maxBulkSMS,
@@ -92,6 +96,8 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, s
 	r.Get("/users/{id}", a.detail)
 	r.Put("/users/{id}/role", a.updateRole)
 	r.Put("/users/{id}/status", a.updateStatus)
+	r.Put("/users/{id}/profile", a.updateProfile)
+	r.Post("/users/{id}/password", a.setPassword)
 	r.Post("/users/{id}/wallet-adjust", a.walletAdjust)
 	r.Delete("/users/{id}", a.deleteUser)
 }
