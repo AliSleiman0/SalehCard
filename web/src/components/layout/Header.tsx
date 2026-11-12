@@ -14,6 +14,7 @@ import { initials } from '@/features/auth/userDisplay'
 import { useCategories } from '@/features/catalog/hooks/useCategories'
 import { adaptRootCategory } from '@/features/catalog/lib/adaptCategory'
 import { useUnreadCount } from '@/features/notifications/hooks/useUnreadCount'
+import { SearchSuggest } from '@/features/catalog/components/SearchSuggest'
 
 export function Header() {
   const { t } = useTranslation()
@@ -29,13 +30,7 @@ export function Header() {
     .map((c) => adaptRootCategory(c, locale))
     .sort((a, b) => a.order - b.order)
   const [menu, setMenu] = useState(false)
-  const [search, setSearch] = useState('')
   const unread = useUnreadCount().data ?? 0
-
-  const submitSearch = () => {
-    const q = search.trim()
-    if (q) navigate('/search?q=' + encodeURIComponent(q))
-  }
 
   useEffect(() => {
     const h = () => setMenu(false)
@@ -72,15 +67,7 @@ export function Header() {
           </div>
         </div>
 
-        <div className="searchbar desktop-only">
-          <Icon name="search" size={18} />
-          <input
-            placeholder={t('search_ph')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-          />
-        </div>
+        <SearchSuggest />
 
         <div className="header-right">
           <button
