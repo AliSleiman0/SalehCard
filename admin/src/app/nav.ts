@@ -50,7 +50,13 @@ export function firstAllowedRoute(can: (perm: string) => boolean): string {
 
 // Sidebar structure mirrors the prototype's NAV.
 export const NAV: NavGroup[] = [
-  { group: 'grp_overview', items: [{ to: '/', icon: 'grid', label: 'nav_dashboard', domain: 'dashboard' }] },
+  {
+    group: 'grp_overview',
+    items: [
+      { to: '/', icon: 'grid', label: 'nav_dashboard', domain: 'dashboard' },
+      { to: '/todos', icon: 'checkc', label: 'nav_todos', domain: 'todos' },
+    ],
+  },
   {
     group: 'grp_catalog',
     items: [

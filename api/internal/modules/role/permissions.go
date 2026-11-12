@@ -16,6 +16,7 @@ type Domain struct {
 // and never grantable to a custom role.
 var Domains = []Domain{
 	{Key: "dashboard", Label: "Dashboard"},
+	{Key: "todos", Label: "To-do list"},
 	{Key: "products", Label: "Products"},
 	{Key: "categories", Label: "Categories"},
 	{Key: "inventory", Label: "Inventory"},
