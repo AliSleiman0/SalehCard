@@ -1,5 +1,5 @@
 import { ffKey, artForCategory, type FfKey } from '@/components'
-import { relativeTime } from '@/lib/utils'
+import { formatDateTime } from '@/lib/utils'
 import type { AdminOrder, AdminOrderItem, OrderCustomer } from '../api/orders'
 
 /** The flat shape the order list/detail tables render. */
@@ -108,7 +108,7 @@ export function adaptOrder(o: AdminOrder): OrderView {
     cur: (o.currency as 'USD' | 'TRY') || 'USD',
     pay: payKey(o.paymentMethod),
     status: o.status,
-    date: relativeTime(o.createdAt),
+    date: formatDateTime(o.createdAt),
     raw: o,
   }
 }

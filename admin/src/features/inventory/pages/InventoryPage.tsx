@@ -12,7 +12,7 @@ import {
 } from '../hooks/useInventory'
 import { parseCodesFile, listCodes, type UploadItem } from '../api/codes'
 import { CodesModal } from '../components/CodesModal'
-import { relativeTime, downloadCsv, money } from '@/lib/utils'
+import { formatDateTime, downloadCsv, money } from '@/lib/utils'
 import { useCan } from '@/stores/auth'
 import type { InventoryStats, Code } from '@/types'
 
@@ -559,7 +559,7 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <b style={{ fontSize: 13 }}>{u.productTitle || u.productId}</b>
                   <span className="num faint" style={{ marginInlineStart: 'auto', fontSize: 12 }}>
-                    {relativeTime(u.createdAt)}
+                    {formatDateTime(u.createdAt)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>

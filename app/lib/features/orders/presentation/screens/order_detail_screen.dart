@@ -12,6 +12,7 @@ import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/money_row.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../../core/format/date_time.dart';
 import '../../../checkout/domain/entities/order.dart';
 import '../../../checkout/presentation/providers.dart';
 
@@ -357,15 +358,7 @@ class _Timeline extends StatelessWidget {
   final List<TimelineEvent> events;
   final String Function(String) labelOf;
 
-  String _time(DateTime? at) {
-    if (at == null) return '';
-    final local = at.toLocal();
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final h = local.hour.toString().padLeft(2, '0');
-    final min = local.minute.toString().padLeft(2, '0');
-    return '${local.year}-$m-$d $h:$min';
-  }
+  String _time(DateTime? at) => formatDateTime(at);
 
   @override
   Widget build(BuildContext context) {

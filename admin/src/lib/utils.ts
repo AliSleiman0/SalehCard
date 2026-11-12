@@ -16,6 +16,16 @@ export function money(v: number, cur: 'USD' | 'TRY' = 'USD'): string {
   return cur === 'TRY' ? `${sign}₺${s}` : `${sign}$${s}`
 }
 
+/** Absolute date + time, e.g. 'Nov 12, 2026 · 3:05 PM' (client feedback: admins
+ *  need the exact time on orders and wallet rows, not '6h ago'). */
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return `${date} · ${time}`
+}
+
 /** Short relative time ("2m ago", "Yesterday", "Jun 3") from an ISO timestamp. */
 export function relativeTime(iso: string): string {
   const then = new Date(iso).getTime()

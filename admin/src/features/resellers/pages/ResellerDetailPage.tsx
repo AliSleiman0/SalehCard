@@ -15,7 +15,7 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
-import { money, relativeTime } from '@/lib/utils'
+import { money, formatDateTime } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
@@ -268,7 +268,7 @@ function BalanceTab({
                     </td>
                     <td>{tx.method ? <PayChip p={tx.method} /> : <span className="faint">—</span>}</td>
                     <td className="muted" style={{ fontSize: 12 }}>
-                      {relativeTime(tx.createdAt)}
+                      {formatDateTime(tx.createdAt)}
                     </td>
                   </tr>
                 ))}

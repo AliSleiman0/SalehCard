@@ -11,6 +11,7 @@ import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/ledger_row.dart';
+import '../../../../core/format/date_time.dart';
 import '../../domain/entities/wallet.dart';
 import '../providers.dart';
 
@@ -232,13 +233,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
     }
   }
 
-  static String _shortDate(DateTime? at) {
-    if (at == null) return '';
-    final local = at.toLocal();
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    return '${local.year}-$m-$d';
-  }
+  static String _shortDate(DateTime? at) => formatDateTime(at);
 }
 
 /// Compact summary banner shown when the user has pending top-up requests, so an

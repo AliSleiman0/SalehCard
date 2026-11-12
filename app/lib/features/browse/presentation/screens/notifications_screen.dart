@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/format/date_time.dart';
 import '../../domain/entities/app_notification.dart';
 import '../providers.dart';
 
@@ -239,10 +240,5 @@ class _NotificationRow extends StatelessWidget {
     }
   }
 
-  static String _shortDate(DateTime at) {
-    final local = at.toLocal();
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    return '${local.year}-$m-$d';
-  }
+  static String _shortDate(DateTime at) => formatDateTime(at);
 }
