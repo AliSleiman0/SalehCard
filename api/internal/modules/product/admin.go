@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -41,6 +42,11 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, s
 	r.Post("/products", h.Create)
 	r.Post("/products/bulk", h.Bulk)
 	r.Post("/products/images", h.UploadImage)
+	// Manual product order inside a category (catalog_order.go). Static paths,
+	// so chi matches them before /products/{id}.
+	ord := &orderService{store: repo, categories: categories}
+	r.Get("/products/order", productOrderListHandler(ord))
+	r.Put("/products/order", productOrderSaveHandler(ord, h.rec))
 	r.Get("/products/{id}", h.GetByID)
 	r.Put("/products/{id}", h.Update)
 	r.Delete("/products/{id}", h.Delete)
@@ -98,6 +104,19 @@ func (h *Handler) AdminList(w http.ResponseWriter, r *http.Request) {
 	}
 	if fm := q.Get("fulfillmentMode"); fm != "" {
 		f.FulfillmentMode = FulfillmentMode(fm)
+	}
+	// Same catalog order + direct-node scoping the customer list accepts, so
+	// the Categories page can preview exactly what customers see.
+	if q.Get("sort") == SortByName {
+		f.Sort = SortByName
+	}
+	if raw := q.Get("directOnly"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			response.BadRequest(w, "directOnly must be a boolean")
+			return
+		}
+		f.CategoryDirect = v
 	}
 
 	p := pagination.ParseParams(r)

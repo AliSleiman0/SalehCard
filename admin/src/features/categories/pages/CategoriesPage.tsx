@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -13,11 +13,19 @@ import {
   EmptyState,
 } from '@/components'
 import { ApiError } from '@/lib/api-client'
-import { useProducts, useUploadProductImage } from '@/features/products/hooks/useProducts'
+import {
+  useProducts,
+  useUploadProductImage,
+  useCategoryProductOrder,
+  useSaveCategoryProductOrder,
+} from '@/features/products/hooks/useProducts'
+import { useCan } from '@/stores/auth'
+import type { Product } from '@/types'
 import { ProductThumb } from '@/features/products/pages/ProductListPage'
 import { priceRange, productStatus } from '@/features/products/lib/view'
 import { useCategoryTree, useCreateCategory, useUpdateCategory, useDeleteCategory } from '../hooks/useCategories'
 import { orderedTree, pathLabel, subtreeIds, type AdminCategory } from '../api/categories'
+import { moveItem } from '../lib/moveItem'
 
 const MAX_DEPTH = 2 // Collection(0) → Category(1) → Subcategory(2)
 
@@ -253,7 +261,7 @@ export default function CategoriesPage() {
                       {productsOpen && (
                         <tr>
                           <td colSpan={4} style={{ background: 'var(--surface-2)', padding: 0 }}>
-                            <CategoryProductsPanel categoryId={n.id} />
+                            <CategoryProductsPanel node={n} />
                           </td>
                         </tr>
                       )}
@@ -493,10 +501,14 @@ function CategoryEditorModal({
 }
 
 /** Inline product list under an expanded category row. Tree-aware — lists the
- *  node's own + descendants' products (matching the roll-up count), with its own
- *  search + pagination. Rows link to the product editor. */
-function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
+ *  node's own + descendants' products (matching the roll-up count) in the order
+ *  customers see them, with its own search + pagination. Rows link to the
+ *  product editor. "Arrange order" switches to the reorder list. */
+function CategoryProductsPanel({ node }: { node: AdminCategory }) {
   const navigate = useNavigate()
+  const can = useCan()
+  const canArrange = can('products.manage')
+  const [arranging, setArranging] = useState(false)
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [page, setPage] = useState(1)
@@ -509,27 +521,43 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
     return () => clearTimeout(timer)
   }, [search])
 
-  const { data, isLoading, isError, refetch } = useProducts({
-    categoryId,
-    search: debounced.trim() || undefined,
-    page,
-  })
+  const { data, isLoading, isError, refetch } = useProducts(
+    {
+      categoryId: node.id,
+      search: debounced.trim() || undefined,
+      sort: 'name',
+      page,
+    },
+    { enabled: !arranging },
+  )
   const rows = data?.data ?? []
   const meta = data?.meta
 
+  if (arranging) {
+    return <ArrangeProductsPanel node={node} onDone={() => setArranging(false)} />
+  }
+
   return (
     <div style={{ padding: '12px 16px' }}>
-      <div className="fsearch" style={{ marginBottom: 8, maxWidth: 340 }}>
-        <Icon name="search" size={14} />
-        <input
-          placeholder="Search products in this category…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+        <div className="fsearch" style={{ maxWidth: 340, flex: '1 1 220px' }}>
+          <Icon name="search" size={14} />
+          <input
+            placeholder="Search products in this category…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {canArrange && (
+          <button className="abtn sm" style={{ marginLeft: 'auto' }} onClick={() => setArranging(true)}>
+            <Icon name="sort" size={13} /> Arrange order
+          </button>
+        )}
       </div>
       <div className="ahint" style={{ marginTop: 0, marginBottom: 10 }}>
-        Includes subcategories. The count reflects available products; drafts are listed here too.
-        Assign products from the Products page (select rows → Move to category).
+        Listed in the order customers see. Includes subcategories. The count reflects available
+        products; drafts are listed here too. Assign products from the Products page (select rows →
+        Move to category).
       </div>
       {isLoading ? (
         <LoadingSpinner />
@@ -585,6 +613,202 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
             onPage={setPage}
           />
         </>
+      )}
+    </div>
+  )
+}
+
+/** Reorder list for the products assigned DIRECTLY to one node: drag a row by
+ *  its handle, or use the arrow buttons (keyboard-friendly), then Save. The
+ *  order is per node — products in subcategories are arranged on their own
+ *  subcategory. Products never arranged sit after the arranged ones, A to Z. */
+function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: () => void }) {
+  const { data, isLoading, isError, refetch, isFetching } = useCategoryProductOrder(node.id)
+  const save = useSaveCategoryProductOrder()
+  // null = untouched: follow the server order (also after a reload).
+  const [order, setOrder] = useState<Product[] | null>(null)
+  // The drag source lives in a ref (read synchronously by dragover/drop, which
+  // can fire before React re-renders after dragstart); the state mirrors it
+  // only for styling.
+  const dragRef = useRef<number | null>(null)
+  const [dragFrom, setDragFrom] = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [stale, setStale] = useState(false)
+
+  const loaded = useMemo(() => data?.data ?? [], [data])
+  const list = order ?? loaded
+  const dirty = list.some((p, i) => p.id !== loaded[i]?.id)
+  const name = node.name.en || node.slug
+
+  function move(from: number, to: number) {
+    setError(null)
+    setOrder(moveItem(list, from, to))
+  }
+
+  function endDrag() {
+    dragRef.current = null
+    setDragFrom(null)
+    setDragOver(null)
+  }
+
+  function runSave() {
+    setError(null)
+    setStale(false)
+    save.mutate(
+      { categoryId: node.id, productIds: list.map((p) => p.id) },
+      {
+        onSuccess: onDone,
+        onError: (e) => {
+          if (e instanceof ApiError && e.code === 'STALE_ORDER') setStale(true)
+          setError(e instanceof ApiError ? e.message : 'Could not save the order.')
+        },
+      },
+    )
+  }
+
+  function reload() {
+    setError(null)
+    setStale(false)
+    setOrder(null)
+    void refetch()
+  }
+
+  return (
+    <div style={{ padding: '12px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 13.5 }}>Arrange products in “{name}”</b>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button className="abtn sm" onClick={onDone} disabled={save.isPending}>
+            {dirty ? 'Cancel' : 'Done'}
+          </button>
+          <button
+            className="abtn sm primary"
+            onClick={runSave}
+            disabled={!dirty || save.isPending || isFetching || list.length === 0}
+          >
+            <Icon name="check" size={13} /> {save.isPending ? 'Saving…' : 'Save order'}
+          </button>
+        </div>
+      </div>
+      <div className="ahint" style={{ marginTop: 0, marginBottom: 10 }}>
+        Customers see these products in this order, in the app and on the web. Drag a row by its
+        handle or use the arrows. This arranges only the products placed directly in “{name}” —
+        products in its subcategories are arranged on each subcategory. Products added later appear
+        after the arranged ones, A to Z.
+      </div>
+      {error && (
+        <div
+          role="alert"
+          style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center' }}
+        >
+          {error}
+          {stale && (
+            <button className="abtn sm" onClick={reload}>
+              <Icon name="refresh" size={13} /> Reload
+            </button>
+          )}
+        </div>
+      )}
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : isError ? (
+        <ErrorState message="Could not load products." onRetry={() => void refetch()} />
+      ) : list.length === 0 ? (
+        <EmptyState
+          title="No products placed directly in this category."
+          sub={
+            node.hasChildren
+              ? 'Open a subcategory and arrange its products there.'
+              : 'Assign products from the Products page.'
+          }
+        />
+      ) : (
+        <div className="tablewrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th style={{ width: 44 }}>#</th>
+                <th>Product</th>
+                <th>Status</th>
+                <th style={{ width: 170, textAlign: 'right' }}>Move</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((p, i) => {
+                const label = p.title.en || p.id.slice(-8)
+                const showDrop = dragOver === i && dragFrom !== null && dragFrom !== i
+                return (
+                  <tr
+                    key={p.id}
+                    onDragOver={(e) => {
+                      if (dragRef.current === null) return
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                      if (dragOver !== i) setDragOver(i)
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const from = dragRef.current
+                      if (from !== null) move(from, i)
+                      endDrag()
+                    }}
+                    style={{
+                      opacity: dragFrom === i ? 0.45 : 1,
+                      boxShadow: showDrop ? `inset 0 ${dragFrom! < i ? -2 : 2}px 0 var(--brand)` : undefined,
+                    }}
+                  >
+                    <td className="num muted">{i + 1}</td>
+                    <td>
+                      <div className="cellprod">
+                        <span
+                          draggable
+                          title="Drag to reorder"
+                          aria-hidden="true"
+                          onDragStart={(e) => {
+                            dragRef.current = i
+                            setDragFrom(i)
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', p.id)
+                          }}
+                          onDragEnd={endDrag}
+                          style={{ cursor: 'grab', display: 'inline-flex', padding: '0 2px' }}
+                          className="faint"
+                        >
+                          <Icon name="dots" size={16} />
+                        </span>
+                        <ProductThumb p={p} />
+                        <div className="pn">
+                          <b>{p.title.en}</b>
+                          <span className="mono">{p.id.slice(-8)}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <StatusBadge s={productStatus(p)} />
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                        <button className="abtn sm" aria-label={`Move ${label} to top`} title="Move to top" disabled={i === 0} onClick={() => move(i, 0)}>
+                          <Icon name="arrowup" size={13} />
+                        </button>
+                        <button className="abtn sm" aria-label={`Move ${label} up`} title="Move up" disabled={i === 0} onClick={() => move(i, i - 1)}>
+                          <Icon name="chevup" size={13} />
+                        </button>
+                        <button className="abtn sm" aria-label={`Move ${label} down`} title="Move down" disabled={i === list.length - 1} onClick={() => move(i, i + 1)}>
+                          <Icon name="chevdown" size={13} />
+                        </button>
+                        <button className="abtn sm" aria-label={`Move ${label} to bottom`} title="Move to bottom" disabled={i === list.length - 1} onClick={() => move(i, list.length - 1)}>
+                          <Icon name="arrowdown" size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )

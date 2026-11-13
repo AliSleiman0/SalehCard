@@ -283,7 +283,7 @@
   "price_range": "Price",
   "platform": "Platform",
   "denomination": "Denomination",
-  "sort_pop": "Most popular",
+  "sort_featured": "Featured",
   "sort_az": "Name: A to Z",
   "sort_low": "Price: low to high",
   "sort_high": "Price: high to low",

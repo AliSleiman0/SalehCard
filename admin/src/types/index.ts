@@ -116,6 +116,9 @@ export interface Product {
   bridge?: BridgeSpec
   stock: number
   available: boolean
+  /** Admin-arranged rank among the products directly in its category node
+   *  (1-based); absent = not arranged (listed after, A to Z). */
+  position?: number
   ratings: RatingsSummary
   inputFields?: InputField[]
   verification?: Verification

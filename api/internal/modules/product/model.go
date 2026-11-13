@@ -294,6 +294,14 @@ type Product struct {
 	// Migration: status fidelity + ordering + review markers.
 	Status    string         `bson:"status,omitempty"    json:"status,omitempty"`
 	SortOrder int            `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
+	// Position is the admin-arranged rank (1-based) of the product among the
+	// products assigned directly to its own category node (categoryId) — set
+	// only by the reorder endpoint (catalog_order.go). 0/absent = not arranged:
+	// those list after the arranged ones, A to Z. It is per node because a
+	// product belongs to exactly one node; moving the product to another node
+	// clears it. Deliberately NOT the legacy SortOrder above, which still holds
+	// the old site's migration-era values and would reshuffle the live catalog.
+	Position int `bson:"position,omitempty" json:"position,omitempty"`
 	Flags     []string       `bson:"flags,omitempty"     json:"flags,omitempty"`
 	Ratings   RatingsSummary `bson:"ratings"   json:"ratings"`
 	CreatedAt time.Time      `bson:"createdAt" json:"createdAt"`
@@ -444,7 +452,8 @@ type ListFilter struct {
 	FulfillmentMode FulfillmentMode
 	Status          string // "active" | "draft" | "out"
 	Search          string
-	// Sort: SortByName for a natural A to Z listing; empty = newest first.
+	// Sort: SortByName for the catalog order (admin-arranged Position first,
+	// then natural A to Z); empty = newest first.
 	Sort string
 }
 

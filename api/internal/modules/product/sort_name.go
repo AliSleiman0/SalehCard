@@ -8,8 +8,12 @@ import (
 	"unicode"
 )
 
-// SortByName is the ListFilter.Sort value for a natural A→Z listing (client
-// feedback 2026-11-12 #68/#104: "sort everything from A to Z").
+// SortByName is the ListFilter.Sort value for the customer catalog order
+// (?sort=name — every app/web listing sends it): products an admin arranged
+// in their category (Position > 0) come first in that order, then the rest
+// natural A→Z (client feedback 2026-11-12 #68/#104: "sort everything from A
+// to Z"; 2026-11-14: "let us set the order of products inside a category").
+// The name is kept for wire compatibility with shipped app builds.
 const SortByName = "name"
 
 // nameSortCap bounds how many matches the in-memory A→Z path loads. Mongo's
@@ -80,9 +84,20 @@ func readNumber(r []rune, i int) (string, int) {
 	return s, i
 }
 
-// sortProductsByName orders products A→Z in place (stable); untitled last.
+// sortProductsByName orders products in catalog order in place (stable):
+// arranged products (Position > 0) first by Position, then the unarranged ones
+// A→Z, untitled last. In a listing that spans several nodes (a collection's
+// subtree, a root domain, a search) positions from different nodes tie and
+// fall back to A→Z, so each node's top picks lead the list.
 func sortProductsByName(ps []Product) {
 	sort.SliceStable(ps, func(i, j int) bool {
+		pi, pj := ps[i].Position, ps[j].Position
+		if (pi > 0) != (pj > 0) {
+			return pi > 0 // arranged before unarranged
+		}
+		if pi != pj {
+			return pi < pj
+		}
 		a, b := sortKey(&ps[i]), sortKey(&ps[j])
 		if (a == "") != (b == "") {
 			return b == "" // untitled products go last

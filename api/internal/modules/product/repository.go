@@ -175,12 +175,18 @@ func (r *MongoRepository) BulkSetCategory(ctx context.Context, ids []string, cat
 				{Key: "categoryId", Value: ""},
 				{Key: "category", Value: ""},
 				{Key: "rootDomain", Value: ""},
+				{Key: "position", Value: ""}, // a rank only means something inside a node
 			}},
 		}
 	} else {
 		catOID, err := bson.ObjectIDFromHex(categoryID)
 		if err != nil {
 			return 0, apperrors.ErrBadRequest
+		}
+		// Products actually changing node drop their old node's rank (they join
+		// the new node unarranged, A to Z); ones already in it keep theirs.
+		if err := r.clearPositionsLeaving(ctx, oids, catOID); err != nil {
+			return 0, err
 		}
 		update = bson.D{{Key: "$set", Value: bson.D{
 			{Key: "categoryId", Value: catOID},
@@ -679,8 +685,13 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	// Taxonomy re-assignment: the service resolved CategoryID and set the derived
 	// RootDomain. Persist the node ref + denormalized rootDomain together.
 	if in.CategoryID != nil {
-		if oid, oerr := bson.ObjectIDFromHex(*in.CategoryID); oerr == nil {
-			set = append(set, bson.E{Key: "categoryId", Value: oid})
+		if catOID, oerr := bson.ObjectIDFromHex(*in.CategoryID); oerr == nil {
+			set = append(set, bson.E{Key: "categoryId", Value: catOID})
+			// The editor sends categoryId on every save; only a real move
+			// drops the product's rank in its old node.
+			if err := r.clearPositionsLeaving(ctx, []bson.ObjectID{oid}, catOID); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if in.RootDomain != nil {
