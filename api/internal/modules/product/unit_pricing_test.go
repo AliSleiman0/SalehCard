@@ -35,6 +35,8 @@ func TestValidateUnitPricing(t *testing.T) {
 		{name: "valid", up: ok},
 		{name: "derived manual mode ok", up: ok, mutate: func(t *unitPricingTarget) { t.Mode = "" }},
 		{name: "negative block", up: &UnitPricing{FieldKey: "amount", BlockUnits: -1}, wantErr: true},
+		{name: "money transfer ok", up: ok, mutate: func(t *unitPricingTarget) { t.Type = FulfillmentTransfer }},
+		{name: "money transfer derived mode ok", up: ok, mutate: func(t *unitPricingTarget) { t.Type = FulfillmentTransfer; t.Mode = "" }},
 		{name: "code product", up: ok, mutate: func(t *unitPricingTarget) { t.Type = FulfillmentCode }, wantErr: true},
 		{name: "api mode", up: ok, mutate: func(t *unitPricingTarget) { t.Mode = FulfillmentModeAPI }, wantErr: true},
 		{name: "bridge mode", up: ok, mutate: func(t *unitPricingTarget) { t.Mode = FulfillmentModeBridgeDevice }, wantErr: true},

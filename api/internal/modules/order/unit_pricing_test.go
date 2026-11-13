@@ -69,6 +69,24 @@ func TestPlaceOrder_UnitPricing_ProportionalPrice(t *testing.T) {
 	assert.Equal(t, "45000", got)
 }
 
+// A money transfer sold by amount: 1 unit at $1.00, sending 1,000 costs $1,000
+// (the flat-fee bug was charging the single package price for any amount).
+func TestPlaceOrder_UnitPricing_MoneyTransfer(t *testing.T) {
+	p := unitProduct(1, 1, 10, 5000)
+	p.FulfillmentType = product.FulfillmentTransfer
+	walletSvc := &fakeWalletSvc{balance: 2000}
+	svc, _ := newSUT(p, &fakeCodeSvc{available: map[string]int{}}, walletSvc)
+
+	it := amountItem(p, 1000)
+	it.Recipient = &RecipientInput{Name: "Ali", Country: "Lebanon"}
+	order, err := placeUnit(t, svc, false, it)
+	require.NoError(t, err)
+	assert.Equal(t, 1000.0, order.Total)
+	assert.Equal(t, 1000.0, walletSvc.balance)
+	assert.Equal(t, 1, order.Items[0].Qty)
+	assert.Equal(t, "1,000", order.Items[0].Denomination)
+}
+
 func TestPlaceOrder_UnitPricing_RoundsToCents(t *testing.T) {
 	p := unitProduct(10, 90000, 1, 900000)
 	svc, _ := newSUT(p, &fakeCodeSvc{available: map[string]int{}}, &fakeWalletSvc{balance: 100})

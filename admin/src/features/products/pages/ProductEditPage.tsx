@@ -213,7 +213,9 @@ export default function ProductEditPage() {
   // Per-unit pricing is offered only on manually fulfilled account-credit
   // products (the server rejects it with the bridge or a supplier API); any
   // other configuration is forced back to fixed packages.
-  const unitEligible = ff === 'credit' && !bridgeOn && !apiOn
+  // Money transfers can be sold by amount too (send 1,000 → pay 1,000 × rate);
+  // bridge/API dispatch only exist on credit products, so they never block it.
+  const unitEligible = (ff === 'credit' && !bridgeOn && !apiOn) || ff === 'transfer'
   const perUnit = unit.enabled && unitEligible
   const unitForm: UnitPricingForm = { ...unit, enabled: perUnit }
   // A fixed-price credit product that still collects an amount charges the
@@ -709,7 +711,9 @@ export default function ProductEditPage() {
                 </div>
                 <div className="ahint" style={{ margin: '6px 0 0' }}>
                   {perUnit
-                    ? 'For coin/diamond recharges sold by amount: the customer types how many units they want and pays the price below pro-rata.'
+                    ? ff === 'transfer'
+                      ? 'For transfers sold by amount: the customer types how much to send and pays the price below pro-rata (e.g. 1 unit at $1.00 → sending 1,000 costs $1,000).'
+                      : 'For coin/diamond recharges sold by amount: the customer types how many units they want and pays the price below pro-rata.'
                     : 'The customer picks one of the packages below.'}
                 </div>
                 {unitNotice && (

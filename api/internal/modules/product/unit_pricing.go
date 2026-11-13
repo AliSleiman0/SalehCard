@@ -57,7 +57,7 @@ func normalizeUnitPricing(u *UnitPricing) *UnitPricing {
 
 // validateUnitPricing enforces the per-unit invariants: a positive block size,
 // a driving amount field with a positive min and max ≥ min, exactly one
-// variant (the block price), an account_credit product fulfilled by hand (v1:
+// variant (the block price), an account_credit or transfer product fulfilled by hand (v1:
 // supplier/bridge dispatch has its own qty semantics), and no quantity-type
 // field (its pack-count bounds would contradict qty == 1).
 func validateUnitPricing(u *UnitPricing, t unitPricingTarget) error {
@@ -67,8 +67,10 @@ func validateUnitPricing(u *UnitPricing, t unitPricingTarget) error {
 	if u.BlockUnits < 0 || math.IsNaN(u.BlockUnits) || math.IsInf(u.BlockUnits, 0) {
 		return badRequest("per-unit pricing needs a positive number of units per price")
 	}
-	if t.Type != FulfillmentCredit {
-		return badRequest("per-unit pricing is only available on account-credit products")
+	// Account credit (live-app coins) and money transfers (send $1,000 → pay
+	// 1,000 × the per-unit rate). Both default to manual fulfillment.
+	if t.Type != FulfillmentCredit && t.Type != FulfillmentTransfer {
+		return badRequest("per-unit pricing is only available on account-credit and money-transfer products")
 	}
 	mode := t.Mode
 	if mode == "" {
