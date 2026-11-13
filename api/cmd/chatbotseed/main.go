@@ -7,11 +7,12 @@
 // English text already exists at the same level is skipped, so a re-run, or a
 // run after an admin added their own entries, is safe.
 //
-// The support contacts (WhatsApp, phone, email) are NOT seeded: set them in
-// admin → Settings.
+// --whatsapp optionally sets the support WhatsApp number the bot's "Contact
+// support" footer links to (app_settings.supportWhatsapp; free-typed, the
+// clients keep only the digits). Phone and email stay in admin → Settings.
 //
-//	MONGO_URI=... go run ./cmd/chatbotseed
-//	MONGO_URI=... go run ./cmd/chatbotseed --apply [--confirm-prod]
+//	MONGO_URI=... go run ./cmd/chatbotseed [--whatsapp "+961 70 123 456"]
+//	MONGO_URI=... go run ./cmd/chatbotseed --apply [--confirm-prod] [--whatsapp ...]
 package main
 
 import (
@@ -26,6 +27,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/chatbot"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	mongoplatform "github.com/AliSleiman0/salehcard/api/internal/platform/mongo"
 )
 
@@ -36,6 +38,7 @@ func isProdURI(uri string) bool {
 func main() {
 	apply := flag.Bool("apply", false, "write the entries (default: dry run)")
 	confirmProd := flag.Bool("confirm-prod", false, "required together with --apply against the prod cluster")
+	whatsapp := flag.String("whatsapp", "", "also set the support WhatsApp number in app settings")
 	flag.Parse()
 
 	_ = godotenv.Load()
@@ -83,4 +86,40 @@ func main() {
 	for _, q := range res.Skipped {
 		fmt.Println("  " + q)
 	}
+
+	if w := strings.TrimSpace(*whatsapp); w != "" {
+		if !validWhatsapp(w) {
+			log.Fatalf("--whatsapp %q: expected a phone number with 6-15 digits", w)
+		}
+		repo := settings.NewMongoRepository(db)
+		cur, err := repo.Get(ctx)
+		if err != nil {
+			log.Fatalf("read settings: %v", err)
+		}
+		fmt.Printf("\nsupport WhatsApp: %q -> %q", cur.SupportWhatsapp, w)
+		if !*apply {
+			fmt.Println(" (dry run, not saved)")
+			return
+		}
+		if _, err := repo.Update(ctx, settings.UpdateInput{SupportWhatsapp: &w}, "chatbotseed"); err != nil {
+			log.Fatalf("save settings: %v", err)
+		}
+		fmt.Println(" (saved)")
+	}
+}
+
+// validWhatsapp accepts a free-typed phone number: digits plus spaces, dashes,
+// dots, parentheses and a leading +, with 6–15 digits (E.164 max).
+func validWhatsapp(s string) bool {
+	digits := 0
+	for i, r := range s {
+		switch {
+		case r >= '0' && r <= '9':
+			digits++
+		case r == '+' && i == 0, r == ' ', r == '-', r == '.', r == '(', r == ')':
+		default:
+			return false
+		}
+	}
+	return digits >= 6 && digits <= 15
 }
