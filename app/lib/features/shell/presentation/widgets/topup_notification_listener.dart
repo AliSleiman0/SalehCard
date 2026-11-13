@@ -23,12 +23,27 @@ List<AppNotification> newTopUpPopups(
   List<AppNotification> items,
   DateTime since,
 ) {
-  final fresh = items
-      .where((n) =>
-          _popupTypes.contains(n.type) && !n.isRead && n.createdAt.isAfter(since))
-      .toList()
-    ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  final fresh =
+      items
+          .where(
+            (n) =>
+                _popupTypes.contains(n.type) &&
+                !n.isRead &&
+                n.createdAt.isAfter(since),
+          )
+          .toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
   return fresh;
+}
+
+/// The pop-up baseline: the newest notification time in [items], or the epoch
+/// when the inbox is empty.
+DateTime topUpBaseline(List<AppNotification> items) {
+  var max = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  for (final n in items) {
+    if (n.createdAt.isAfter(max)) max = n.createdAt;
+  }
+  return max;
 }
 
 /// Wraps the app shell: polls the unread-notification count while the app is
@@ -54,7 +69,11 @@ class _TopUpNotificationListenerState
   Timer? _timer;
   Timer? _hideTimer;
   int? _lastUnread;
-  DateTime _since = DateTime.now().toUtc();
+
+  /// Newest notification time already in the inbox (server clock), seeded on
+  /// the first check; null until then. Not the device clock, which may run
+  /// ahead of the server and hide notes created right after launch.
+  DateTime? _since;
 
   @override
   void initState() {
@@ -89,14 +108,21 @@ class _TopUpNotificationListenerState
     final repo = ref.read(notificationRepositoryProvider);
     final count = (await repo.unreadCount()).match((_) => null, (c) => c);
     if (!mounted || count == null) return;
+    final first = _since == null;
     final rose = _lastUnread != null && count > _lastUnread!;
     _lastUnread = count;
-    if (!rose) return;
-    ref.invalidate(unreadNotificationsCountProvider);
-    final items = (await repo.listNotifications())
-        .match((_) => const <AppNotification>[], (l) => l);
+    if (!first && !rose) return;
+    final listed = await repo.listNotifications();
     if (!mounted) return;
-    final fresh = newTopUpPopups(items, _since);
+    final items = listed.match((_) => null, (l) => l);
+    if (items == null) return; // retry the baseline on the next tick
+    if (first) {
+      // First look at the inbox: everything in it is "old" — no banner.
+      _since = topUpBaseline(items);
+      return;
+    }
+    ref.invalidate(unreadNotificationsCountProvider);
+    final fresh = newTopUpPopups(items, _since!);
     if (fresh.isEmpty) return;
     _since = fresh.last.createdAt;
     ref.invalidate(walletProvider);

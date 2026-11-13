@@ -5,7 +5,7 @@ import { Icon } from '@/components'
 import { useAuthStore } from '@/stores/auth'
 import { fetchNotifications } from '../api/notifications'
 import { useUnreadCount } from '../hooks/useUnreadCount'
-import { newPopups } from '../lib/popups'
+import { baselineFrom, newPopups } from '../lib/popups'
 import type { AppNotification } from '../types'
 
 const SHOW_MS = 6000
@@ -21,18 +21,29 @@ export function NotificationPopups() {
   const unread = useUnreadCount().data
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const since = useRef(Date.now())
+  // Baseline = newest notification time already in the inbox (server clock),
+  // seeded on the first observation; null until then. A device clock running
+  // ahead of the server would otherwise hide notes created right after load.
+  const since = useRef<number | null>(null)
   const prevUnread = useRef<number | undefined>(undefined)
   const [shown, setShown] = useState<AppNotification[]>([])
 
   useEffect(() => {
     if (!isAuthenticated || unread === undefined) return
-    const rose = prevUnread.current !== undefined && unread > prevUnread.current
+    const first = prevUnread.current === undefined
+    const rose = !first && unread > prevUnread.current!
     prevUnread.current = unread
-    if (!rose) return
+    if (!first && !rose) return
     let cancelled = false
     void fetchNotifications().then((res) => {
-      if (cancelled || !res.success || !res.data) return
+      if (!res.success || !res.data) return
+      if (since.current === null) {
+        // First look at the inbox: everything in it is "old" — no pop-ups.
+        // Seeded even if this effect was superseded, so it always gets set.
+        since.current = baselineFrom(res.data)
+        return
+      }
+      if (cancelled) return
       void qc.invalidateQueries({ queryKey: ['notifications'] })
       const fresh = newPopups(res.data, since.current)
       if (fresh.length === 0) return

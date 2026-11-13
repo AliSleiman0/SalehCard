@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { newPopups } from './popups'
+import { baselineFrom, newPopups } from './popups'
 import type { AppNotification } from '../types'
 
 const n = (id: string, kind: string, at: string, readAt?: string): AppNotification => ({
@@ -22,5 +22,13 @@ describe('newPopups', () => {
       n('order', 'order_completed', '2026-11-12T10:04:00Z'),
     ]
     expect(newPopups(list, since).map((x) => x.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('baselineFrom', () => {
+  it('is the newest server timestamp, or 0 for an empty inbox', () => {
+    expect(baselineFrom([])).toBe(0)
+    const list = [n('a', 'order_completed', '2026-11-12T10:01:00Z'), n('b', 'topup_approved', '2026-11-12T10:05:00Z')]
+    expect(baselineFrom(list)).toBe(Date.parse('2026-11-12T10:05:00Z'))
   })
 })
