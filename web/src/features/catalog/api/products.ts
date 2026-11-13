@@ -8,6 +8,8 @@ export interface ProductsParams {
   rootDomain?: string
   available?: boolean
   q?: string
+  /** 'name' = natural A to Z on the server (ignored by older APIs). */
+  sort?: 'name'
 }
 
 export async function fetchProducts(
@@ -21,6 +23,7 @@ export async function fetchProducts(
   if (params.rootDomain !== undefined) query.set('rootDomain', params.rootDomain)
   if (params.available !== undefined) query.set('available', String(params.available))
   if (params.q !== undefined) query.set('q', params.q)
+  if (params.sort !== undefined) query.set('sort', params.sort)
 
   const qs = query.toString()
   const path = qs ? `/api/v1/products?${qs}` : '/api/v1/products'

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { filterCatalog } from '../lib/filterCatalog'
 import { useTranslation } from 'react-i18next'
 import { PageHead, Icon, Modal, Pagination, LoadingSpinner, EmptyState, ErrorState } from '@/components'
 import { useCan } from '@/stores/auth'
@@ -154,6 +155,8 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
   const products = useMemo<CatalogProductView[]>(() => data?.data?.products ?? [], [data])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [markup, setMarkup] = useState<string>(String(supplier.markupPercent || ''))
+  const [search, setSearch] = useState('')
+  const shown = useMemo(() => filterCatalog(products, search), [products, search])
   const importer = useImportProducts()
 
   const toggle = (upstreamId: string) => {
@@ -209,7 +212,32 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
                 placeholder={String(supplier.markupPercent)}
               />
             </div>
-            <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-faint)' }}>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <label className="alabel">Search</label>
+              <input
+                className="afield"
+                type="search"
+                aria-label="Search supplier products"
+                placeholder="Product, category or ID…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <button
+              className="abtn"
+              disabled={shown.every((p) => p.mapped || selected.has(p.upstreamId))}
+              onClick={() =>
+                setSelected((prev) => {
+                  const next = new Set(prev)
+                  for (const p of shown) if (!p.mapped) next.add(p.upstreamId)
+                  return next
+                })
+              }
+            >
+              Select all shown
+            </button>
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
+              {search.trim() ? `${shown.length} of ${products.length} · ` : ''}
               {selected.size} selected
             </div>
             <button
@@ -234,7 +262,14 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
                 </tr>
               </thead>
               <tbody>
-                {products.map((p) => (
+                {shown.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="muted" style={{ padding: 16 }}>
+                      No products match “{search.trim()}”.
+                    </td>
+                  </tr>
+                )}
+                {shown.map((p) => (
                   <tr key={p.upstreamId}>
                     <td>
                       <input

@@ -203,3 +203,14 @@
      overlap the right-side icons. Scoped via :has() to pages that show the button. */
   .appheader .header-left:has(.acct-menu-btn) .logo-word { display: none; }
 }
+
+/* Header search suggestions (SearchSuggest). */
+.suggest-wrap { position: relative; }
+.suggest-list { position: absolute; top: calc(100% + 8px); inset-inline: 0; z-index: 150; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg, 16px); box-shadow: 0 16px 40px rgba(0,0,0,.25); padding: 6px; max-height: 420px; overflow-y: auto; }
+.suggest-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; cursor: pointer; color: var(--text); font-size: 14px; }
+.suggest-row.on, .suggest-row:hover { background: var(--surface-2); }
+.suggest-row b { font-weight: 800; color: var(--brand-1); }
+.suggest-img { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
+.suggest-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggest-all { color: var(--text-dim); border-top: 1px solid var(--border); border-radius: 0 0 10px 10px; margin-top: 4px; }
+.suggest-empty { padding: 12px; color: var(--text-dim); font-size: 13.5px; }
