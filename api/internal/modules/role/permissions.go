@@ -33,6 +33,7 @@ var Domains = []Domain{
 	{Key: "expenses", Label: "Expenses"},
 	{Key: "reviews", Label: "Reviews"},
 	{Key: "chatbot", Label: "Chatbot"},
+	{Key: "complaints", Label: "Complaints"},
 	{Key: "audit", Label: "Audit log"},
 	{Key: "settings", Label: "Settings"},
 }
