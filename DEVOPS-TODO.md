@@ -553,7 +553,13 @@ started **no** build. Build #5 had to be started by hand (Applications → Saleh
 - Until it's fixed, start iOS builds by hand after merging app changes. Build number = `4 + Codemagic
   index`.
 
-## 24. Customer complaints — after deploy (feat/complaints)
+## 24. Customer complaints — after deploy (PR #141)
+
+**Shipped 2026-11-14.** PR #141 merged as `78cf44e`. Its own deploy was replaced by #138's run, which
+deployed API + admin; web came with the manual full redeploy of `8287849` (all three jobs green). Prod check:
+`/api/v1/complaints` and `/api/admin/complaints/counts` answer 401 without a token (404 before the deploy).
+
+Still open:
 
 - **Grant `complaints.view` / `complaints.manage`** to any custom support role in admin → Roles. Super admins
   already see it. A custom role without it gets 403 and no "Complaints" nav item.
@@ -566,3 +572,10 @@ started **no** build. Build #5 had to be started by hand (Applications → Saleh
   (regenerate `firebase_options.dart` with `flutterfire configure`, or initialize with no options on
   Android), then re-test §19. Until then no device registers a token, so complaint replies reach customers
   only as inbox rows.
+- **Ship a new app build** (Android AAB via Codemagic; iOS too) so complaint screens, the "Report a problem"
+  button and notification tap-to-open reach customers. Builds already in the stores show complaint
+  notifications as plain inbox rows only.
+- **Deploy gotcha seen here:** when two PRs merge seconds apart, GitHub keeps only the newest pending run in
+  the `deploy-prod` concurrency group. The replacement run's path filter sees only its own push, so an
+  earlier merge's components can be skipped. After back-to-back merges, check each component deployed, or
+  run **Deploy (prod)** manually (`workflow_dispatch` deploys everything).
