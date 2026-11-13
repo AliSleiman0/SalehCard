@@ -112,6 +112,7 @@ func (a *adminHandler) list(w http.ResponseWriter, r *http.Request) {
 		Role:   Role(strings.TrimSpace(q.Get("role"))),
 		Status: Status(strings.TrimSpace(q.Get("status"))),
 		Search: strings.TrimSpace(q.Get("q")),
+		Sort:   strings.TrimSpace(q.Get("sort")),
 	}
 
 	users, total, err := a.repo.ListAll(r.Context(), f, p)

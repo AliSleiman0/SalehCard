@@ -55,6 +55,8 @@ class CatalogRemoteDataSource {
         if (rootDomain != null && rootDomain.isNotEmpty) 'rootDomain': rootDomain,
         if (search != null && search.isNotEmpty) 'q': search,
         if (directOnly) 'directOnly': true,
+        // Natural A to Z by name (client feedback: "sort everything A to Z").
+        'sort': 'name',
       },
     );
     final (:data, :meta) = unwrapPaged(response);

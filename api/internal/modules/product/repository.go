@@ -136,6 +136,7 @@ func objectIDs(ids []string) []bson.ObjectID {
 
 // BulkSetAvailable sets the availability flag on every product in ids.
 func (r *MongoRepository) BulkSetAvailable(ctx context.Context, ids []string, available bool) (int64, error) {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
 	oids := objectIDs(ids)
 	if len(oids) == 0 {
 		return 0, nil
@@ -158,6 +159,7 @@ func (r *MongoRepository) BulkSetAvailable(ctx context.Context, ids []string, av
 // An empty categoryID clears the assignment (unassigns) by unsetting all three
 // fields. The service resolves slug/rootDomain from the node before calling.
 func (r *MongoRepository) BulkSetCategory(ctx context.Context, ids []string, categoryID, slug, rootDomain string) (int64, error) {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
 	oids := objectIDs(ids)
 	if len(oids) == 0 {
 		return 0, nil
@@ -197,6 +199,7 @@ func (r *MongoRepository) BulkSetCategory(ctx context.Context, ids []string, cat
 
 // BulkDelete removes every product in ids.
 func (r *MongoRepository) BulkDelete(ctx context.Context, ids []string) (int64, error) {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
 	oids := objectIDs(ids)
 	if len(oids) == 0 {
 		return 0, nil
@@ -215,6 +218,10 @@ func (r *MongoRepository) FindAll(ctx context.Context, f ListFilter, p paginatio
 	total, err := r.col.CountDocuments(ctx, filter)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	if f.Sort == SortByName {
+		return r.findAllByName(ctx, filter, p)
 	}
 
 	skip := pagination.Skip(p)
@@ -244,6 +251,55 @@ func (r *MongoRepository) FindAll(ctx context.Context, f ListFilter, p paginatio
 	}
 
 	return products, total, nil
+}
+
+// findAllByName serves an A to Z page: loads the match set (capped), sorts it
+// naturally in Go, then slices the requested page. The sorted set is cached
+// briefly per filter (see nameCache) and pages are cloned out of it.
+func (r *MongoRepository) findAllByName(ctx context.Context, filter bson.D, p pagination.Params) ([]Product, int64, error) {
+	key := ""
+	if raw, err := bson.MarshalExtJSON(filter, true, false); err == nil {
+		key = string(raw)
+	}
+	now := time.Now()
+	all, hit := []Product(nil), false
+	if key != "" {
+		all, hit = nameCacheGet(key, now)
+	}
+	if !hit {
+		cursor, err := r.col.Find(ctx, filter, options.Find().
+			SetSort(bson.D{{Key: "_id", Value: 1}}).
+			SetLimit(nameSortCap))
+		if err != nil {
+			return nil, 0, err
+		}
+		defer cursor.Close(ctx)
+		if err := cursor.All(ctx, &all); err != nil {
+			return nil, 0, err
+		}
+		for i := range all {
+			all[i].normalize()
+		}
+		sortProductsByName(all)
+		if key != "" {
+			nameCachePut(key, all, now)
+		}
+	}
+	return pageOf(all, p)
+}
+
+// pageOf slices page p out of a sorted set, cloning the rows (see cloneProducts).
+func pageOf(all []Product, p pagination.Params) ([]Product, int64, error) {
+	total := int64(len(all))
+	start := int(pagination.Skip(p))
+	if start > len(all) {
+		start = len(all)
+	}
+	end := start + p.Limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return cloneProducts(all[start:end]), total, nil
 }
 
 // FindByID retrieves a single product by its hex ObjectID string.
@@ -397,6 +453,7 @@ func (r *MongoRepository) CategoryFacets(ctx context.Context) ([]CategoryFacet, 
 // Create inserts a new product document built from the supplied input.
 // Variant IDs are generated automatically; CreatedAt and UpdatedAt are stamped now.
 func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*Product, error) {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
 	now := time.Now().UTC()
 
 	// Generate fresh ObjectIDs for every variant that lacks one.
@@ -476,6 +533,7 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 //     re-import never clobbers admin-managed stock or a hand-toggled
 //     availability. available is derived from status only on first insert.
 func (r *MongoRepository) Upsert(ctx context.Context, in UpsertProductInput) (*Product, error) {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
 	set := buildUpsertSet(in, time.Now().UTC(), bson.NewObjectID())
 
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
@@ -601,6 +659,7 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 // Update applies a partial update to the product identified by id.
 // Only non-nil fields in UpdateProductInput are written; UpdatedAt is always refreshed.
 func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProductInput) (*Product, error) {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, apperrors.ErrNotFound
@@ -743,6 +802,7 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 
 // Delete removes the product identified by id.
 func (r *MongoRepository) Delete(ctx context.Context, id string) error {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
 		return apperrors.ErrNotFound

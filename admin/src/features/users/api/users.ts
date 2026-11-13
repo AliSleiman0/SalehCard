@@ -52,6 +52,8 @@ export interface UserListParams {
   role?: UserRole | ''
   status?: UserStatus | ''
   q?: string
+  /** Column key (name, email, phone, wallet, points, joined); "-" prefix = descending. */
+  sort?: string
 }
 
 export interface WalletAdjustInput {
@@ -69,6 +71,7 @@ export function listUsers(params: UserListParams): Promise<ApiResponse<AdminUser
   if (params.role) q.set('role', params.role)
   if (params.status) q.set('status', params.status)
   if (params.q) q.set('q', params.q)
+  if (params.sort) q.set('sort', params.sort)
   const qs = q.toString()
   return apiClient.get<AdminUser[]>(qs ? `${ADMIN}?${qs}` : ADMIN)
 }
