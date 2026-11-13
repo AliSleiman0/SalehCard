@@ -321,3 +321,20 @@ Still to check:
 3. **Order entry point**: Orders → an order → "Report a problem" pre-selects category Order and that order.
 4. **Caps**: a sixth open complaint → "You already have several open complaints"; the 11th create from one IP
    within an hour → 429 (`RATE_LIMIT_COMPLAINT_MAX`, default 10/hour).
+
+## Admin order → product links (PR #136, merged + deployed 2026-11-14)
+
+Verified locally 2026-11-14 in Chrome (local stack, throwaway DB):
+- detail name and thumbnail open the right product editor;
+- the list links only the first name, while the rest of the row still opens the order;
+- after a product delete, that name turns to plain text on the list and detail;
+- Tab order (thumbnail skipped) and focus ring;
+- light and dark themes.
+
+Still to check:
+
+1. **Prod click-through:** open a real order (e.g. a SOUL STAR one), then click its product name and thumbnail.
+2. **Custom role without `products.view`:** an admin on a role with `orders.view` but no Products access sees
+   plain-text names, with no links.
+3. **Ctrl/cmd-click** on a product name (detail and list row) opens the editor in a new tab and does not
+   open the order.
