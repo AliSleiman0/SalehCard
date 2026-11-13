@@ -10,7 +10,9 @@ workflows:
   android-release:
     name: Android Release (Google Play)
     max_build_duration: 60
-    instance_type: linux_x2
+    # Mac mini M2 is what the current Codemagic plan includes (linux_x2 is
+    # rejected: "instance type not available with the current billing plan").
+    instance_type: mac_mini_m2
     working_directory: app
     environment:
       flutter: 3.44.8
