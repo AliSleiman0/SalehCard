@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useNavigationType } from 'react-router-dom'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { BottomNav } from '@/components/layout/BottomNav'
@@ -18,6 +18,15 @@ export default function Layout() {
   useEffect(() => {
     setAcctDrawer(false)
   }, [pathname, setAcctDrawer])
+
+  // A forward navigation (link, category switch, search result…) starts at the
+  // top of the new page instead of keeping the previous page's scroll offset
+  // (client msg #51). Back/forward (POP) is left alone so returning to a list
+  // keeps the browser's own position.
+  const navType = useNavigationType()
+  useEffect(() => {
+    if (navType !== 'POP') window.scrollTo(0, 0)
+  }, [pathname, navType])
 
   // Lock background scroll while the drawer is open.
   useEffect(() => {

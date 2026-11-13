@@ -10,6 +10,7 @@ export function CategoryTile({ c }: { c: ViewCategory }) {
     <div className="cattile hover-pop" onClick={() => navigate('/category/' + c.key)}>
       <ImageArt
         art={c.art}
+        src={c.image}
         word={c.name}
         sub={c.count !== undefined ? `${c.count}+` : ''}
         h={120}
