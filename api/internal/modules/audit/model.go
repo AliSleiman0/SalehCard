@@ -54,6 +54,7 @@ const (
 	ActionTopupMethodCreate      = "topup.method_create"
 	ActionTopupMethodUpdate      = "topup.method_update"
 	ActionTopupMethodDelete      = "topup.method_delete"
+	ActionTodoDelete             = "todo.delete"
 	ActionSettingsUpdate         = "settings.update"
 	ActionCodeExpire             = "code.expire"
 	ActionCodeResend             = "order.resend_code"

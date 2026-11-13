@@ -33,6 +33,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/role"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/supplier"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/todo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
@@ -309,6 +310,9 @@ func (s *Server) Routes() {
 		domain("categories", func(g chi.Router) { category.RegisterAdminRoutes(g, s.db, rec) })
 		domain("inventory", func(g chi.Router) { code.RegisterAdminRoutes(g, s.db, rec) })
 		domain("dashboard", func(g chi.Router) { dashboard.RegisterAdminRoutes(g, s.db) })
+		// Shared team to-do list: open to every admin (no RBAC domain), so
+		// custom-role admins see it without extra role setup.
+		todo.RegisterAdminRoutes(r, s.db, rec)
 		domain("finance", func(g chi.Router) { finance.RegisterAdminRoutes(g, s.db) })
 		domain("orders", func(g chi.Router) {
 			order.RegisterAdminRoutes(g, s.db, s.cfg, rec, ntf)

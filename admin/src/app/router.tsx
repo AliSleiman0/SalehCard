@@ -26,6 +26,7 @@ const PromoListPage = lazy(() => import('@/features/promos/pages/PromoListPage')
 const PromoEditPage = lazy(() => import('@/features/promos/pages/PromoEditPage'))
 const OffersListPage = lazy(() => import('@/features/offers/pages/OffersListPage'))
 const OffersEditPage = lazy(() => import('@/features/offers/pages/OffersEditPage'))
+const TodosPage = lazy(() => import('@/features/todos/pages/TodosPage'))
 const ExpensesListPage = lazy(() => import('@/features/expenses/pages/ExpensesListPage'))
 const ExpenseEditPage = lazy(() => import('@/features/expenses/pages/ExpenseEditPage'))
 const ReviewsPage = lazy(() => import('@/features/reviews/pages/ReviewsPage'))
@@ -77,6 +78,7 @@ export default function AppRouter() {
         <Route path="/offers" element={guard('offers', <OffersListPage />)} />
         <Route path="/offers/new" element={guard('offers', <OffersEditPage />)} />
         <Route path="/offers/:id/edit" element={guard('offers', <OffersEditPage />)} />
+        <Route path="/todos" element={<TodosPage />} />
         <Route path="/expenses" element={guard('expenses', <ExpensesListPage />)} />
         <Route path="/expenses/new" element={guard('expenses', <ExpenseEditPage />)} />
         <Route path="/expenses/:id/edit" element={guard('expenses', <ExpenseEditPage />)} />
