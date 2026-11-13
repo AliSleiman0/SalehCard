@@ -189,10 +189,20 @@ void main() {
 
   test('method kinds are an allow-list on restricted builds', () {
     for (final kind in ['bank', 'cash', 'other']) {
-      // Even a crypto-sounding name is trusted once an admin classified it.
-      expect(isTopUpMethodShownOnRestricted(kind: kind, name: 'USDT'), isTrue,
+      expect(isTopUpMethodShownOnRestricted(kind: kind, name: 'Sham Cash'),
+          isTrue,
+          reason: kind);
+      // Defense in depth: a mis-set Type never exposes a crypto/Whish rail.
+      expect(isTopUpMethodShownOnRestricted(kind: kind, name: 'USDT TRC20'),
+          isFalse,
+          reason: kind);
+      expect(isTopUpMethodShownOnRestricted(kind: kind, name: 'Whish Money'),
+          isFalse,
           reason: kind);
     }
+    // Word boundaries: ordinary words are not crypto.
+    expect(isCryptoTopUpMethodName('Automatic bank transfer'), isFalse);
+    expect(isCryptoTopUpMethodName('Polygon (MATIC)'), isTrue);
     for (final kind in ['crypto', 'wallet_app', 'some_future_kind']) {
       expect(isTopUpMethodShownOnRestricted(kind: kind, name: 'Bank'), isFalse,
           reason: kind);

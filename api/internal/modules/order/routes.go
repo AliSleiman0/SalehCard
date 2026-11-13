@@ -89,6 +89,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	points := loyalty.NewAwarder(db)
 
 	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, usdt, kycGate, margins, ntf, points, brdg)
+	svc.orderFileOK = photoupload.NewChecker(store, OrderFilesPrefix)
 	h := NewHandler(svc, usdt)
 
 	limiter := ratelimit.New(ratelimit.Config{Provider: cfg.RateLimitProvider}, db)

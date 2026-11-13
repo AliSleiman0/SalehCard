@@ -117,6 +117,13 @@ func (f *fakeOrderRepo) UpdateFulfillmentWithCodes(_ context.Context, id bson.Ob
 	return nil
 }
 
+func (f *fakeOrderRepo) TransitionSupplierStatus(ctx context.Context, id bson.ObjectID, attempt int, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error) {
+	if o, ok := f.byID[id]; ok && o.Fulfillment.SupplierAttempt != attempt {
+		return nil, apperrors.ErrConflict
+	}
+	return f.TransitionStatus(ctx, id, []OrderStatus{OrderStatusProcessing}, to, event, extraSet)
+}
+
 func (f *fakeOrderRepo) TransitionStatus(_ context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error) {
 	o, ok := f.byID[id]
 	if !ok {
@@ -189,16 +196,16 @@ func (f *fakeOrderRepo) ListSupplierRetryable(_ context.Context, now time.Time, 
 	return out, nil
 }
 
-func (f *fakeOrderRepo) BumpSupplierRetry(_ context.Context, id bson.ObjectID, retryCount int, nextRetryAt time.Time) error {
-	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing {
+func (f *fakeOrderRepo) BumpSupplierRetry(_ context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time) error {
+	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing && o.Fulfillment.SupplierAttempt == attempt {
 		o.Fulfillment.SupplierRetryCount = retryCount
 		o.Fulfillment.SupplierNextRetryAt = &nextRetryAt
 	}
 	return nil
 }
 
-func (f *fakeOrderRepo) SetSupplierRef(_ context.Context, id bson.ObjectID, ref string, event TimelineEvent) error {
-	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing {
+func (f *fakeOrderRepo) SetSupplierRef(_ context.Context, id bson.ObjectID, attempt int, ref string, event TimelineEvent) error {
+	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing && o.Fulfillment.SupplierAttempt == attempt {
 		o.Fulfillment.ProviderRef = ref
 		o.Fulfillment.SupplierRetryCount = 0
 		o.Fulfillment.SupplierNextRetryAt = nil
@@ -224,16 +231,17 @@ func (f *fakeOrderRepo) ClaimSupplierReroute(_ context.Context, c RerouteClaim) 
 	o.Fulfillment.SupplierAttemptAt = &now
 	o.Fulfillment.ProviderRef = ""
 	o.Fulfillment.SupplierRetryCount = 0
-	o.Fulfillment.SupplierNextRetryAt = nil
+	fallback := now.Add(rerouteFallbackRetry)
+	o.Fulfillment.SupplierNextRetryAt = &fallback
 	o.Fulfillment.SupplierStuckAt = nil
 	o.Fulfillment.SupplierAttempts = append(o.Fulfillment.SupplierAttempts, c.Archived)
 	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, c.Event)
 	return o, nil
 }
 
-func (f *fakeOrderRepo) MarkSupplierStuck(_ context.Context, id bson.ObjectID, event TimelineEvent) (bool, error) {
+func (f *fakeOrderRepo) MarkSupplierStuck(_ context.Context, id bson.ObjectID, attempt int, event TimelineEvent) (bool, error) {
 	o, ok := f.byID[id]
-	if !ok || o.Status != OrderStatusProcessing || o.Fulfillment.SupplierStuckAt != nil {
+	if !ok || o.Status != OrderStatusProcessing || o.Fulfillment.SupplierStuckAt != nil || o.Fulfillment.SupplierAttempt != attempt {
 		return false, nil
 	}
 	now := time.Now().UTC()

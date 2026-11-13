@@ -98,12 +98,12 @@ func TestSubmit_Valid_GoesPending(t *testing.T) {
 func TestSubmit_Validation(t *testing.T) {
 	svc := NewService(newFakeRepo())
 	cases := map[string]func(SubmitInput) SubmitInput{
-		"empty name":    func(in SubmitInput) SubmitInput { in.FullName = "  "; return in },
-		"bad dob":       func(in SubmitInput) SubmitInput { in.DateOfBirth = "12/04/1995"; return in },
-		"empty pob":     func(in SubmitInput) SubmitInput { in.PlaceOfBirth = ""; return in },
-		"empty res":     func(in SubmitInput) SubmitInput { in.PlaceOfResidence = ""; return in },
-		"bad doc type":  func(in SubmitInput) SubmitInput { in.DocumentType = "ssn"; return in },
-		"empty doc num": func(in SubmitInput) SubmitInput { in.DocumentNumber = ""; return in },
+		"empty name":          func(in SubmitInput) SubmitInput { in.FullName = "  "; return in },
+		"bad dob":             func(in SubmitInput) SubmitInput { in.DateOfBirth = "12/04/1995"; return in },
+		"empty pob":           func(in SubmitInput) SubmitInput { in.PlaceOfBirth = ""; return in },
+		"empty res":           func(in SubmitInput) SubmitInput { in.PlaceOfResidence = ""; return in },
+		"bad doc type":        func(in SubmitInput) SubmitInput { in.DocumentType = "ssn"; return in },
+		"empty doc num":       func(in SubmitInput) SubmitInput { in.DocumentNumber = ""; return in },
 		"missing front photo": func(in SubmitInput) SubmitInput { in.DocumentFrontURL = "  "; return in },
 		"front not a URL":     func(in SubmitInput) SubmitInput { in.DocumentFrontURL = "not-a-url"; return in },
 		"front off keyspace":  func(in SubmitInput) SubmitInput { in.DocumentFrontURL = "https://cdn.test/x.jpg"; return in },

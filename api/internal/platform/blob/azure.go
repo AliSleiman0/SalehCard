@@ -70,3 +70,13 @@ func (a *AzureStorage) Delete(ctx context.Context, key string) error {
 	}
 	return nil
 }
+
+// PublicURL implements URLBuilder (same shape Upload returns).
+func (a *AzureStorage) PublicURL(key string) string {
+	base, err := url.Parse(a.serviceURL)
+	if err != nil {
+		return ""
+	}
+	base.Path = fmt.Sprintf("/%s/%s", a.container, key)
+	return base.String()
+}

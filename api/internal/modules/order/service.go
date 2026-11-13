@@ -108,6 +108,9 @@ type OrderService struct {
 	ntf       notification.Notifier
 	loyalty   loyaltyAwarder
 	bridge    bridgeDispatcher
+	// orderFileOK verifies a photo-field value is one of OUR uploads (host +
+	// keyspace); nil falls back to the path-shape check. Set by RegisterRoutes.
+	orderFileOK photoupload.Checker
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
@@ -321,7 +324,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		if err := validateQuantityField(p, in.Qty); err != nil {
 			return nil, err
 		}
-		if err := validateFieldInputs(p, in.Fields); err != nil {
+		if err := validateFieldInputsWith(p, in.Fields, s.orderFileOK); err != nil {
 			return nil, err
 		}
 		items = append(items, OrderItem{
@@ -337,7 +340,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			FulfillmentMode:     string(mode),
 			FulfillmentProvider: p.FulfillmentProvider,
 			UpstreamProductID:   p.UpstreamProductID,
-			PlayerID:            in.PlayerID,
+			PlayerID:            linePlayerID(p, in),
 			Recipient:           in.Recipient,
 			Fields:              resolveOrderFields(p, in.Fields, in.Qty),
 		})
@@ -945,6 +948,43 @@ func resolveOrderFields(p *product.Product, in []OrderFieldInput, qty int) []Ord
 	return out
 }
 
+// linePlayerID is the line's account / player id. Clients send the first
+// input field's value; a photo field (QR / barcode) must never become it — the
+// URL would reach suppliers, the bridge and Fulfillment.CreditedToID as an
+// account number. In that case the first non-photo, non-quantity value is used.
+func linePlayerID(p *product.Product, in PlaceOrderItemInput) string {
+	fileKeys := map[string]bool{}
+	skip := map[string]bool{}
+	for _, def := range p.InputFields {
+		if def.Type == product.InputFieldFile {
+			fileKeys[def.Key] = true
+		}
+		if def.Type == product.InputFieldFile || def.Type == product.InputFieldQuantity || def.Sensitive {
+			skip[def.Key] = true
+		}
+	}
+	isPhoto := photoupload.IsStoredURL(strings.TrimSpace(in.PlayerID), OrderFilesPrefix)
+	for _, f := range in.Fields {
+		if fileKeys[f.Key] && strings.TrimSpace(f.Value) == strings.TrimSpace(in.PlayerID) {
+			isPhoto = true
+		}
+	}
+	if !isPhoto || in.PlayerID == "" {
+		return in.PlayerID
+	}
+	for _, def := range p.InputFields {
+		if skip[def.Key] {
+			continue
+		}
+		for _, f := range in.Fields {
+			if f.Key == def.Key && strings.TrimSpace(f.Value) != "" {
+				return strings.TrimSpace(f.Value)
+			}
+		}
+	}
+	return ""
+}
+
 // unitAmount validates the customer-entered amount on a per-unit line: the
 // product must still be validly configured (its driving amount field present),
 // the amount is required (an old app build that never sends it gets a clear
@@ -1043,7 +1083,17 @@ func validateQuantityField(p *product.Product, qty int) error {
 // mis-migrated product never bricks checkout. Empty values stay legal (fields
 // are optional at order time; "required" is a client concern), and submitted
 // values are never echoed into error messages — a field may be sensitive.
+// validateFieldInputs is validateFieldInputsWith using the path-shape photo check.
 func validateFieldInputs(p *product.Product, in []OrderFieldInput) error {
+	return validateFieldInputsWith(p, in, nil)
+}
+
+// validateFieldInputsWith validates captured inputs; isOrderFile (nil = the
+// path-shape check) decides whether a photo field holds one of OUR uploads.
+func validateFieldInputsWith(p *product.Product, in []OrderFieldInput, isOrderFile photoupload.Checker) error {
+	if isOrderFile == nil {
+		isOrderFile = func(v string) bool { return photoupload.IsStoredURL(v, OrderFilesPrefix) }
+	}
 	if len(p.InputFields) == 0 {
 		return nil
 	}
@@ -1055,7 +1105,7 @@ func validateFieldInputs(p *product.Product, in []OrderFieldInput) error {
 		// A photo field must carry one of OUR stored uploads, never an
 		// arbitrary customer-typed link (shown to operators as an image).
 		if def.Type == product.InputFieldFile {
-			if v := strings.TrimSpace(values[def.Key]); v != "" && !photoupload.IsStoredURL(v, OrderFilesPrefix) {
+			if v := strings.TrimSpace(values[def.Key]); v != "" && !isOrderFile(v) {
 				return badRequest(fmt.Sprintf("%s must be an uploaded photo", fieldName(def)))
 			}
 			continue

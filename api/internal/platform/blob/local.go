@@ -71,3 +71,6 @@ func (l *LocalStorage) Delete(_ context.Context, key string) error {
 	}
 	return nil
 }
+
+// PublicURL implements URLBuilder (same shape Upload returns).
+func (l *LocalStorage) PublicURL(key string) string { return l.publicBase + "/uploads/" + key }

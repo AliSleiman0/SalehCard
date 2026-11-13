@@ -199,8 +199,7 @@ func (s *SupplierSettler) settleAccept(ctx context.Context, o *Order, ref string
 	if len(codes) > 0 {
 		extra = append(extra, bson.E{Key: "fulfillment.deliveredCode", Value: strings.Join(codes, "\n")})
 	}
-	before, err := s.svc.repo.TransitionStatus(ctx, o.ID,
-		[]OrderStatus{OrderStatusProcessing}, OrderStatusCompleted,
+	before, err := s.svc.repo.TransitionSupplierStatus(ctx, o.ID, o.Fulfillment.SupplierAttempt, OrderStatusCompleted,
 		TimelineEvent{Status: "completed", Note: note, At: time.Now().UTC()},
 		extra,
 	)
@@ -208,7 +207,7 @@ func (s *SupplierSettler) settleAccept(ctx context.Context, o *Order, ref string
 		if errors.Is(err, apperrors.ErrConflict) {
 			_ = s.svc.repo.AppendTimelineEvent(ctx, o.ID, TimelineEvent{
 				Status: "info",
-				Note:   "supplier delivered after order left processing — reconcile manually",
+				Note:   "supplier delivered after the order was rerouted or left processing — reconcile manually",
 				At:     time.Now().UTC(),
 			})
 			return nil
@@ -238,8 +237,7 @@ func (s *SupplierSettler) settleAccept(ctx context.Context, o *Order, ref string
 // `refunded` puts the settler and the admin refund button under the SAME
 // transition target/lock, keeping the refund-rate metric honest.
 func (s *SupplierSettler) settleReject(ctx context.Context, o *Order, reason string) error {
-	before, err := s.svc.repo.TransitionStatus(ctx, o.ID,
-		[]OrderStatus{OrderStatusProcessing}, OrderStatusRefunded,
+	before, err := s.svc.repo.TransitionSupplierStatus(ctx, o.ID, o.Fulfillment.SupplierAttempt, OrderStatusRefunded,
 		TimelineEvent{Status: "refunded", Note: reason, At: time.Now().UTC()},
 		nil,
 	)
@@ -320,13 +318,18 @@ func (s *SupplierSettler) redispatchOne(ctx context.Context, o *Order) error {
 		return s.settleAccept(ctx, o, res.Reference, res.Codes, "completed by supplier re-dispatch")
 	case errors.Is(err, provider.ErrPending):
 		// Accepted, still working: promote to the pollable class.
-		return s.svc.repo.SetSupplierRef(ctx, o.ID, res.Reference,
+		if res.Reference == "" {
+			// Pending without a reference cannot be polled: retry instead.
+			n := o.Fulfillment.SupplierRetryCount + 1
+			return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, n, time.Now().UTC().Add(backoffDelay(n)))
+		}
+		return s.svc.repo.SetSupplierRef(ctx, o.ID, o.Fulfillment.SupplierAttempt, res.Reference,
 			TimelineEvent{Status: "processing", Note: "awaiting upstream provider", At: time.Now().UTC()})
-	case errors.Is(err, provider.ErrUnavailable), errors.Is(err, provider.ErrNotImplemented):
+	case errors.Is(err, provider.ErrUnavailable), errors.Is(err, provider.ErrNotImplemented), isCtxErr(err):
 		// Still environmental (or the supplier token was pulled → stub):
 		// quiet backoff bump.
 		n := o.Fulfillment.SupplierRetryCount + 1
-		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, n, time.Now().UTC().Add(backoffDelay(n)))
+		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, n, time.Now().UTC().Add(backoffDelay(n)))
 	default:
 		// The panel adapter wraps everything ambiguous in ErrUnavailable, so a
 		// plain error here is a definitive order-level rejection; upstream
@@ -348,7 +351,7 @@ func (s *SupplierSettler) maybeFlagStuck(ctx context.Context, o *Order, why stri
 // admin decides via the existing refund action. Ref'd orders keep being
 // polled afterwards (the supplier may still deliver).
 func (s *SupplierSettler) flagStuck(ctx context.Context, o *Order, why string) error {
-	flagged, err := s.svc.repo.MarkSupplierStuck(ctx, o.ID, TimelineEvent{
+	flagged, err := s.svc.repo.MarkSupplierStuck(ctx, o.ID, o.Fulfillment.SupplierAttempt, TimelineEvent{
 		Status: "stuck_upstream",
 		Note:   "stuck upstream — needs attention: " + why,
 		At:     time.Now().UTC(),
@@ -378,4 +381,10 @@ func (s *SupplierSettler) record(ctx context.Context, action string, orderID bso
 		TargetID:   orderID.Hex(),
 		Summary:    summary,
 	})
+}
+
+// isCtxErr reports a cancelled or timed-out call: never a definitive upstream
+// rejection (the request may or may not have landed), so it is retried.
+func isCtxErr(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }

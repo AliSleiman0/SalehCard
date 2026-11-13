@@ -82,3 +82,24 @@ func IsStoredURL(s, prefix string) bool {
 	}
 	return strings.Contains(u.Path, "/"+prefix) && strings.HasSuffix(u.Path, ".jpg")
 }
+
+// Checker reports whether a client-submitted URL is one of our stored photos.
+type Checker func(string) bool
+
+// NewChecker builds a Checker for photos stored under prefix. When the store
+// can report its public URLs (blob.URLBuilder), the URL must start with OUR
+// storage's public URL for that keyspace — so an external host whose path
+// merely contains "/<prefix>" (a tracking pixel shown to operators) is
+// rejected. Otherwise it falls back to the path-shape check.
+func NewChecker(store blob.Storage, prefix string) Checker {
+	base := ""
+	if ub, ok := store.(blob.URLBuilder); ok {
+		base = ub.PublicURL(prefix)
+	}
+	return func(s string) bool {
+		if !IsStoredURL(s, prefix) || strings.Contains(s, "..") {
+			return false
+		}
+		return base == "" || strings.HasPrefix(s, base)
+	}
+}

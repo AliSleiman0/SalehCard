@@ -2,12 +2,12 @@ package kyc
 
 import (
 	"context"
-	"net/url"
 	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"github.com/AliSleiman0/salehcard/api/internal/platform/photoupload"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 )
 
@@ -21,6 +21,23 @@ type Service interface {
 // KycService is the concrete implementation of Service.
 type KycService struct {
 	repo Repository
+	// docOK verifies a document URL is one of OUR kyc/ uploads (host +
+	// keyspace when the store can report its public URLs); nil = path shape.
+	docOK photoupload.Checker
+}
+
+// WithDocChecker pins submitted document URLs to the given checker (built
+// from the blob store, so an external host with a look-alike path fails).
+func (s *KycService) WithDocChecker(c photoupload.Checker) *KycService {
+	s.docOK = c
+	return s
+}
+
+func (s *KycService) validDoc(u string) bool {
+	if s.docOK != nil {
+		return s.docOK(u)
+	}
+	return validDocURL(u)
 }
 
 // NewService constructs a KycService backed by the given repository.
@@ -63,14 +80,14 @@ func (s *KycService) Submit(ctx context.Context, userID bson.ObjectID, in Submit
 	if sub.DocumentNumber == "" {
 		return nil, badRequest("document number is required")
 	}
-	if !validDocURL(sub.DocumentFrontURL) {
+	if !s.validDoc(sub.DocumentFrontURL) {
 		return nil, badRequest("a photo of the front of your document is required")
 	}
 	// Passports are single-sided; every other document needs both sides.
 	if sub.DocumentType != DocPassport && sub.DocumentBackURL == "" {
 		return nil, badRequest("a photo of the back of your document is required")
 	}
-	if sub.DocumentBackURL != "" && !validDocURL(sub.DocumentBackURL) {
+	if sub.DocumentBackURL != "" && !s.validDoc(sub.DocumentBackURL) {
 		return nil, badRequest("the back document photo URL is invalid")
 	}
 
@@ -98,16 +115,7 @@ func (s *KycService) GetProfile(ctx context.Context, userID bson.ObjectID) (*Pro
 // /api/v1/kyc/documents stores under a kyc/ key as re-encoded JPEG on both the
 // azure and local adapters). Not ownership-proof — admins review the images
 // visually — but it rejects junk and off-keyspace URLs.
-func validDocURL(s string) bool {
-	if s == "" || len(s) > 512 {
-		return false
-	}
-	u, err := url.Parse(s)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return false
-	}
-	return strings.Contains(u.Path, "/kyc/") && strings.HasSuffix(u.Path, ".jpg")
-}
+func validDocURL(s string) bool { return photoupload.IsStoredURL(s, "kyc/") }
 
 // badRequest builds a 400-classified validation error.
 func badRequest(msg string) error {

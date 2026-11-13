@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -14,6 +15,9 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 )
+
+// rerouteDispatchTimeout bounds the immediate dispatch to the new supplier.
+const rerouteDispatchTimeout = 2 * time.Minute
 
 // RerouteInput is the admin "send this stuck order to another supplier"
 // request (client msgs #5–#8).
@@ -135,8 +139,16 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 		})
 	}
 
-	if err := s.dispatchRerouted(ctx, claimed); err != nil {
-		return nil, err
+	// Dispatch on a context detached from the admin request: closing the tab
+	// or a proxy timeout must not abort a call the supplier may already be
+	// processing. The claim already happened, so a failure to persist the
+	// outcome is logged, not returned: the claim fallback retry clock makes
+	// the settler re-dispatch this attempt (same key), and a 500 here would
+	// only invite a second reroute with a NEW key (a possible double order).
+	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rerouteDispatchTimeout)
+	defer cancel()
+	if err := s.dispatchRerouted(dctx, claimed); err != nil {
+		slog.Error("order: reroute dispatch outcome not persisted; settler will retry", "order", o.ID.Hex(), "error", err)
 	}
 	return s.svc.repo.FindByID(ctx, o.ID)
 }
@@ -152,12 +164,15 @@ func (s *SupplierSettler) dispatchRerouted(ctx context.Context, o *Order) error 
 	switch {
 	case err == nil:
 		return s.settleAccept(ctx, o, res.Reference, res.Codes, "completed by the new supplier")
-	case errors.Is(err, provider.ErrPending):
-		return s.svc.repo.SetSupplierRef(ctx, o.ID, res.Reference,
+	case errors.Is(err, provider.ErrPending) && res.Reference != "":
+		return s.svc.repo.SetSupplierRef(ctx, o.ID, o.Fulfillment.SupplierAttempt, res.Reference,
 			TimelineEvent{Status: "processing", Note: "awaiting the new supplier", At: time.Now().UTC()})
-	case errors.Is(err, provider.ErrUnavailable), errors.Is(err, provider.ErrNotImplemented):
+	case errors.Is(err, provider.ErrPending), errors.Is(err, provider.ErrUnavailable),
+		errors.Is(err, provider.ErrNotImplemented), isCtxErr(err):
 		// Environmental: the settler retries on the normal backoff (same new key).
-		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, 1, time.Now().UTC().Add(backoffDelay(1)))
+		// (Pending with no reference cannot be polled, and a cancelled or timed-out
+		// call is never a definitive rejection: both retry.)
+		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, 1, time.Now().UTC().Add(backoffDelay(1)))
 	default:
 		// A definitive rejection by the NEW supplier: no automatic refund — the
 		// admin just chose this route, so flag it stuck again and let them try

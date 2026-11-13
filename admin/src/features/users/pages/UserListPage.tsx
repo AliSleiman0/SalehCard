@@ -192,7 +192,7 @@ export default function UserListPage() {
 
         {isLoading ? (
           <LoadingSpinner />
-        ) : isError ? (
+        ) : isError && !data ? (
           <ErrorState message="Couldn't load users." onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState title="No users found" />

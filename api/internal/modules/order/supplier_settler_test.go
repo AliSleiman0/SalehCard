@@ -132,7 +132,7 @@ func TestSettler_AcceptIdempotentOnMovedOrder(t *testing.T) {
 	assert.Empty(t, ntf.notes)
 	assert.Empty(t, rec.entries)
 	assert.Equal(t, 0, aw.calls)
-	assert.Equal(t, 1, countTimelineNote(o, "supplier delivered after order left processing — reconcile manually"))
+	assert.Equal(t, 1, countTimelineNote(o, "supplier delivered after the order was rerouted or left processing — reconcile manually"))
 }
 
 func TestSettler_RejectRefundsOnce(t *testing.T) {
@@ -354,12 +354,12 @@ func TestSettler_RedispatchSuccessLosesRaceToAdmin(t *testing.T) {
 
 	// The admin completes/refunds between the list query and the settle: the
 	// upstream Fulfill still runs, but the guarded transition must lose cleanly.
-	require.NoError(t, st.svc.repo.BumpSupplierRetry(context.Background(), o.ID, 1, due)) // keep retryable
+	require.NoError(t, st.svc.repo.BumpSupplierRetry(context.Background(), o.ID, 0, 1, due)) // keep retryable
 	o.Status = OrderStatusRefunded
 	require.NoError(t, st.redispatchOne(context.Background(), o))
 
 	assert.Equal(t, OrderStatusRefunded, o.Status) // not resurrected
 	assert.Equal(t, 0, walletSvc.refundCalls)
 	assert.Empty(t, ntf.notes)
-	assert.Equal(t, 1, countTimelineNote(o, "supplier delivered after order left processing — reconcile manually"))
+	assert.Equal(t, 1, countTimelineNote(o, "supplier delivered after the order was rerouted or left processing — reconcile manually"))
 }

@@ -66,7 +66,7 @@ func TestClaimSupplierReroute_Mongo(t *testing.T) {
 	assert.Nil(t, got.Items[0].FulfillmentProvider)
 	assert.Equal(t, "", got.Fulfillment.ProviderRef, "old ref no longer polled")
 	assert.Nil(t, got.Fulfillment.SupplierStuckAt)
-	assert.Nil(t, got.Fulfillment.SupplierNextRetryAt)
+	require.NotNil(t, got.Fulfillment.SupplierNextRetryAt, "fallback retry clock (overwritten by the dispatch outcome)")
 	assert.Equal(t, 0, got.Fulfillment.SupplierRetryCount)
 	assert.Equal(t, 1, got.Fulfillment.SupplierAttempt)
 	assert.Equal(t, claim.NewOrderUUID, got.Fulfillment.SupplierOrderUUID)
@@ -79,7 +79,7 @@ func TestClaimSupplierReroute_Mongo(t *testing.T) {
 	_, err = repo.ClaimSupplierReroute(ctx, claim)
 	assert.ErrorIs(t, err, apperrors.ErrConflict)
 
-	// Not pollable any more (ref cleared) and not retryable (clock cleared).
+	// Not pollable any more (old ref cleared).
 	pollable, err := repo.ListSupplierPollable(ctx, 10)
 	require.NoError(t, err)
 	assert.Empty(t, pollable)

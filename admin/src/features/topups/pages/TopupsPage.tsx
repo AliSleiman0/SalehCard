@@ -92,7 +92,7 @@ export default function TopupsPage() {
 
         {isLoading ? (
           <LoadingSpinner />
-        ) : isError ? (
+        ) : isError && !data ? (
           <ErrorState message="Couldn't load top-up requests." onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState
