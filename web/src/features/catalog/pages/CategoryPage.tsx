@@ -17,8 +17,15 @@ import { sortAZ } from '../lib/sortAZ'
 
 type Sort = 'az' | 'pop' | 'low' | 'high' | 'rating'
 
+// Keyed by the route slug so switching categories remounts the page: sort and
+// price-cap state reset to their defaults (client msg #51) instead of carrying
+// over from the previous category.
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>()
+  return <CategoryView key={slug ?? ''} slug={slug} />
+}
+
+function CategoryView({ slug }: { slug: string | undefined }) {
   // The :slug is a rootDomain (games, app_topups, …); the storefront browses a
   // whole top-level domain at once.
   const cat = slug ?? 'games'

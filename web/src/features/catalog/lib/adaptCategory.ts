@@ -11,6 +11,9 @@ export interface ViewCategory {
   tag: string
   count?: number
   order: number
+  // Admin-uploaded category image (rendered as the tile background); absent →
+  // the curated gradient art.
+  image?: string
 }
 
 // adaptRootCategory maps an API root category (depth 0) to a tile view. English
@@ -27,5 +30,6 @@ export function adaptRootCategory(c: Category, locale: 'en' | 'ar' | 'tr'): View
     tag: meta.tag,
     count: c.productCount,
     order: meta.order,
+    image: c.image || undefined,
   }
 }
