@@ -326,6 +326,8 @@
   "notify_me": "Notify me",
   "no_results": "No results found",
   "no_results_sub": "Try a different search or adjust your filters.",
+  "upload_photo": "Upload a photo (QR code / barcode)",
+  "upload_failed": "Upload failed — try another photo.",
   "empty_orders": "No orders yet",
   "empty_orders_sub": "Your purchases and codes will appear here.",
   "start_shopping": "Start shopping",

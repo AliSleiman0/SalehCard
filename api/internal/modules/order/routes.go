@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,9 +20,15 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/reseller"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/payments"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/photoupload"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/ratelimit"
 )
+
+// OrderFilesPrefix is the blob keyspace for checkout photo-field uploads.
+const OrderFilesPrefix = "order-files/"
 
 // RegisterRoutes wires the customer-facing order routes onto r. /api/v1/orders
 // is guarded by AuthRequired. The order service depends on the product catalog
@@ -30,7 +37,7 @@ import (
 // checkout — the payment intents port (nil disables the usdt method). It
 // returns the constructed *OrderService so the caller can wire it back as the
 // payment module's OrderSettler (the async fulfillment callback).
-func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf notification.Notifier, usdt usdtIntents, brdg bridgeDispatcher) *OrderService {
+func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf notification.Notifier, usdt usdtIntents, brdg bridgeDispatcher, store blob.Storage) *OrderService {
 	repo := NewMongoRepository(db.Collection("orders"))
 	if err := EnsureIndexes(context.Background(), db); err != nil {
 		slog.Warn("order: failed to ensure indexes", "error", err)
@@ -84,11 +91,24 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 	svc := NewOrderService(repo, products, codes, wlt, promos, offers, providers, pay, usdt, kycGate, margins, ntf, points, brdg)
 	h := NewHandler(svc, usdt)
 
+	limiter := ratelimit.New(ratelimit.Config{Provider: cfg.RateLimitProvider}, db)
+	if _, ok := limiter.(ratelimit.NoopLimiter); !ok {
+		if err := ratelimit.EnsureIndexes(context.Background(), db); err != nil {
+			slog.Warn("order: failed to ensure rate-limit indexes", "error", err)
+		}
+	}
+	uploadLimit := ratelimit.Middleware(limiter, cfg.RateLimitKycUploadMax, cfg.RateLimitKycUploadWindow, func(req *http.Request) string {
+		return "orderfileupload:" + ratelimit.ClientIP(req)
+	})
+
 	r.Route("/api/v1/orders", func(r chi.Router) {
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
 		r.Use(auth.RequireActive(db))
 		r.Post("/", h.PlaceOrder)
 		r.Get("/", h.ListOrders)
+		// Checkout photo fields (QR / barcode …): one customer photo per call,
+		// per-IP rate-limited like the other customer uploads (billed blob storage).
+		r.With(uploadLimit).Post("/field-files", photoupload.Handler(store, OrderFilesPrefix, "order"))
 		r.Get("/{id}", h.GetOrder)
 	})
 	return svc

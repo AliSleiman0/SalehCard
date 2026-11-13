@@ -1000,4 +1000,13 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get unitPricedUnavailable =>
       'لا يمكن شراء هذا المنتج حالياً. يرجى المحاولة لاحقاً.';
+
+  @override
+  String get uploadPhoto => 'ارفع صورة (رمز QR / باركود)';
+
+  @override
+  String get replacePhoto => 'استبدال الصورة';
+
+  @override
+  String get uploadFailed => 'فشل الرفع. يرجى تجربة صورة أخرى.';
 }

@@ -8,6 +8,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../catalog/domain/entities/product.dart';
 import '../../domain/field_validation.dart';
+import 'photo_field_input.dart';
 
 /// Maps an amount-bounds violation of [value] against [c] to its localized
 /// inline message, or null when the value is fine (or the field carries no
@@ -81,7 +82,14 @@ class DynamicInputField extends StatelessWidget {
     );
 
     Widget input;
-    if (field.type == 'select') {
+    if (field.type == 'file' && controller != null) {
+      // A photo (QR code / barcode): uploaded on pick, value = stored URL.
+      input = PhotoFieldInput(
+        controller: controller!,
+        onChanged: onChanged,
+        hasError: hasError,
+      );
+    } else if (field.type == 'select') {
       final options = field.constraints?.options ?? const <String>[];
       input = DropdownButtonFormField<String>(
         initialValue:

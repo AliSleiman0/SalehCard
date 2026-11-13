@@ -176,6 +176,9 @@ const (
 	InputFieldAmount   InputFieldType = "amount"
 	InputFieldQuantity InputFieldType = "quantity"
 	InputFieldSelect   InputFieldType = "select"
+	// InputFieldFile is a customer-uploaded photo (QR code, barcode, ID card…):
+	// the value is the stored image URL from POST /api/v1/orders/field-files.
+	InputFieldFile InputFieldType = "file"
 )
 
 // I18nLabel is the 2-locale (ar/en) shape input-field labels carry.

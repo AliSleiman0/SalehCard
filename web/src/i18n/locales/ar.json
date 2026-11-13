@@ -327,6 +327,8 @@
   "no_results": "لا توجد نتائج",
   "no_results_sub": "جرّب بحثاً مختلفاً أو عدّل الفلاتر.",
   "empty_orders": "لا طلبات بعد",
+  "upload_photo": "ارفع صورة (رمز QR / باركود)",
+  "upload_failed": "فشل الرفع — جرّب صورة أخرى.",
   "empty_orders_sub": "ستظهر مشترياتك وأكوادك هنا.",
   "start_shopping": "ابدأ التسوّق",
   "amount_range": "{{min}} – {{max}}",

@@ -1873,6 +1873,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This product can\'t be bought right now. Please try again later.'**
   String get unitPricedUnavailable;
+
+  /// No description provided for @uploadPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a photo (QR code / barcode)'**
+  String get uploadPhoto;
+
+  /// No description provided for @replacePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace photo'**
+  String get replacePhoto;
+
+  /// No description provided for @uploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed. Please try another photo.'**
+  String get uploadFailed;
 }
 
 class _AppLocalizationsDelegate

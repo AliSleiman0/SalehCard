@@ -327,6 +327,8 @@
   "no_results": "Sonuç bulunamadı",
   "no_results_sub": "Farklı bir arama deneyin veya filtreleri değiştirin.",
   "empty_orders": "Henüz sipariş yok",
+  "upload_photo": "Fotoğraf yükle (QR kod / barkod)",
+  "upload_failed": "Yükleme başarısız — başka bir fotoğraf deneyin.",
   "empty_orders_sub": "Satın alımların ve kodların burada görünür.",
   "start_shopping": "Alışverişe başla",
   "amount_range": "{{min}} – {{max}}",
