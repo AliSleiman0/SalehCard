@@ -541,6 +541,11 @@ func slugify(s string) string {
 // A negative balance (a supplier account overdrawn on credit) puts the sign
 // before the currency symbol: -$450.29, never $-450.-29.
 func formatMoney(v float64, currency string) string {
+	// A garbage upstream value (NaN/±Inf, or beyond what int64 cents can
+	// hold) has no sensible rendering; show the "unknown" dash instead.
+	if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > 1e15 {
+		return "—"
+	}
 	switch currency {
 	case "USD":
 		cents := int64(math.Round(v * 100))
@@ -551,7 +556,12 @@ func formatMoney(v float64, currency string) string {
 	case "LBP":
 		return humanizeInt(int64(math.Round(v))) + " LBP"
 	default:
-		return fmt.Sprintf("%.2f %s", v, currency)
+		// Round to cents first so a tiny negative prints "0.00", not "-0.00".
+		cents := math.Round(v * 100)
+		if cents == 0 {
+			cents = 0 // normalise -0
+		}
+		return fmt.Sprintf("%.2f %s", cents/100, currency)
 	}
 }
 

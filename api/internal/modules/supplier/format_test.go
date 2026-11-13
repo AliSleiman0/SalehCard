@@ -1,6 +1,9 @@
 package supplier
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestFormatMoney(t *testing.T) {
 	cases := []struct {
@@ -20,6 +23,10 @@ func TestFormatMoney(t *testing.T) {
 		{-1500000.6, "LBP", "-1,500,001 LBP"},
 		{12.5, "EUR", "12.50 EUR"},
 		{-12.5, "EUR", "-12.50 EUR"},
+		{-0.001, "EUR", "0.00 EUR"}, // no stray minus in the generic branch either
+		{math.NaN(), "USD", "—"},
+		{math.Inf(-1), "USD", "—"},
+		{-1e19, "USD", "—"}, // would overflow int64 cents
 	}
 	for _, c := range cases {
 		if got := formatMoney(c.v, c.currency); got != c.want {

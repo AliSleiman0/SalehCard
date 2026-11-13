@@ -78,7 +78,7 @@ describe('DashboardPage KPI tiles', () => {
     expect(tileHref('Pending transfers')).toBe('/orders?status=processing&type=transfer')
     expect(tileHref('Pending top-ups')).toBe('/topups?status=pending')
     expect(tileHref('Pending KYC')).toBe('/kyc?status=pending')
-    expect(tileHref('Low-stock alerts')).toBe('/inventory?view=low')
+    expect(tileHref('Low-stock alerts')).toBe('/inventory?view=below')
     expect(tileHref('Completed orders')).toBe('/orders?status=completed')
     expect(tileHref('Pending orders')).toBe('/orders?status=pending')
     expect(tileHref('Failed orders')).toBe('/orders?status=failed')

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -15,6 +15,7 @@ import {
 import { money } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
+import { useKeyedPage } from '@/hooks/useKeyedPage'
 import { useTopUps, useApproveTopUp, useRejectTopUp } from '../hooks/useTopups'
 import type { AdminTopUp, TopUpStatus } from '../api/topups'
 
@@ -59,11 +60,9 @@ export default function TopupsPage() {
       },
       { replace: true },
     )
-  const [page, setPage] = useState(1)
-  // A status change from outside (dashboard deep link, sidebar) starts at page 1.
-  useEffect(() => {
-    setPage(1)
-  }, [status])
+  // A status change (chip, dashboard deep link, sidebar) starts at page 1 —
+  // in the same render, so no request goes out for a stale page.
+  const [page, setPage] = useKeyedPage(status)
   const [toReject, setToReject] = useState<AdminTopUp | null>(null)
 
   const { data, isLoading, isError, refetch } = useTopUps({ page, status: status || undefined })
@@ -98,10 +97,7 @@ export default function TopupsPage() {
               <Chip
                 key={k || 'all'}
                 on={status === k}
-                onClick={() => {
-                  setStatus(k)
-                  setPage(1)
-                }}
+                onClick={() => setStatus(k)}
               >
                 {l}
               </Chip>

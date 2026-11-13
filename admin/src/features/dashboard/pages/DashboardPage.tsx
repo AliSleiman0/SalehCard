@@ -291,7 +291,7 @@ export default function DashboardPage() {
           value={s ? String(s.lowStockCount) : '—'}
           since="codes running out"
           cls="crit"
-          to={tileLink(can, 'inventory', '/inventory?view=low')}
+          to={tileLink(can, 'inventory', '/inventory?view=below')}
         />
         <Kpi
           icon={<Icon name="bag" size={17} />}
@@ -493,7 +493,7 @@ export default function DashboardPage() {
                 {s ? s.lowStockCount : lowStock.length}
               </span>
               <div className="ph-act">
-                <button className="abtn xs" onClick={() => navigate('/inventory?view=low')}>
+                <button className="abtn xs" onClick={() => navigate('/inventory?view=below')}>
                   Manage
                 </button>
               </div>

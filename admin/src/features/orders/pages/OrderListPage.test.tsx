@@ -58,10 +58,18 @@ describe('OrderListPage URL filters (dashboard deep links)', () => {
   it('Stuck upstream link → supplierStuck, and picking a status leaves the stuck view', () => {
     renderAt('/orders?stuck=1')
     expect(last()).toMatchObject({ supplierStuck: true })
-    const statusSelect = screen.getByDisplayValue('Processing')
-    fireEvent.change(statusSelect, { target: { value: 'failed' } })
-    expect(search).toBe('?status=failed')
-    expect(last()).toMatchObject({ status: 'failed', supplierStuck: false })
+    // Picking plain "Processing" is a real change that leaves the stuck view.
+    fireEvent.change(screen.getByDisplayValue('Processing · supplier stuck'), { target: { value: 'processing' } })
+    expect(search).toBe('?status=processing')
+    expect(last()).toMatchObject({ status: 'processing', supplierStuck: false })
+  })
+
+  it('payment filter round-trips through the URL', () => {
+    renderAt('/orders?pay=wallet')
+    expect(last()).toMatchObject({ paymentMethod: 'wallet' })
+    fireEvent.change(screen.getByDisplayValue('Wallet'), { target: { value: 'usdt' } })
+    expect(new URLSearchParams(search).get('pay')).toBe('usdt')
+    expect(last()).toMatchObject({ paymentMethod: 'usdt' })
   })
 
   it('garbage params fall back to no filter', () => {

@@ -14,6 +14,7 @@ import {
 } from '@/components'
 import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
+import { useKeyedPage } from '@/hooks/useKeyedPage'
 import { useKyc, useSetKycStatus } from '../hooks/useKyc'
 import { adaptKyc, type KycView } from '../lib/adaptKyc'
 import type { KycStatus } from '../api/kyc'
@@ -50,7 +51,6 @@ export default function KycPage() {
     )
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
-  const [page, setPage] = useState(1)
   const [toReject, setToReject] = useState<KycView | null>(null)
 
   // Adopt the URL's ?q= — keyed on the value, not the params object, so a
@@ -60,18 +60,17 @@ export default function KycPage() {
     setSearch(qParam)
   }, [qParam])
 
-  // A status change from outside (dashboard deep link, sidebar) starts at page 1.
-  useEffect(() => {
-    setPage(1)
-  }, [status])
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search)
-      setPage(1)
     }, 300)
     return () => clearTimeout(timer)
   }, [search])
+
+  // A status change (chip, dashboard deep link, sidebar) or a new search starts
+  // at page 1 — in the same render, so no request goes out for a stale page.
+  const [page, setPage] = useKeyedPage(`${status}|${debouncedSearch.trim()}`)
 
   const { data, isLoading, isError, refetch } = useKyc({
     page,
@@ -104,10 +103,7 @@ export default function KycPage() {
               <Chip
                 key={k || 'all'}
                 on={status === k}
-                onClick={() => {
-                  setStatus(k)
-                  setPage(1)
-                }}
+                onClick={() => setStatus(k)}
               >
                 {l}
               </Chip>

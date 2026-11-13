@@ -34,7 +34,7 @@ export function useInventory(enabled = true) {
 }
 
 /** One backend-paginated page of the inventory listing — for the code-stock table. */
-export function useInventoryPage(params: { page: number; limit?: number; low?: boolean; q?: string }) {
+export function useInventoryPage(params: { page: number; limit?: number; low?: boolean; below?: boolean; q?: string }) {
   return useQuery({
     queryKey: ['admin', 'inventory', 'page', params],
     queryFn: () => listInventory(params),
