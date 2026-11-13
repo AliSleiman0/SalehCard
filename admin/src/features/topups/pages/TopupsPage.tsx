@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import {
   Icon,
   PageHead,
@@ -14,6 +15,7 @@ import {
 import { money } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
+import { useKeyedPage } from '@/hooks/useKeyedPage'
 import { useTopUps, useApproveTopUp, useRejectTopUp } from '../hooks/useTopups'
 import type { AdminTopUp, TopUpStatus } from '../api/topups'
 
@@ -23,6 +25,11 @@ const FILTERS: [TopUpStatus | '', string][] = [
   ['rejected', 'Rejected'],
   ['', 'All'],
 ]
+
+function statusFromParam(raw: string | null): TopUpStatus | '' {
+  if (raw === 'all') return ''
+  return FILTERS.some(([k]) => k && k === raw) ? (raw as TopUpStatus) : 'pending'
+}
 
 const STATUS_CLASS: Record<TopUpStatus, string> = {
   pending: 'st st-warn',
@@ -39,8 +46,23 @@ export default function TopupsPage() {
   const { t } = useTranslation()
   const can = useCan()
   const canManage = can('topups.manage')
-  const [status, setStatus] = useState<TopUpStatus | ''>('pending')
-  const [page, setPage] = useState(1)
+  // The status filter lives in the URL (?status=pending|approved|rejected|all)
+  // so dashboard tiles can deep-link to it and a refresh keeps it. Absent or
+  // unknown → pending (the work queue); "all" → every status.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const status = statusFromParam(searchParams.get('status'))
+  const setStatus = (k: TopUpStatus | '') =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('status', k || 'all')
+        return next
+      },
+      { replace: true },
+    )
+  // A status change (chip, dashboard deep link, sidebar) starts at page 1 —
+  // in the same render, so no request goes out for a stale page.
+  const [page, setPage] = useKeyedPage(status)
   const [toReject, setToReject] = useState<AdminTopUp | null>(null)
 
   const { data, isLoading, isError, refetch } = useTopUps({ page, status: status || undefined })
@@ -75,10 +97,7 @@ export default function TopupsPage() {
               <Chip
                 key={k || 'all'}
                 on={status === k}
-                onClick={() => {
-                  setStatus(k)
-                  setPage(1)
-                }}
+                onClick={() => setStatus(k)}
               >
                 {l}
               </Chip>

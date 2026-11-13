@@ -127,7 +127,9 @@ type adminHandler struct {
 }
 
 // list handles GET /api/admin/orders — paginated, newest first, with optional
-// status / fulfillmentType / paymentMethod filters and a search term (q) that
+// status / fulfillmentType / paymentMethod filters, date=today (the current
+// business-timezone day), supplierStuck=true (processing orders the supplier
+// settler flagged stuck), and a search term (q) that
 // matches an order id (full or the short id shown in the UI), a delivered code,
 // a player/account ID or other checkout field value, or a customer's email,
 // phone or name.
@@ -139,6 +141,11 @@ func (a *adminHandler) list(w http.ResponseWriter, r *http.Request) {
 		Status:          OrderStatus(strings.TrimSpace(q.Get("status"))),
 		PaymentMethod:   PaymentMethod(strings.TrimSpace(q.Get("paymentMethod"))),
 		FulfillmentType: strings.TrimSpace(q.Get("fulfillmentType")),
+		SupplierStuck:   q.Get("supplierStuck") == "true",
+	}
+	if q.Get("date") == "today" {
+		from, to := businessDay(time.Now())
+		f.CreatedFrom, f.CreatedTo = &from, &to
 	}
 	if search := strings.TrimSpace(q.Get("q")); search != "" {
 		if id, err := bson.ObjectIDFromHex(search); err == nil {

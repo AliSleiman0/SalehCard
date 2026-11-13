@@ -25,6 +25,9 @@ const SearchPage = lazy(() => import('@/features/catalog/pages/SearchPage'))
 const OffersPage = lazy(() => import('@/features/offers/pages/OffersPage'))
 const UsdtDepositPage = lazy(() => import('@/features/payments/pages/UsdtDepositPage'))
 const NotificationsPage = lazy(() => import('@/features/notifications/pages/NotificationsPage'))
+const ComplaintsPage = lazy(() => import('@/features/complaints/pages/ComplaintsPage'))
+const NewComplaintPage = lazy(() => import('@/features/complaints/pages/NewComplaintPage'))
+const ComplaintDetailPage = lazy(() => import('@/features/complaints/pages/ComplaintDetailPage'))
 
 // Remount the product page per product: its typed player ID, amount and
 // quantity are local state, and a product→product navigation (related items)
@@ -144,6 +147,30 @@ export default function AppRouter() {
             element={
               <RequireAuth>
                 <NotificationsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/complaints"
+            element={
+              <RequireAuth>
+                <ComplaintsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/complaints/new"
+            element={
+              <RequireAuth>
+                <NewComplaintPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/complaints/:id"
+            element={
+              <RequireAuth>
+                <ComplaintDetailPage />
               </RequireAuth>
             }
           />

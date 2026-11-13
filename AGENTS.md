@@ -190,6 +190,15 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   transfer, player IDs and Whish/crypto top-up methods. It's a build-time platform check (never a remote flag,
   per 2.3.1); catalog queries are pinned server-side to `rootDomain=telecom`. Android is unaffected. Debug:
   `--dart-define=FORCE_IOS_SCOPE=true`. Never mention crypto/money transfer/Whish in Apple-facing text.
+- **Customer complaints** (`internal/modules/complaint`, RBAC domain `complaints`): customers file a
+  complaint (category, optional own order, subject, message, optional photo under `complaints/`) from the
+  app/web at `/api/v1/complaints`; staff answer at `/api/admin/complaints` (public replies, **internal notes
+  stripped server-side from every customer response**, status, assignee). One document per complaint with an
+  embedded, capped thread (200), so each write is one guarded `FindOneAndUpdate`; numbers (`C-1001`…) come
+  from the `counters` doc. A foreign complaint is a 404, never 403. Caps: 5 open per user (`409
+  TOO_MANY_OPEN`), per-IP create limit `RATE_LIMIT_COMPLAINT_*`. Staff replies and resolve/close notify the
+  customer (`complaint_reply` / `complaint_status`, inbox + push, never SMS); the push data carries `kind`
+  so the app's tray tap opens the thread. Web has no push and polls every 30s.
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout

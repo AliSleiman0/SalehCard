@@ -308,3 +308,16 @@ check:
 4. **The Android emulator can mimic iOS:** `flutter run --dart-define=FORCE_IOS_SCOPE=true`
    (debug only) shows the iOS scope.
 
+## Customer complaints (feat/complaints)
+
+Verified locally 2026-11-14 (Chrome web + admin, Android emulator): submit with photo, internal note hidden
+from the customer, reply, resolve then reopen by customer reply, inbox row tap opens the thread.
+Still to check:
+
+1. **Push tray tap on a real device** (needs DEVOPS-TODO §24 fixed first): an admin reply should show a tray
+   notification "Reply to your complaint C-xxxx"; tapping it with the app in the background, and again with
+   the app killed, opens that complaint. With the app in the foreground, an open thread refreshes itself.
+2. **Arabic copy**: the complaint screens, inbox rows and status badges on the app and web in AR (RTL bubbles).
+3. **Order entry point**: Orders → an order → "Report a problem" pre-selects category Order and that order.
+4. **Caps**: a sixth open complaint → "You already have several open complaints"; the 11th create from one IP
+   within an hour → 429 (`RATE_LIMIT_COMPLAINT_MAX`, default 10/hour).

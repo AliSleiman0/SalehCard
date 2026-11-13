@@ -68,6 +68,30 @@ func TestOrderFilter_build(t *testing.T) {
 		assert.Len(t, or, 4) // deliveredCode + items.codes + playerId + field values
 	})
 
+	t.Run("created window maps to a half-open createdAt range", func(t *testing.T) {
+		from := time.Date(2026, 11, 13, 22, 0, 0, 0, time.UTC)
+		to := from.AddDate(0, 0, 1)
+		d := OrderFilter{CreatedFrom: &from, CreatedTo: &to}.build()
+		v, ok := get(d, "createdAt")
+		require.True(t, ok)
+		assert.Equal(t, bson.D{{Key: "$gte", Value: from}, {Key: "$lt", Value: to}}, v)
+	})
+
+	t.Run("supplierStuck matches the dashboard stuckUpstream predicate and overrides status", func(t *testing.T) {
+		d := OrderFilter{Status: OrderStatusFailed, SupplierStuck: true}.build()
+		n := 0
+		for _, e := range d {
+			if e.Key == "status" {
+				n++
+				assert.Equal(t, OrderStatusProcessing, e.Value)
+			}
+		}
+		assert.Equal(t, 1, n, "exactly one status key")
+		v, ok := get(d, "fulfillment.supplierStuckAt")
+		require.True(t, ok)
+		assert.Equal(t, bson.D{{Key: "$exists", Value: true}, {Key: "$ne", Value: nil}}, v)
+	})
+
 	t.Run("short hex id also matches the order ref", func(t *testing.T) {
 		d := OrderFilter{SearchRaw: "2F1E2818"}.build()
 		v, _ := get(d, "$or")
@@ -125,4 +149,18 @@ func TestRevenueBuckets(t *testing.T) {
 		_, buckets := revenueBuckets(now, "nonsense", loc)
 		assert.Len(t, buckets, 14)
 	})
+}
+
+func TestBusinessDay(t *testing.T) {
+	saved := businessLocation
+	t.Cleanup(func() { businessLocation = saved })
+	beirut, err := time.LoadLocation("Asia/Beirut")
+	if err != nil {
+		t.Skip("tzdata unavailable")
+	}
+	businessLocation = beirut
+	// 23:30 UTC on Nov 13 is already Nov 14 in Beirut (UTC+2).
+	start, end := businessDay(time.Date(2026, 11, 13, 23, 30, 0, 0, time.UTC))
+	assert.Equal(t, time.Date(2026, 11, 13, 22, 0, 0, 0, time.UTC), start.UTC())
+	assert.Equal(t, time.Date(2026, 11, 14, 22, 0, 0, 0, time.UTC), end.UTC())
 }

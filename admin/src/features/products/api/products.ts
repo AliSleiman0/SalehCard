@@ -23,6 +23,9 @@ export interface ProductListParams {
   status?: 'active' | 'draft' | 'out'
   available?: boolean
   search?: string
+  // 'name' = the customer catalog order: A to Z, with admin-arranged products
+  // first when the listing is a single category node; omitted = newest first.
+  sort?: 'name'
 }
 
 export interface ProductInput {
@@ -86,6 +89,7 @@ export async function listProducts(
   if (params.status) q.set('status', params.status)
   if (params.available !== undefined) q.set('available', String(params.available))
   if (params.search) q.set('search', params.search)
+  if (params.sort) q.set('sort', params.sort)
   const qs = q.toString()
   return apiClient.get<Product[]>(qs ? `${ADMIN}?${qs}` : ADMIN)
 }
@@ -104,6 +108,24 @@ export function updateProduct(id: string, input: Partial<ProductInput>): Promise
 
 export function deleteProduct(id: string): Promise<ApiResponse<unknown>> {
   return apiClient.delete(`${ADMIN}/${id}`)
+}
+
+// --- manual order inside a category ------------------------------------------
+// Products are arranged per taxonomy node, over the products assigned DIRECTLY
+// to it (subcategory products are arranged on their subcategory).
+
+/** The node's direct products in the order customers see them. */
+export function getCategoryProductOrder(categoryId: string): Promise<ApiResponse<Product[]>> {
+  return apiClient.get<Product[]>(`${ADMIN}/order?categoryId=${encodeURIComponent(categoryId)}`)
+}
+
+/** Save the full new order. productIds must be exactly the node's direct
+ *  products — otherwise the API answers 409 STALE_ORDER (reload and retry). */
+export function saveCategoryProductOrder(
+  categoryId: string,
+  productIds: string[],
+): Promise<ApiResponse<{ modified: number }>> {
+  return apiClient.put<{ modified: number }>(`${ADMIN}/order`, { categoryId, productIds })
 }
 
 export interface UploadImageResult {
