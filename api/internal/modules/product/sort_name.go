@@ -9,11 +9,11 @@ import (
 )
 
 // SortByName is the ListFilter.Sort value for the customer catalog order
-// (?sort=name — every app/web listing sends it): products an admin arranged
-// in their category (Position > 0) come first in that order, then the rest
-// natural A→Z (client feedback 2026-11-12 #68/#104: "sort everything from A
-// to Z"; 2026-11-14: "let us set the order of products inside a category").
-// The name is kept for wire compatibility with shipped app builds.
+// (?sort=name — every app/web listing sends it): natural A→Z (client feedback
+// 2026-11-12 #68/#104: "sort everything from A to Z"), except that a listing
+// of ONE category node puts the products an admin arranged there (Position >
+// 0) first, in that order (2026-11-14: "set the order of products inside a
+// category"). The name is kept for wire compatibility with shipped builds.
 const SortByName = "name"
 
 // nameSortCap bounds how many matches the in-memory A→Z path loads. Mongo's
@@ -84,12 +84,10 @@ func readNumber(r []rune, i int) (string, int) {
 	return s, i
 }
 
-// sortProductsByName orders products in catalog order in place (stable):
-// arranged products (Position > 0) first by Position, then the unarranged ones
-// A→Z, untitled last. In a listing that spans several nodes (a collection's
-// subtree, a root domain, a search) positions from different nodes tie and
-// fall back to A→Z, so each node's top picks lead the list.
-func sortProductsByName(ps []Product) {
+// sortProductsCatalog orders ONE node's products in place (stable): the
+// admin-arranged ones (Position > 0) first by Position, then the rest A→Z.
+// Only meaningful within a single node — Position is a per-node rank.
+func sortProductsCatalog(ps []Product) {
 	sort.SliceStable(ps, func(i, j int) bool {
 		pi, pj := ps[i].Position, ps[j].Position
 		if (pi > 0) != (pj > 0) {
@@ -98,12 +96,22 @@ func sortProductsByName(ps []Product) {
 		if pi != pj {
 			return pi < pj
 		}
-		a, b := sortKey(&ps[i]), sortKey(&ps[j])
-		if (a == "") != (b == "") {
-			return b == "" // untitled products go last
-		}
-		return naturalLess(a, b)
+		return lessByName(&ps[i], &ps[j])
 	})
+}
+
+// sortProductsByName orders products A→Z in place (stable); untitled last.
+func sortProductsByName(ps []Product) {
+	sort.SliceStable(ps, func(i, j int) bool { return lessByName(&ps[i], &ps[j]) })
+}
+
+// lessByName is the natural A→Z comparison; untitled products go last.
+func lessByName(x, y *Product) bool {
+	a, b := sortKey(x), sortKey(y)
+	if (a == "") != (b == "") {
+		return b == "" // untitled products go last
+	}
+	return naturalLess(a, b)
 }
 
 // --- A→Z result cache --------------------------------------------------------
@@ -127,7 +135,27 @@ type nameCacheEntry struct {
 var nameCache = struct {
 	sync.Mutex
 	m map[string]nameCacheEntry
+	// gen is bumped by every invalidation; a read that started under an older
+	// generation must not cache what it loaded (it may predate the write).
+	gen uint64
 }{m: map[string]nameCacheEntry{}}
+
+// nameCacheGeneration returns the current invalidation generation.
+func nameCacheGeneration() uint64 {
+	nameCache.Lock()
+	defer nameCache.Unlock()
+	return nameCache.gen
+}
+
+// nameCachePutIfCurrent caches items only if no invalidation happened since
+// gen was read — otherwise the set may be from before a concurrent write.
+func nameCachePutIfCurrent(key string, items []Product, now time.Time, gen uint64) {
+	nameCache.Lock()
+	defer nameCache.Unlock()
+	if nameCache.gen == gen {
+		nameCachePutLocked(key, items, now)
+	}
+}
 
 // nameCacheGet returns the cached sorted set for key if still fresh.
 func nameCacheGet(key string, now time.Time) ([]Product, bool) {
@@ -144,6 +172,11 @@ func nameCacheGet(key string, now time.Time) ([]Product, bool) {
 func nameCachePut(key string, items []Product, now time.Time) {
 	nameCache.Lock()
 	defer nameCache.Unlock()
+	nameCachePutLocked(key, items, now)
+}
+
+// nameCachePutLocked is nameCachePut with nameCache already locked.
+func nameCachePutLocked(key string, items []Product, now time.Time) {
 	if _, exists := nameCache.m[key]; !exists && len(nameCache.m) >= nameCacheMax {
 		oldestKey, oldest := "", now
 		for k, e := range nameCache.m {
@@ -160,6 +193,7 @@ func nameCachePut(key string, items []Product, now time.Time) {
 func invalidateNameCache() {
 	nameCache.Lock()
 	nameCache.m = map[string]nameCacheEntry{}
+	nameCache.gen++
 	nameCache.Unlock()
 }
 

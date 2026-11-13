@@ -521,11 +521,15 @@ function CategoryProductsPanel({ node }: { node: AdminCategory }) {
     return () => clearTimeout(timer)
   }, [search])
 
+  const term = debounced.trim()
+  // Browsing uses the customer catalog order. A search drops it (newest
+  // first): every distinct term would otherwise load + cache a whole sorted
+  // set on the API, crowding out the cached customer listings.
   const { data, isLoading, isError, refetch } = useProducts(
     {
       categoryId: node.id,
-      search: debounced.trim() || undefined,
-      sort: 'name',
+      search: term || undefined,
+      sort: term ? undefined : 'name',
       page,
     },
     { enabled: !arranging },
@@ -555,9 +559,11 @@ function CategoryProductsPanel({ node }: { node: AdminCategory }) {
         )}
       </div>
       <div className="ahint" style={{ marginTop: 0, marginBottom: 10 }}>
-        Listed in the order customers see. Includes subcategories. The count reflects available
-        products; drafts are listed here too. Assign products from the Products page (select rows →
-        Move to category).
+        {node.hasChildren
+          ? 'Includes subcategories, listed A to Z. “Arrange order” sets the order of the products placed directly in this category; arrange each subcategory on its own row.'
+          : 'Listed in the order customers see.'}{' '}
+        The count reflects available products; drafts are listed here too. Assign products from the
+        Products page (select rows → Move to category).
       </div>
       {isLoading ? (
         <LoadingSpinner />

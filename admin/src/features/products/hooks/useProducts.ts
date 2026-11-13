@@ -70,11 +70,10 @@ export function useDeleteProduct() {
   })
 }
 
-export function useCategoryProductOrder(categoryId: string, enabled = true) {
+export function useCategoryProductOrder(categoryId: string) {
   return useQuery({
     queryKey: ['admin', 'products', 'order', categoryId],
     queryFn: () => getCategoryProductOrder(categoryId),
-    enabled,
   })
 }
 

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -105,18 +104,10 @@ func (h *Handler) AdminList(w http.ResponseWriter, r *http.Request) {
 	if fm := q.Get("fulfillmentMode"); fm != "" {
 		f.FulfillmentMode = FulfillmentMode(fm)
 	}
-	// Same catalog order + direct-node scoping the customer list accepts, so
-	// the Categories page can preview exactly what customers see.
+	// Same catalog order the customer list uses, so the Categories page can
+	// preview what customers see.
 	if q.Get("sort") == SortByName {
 		f.Sort = SortByName
-	}
-	if raw := q.Get("directOnly"); raw != "" {
-		v, err := strconv.ParseBool(raw)
-		if err != nil {
-			response.BadRequest(w, "directOnly must be a boolean")
-			return
-		}
-		f.CategoryDirect = v
 	}
 
 	p := pagination.ParseParams(r)

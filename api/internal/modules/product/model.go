@@ -452,9 +452,13 @@ type ListFilter struct {
 	FulfillmentMode FulfillmentMode
 	Status          string // "active" | "draft" | "out"
 	Search          string
-	// Sort: SortByName for the catalog order (admin-arranged Position first,
-	// then natural A to Z); empty = newest first.
+	// Sort: SortByName for the catalog order (natural A to Z, with admin-
+	// arranged products first when the listing is one node); empty = newest.
 	Sort string
+	// manualOrder is set by the service when a SortByName listing covers
+	// exactly one taxonomy node — the only scope a Position means anything in
+	// (it is a per-node rank). Cross-node listings stay plain A to Z.
+	manualOrder bool
 }
 
 // BulkAction is a bulk operation applied to a set of product IDs.

@@ -16,9 +16,7 @@ import { SubcategoryGrid } from '../components/SubcategoryGrid'
 
 import { sortAZ } from '../lib/sortAZ'
 
-// 'featured' = the server's catalog order (products an admin arranged in their
-// category first, then A to Z) — kept as-is, never re-sorted in the browser.
-type Sort = 'featured' | 'az' | 'low' | 'high' | 'rating'
+type Sort = 'az' | 'pop' | 'low' | 'high' | 'rating'
 
 // Keyed by the route slug so switching categories remounts the page: sort and
 // price-cap state reset to their defaults (client msg #51) instead of carrying
@@ -37,16 +35,14 @@ function CategoryView({ slug }: { slug: string | undefined }) {
   const agent = useUiStore((s) => s.agent)
   const locale = useLocaleStore((s) => s.locale)
 
-  // The store's arranged order by default (client 2026-11-14: "set the order of
-  // products in a category"); unarranged products already come A to Z from the
-  // server (client feedback #68/#104).
-  const [sort, setSort] = useState<Sort>('featured')
+  // A to Z by default (client feedback #68/#104: "sort everything A to Z").
+  const [sort, setSort] = useState<Sort>('az')
   // null = no cap (show everything). The slider's ceiling is derived from the
   // actual product prices below, so high-priced items are never hidden by default.
   const [maxP, setMaxP] = useState<number | null>(null)
 
-  // The API caps a page at 100; sort=name is the server's catalog order, so the
-  // first page is the same slice the default "featured" order shows.
+  // The API caps a page at 100; A→Z on the server so the first page is the
+  // same slice the default A→Z sort shows (was 50, unsorted).
   const query = useProducts({ rootDomain: cat, limit: 100, sort: 'name' })
   const roots = useCategories({ depth: 0 }).data?.data ?? []
   // The root tree node for this domain: its subcategories (Jawaker, Clash of
@@ -104,8 +100,8 @@ function CategoryView({ slug }: { slug: string | undefined }) {
           value={sort}
           onChange={setSort}
           options={[
-            { value: 'featured', label: t('sort_featured') },
             { value: 'az', label: t('sort_az') },
+            { value: 'pop', label: t('sort_pop') },
             { value: 'low', label: t('sort_low') },
             { value: 'high', label: t('sort_high') },
             { value: 'rating', label: t('sort_rating') },
@@ -128,7 +124,7 @@ function CategoryView({ slug }: { slug: string | undefined }) {
               style={{ color: 'var(--brand-1)', fontWeight: 700 }}
               onClick={() => {
                 setMaxP(null)
-                setSort('featured')
+                setSort('az')
               }}
             >
               {t('clear')}

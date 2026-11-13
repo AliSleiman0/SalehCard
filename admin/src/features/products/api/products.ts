@@ -23,11 +23,9 @@ export interface ProductListParams {
   status?: 'active' | 'draft' | 'out'
   available?: boolean
   search?: string
-  // 'name' = the customer catalog order (admin-arranged products first, then
-  // A to Z); omitted = newest first.
+  // 'name' = the customer catalog order: A to Z, with admin-arranged products
+  // first when the listing is a single category node; omitted = newest first.
   sort?: 'name'
-  // With categoryId: only products assigned to that exact node (no subtree).
-  directOnly?: boolean
 }
 
 export interface ProductInput {
@@ -92,7 +90,6 @@ export async function listProducts(
   if (params.available !== undefined) q.set('available', String(params.available))
   if (params.search) q.set('search', params.search)
   if (params.sort) q.set('sort', params.sort)
-  if (params.directOnly) q.set('directOnly', 'true')
   const qs = q.toString()
   return apiClient.get<Product[]>(qs ? `${ADMIN}?${qs}` : ADMIN)
 }

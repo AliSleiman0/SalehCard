@@ -52,8 +52,8 @@ func TestCatalogOrder_Mongo(t *testing.T) {
 	alpha, bravo, charlie := mk("Alpha", nodeA), mk("Bravo", nodeA), mk("Charlie", nodeA)
 	other := mk("Other", nodeB)
 
-	titles := func(node bson.ObjectID) []string {
-		ps, _, err := repo.FindAll(ctx, ListFilter{CategoryID: node.Hex(), Sort: SortByName}, pagination.Params{Page: 1, Limit: 50})
+	list := func(f ListFilter) []string {
+		ps, _, err := repo.FindAll(ctx, f, pagination.Params{Page: 1, Limit: 50})
 		require.NoError(t, err)
 		out := make([]string, len(ps))
 		for i := range ps {
@@ -61,12 +61,20 @@ func TestCatalogOrder_Mongo(t *testing.T) {
 		}
 		return out
 	}
+	// The service sets manualOrder for one-node listings; at the repo level it
+	// is set explicitly.
+	titles := func(node bson.ObjectID) []string {
+		return list(ListFilter{CategoryID: node.Hex(), Sort: SortByName, manualOrder: true})
+	}
 	assert.Equal(t, []string{"Alpha", "Bravo", "Charlie"}, titles(nodeA), "unarranged = A to Z")
 
 	o := &orderService{store: repo}
 	_, err = o.Reorder(ctx, ReorderInput{CategoryID: nodeA.Hex(), ProductIDs: []string{charlie.Hex(), alpha.Hex(), bravo.Hex()}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"Charlie", "Alpha", "Bravo"}, titles(nodeA), "cache invalidated, ranks honoured")
+	// A cross-node listing ignores the per-node ranks.
+	cross := list(ListFilter{CategoryIDs: []bson.ObjectID{nodeA, nodeB}, Sort: SortByName})
+	assert.Equal(t, []string{"Alpha", "Bravo", "Charlie", "Other"}, cross)
 
 	// Stamping is node-guarded: a product of another node is never ranked.
 	matched, _, err := repo.SetPositions(ctx, nodeA, []bson.ObjectID{other})
@@ -91,13 +99,18 @@ func TestCatalogOrder_Mongo(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, pos(alpha))
 
-	// Bulk assign: the mover loses its rank, one already in dest keeps it.
-	_, err = repo.BulkSetCategory(ctx, []string{charlie.Hex()}, nodeA.Hex(), "a", "games")
+	// Bulk assign of a mix: the one already in dest keeps its rank, the mover
+	// loses its rank, and both are counted once.
+	_, _, err = repo.SetPositions(ctx, nodeB, []bson.ObjectID{other})
 	require.NoError(t, err)
-	assert.Equal(t, 1, pos(charlie))
-	_, err = repo.BulkSetCategory(ctx, []string{charlie.Hex()}, nodeB.Hex(), "b", "games")
+	n, err := repo.BulkSetCategory(ctx, []string{charlie.Hex(), other.Hex()}, nodeB.Hex(), "b", "games")
 	require.NoError(t, err)
-	assert.Zero(t, pos(charlie))
+	assert.EqualValues(t, 2, n)
+	assert.Equal(t, 1, pos(other), "already in dest keeps its rank")
+	assert.Zero(t, pos(charlie), "moved drops its rank")
+	moved, err := repo.FindByID(ctx, charlie.Hex())
+	require.NoError(t, err)
+	assert.Equal(t, nodeB, *moved.CategoryID)
 
 	// Unassign clears it too.
 	_, err = repo.BulkSetCategory(ctx, []string{bravo.Hex()}, "", "", "")

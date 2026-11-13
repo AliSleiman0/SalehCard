@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,22 +16,98 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
+	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
 
-func TestSortProductsByName_PositionFirst(t *testing.T) {
+func titlesOf(ps []Product) []string {
+	got := make([]string, len(ps))
+	for i := range ps {
+		got[i] = ps[i].Title.En
+	}
+	return got
+}
+
+func TestSortProductsCatalog_PositionFirst(t *testing.T) {
 	ps := []Product{
 		{Title: I18nString{En: "Alpha"}},
 		{Title: I18nString{En: "Zulu"}, Position: 2},
 		{Title: I18nString{En: "Bravo"}},
 		{Title: I18nString{En: "Yankee"}, Position: 1},
-		{Title: I18nString{En: "Xray"}, Position: 2}, // same rank from another node → A to Z
+	}
+	sortProductsCatalog(ps)
+	assert.Equal(t, []string{"Yankee", "Zulu", "Alpha", "Bravo"}, titlesOf(ps))
+}
+
+func TestSortProductsByName_IgnoresPosition(t *testing.T) {
+	ps := []Product{
+		{Title: I18nString{En: "Zulu"}, Position: 1},
+		{Title: I18nString{En: "Alpha"}},
 	}
 	sortProductsByName(ps)
-	got := make([]string, len(ps))
-	for i := range ps {
-		got[i] = ps[i].Title.En
+	assert.Equal(t, []string{"Alpha", "Zulu"}, titlesOf(ps))
+}
+
+// filterRepo records the filter FindAll receives (only FindAll is used).
+type filterRepo struct {
+	Repository
+	last ListFilter
+}
+
+func (r *filterRepo) FindAll(_ context.Context, f ListFilter, _ pagination.Params) ([]Product, int64, error) {
+	r.last = f
+	return nil, 0, nil
+}
+
+type descendantsResolver struct {
+	fakeResolver
+	ids []bson.ObjectID
+}
+
+func (d descendantsResolver) DescendantIDs(context.Context, string) ([]bson.ObjectID, error) {
+	return d.ids, nil
+}
+
+// Ranks are per node: only a one-node listing may honour them.
+func TestFindAll_ManualOrderOnlyForOneNode(t *testing.T) {
+	node := bson.NewObjectID()
+	leaf := descendantsResolver{ids: []bson.ObjectID{node}}
+	parent := descendantsResolver{ids: []bson.ObjectID{node, bson.NewObjectID()}}
+	cases := []struct {
+		name string
+		res  CategoryResolver
+		f    ListFilter
+		want bool
+	}{
+		{"leaf node", leaf, ListFilter{CategoryID: node.Hex(), Sort: SortByName}, true},
+		{"directOnly on a parent", parent, ListFilter{CategoryID: node.Hex(), CategoryDirect: true, Sort: SortByName}, true},
+		{"leaf node + search", leaf, ListFilter{CategoryID: node.Hex(), Search: "x", Sort: SortByName}, true},
+		{"parent subtree", parent, ListFilter{CategoryID: node.Hex(), Sort: SortByName}, false},
+		{"root domain", parent, ListFilter{RootDomain: "games", Sort: SortByName}, false},
+		{"catalog search", parent, ListFilter{Search: "pubg", Sort: SortByName}, false},
+		{"leaf, newest sort", leaf, ListFilter{CategoryID: node.Hex()}, false},
 	}
-	assert.Equal(t, []string{"Yankee", "Xray", "Zulu", "Alpha", "Bravo"}, got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &filterRepo{}
+			_, _, err := NewProductService(repo, WithCategoryResolver(tc.res)).FindAll(context.Background(), tc.f, pagination.Params{Page: 1, Limit: 20})
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, repo.last.manualOrder)
+		})
+	}
+}
+
+func TestNameCache_StaleReadNotCached(t *testing.T) {
+	invalidateNameCache()
+	t.Cleanup(invalidateNameCache)
+	now := time.Now()
+	gen := nameCacheGeneration()
+	invalidateNameCache() // a write lands while the read is in flight
+	nameCachePutIfCurrent("k", []Product{{}}, now, gen)
+	_, ok := nameCacheGet("k", now)
+	assert.False(t, ok, "a set read before the write must not be cached")
+	nameCachePutIfCurrent("k", []Product{{}}, now, nameCacheGeneration())
+	_, ok = nameCacheGet("k", now)
+	assert.True(t, ok)
 }
 
 // fakePositionStore is an in-memory positionStore keyed by categoryId.
@@ -143,6 +220,25 @@ func TestReorder_Guards(t *testing.T) {
 			assert.Zero(t, st.setCalls, "a rejected order must not write")
 		})
 	}
+}
+
+func TestReorder_TooManyIsBadRequestNotStale(t *testing.T) {
+	node, st, ids := nodeWith(maxArrangeable + 1)
+	o := &orderService{store: st}
+	_, err := o.List(context.Background(), node.Hex())
+	assert.ErrorIs(t, err, apperrors.ErrBadRequest, "GET must not silently truncate")
+	_, err = o.Reorder(context.Background(), ReorderInput{CategoryID: node.Hex(), ProductIDs: ids[:maxArrangeable]})
+	assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+	assert.NotErrorIs(t, err, apperrors.ErrConflict)
+}
+
+func TestReorder_CategoryLookupFailureIsNotNotFound(t *testing.T) {
+	node, st, ids := nodeWith(2)
+	boom := errors.New("cosmos timeout")
+	o := &orderService{store: st, categories: fakeResolver{err: boom}}
+	_, err := o.Reorder(context.Background(), ReorderInput{CategoryID: node.Hex(), ProductIDs: ids})
+	assert.ErrorIs(t, err, boom)
+	assert.NotErrorIs(t, err, apperrors.ErrBadRequest)
 }
 
 func TestReorder_UnknownCategory(t *testing.T) {

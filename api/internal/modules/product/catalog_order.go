@@ -21,9 +21,10 @@ import (
 // to that node (categoryId == node). A product belongs to exactly one node, so
 // one Position field on the product is enough — it is the product's rank in
 // its own node. Products in subcategories are arranged on the subcategory.
-// Listings that span several nodes (a collection's subtree, a root domain, a
-// search) tie same-ranked products across nodes and fall back to A→Z (see
-// sortProductsByName).
+// Only a listing of exactly one node honours the ranks (directOnly, or a leaf
+// node); listings spanning several nodes (a collection's subtree, a root
+// domain, a catalog-wide search) stay plain A→Z (ProductService.FindAll sets
+// ListFilter.manualOrder).
 //
 //	GET /api/admin/products/order?categoryId=…  products.view   — the node's direct products in catalog order
 //	PUT /api/admin/products/order               products.manage — {categoryId, productIds} = the full new order
@@ -44,6 +45,10 @@ type ReorderInput struct {
 	CategoryID string   `json:"categoryId"`
 	ProductIDs []string `json:"productIds"`
 }
+
+// errTooManyToArrange: the node has more direct products than one arrange
+// request may carry (the GET would be truncated, the PUT could never match).
+var errTooManyToArrange = badRequest("this category has more than 1000 products; split it into subcategories to arrange them")
 
 // errStaleOrder: the submitted list no longer matches the node's products.
 var errStaleOrder = &apperrors.AppError{
@@ -76,7 +81,10 @@ func (o *orderService) parseNode(ctx context.Context, categoryID string) (bson.O
 	}
 	if o.categories != nil {
 		if _, _, rerr := o.categories.Resolve(ctx, categoryID); rerr != nil {
-			return bson.ObjectID{}, badRequest("category not found")
+			if errors.Is(rerr, apperrors.ErrNotFound) {
+				return bson.ObjectID{}, badRequest("category not found")
+			}
+			return bson.ObjectID{}, rerr // a DB failure is a 500, not "not found"
 		}
 	}
 	return oid, nil
@@ -89,11 +97,14 @@ func (o *orderService) List(ctx context.Context, categoryID string) ([]Product, 
 	if err != nil {
 		return nil, err
 	}
-	ps, err := o.store.DirectProducts(ctx, oid, maxArrangeable)
+	ps, err := o.store.DirectProducts(ctx, oid, maxArrangeable+1)
 	if err != nil {
 		return nil, err
 	}
-	sortProductsByName(ps)
+	if len(ps) > maxArrangeable {
+		return nil, errTooManyToArrange
+	}
+	sortProductsCatalog(ps)
 	return ps, nil
 }
 
@@ -104,7 +115,7 @@ func (o *orderService) Reorder(ctx context.Context, in ReorderInput) (int64, err
 		return 0, badRequest("productIds is required")
 	}
 	if len(in.ProductIDs) > maxArrangeable {
-		return 0, badRequest("too many products to arrange in one category")
+		return 0, errTooManyToArrange
 	}
 	ids := make([]bson.ObjectID, 0, len(in.ProductIDs))
 	seen := make(map[bson.ObjectID]bool, len(in.ProductIDs))
@@ -129,6 +140,9 @@ func (o *orderService) Reorder(ctx context.Context, in ReorderInput) (int64, err
 	if err != nil {
 		return 0, err
 	}
+	if len(current) > maxArrangeable {
+		return 0, errTooManyToArrange
+	}
 	if len(current) != len(ids) {
 		return 0, errStaleOrder
 	}
@@ -152,10 +166,17 @@ func (o *orderService) Reorder(ctx context.Context, in ReorderInput) (int64, err
 
 // --- persistence (MongoRepository) -----------------------------------------
 
+// directFilter is THE definition of "the node's arrangeable products", shared
+// by the arrange list and the save guard so the two can never disagree (a
+// future exclusion — e.g. soft-deleted products — goes here, once).
+func directFilter(categoryID bson.ObjectID) bson.D {
+	return bson.D{{Key: "categoryId", Value: categoryID}}
+}
+
 // DirectProducts loads the products assigned directly to a node (any status —
 // the admin arranges drafts too), capped at limit.
 func (r *MongoRepository) DirectProducts(ctx context.Context, categoryID bson.ObjectID, limit int64) ([]Product, error) {
-	cursor, err := r.col.Find(ctx, bson.D{{Key: "categoryId", Value: categoryID}},
+	cursor, err := r.col.Find(ctx, directFilter(categoryID),
 		options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}).SetLimit(limit))
 	if err != nil {
 		return nil, err
@@ -173,7 +194,7 @@ func (r *MongoRepository) DirectProducts(ctx context.Context, categoryID bson.Ob
 
 // DirectProductIDs returns the ids of the products assigned directly to a node.
 func (r *MongoRepository) DirectProductIDs(ctx context.Context, categoryID bson.ObjectID, limit int64) ([]bson.ObjectID, error) {
-	cursor, err := r.col.Find(ctx, bson.D{{Key: "categoryId", Value: categoryID}},
+	cursor, err := r.col.Find(ctx, directFilter(categoryID),
 		options.Find().SetProjection(bson.D{{Key: "_id", Value: 1}}).SetLimit(limit))
 	if err != nil {
 		return nil, err
@@ -212,24 +233,6 @@ func (r *MongoRepository) SetPositions(ctx context.Context, categoryID bson.Obje
 		return 0, 0, err
 	}
 	return res.MatchedCount, res.ModifiedCount, nil
-}
-
-// clearPositionsLeaving drops the rank of every product in ids that is about to
-// move to a different node than dest (its rank belonged to the node it leaves).
-// Products already in dest keep their rank.
-func (r *MongoRepository) clearPositionsLeaving(ctx context.Context, ids []bson.ObjectID, dest bson.ObjectID) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	_, err := r.col.UpdateMany(ctx,
-		bson.D{
-			{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}},
-			{Key: "categoryId", Value: bson.D{{Key: "$ne", Value: dest}}},
-			{Key: "position", Value: bson.D{{Key: "$exists", Value: true}}},
-		},
-		bson.D{{Key: "$unset", Value: bson.D{{Key: "position", Value: ""}}}},
-	)
-	return err
 }
 
 // --- transport ----------------------------------------------------------------
