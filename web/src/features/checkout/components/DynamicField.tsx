@@ -1,8 +1,12 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { FileUpload } from '@/components/FileUpload'
+import { uploadOrderFieldFile } from '@/features/orders/api/orders'
 import { useLocaleStore } from '@/stores/locale'
 import type { InputField } from '@/types'
 
-// DynamicField renders one product InputField (text | amount | select; the
+// DynamicField renders one product InputField (text | amount | select | file —
+// a photo such as a QR code / barcode, uploaded right away and stored as its URL; the
 // legacy `quantity` type is filtered upstream). Sensitive fields are masked.
 // Controlled by the parent — value + onChange. Port of dynamic_input_field.dart.
 export function DynamicField({
@@ -20,6 +24,24 @@ export function DynamicField({
   const locale = useLocaleStore((s) => s.locale)
   const label = field.label[locale] || field.label.en || field.key
   const options = field.constraints?.options ?? []
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+
+  // A photo field uploads on pick; the value is the stored URL. While the upload
+  // runs the value stays empty, so the required-field check blocks checkout.
+  const upload = async (file: File) => {
+    setUploadError('')
+    setUploading(true)
+    try {
+      const res = await uploadOrderFieldFile(file)
+      if (res.success && res.data?.url) onChange(res.data.url)
+      else setUploadError(res.error?.message ?? t('upload_failed'))
+    } catch {
+      setUploadError(t('upload_failed'))
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <div className="col" style={{ gap: 8 }}>
@@ -31,7 +53,16 @@ export function DynamicField({
           {t('required')}
         </span>
       </div>
-      {field.type === 'select' ? (
+      {field.type === 'file' ? (
+        <FileUpload
+          label={t('upload_photo')}
+          value={value || null}
+          uploading={uploading}
+          error={uploadError || undefined}
+          onSelect={upload}
+          onClear={() => onChange('')}
+        />
+      ) : field.type === 'select' ? (
         <select
           className="field"
           value={value}

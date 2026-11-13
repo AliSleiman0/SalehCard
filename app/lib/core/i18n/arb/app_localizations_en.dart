@@ -1002,4 +1002,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get unitPricedUnavailable =>
       'This product can\'t be bought right now. Please try again later.';
+
+  @override
+  String get uploadPhoto => 'Upload a photo (QR code / barcode)';
+
+  @override
+  String get replacePhoto => 'Replace photo';
+
+  @override
+  String get uploadFailed => 'Upload failed. Please try another photo.';
 }

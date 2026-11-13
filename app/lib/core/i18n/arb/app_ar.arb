@@ -387,5 +387,8 @@
     "placeholders": { "price": { "type": "String" }, "units": { "type": "String" } }
   },
   "amountTooSmall": "هذه الكمية صغيرة جداً للشراء.",
-  "unitPricedUnavailable": "لا يمكن شراء هذا المنتج حالياً. يرجى المحاولة لاحقاً."
+  "unitPricedUnavailable": "لا يمكن شراء هذا المنتج حالياً. يرجى المحاولة لاحقاً.",
+  "uploadPhoto": "ارفع صورة (رمز QR / باركود)",
+  "replacePhoto": "استبدال الصورة",
+  "uploadFailed": "فشل الرفع. يرجى تجربة صورة أخرى."
 }

@@ -24,7 +24,7 @@ export interface InputFieldConstraints {
 export interface InputField {
   key: string
   label: Partial<I18nString>
-  type: 'text' | 'amount' | 'quantity' | 'select'
+  type: 'text' | 'amount' | 'quantity' | 'select' | 'file'
   constraints?: InputFieldConstraints
   sensitive: boolean
 }

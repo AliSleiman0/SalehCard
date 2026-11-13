@@ -46,6 +46,8 @@ func sanitizeInputFields(fields []InputField) ([]InputField, error) {
 			f.Constraints = c
 		case InputFieldSelect:
 			f.Constraints = sanitizeSelectConstraints(f.Constraints)
+		case InputFieldFile:
+			f.Constraints = nil
 		default:
 			return nil, badRequest(fmt.Sprintf("input field %q has unknown type %q", f.Key, f.Type))
 		}

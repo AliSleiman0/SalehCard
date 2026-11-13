@@ -392,5 +392,8 @@
     "placeholders": { "price": { "type": "String" }, "units": { "type": "String" } }
   },
   "amountTooSmall": "This amount is too small to purchase.",
-  "unitPricedUnavailable": "This product can't be bought right now. Please try again later."
+  "unitPricedUnavailable": "This product can't be bought right now. Please try again later.",
+  "uploadPhoto": "Upload a photo (QR code / barcode)",
+  "replacePhoto": "Replace photo",
+  "uploadFailed": "Upload failed. Please try another photo."
 }

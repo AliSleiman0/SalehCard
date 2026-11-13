@@ -332,6 +332,8 @@
   "load_more": "Daha fazla yükle",
   "category_unavailable": "Bu kategori mevcut değil.",
   "empty_orders": "Henüz sipariş yok",
+  "upload_photo": "Fotoğraf yükle (QR kod / barkod)",
+  "upload_failed": "Yükleme başarısız — başka bir fotoğraf deneyin.",
   "empty_orders_sub": "Satın alımların ve kodların burada görünür.",
   "start_shopping": "Alışverişe başla",
   "amount_range": "{{min}} – {{max}}",

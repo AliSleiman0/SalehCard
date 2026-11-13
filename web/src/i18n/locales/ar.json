@@ -332,6 +332,8 @@
   "load_more": "عرض المزيد",
   "category_unavailable": "هذا القسم غير متاح.",
   "empty_orders": "لا طلبات بعد",
+  "upload_photo": "ارفع صورة (رمز QR / باركود)",
+  "upload_failed": "فشل الرفع — جرّب صورة أخرى.",
   "empty_orders_sub": "ستظهر مشترياتك وأكوادك هنا.",
   "start_shopping": "ابدأ التسوّق",
   "amount_range": "{{min}} – {{max}}",
