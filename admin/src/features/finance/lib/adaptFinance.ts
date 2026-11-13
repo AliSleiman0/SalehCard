@@ -1,4 +1,4 @@
-import { relativeTime } from '@/lib/utils'
+import { formatDateTime } from '@/lib/utils'
 import type { AdminTx } from '../api/finance'
 
 /** The flat shape the transactions table renders. */
@@ -31,7 +31,7 @@ export function adaptTx(t: AdminTx): TxView {
     type: t.type,
     amount: t.amount,
     method: payKey(t.method),
-    date: relativeTime(t.createdAt),
+    date: formatDateTime(t.createdAt),
     raw: t,
   }
 }

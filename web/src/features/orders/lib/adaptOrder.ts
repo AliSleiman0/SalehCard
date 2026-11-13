@@ -1,3 +1,4 @@
+import { fmtDateTime } from '@/lib/utils'
 import { artForCategory } from '@/lib/art'
 import type { Order, OrderItem, OrderStatus, PaymentMethod } from '@/types'
 import type { CodeLine, OrderView } from '../types'
@@ -21,16 +22,6 @@ function statusLabel(s: OrderStatus): string {
     default:
       return s // failed | refunded
   }
-}
-
-function fmtDate(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return (
-    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-    ' · ' +
-    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-  )
 }
 
 // codeLines groups an order's delivered codes per line (one code per unit).
@@ -58,7 +49,7 @@ export function adaptOrder(o: Order, locale: 'en' | 'ar' | 'tr'): OrderView {
   const extra = o.items.length > 1 ? ` +${o.items.length - 1}` : ''
   const brand = first ? first.title[locale] || first.title.en : 'Order'
   const fulfill = first ? toFulfillKind(first.fulfillmentType) : 'code'
-  const date = fmtDate(o.createdAt)
+  const date = fmtDateTime(o.createdAt)
   const lines = codeLines(o, locale)
   const manual = o.items.find((it) => toFulfillKind(it.fulfillmentType) !== 'code')
   const manualKind = manual ? (toFulfillKind(manual.fulfillmentType) as 'credit' | 'transfer') : undefined
@@ -88,7 +79,7 @@ export function adaptOrder(o: Order, locale: 'en' | 'ar' | 'tr'): OrderView {
     view.recipient = manual?.recipient
     view.steps = o.fulfillment.statusTimeline.map((e) => ({
       k: e.status,
-      ts: e.at ? fmtDate(e.at) : '',
+      ts: e.at ? fmtDateTime(e.at) : '',
     }))
   }
 

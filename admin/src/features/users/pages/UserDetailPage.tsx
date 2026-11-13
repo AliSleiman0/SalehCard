@@ -17,7 +17,7 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
-import { money, relativeTime } from '@/lib/utils'
+import { money, formatDateTime } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useCan, useIsSuperAdmin } from '@/stores/auth'
 import { useOrders } from '@/features/orders/hooks/useOrders'
@@ -215,7 +215,7 @@ export default function UserDetailPage() {
                       </td>
                       <td>{tx.method ? <PayChip p={tx.method} /> : <span className="faint">—</span>}</td>
                       <td className="muted" style={{ fontSize: 12 }}>
-                        {relativeTime(tx.createdAt)}
+                        {formatDateTime(tx.createdAt)}
                       </td>
                     </tr>
                   ))}

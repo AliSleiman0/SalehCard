@@ -1,4 +1,4 @@
-import { relativeTime } from '@/lib/utils'
+import { formatDateTime } from '@/lib/utils'
 import type { AdminReview } from '../api/reviews'
 
 /** The flat shape the moderation list renders. */
@@ -27,7 +27,7 @@ export function adaptReview(r: AdminReview): ReviewView {
     user: r.userName || 'Unknown',
     rating: r.rating,
     body: r.body,
-    date: relativeTime(r.createdAt),
+    date: formatDateTime(r.createdAt),
     status: r.status,
     verified: r.verifiedPurchase,
     flagged: r.rating <= 1,

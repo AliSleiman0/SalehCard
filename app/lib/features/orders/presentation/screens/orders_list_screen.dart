@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../../core/format/date_time.dart';
 import '../../../checkout/domain/entities/order.dart';
 import '../../../checkout/presentation/providers.dart';
 
@@ -240,13 +241,7 @@ class _OrderRow extends StatelessWidget {
     }
   }
 
-  String _shortDate(DateTime? at) {
-    if (at == null) return '';
-    final local = at.toLocal();
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    return '${local.year}-$m-$d';
-  }
+  String _shortDate(DateTime? at) => formatDateTime(at);
 
   @override
   Widget build(BuildContext context) {

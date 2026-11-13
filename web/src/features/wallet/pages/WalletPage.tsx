@@ -7,7 +7,7 @@ import { NetworkChips } from '@/features/payments/components/NetworkChips'
 import { usePaymentConfig } from '@/features/payments/hooks/usePaymentConfig'
 import { useCreateTopUpIntent } from '@/features/payments/hooks/useCreateTopUpIntent'
 import { useCurrencyStore } from '@/stores/currency'
-import { fmtPrice } from '@/lib/utils'
+import { fmtDateTime, fmtPrice } from '@/lib/utils'
 import { useWallet } from '../hooks/useWallet'
 import { useTopUp, useTopUpMethods, useTopUpRequests } from '../hooks/useTopUp'
 import { MethodFields } from '../components/MethodFields'
@@ -56,12 +56,6 @@ function txLabel(tx: WalletTransaction, t: (k: string) => string): string {
     default:
       return tx.type
   }
-}
-
-function fmtTxDate(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export default function WalletPage() {
@@ -320,7 +314,7 @@ export default function WalletPage() {
                     </span>
                     <div className="col" style={{ gap: 1, flex: 1 }}>
                       <span style={{ fontWeight: 700, fontSize: 14 }}>{txLabel(tx, t)}</span>
-                      <span className="tiny faint num">{fmtTxDate(tx.createdAt)}</span>
+                      <span className="tiny faint num">{fmtDateTime(tx.createdAt)}</span>
                     </div>
                     <span
                       className="num"
