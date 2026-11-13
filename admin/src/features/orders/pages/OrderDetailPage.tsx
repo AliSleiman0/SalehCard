@@ -20,6 +20,7 @@ import { useOrder } from '../hooks/useOrders'
 import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrderMutations'
 import { adaptOrder, codeLines, creditLines, itemQtyLabel } from '../lib/adaptOrder'
 import type { AdminOrder } from '../api/orders'
+import { SupplierPanel } from '../components/SupplierPanel'
 
 /** isOrderFileUrl detects a checkout photo-field upload (re-encoded JPEG under
  *  the order-files/ keyspace — the API rejects any other link for a file field). */
@@ -96,6 +97,8 @@ export default function OrderDetailPage() {
           </button>
         )}
       </PageHead>
+
+      <SupplierPanel order={o} canManage={canManage} />
 
       <div className="formgrid">
         <div className="fieldset">

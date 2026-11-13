@@ -207,6 +207,30 @@ func (f *fakeOrderRepo) SetSupplierRef(_ context.Context, id bson.ObjectID, ref 
 	return nil
 }
 
+func (f *fakeOrderRepo) ClaimSupplierReroute(_ context.Context, c RerouteClaim) (*Order, error) {
+	o, ok := f.byID[c.OrderID]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	if o.Status != OrderStatusProcessing || o.Fulfillment.SupplierAttempt != c.ExpectedAttempt || o.Fulfillment.ProviderRef != c.ExpectedRef {
+		return nil, apperrors.ErrConflict
+	}
+	now := time.Now().UTC()
+	prov := c.NewProvider
+	o.Items[c.ItemIndex].FulfillmentProvider = &prov
+	o.Items[c.ItemIndex].UpstreamProductID = c.NewUpstreamID
+	o.Fulfillment.SupplierAttempt = c.ExpectedAttempt + 1
+	o.Fulfillment.SupplierOrderUUID = c.NewOrderUUID
+	o.Fulfillment.SupplierAttemptAt = &now
+	o.Fulfillment.ProviderRef = ""
+	o.Fulfillment.SupplierRetryCount = 0
+	o.Fulfillment.SupplierNextRetryAt = nil
+	o.Fulfillment.SupplierStuckAt = nil
+	o.Fulfillment.SupplierAttempts = append(o.Fulfillment.SupplierAttempts, c.Archived)
+	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, c.Event)
+	return o, nil
+}
+
 func (f *fakeOrderRepo) MarkSupplierStuck(_ context.Context, id bson.ObjectID, event TimelineEvent) (bool, error) {
 	o, ok := f.byID[id]
 	if !ok || o.Status != OrderStatusProcessing || o.Fulfillment.SupplierStuckAt != nil {

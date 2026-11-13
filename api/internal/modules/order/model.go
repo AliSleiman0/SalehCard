@@ -95,6 +95,19 @@ type TimelineEvent struct {
 	At     time.Time `bson:"at"     json:"at"`
 }
 
+// SupplierAttempt is one abandoned upstream attempt, archived when an admin
+// reroutes a stuck order to another supplier. The old ProviderRef is kept here
+// (and no longer polled) so ops can reconcile a late delivery by hand.
+type SupplierAttempt struct {
+	Provider          *int       `bson:"provider,omitempty"          json:"provider,omitempty"`
+	UpstreamProductID string     `bson:"upstreamProductId,omitempty" json:"upstreamProductId,omitempty"`
+	ProviderRef       string     `bson:"providerRef,omitempty"       json:"providerRef,omitempty"`
+	OrderUUID         string     `bson:"orderUuid,omitempty"         json:"orderUuid,omitempty"`
+	StuckAt           *time.Time `bson:"stuckAt,omitempty"           json:"stuckAt,omitempty"`
+	ReroutedAt        time.Time  `bson:"reroutedAt"                  json:"reroutedAt"`
+	ReroutedBy        string     `bson:"reroutedBy,omitempty"        json:"reroutedBy,omitempty"`
+}
+
 // Fulfillment carries delivery details for an order.
 type Fulfillment struct {
 	DeliveredCode string `bson:"deliveredCode,omitempty"   json:"deliveredCode,omitempty"`
@@ -111,10 +124,19 @@ type Fulfillment struct {
 	// internals are hidden from JSON; SupplierStuckAt is the set-once "stuck
 	// upstream" marker (serialized — admin views embed Order, and Phase 3's
 	// dashboard counter queries it).
-	SupplierRetryCount  int             `bson:"supplierRetryCount,omitempty"  json:"-"`
-	SupplierNextRetryAt *time.Time      `bson:"supplierNextRetryAt,omitempty" json:"-"`
-	SupplierStuckAt     *time.Time      `bson:"supplierStuckAt,omitempty"     json:"supplierStuckAt,omitempty"`
-	StatusTimeline      []TimelineEvent `bson:"statusTimeline"                json:"statusTimeline"`
+	SupplierRetryCount  int        `bson:"supplierRetryCount,omitempty"  json:"-"`
+	SupplierNextRetryAt *time.Time `bson:"supplierNextRetryAt,omitempty" json:"-"`
+	SupplierStuckAt     *time.Time `bson:"supplierStuckAt,omitempty"     json:"supplierStuckAt,omitempty"`
+	// Reroute bookkeeping (admin "send to another supplier"). SupplierAttempt
+	// counts reroutes; SupplierOrderUUID is the upstream idempotency key of the
+	// CURRENT attempt (empty = the original attempt, keyed by the order id);
+	// SupplierAttemptAt restarts the settler's give-up window; SupplierAttempts
+	// keeps every abandoned attempt (supplier, product, ref) for reconciliation.
+	SupplierAttempt   int               `bson:"supplierAttempt,omitempty"   json:"supplierAttempt,omitempty"`
+	SupplierOrderUUID string            `bson:"supplierOrderUUID,omitempty" json:"-"`
+	SupplierAttemptAt *time.Time        `bson:"supplierAttemptAt,omitempty" json:"supplierAttemptAt,omitempty"`
+	SupplierAttempts  []SupplierAttempt `bson:"supplierAttempts,omitempty"  json:"supplierAttempts,omitempty"`
+	StatusTimeline    []TimelineEvent   `bson:"statusTimeline"                json:"statusTimeline"`
 }
 
 // Order is the root aggregate for a customer purchase.

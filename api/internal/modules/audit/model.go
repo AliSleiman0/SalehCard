@@ -40,7 +40,10 @@ const (
 	// completion of an upstream-delivered order, or a stuck-upstream flag);
 	// settler-driven refunds reuse ActionOrderRefund so the finance trail has
 	// one action for every refund regardless of who triggered it.
-	ActionOrderSupplierSettle    = "order.supplier_settle"
+	ActionOrderSupplierSettle = "order.supplier_settle"
+	// ActionOrderSupplierReroute records an admin sending a stuck order to
+	// another supplier (from/to supplier + product, archived ref).
+	ActionOrderSupplierReroute   = "order.supplier_reroute"
 	ActionSupplierSync           = "supplier.sync"
 	ActionSupplierImport         = "supplier.import"
 	ActionSupplierSettingsUpdate = "supplier.settings_update"
