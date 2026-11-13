@@ -392,5 +392,11 @@
     "placeholders": { "price": { "type": "String" }, "units": { "type": "String" } }
   },
   "amountTooSmall": "This amount is too small to purchase.",
-  "unitPricedUnavailable": "This product can't be bought right now. Please try again later."
+  "unitPricedUnavailable": "This product can't be bought right now. Please try again later.",
+  "helpTitle": "Help",
+  "helpGreeting": "Hi! Pick a question below, or type to search.",
+  "helpSearchHint": "Type to search questions…",
+  "helpAllQuestions": "All questions",
+  "helpNoMatch": "No matching questions",
+  "helpNeedHelp": "Still need help?"
 }

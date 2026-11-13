@@ -89,7 +89,9 @@ export const NAV: NavGroup[] = [
       { to: '/expenses', icon: 'coins', label: 'nav_expenses', domain: 'expenses' },
     ],
   },
-  { group: 'grp_content', items: [{ to: '/reviews', icon: 'star', label: 'nav_reviews', domain: 'reviews' }] },
+  { group: 'grp_content', items: [{ to: '/reviews', icon: 'star', label: 'nav_reviews', domain: 'reviews' },
+    { to: '/chatbot', icon: 'send', label: 'nav_chatbot', domain: 'chatbot' },
+  ] },
   {
     group: 'grp_system',
     items: [

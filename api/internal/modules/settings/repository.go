@@ -58,6 +58,9 @@ func (r *MongoRepository) Update(ctx context.Context, in UpdateInput, actor stri
 	if in.SupportPhone != nil {
 		cur.SupportPhone = strings.TrimSpace(*in.SupportPhone)
 	}
+	if in.SupportWhatsapp != nil {
+		cur.SupportWhatsapp = strings.TrimSpace(*in.SupportWhatsapp)
+	}
 	if in.DefaultLanguage != nil {
 		cur.DefaultLanguage = *in.DefaultLanguage
 	}

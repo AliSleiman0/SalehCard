@@ -1000,4 +1000,22 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get unitPricedUnavailable =>
       'لا يمكن شراء هذا المنتج حالياً. يرجى المحاولة لاحقاً.';
+
+  @override
+  String get helpTitle => 'المساعدة';
+
+  @override
+  String get helpGreeting => 'مرحباً! اختر سؤالاً من الأسفل أو اكتب للبحث.';
+
+  @override
+  String get helpSearchHint => 'اكتب للبحث في الأسئلة…';
+
+  @override
+  String get helpAllQuestions => 'كل الأسئلة';
+
+  @override
+  String get helpNoMatch => 'لا توجد أسئلة مطابقة';
+
+  @override
+  String get helpNeedHelp => 'هل ما زلت بحاجة للمساعدة؟';
 }

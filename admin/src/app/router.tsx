@@ -30,6 +30,7 @@ const TodosPage = lazy(() => import('@/features/todos/pages/TodosPage'))
 const ExpensesListPage = lazy(() => import('@/features/expenses/pages/ExpensesListPage'))
 const ExpenseEditPage = lazy(() => import('@/features/expenses/pages/ExpenseEditPage'))
 const ReviewsPage = lazy(() => import('@/features/reviews/pages/ReviewsPage'))
+const ChatbotPage = lazy(() => import('@/features/chatbot/pages/ChatbotPage'))
 const KycPage = lazy(() => import('@/features/kyc/pages/KycPage'))
 const AuditLogPage = lazy(() => import('@/features/audit/pages/AuditLogPage'))
 const SettingsPage = lazy(() => import('@/features/settings/pages/SettingsPage'))
@@ -83,6 +84,7 @@ export default function AppRouter() {
         <Route path="/expenses/new" element={guard('expenses', <ExpenseEditPage />)} />
         <Route path="/expenses/:id/edit" element={guard('expenses', <ExpenseEditPage />)} />
         <Route path="/reviews" element={guard('reviews', <ReviewsPage />)} />
+        <Route path="/chatbot" element={guard('chatbot', <ChatbotPage />)} />
         <Route path="/kyc" element={guard('kyc', <KycPage />)} />
         <Route path="/audit" element={guard('audit', <AuditLogPage />)} />
         <Route path="/settings" element={guard('settings', <SettingsPage />)} />
