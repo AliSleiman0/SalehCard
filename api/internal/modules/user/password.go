@@ -31,13 +31,32 @@ var errWrongPassword = &apperrors.AppError{
 	Err: apperrors.ErrBadRequest,
 }
 
-func weakPassword() error {
-	return &apperrors.AppError{Code: "WEAK_PASSWORD", Message: "password must be at least 8 characters", Err: apperrors.ErrBadRequest}
+// maxPasswordBytes is bcrypt's input limit; longer passwords make
+// GenerateFromPassword fail, which would otherwise surface as a 500.
+const maxPasswordBytes = 72
+
+var errNoPasswordSet = &apperrors.AppError{
+	Code:    "NO_PASSWORD_SET",
+	Message: "this account has no password yet — set one by signing in with an SMS code",
+	Err:     apperrors.ErrBadRequest,
+}
+
+// validateNewPassword enforces the password policy for any new password:
+// at least 8 characters and at most 72 bytes (bcrypt's limit).
+func validateNewPassword(pw string) error {
+	if len(pw) < minPasswordLen {
+		return &apperrors.AppError{Code: "WEAK_PASSWORD", Message: "password must be at least 8 characters", Err: apperrors.ErrBadRequest}
+	}
+	if len(pw) > maxPasswordBytes {
+		return &apperrors.AppError{Code: "PASSWORD_TOO_LONG", Message: "password must be at most 72 characters", Err: apperrors.ErrBadRequest}
+	}
+	return nil
 }
 
 // ChangePassword lets a signed-in user (customer or admin) replace their own
-// password. The current password is required when one is set; a phone-OTP
-// account that never set one can set it directly (it is already authenticated).
+// password; the current one is always required. A phone-OTP account that never
+// set a password gets NO_PASSWORD_SET — it sets its first one through the SMS
+// sign-in (VerifyOTP with a password), so a stolen session alone can't.
 // Other sessions are left alone — the caller's own refresh token can't be told
 // apart here, and revoking everything would sign the caller out too.
 func (s *UserService) ChangePassword(ctx context.Context, id bson.ObjectID, in ChangePasswordInput) error {
@@ -48,13 +67,14 @@ func (s *UserService) ChangePassword(ctx context.Context, id bson.ObjectID, in C
 	if isDeleted(u) {
 		return apperrors.ErrUnauthorized
 	}
-	if len(in.NewPassword) < minPasswordLen {
-		return weakPassword()
+	if err := validateNewPassword(in.NewPassword); err != nil {
+		return err
 	}
-	if u.PasswordHash != nil {
-		if bcrypt.CompareHashAndPassword([]byte(*u.PasswordHash), []byte(in.CurrentPassword)) != nil {
-			return errWrongPassword
-		}
+	if u.PasswordHash == nil {
+		return errNoPasswordSet
+	}
+	if bcrypt.CompareHashAndPassword([]byte(*u.PasswordHash), []byte(in.CurrentPassword)) != nil {
+		return errWrongPassword
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -160,8 +180,8 @@ func (a *adminHandler) setPassword(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "invalid request body")
 		return
 	}
-	if len(body.NewPassword) < minPasswordLen {
-		writeAuthError(w, weakPassword())
+	if err := validateNewPassword(body.NewPassword); err != nil {
+		writeAuthError(w, err)
 		return
 	}
 	current, err := a.repo.FindByID(r.Context(), id)

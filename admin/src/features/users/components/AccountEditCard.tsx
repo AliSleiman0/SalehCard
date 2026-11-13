@@ -76,6 +76,7 @@ export function AccountEditCard({ id, name }: { id: string; name: string }) {
           autoComplete="new-password"
           aria-label="New password"
           placeholder="At least 8 characters"
+          maxLength={72}
           value={pw}
           onChange={(e) => setPw(e.target.value)}
         />

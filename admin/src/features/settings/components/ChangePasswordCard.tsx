@@ -44,11 +44,11 @@ export function ChangePasswordCard() {
           </div>
           <div>
             <label className="alabel">New password</label>
-            <input className="afield" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={next} onChange={(e) => setNext(e.target.value)} />
+            <input className="afield" type="password" autoComplete="new-password" placeholder="At least 8 characters" maxLength={72} value={next} onChange={(e) => setNext(e.target.value)} />
           </div>
           <div>
             <label className="alabel">Confirm new password</label>
-            <input className="afield" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            <input className="afield" type="password" autoComplete="new-password" maxLength={72} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </div>
         </div>
         {err && <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 12 }}>{err}</div>}
