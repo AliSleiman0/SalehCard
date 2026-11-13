@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Checkbox, EmptyState, ErrorState, Icon, LoadingSpinner, PageHead } from '@/components'
+import { Checkbox, EmptyState, ErrorState, Icon, LoadingSpinner, Modal, PageHead } from '@/components'
 import { ApiError } from '@/lib/api-client'
 import { toast } from '@/stores/toast'
 import { createTodo, deleteTodo, listTodos, updateTodo, type Todo, type TodoInput } from '../api/todos'
@@ -9,10 +9,12 @@ import { dateInputToIso, dueState } from '../lib/due'
 
 const KEY = ['admin', 'todos']
 
-const DUE_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
-  overdue: { bg: 'var(--danger-bg, rgba(229,72,77,.12))', fg: 'var(--danger)', label: 'Overdue' },
-  today: { bg: 'var(--warn-bg, rgba(245,166,35,.14))', fg: 'var(--warn, #b7791f)', label: 'Today' },
-  upcoming: { bg: 'var(--surface-2)', fg: 'var(--text-dim)', label: '' },
+// Due badge per state, using the theme's .st-* status classes (they follow
+// light/dark mode). Upcoming dates are neutral.
+const DUE_CLASS: Record<string, { cls: string; label: string }> = {
+  overdue: { cls: 'st st-danger', label: 'Overdue' },
+  today: { cls: 'st st-warn', label: 'Today' },
+  upcoming: { cls: 'st st-mute', label: '' },
 }
 
 function fmtDate(iso: string, withTime = false): string {
@@ -22,15 +24,25 @@ function fmtDate(iso: string, withTime = false): string {
   return withTime ? `${date} · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : date
 }
 
-/** Shared team to-do list (client feedback 2026-11-12 #18). */
+/** Shared team to-do list (client feedback 2026-11-12 #18). Every admin can
+ *  add, tick and delete; deletes ask for confirmation and are audited. */
 export default function TodosPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  // Every admin can add / tick / delete — it is a shared team list.
-  const canManage = true
   const [title, setTitle] = useState('')
   const [note, setNote] = useState('')
   const [due, setDue] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState<Todo | null>(null)
+  // Per-row in-flight state, so one row's request doesn't grey out the others
+  // and a double-click can't send the same toggle/delete twice.
+  const [busy, setBusy] = useState<Set<string>>(new Set())
+  const mark = (id: string, on: boolean) =>
+    setBusy((s) => {
+      const next = new Set(s)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
 
   const q = useQuery({
     queryKey: KEY,
@@ -42,29 +54,40 @@ export default function TodosPage() {
     refetchInterval: 30_000, // a shared list: pick up teammates' changes
   })
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : 'Something went wrong')
+  const refresh = () => void qc.invalidateQueries({ queryKey: KEY })
+
   const add = useMutation({
     mutationFn: (input: TodoInput) => createTodo(input),
     onSuccess: () => {
       setTitle('')
       setNote('')
       setDue('')
-      void qc.invalidateQueries({ queryKey: KEY })
+      refresh()
     },
     onError: onErr,
   })
   const patch = useMutation({
     mutationFn: ({ id, input }: { id: string; input: TodoInput }) => updateTodo(id, input),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+    onMutate: ({ id }) => mark(id, true),
+    onSettled: (_d, _e, { id }) => {
+      mark(id, false)
+      refresh()
+    },
     onError: onErr,
   })
   const remove = useMutation({
     mutationFn: (id: string) => deleteTodo(id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+    onMutate: (id) => mark(id, true),
+    onSettled: (_d, _e, id) => {
+      mark(id, false)
+      refresh()
+    },
     onError: onErr,
   })
 
   const submit = () => {
-    if (!title.trim()) return
+    // Enter and the Add button both land here — ignore repeats while saving.
+    if (!title.trim() || add.isPending) return
     add.mutate({ title: title.trim(), note: note.trim() || undefined, dueAt: dateInputToIso(due) })
   }
 
@@ -74,17 +97,18 @@ export default function TodosPage() {
 
   const row = (x: Todo) => {
     const ds = x.done ? 'none' : dueState(x.dueAt)
-    const st = DUE_STYLE[ds]
+    const badge = DUE_CLASS[ds]
+    const rowBusy = busy.has(x.id)
     return (
       <div
         key={x.id}
         style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 18px', borderTop: '1px solid var(--border)' }}
       >
-        <div style={{ paddingTop: 2 }}>
+        <div style={{ paddingTop: 2, opacity: rowBusy ? 0.5 : 1 }}>
           <Checkbox
             on={x.done}
             onClick={() => {
-              if (canManage) patch.mutate({ id: x.id, input: { done: !x.done } })
+              if (!rowBusy) patch.mutate({ id: x.id, input: { done: !x.done } })
             }}
           />
         </div>
@@ -111,26 +135,20 @@ export default function TodosPage() {
               : `Added ${fmtDate(x.createdAt, true)}${x.createdBy ? ` by ${x.createdBy}` : ''}`}
           </div>
         </div>
-        {x.dueAt && !x.done && st && (
-          <span
-            className="bdg"
-            style={{ background: st.bg, color: st.fg, whiteSpace: 'nowrap' }}
-            title={fmtDate(x.dueAt)}
-          >
-            <Icon name="clock" size={12} /> {st.label ? `${st.label} · ` : ''}
+        {x.dueAt && !x.done && badge && (
+          <span className={badge.cls} style={{ whiteSpace: 'nowrap' }} title={fmtDate(x.dueAt)}>
+            <i className="d" /> {badge.label ? `${badge.label} · ` : ''}
             {fmtDate(x.dueAt)}
           </span>
         )}
-        {canManage && (
-          <button
-            className="abtn xs ghost"
-            aria-label="Delete to-do"
-            onClick={() => remove.mutate(x.id)}
-            disabled={remove.isPending}
-          >
-            <Icon name="trash" size={13} />
-          </button>
-        )}
+        <button
+          className="abtn xs ghost"
+          aria-label="Delete to-do"
+          onClick={() => setConfirmDelete(x)}
+          disabled={rowBusy}
+        >
+          <Icon name="trash" size={13} />
+        </button>
       </div>
     )
   }
@@ -143,34 +161,32 @@ export default function TodosPage() {
         sub={`${open.length} open · shared with every admin`}
       />
 
-      {canManage && (
-        <div className="acard pad" style={{ marginBottom: 18 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,2fr) 170px auto', gap: 10 }} className="todo-add">
-            <input
-              className="afield"
-              placeholder="What needs doing?"
-              aria-label="To-do"
-              value={title}
-              maxLength={200}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
-            />
-            <input
-              className="afield"
-              placeholder="Note (optional)"
-              aria-label="Note"
-              value={note}
-              maxLength={1000}
-              onChange={(e) => setNote(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
-            />
-            <input className="afield" type="date" aria-label="Due date" value={due} onChange={(e) => setDue(e.target.value)} />
-            <button className="abtn primary" onClick={submit} disabled={!title.trim() || add.isPending}>
-              <Icon name="plus" size={15} /> Add
-            </button>
-          </div>
+      <div className="acard pad" style={{ marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,2fr) 170px auto', gap: 10 }} className="todo-add">
+          <input
+            className="afield"
+            placeholder="What needs doing?"
+            aria-label="To-do"
+            value={title}
+            maxLength={200}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+          <input
+            className="afield"
+            placeholder="Note (optional)"
+            aria-label="Note"
+            value={note}
+            maxLength={1000}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+          <input className="afield" type="date" aria-label="Due date" value={due} onChange={(e) => setDue(e.target.value)} />
+          <button className="abtn primary" onClick={submit} disabled={!title.trim() || add.isPending}>
+            <Icon name="plus" size={15} /> Add
+          </button>
         </div>
-      )}
+      </div>
 
       {q.isLoading ? (
         <LoadingSpinner />
@@ -203,6 +219,35 @@ export default function TodosPage() {
             </div>
           )}
         </>
+      )}
+
+      {confirmDelete && (
+        <Modal onClose={() => setConfirmDelete(null)} maxWidth={420}>
+          <div style={{ padding: 22 }}>
+            <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Delete this to-do?</h3>
+            <div className="muted" style={{ fontSize: 13, marginBottom: 6, wordBreak: 'break-word' }}>
+              “{confirmDelete.title}”
+            </div>
+            <div className="faint" style={{ fontSize: 12.5, marginBottom: 18 }}>
+              Every admin shares this list. The deletion is recorded in the activity log.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="abtn" onClick={() => setConfirmDelete(null)}>
+                Cancel
+              </button>
+              <button
+                className="abtn primary"
+                style={{ background: 'var(--danger)' }}
+                onClick={() => {
+                  remove.mutate(confirmDelete.id)
+                  setConfirmDelete(null)
+                }}
+              >
+                <Icon name="trash" size={14} /> Delete
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )
