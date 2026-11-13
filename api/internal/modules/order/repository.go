@@ -154,10 +154,10 @@ func NewMongoRepository(col *mongo.Collection) *MongoRepository {
 	return &MongoRepository{collection: col}
 }
 
-// isShortRef reports whether s looks like (part of) an order id — 4 to 23 hex
+// isShortRef reports whether s looks like (part of) an order id — 6 to 23 hex
 // characters — e.g. the 8-char "2f1e2818" the admin UI and receipts show.
 func isShortRef(s string) bool {
-	if len(s) < 4 || len(s) > 23 {
+	if len(s) < 6 || len(s) > 23 {
 		return false
 	}
 	for _, c := range strings.ToLower(s) {

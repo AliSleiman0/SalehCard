@@ -214,13 +214,10 @@ func (r *MongoRepository) FindByContactLike(ctx context.Context, q string) ([]*U
 		bson.D{{Key: "name", Value: rx}},
 	}
 	// Phones are stored E.164 ("+961…"); match on the typed digits so spaces,
-	// dashes or a missing country code don't hide the customer.
-	if digits := strings.Map(func(c rune) rune {
-		if c >= '0' && c <= '9' {
-			return c
-		}
-		return -1
-	}, q); len(digits) >= 4 {
+	// dashes or a missing country code don't hide the customer — but only when
+	// the term actually looks like a phone number, so searching a code such as
+	// "DEMO-0001" doesn't pull in every customer whose phone contains "0001".
+	if digits, ok := phoneDigits(q); ok {
 		or = append(or, bson.D{{Key: "phone", Value: bson.D{{Key: "$regex", Value: digits}}}})
 	}
 	cur, err := r.collection.Find(ctx, bson.D{{Key: "$or", Value: or}})
@@ -564,4 +561,22 @@ func (r *MongoRepository) Delete(ctx context.Context, id bson.ObjectID) error {
 		return apperrors.ErrNotFound
 	}
 	return nil
+}
+
+// phoneDigits returns the digits of q when q looks like a phone number: once
+// spaces, "+", "-", "(" and ")" are removed it is all digits and at least 6
+// long. Anything else (codes, emails, names) is not phone-like.
+func phoneDigits(q string) (string, bool) {
+	var b strings.Builder
+	for _, c := range q {
+		switch {
+		case c >= '0' && c <= '9':
+			b.WriteRune(c)
+		case c == ' ' || c == '+' || c == '-' || c == '(' || c == ')':
+		default:
+			return "", false
+		}
+	}
+	d := b.String()
+	return d, len(d) >= 6
 }

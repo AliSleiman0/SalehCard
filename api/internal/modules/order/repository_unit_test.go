@@ -79,8 +79,9 @@ func TestOrderFilter_build(t *testing.T) {
 
 func TestIsShortRef(t *testing.T) {
 	assert.True(t, isShortRef("2f1e2818"))
-	assert.True(t, isShortRef("ABCD"))
-	assert.False(t, isShortRef("abc"))                      // too short
+	assert.True(t, isShortRef("2F1E28"))
+	assert.False(t, isShortRef("abcd"))                     // 4 hex: too loose
+	assert.False(t, isShortRef("abc12"))                    // too short
 	assert.False(t, isShortRef("6af5b2f431f548082f1e2818")) // full id → exact path
 	assert.False(t, isShortRef("1234-567"))
 	assert.False(t, isShortRef("player9"))
