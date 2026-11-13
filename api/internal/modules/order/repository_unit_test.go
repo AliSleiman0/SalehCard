@@ -58,15 +58,33 @@ func TestOrderFilter_build(t *testing.T) {
 		require.True(t, ok)
 		or, ok := v.(bson.A)
 		require.True(t, ok)
-		assert.Len(t, or, 3) // deliveredCode + items.codes + userId clauses
+		assert.Len(t, or, 5) // deliveredCode + items.codes + playerId + field values + userId
 	})
 
-	t.Run("search with no matching users still matches by deliveredCode", func(t *testing.T) {
+	t.Run("search with no matching users still matches by code / player ID / field", func(t *testing.T) {
 		d := OrderFilter{SearchRaw: "DEMO-0001", UserIDs: []bson.ObjectID{}}.build()
 		v, _ := get(d, "$or")
 		or, _ := v.(bson.A)
-		assert.Len(t, or, 2) // deliveredCode + items.codes clauses
+		assert.Len(t, or, 4) // deliveredCode + items.codes + playerId + field values
 	})
+
+	t.Run("short hex id also matches the order ref", func(t *testing.T) {
+		d := OrderFilter{SearchRaw: "2F1E2818"}.build()
+		v, _ := get(d, "$or")
+		or, _ := v.(bson.A)
+		require.Len(t, or, 5)
+		assert.Equal(t, bson.D{{Key: "ref", Value: bson.D{{Key: "$regex", Value: "2f1e2818"}}}}, or[4])
+	})
+}
+
+func TestIsShortRef(t *testing.T) {
+	assert.True(t, isShortRef("2f1e2818"))
+	assert.True(t, isShortRef("2F1E28"))
+	assert.False(t, isShortRef("abcd"))                     // 4 hex: too loose
+	assert.False(t, isShortRef("abc12"))                    // too short
+	assert.False(t, isShortRef("6af5b2f431f548082f1e2818")) // full id → exact path
+	assert.False(t, isShortRef("1234-567"))
+	assert.False(t, isShortRef("player9"))
 }
 
 func TestRevenueBuckets(t *testing.T) {

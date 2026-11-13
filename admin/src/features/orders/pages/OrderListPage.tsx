@@ -180,7 +180,7 @@ export default function OrderListPage() {
           <div className="fsearch">
             <Icon name="search" size={15} />
             <input
-              placeholder="Order ID, customer email, or code…"
+              placeholder="Order ID, player ID, phone, email, name or code…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

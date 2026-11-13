@@ -65,3 +65,24 @@ func TestUserFilter_Build_SearchTextMatchesEmailOrPhone(t *testing.T) {
 	assert.Len(t, or, 2)
 	assert.NotContains(t, m, "_id")
 }
+
+func TestPhoneDigits(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"71363772", "71363772", true},
+		{"+961 71 363 772", "96171363772", true},
+		{"(03) 123-456", "03123456", true},
+		{"DEMO-0001", "", false},
+		{"a1b2c3d4", "", false},
+		{"12345", "12345", false},
+	} {
+		got, ok := phoneDigits(tc.in)
+		assert.Equal(t, tc.ok, ok, tc.in)
+		if ok {
+			assert.Equal(t, tc.want, got, tc.in)
+		}
+	}
+}

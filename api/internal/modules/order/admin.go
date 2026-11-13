@@ -31,7 +31,7 @@ import (
 type customerLookup interface {
 	FindByID(ctx context.Context, id bson.ObjectID) (*user.User, error)
 	FindByIDs(ctx context.Context, ids []bson.ObjectID) ([]*user.User, error)
-	FindByEmailLike(ctx context.Context, q string) ([]*user.User, error)
+	FindByContactLike(ctx context.Context, q string) ([]*user.User, error)
 }
 
 // CustomerInfo is the customer summary attached to each admin order view. The
@@ -114,7 +114,9 @@ type adminHandler struct {
 
 // list handles GET /api/admin/orders — paginated, newest first, with optional
 // status / fulfillmentType / paymentMethod filters and a search term (q) that
-// matches an order id, a delivered code, or a customer email.
+// matches an order id (full or the short id shown in the UI), a delivered code,
+// a player/account ID or other checkout field value, or a customer's email,
+// phone or name.
 func (a *adminHandler) list(w http.ResponseWriter, r *http.Request) {
 	p := pagination.ParseParams(r)
 	q := r.URL.Query()
@@ -128,7 +130,7 @@ func (a *adminHandler) list(w http.ResponseWriter, r *http.Request) {
 		if id, err := bson.ObjectIDFromHex(search); err == nil {
 			f.OrderID = &id
 		} else {
-			users, err := a.users.FindByEmailLike(r.Context(), search)
+			users, err := a.users.FindByContactLike(r.Context(), search)
 			if err != nil {
 				response.InternalError(w)
 				return

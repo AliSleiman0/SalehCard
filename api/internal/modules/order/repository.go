@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
@@ -123,11 +124,17 @@ func (f OrderFilter) build() bson.D {
 	if f.OrderID != nil {
 		filter = append(filter, bson.E{Key: "_id", Value: *f.OrderID})
 	} else if f.SearchRaw != "" {
-		// Non-hex search: match a delivered code exactly, or any order owned by
-		// a user whose email matched the term.
+		// Non-full-id search: a delivered code, a player/account ID or other
+		// checkout field value (exact), the short order id shown in the UI
+		// (hex substring of ref), or any order owned by a matching customer.
 		or := bson.A{
 			bson.D{{Key: "fulfillment.deliveredCode", Value: f.SearchRaw}},
 			bson.D{{Key: "items.codes", Value: f.SearchRaw}},
+			bson.D{{Key: "items.playerId", Value: f.SearchRaw}},
+			bson.D{{Key: "items.fields.value", Value: f.SearchRaw}},
+		}
+		if isShortRef(f.SearchRaw) {
+			or = append(or, bson.D{{Key: "ref", Value: bson.D{{Key: "$regex", Value: strings.ToLower(f.SearchRaw)}}}})
 		}
 		if len(f.UserIDs) > 0 {
 			or = append(or, bson.D{{Key: "userId", Value: bson.D{{Key: "$in", Value: f.UserIDs}}}})
@@ -145,6 +152,48 @@ type MongoRepository struct {
 // NewMongoRepository constructs a MongoRepository using the given collection.
 func NewMongoRepository(col *mongo.Collection) *MongoRepository {
 	return &MongoRepository{collection: col}
+}
+
+// isShortRef reports whether s looks like (part of) an order id — 6 to 23 hex
+// characters — e.g. the 8-char "2f1e2818" the admin UI and receipts show.
+func isShortRef(s string) bool {
+	if len(s) < 6 || len(s) > 23 {
+		return false
+	}
+	for _, c := range strings.ToLower(s) {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// BackfillRefs stamps ref (the hex id, searchable by substring) on orders
+// created before the field existed. Idempotent and cheap once done (the filter
+// matches nothing); run detached at startup so boot isn't delayed.
+func BackfillRefs(ctx context.Context, db *mongo.Database) (int, error) {
+	col := db.Collection("orders")
+	cur, err := col.Find(ctx, bson.D{{Key: "ref", Value: bson.D{{Key: "$exists", Value: false}}}},
+		options.Find().SetProjection(bson.D{{Key: "_id", Value: 1}}))
+	if err != nil {
+		return 0, err
+	}
+	defer cur.Close(ctx)
+	n := 0
+	for cur.Next(ctx) {
+		var row struct {
+			ID bson.ObjectID `bson:"_id"`
+		}
+		if err := cur.Decode(&row); err != nil {
+			return n, err
+		}
+		if _, err := col.UpdateOne(ctx, bson.D{{Key: "_id", Value: row.ID}},
+			bson.D{{Key: "$set", Value: bson.D{{Key: "ref", Value: row.ID.Hex()}}}}); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, cur.Err()
 }
 
 // EnsureIndexes creates the indexes the order module relies on: a lookup index
@@ -234,6 +283,7 @@ func (r *MongoRepository) Create(ctx context.Context, order *Order) error {
 	if order.ID.IsZero() {
 		order.ID = bson.NewObjectID()
 	}
+	order.Ref = order.ID.Hex()
 	order.CreatedAt = now
 	order.UpdatedAt = now
 	if order.Items == nil {
