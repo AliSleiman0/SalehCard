@@ -26,7 +26,9 @@ func NewHandler(svc Service) *Handler {
 // Inventory handles GET /api/admin/inventory. Without a "page" query param it
 // returns the full listing (used by the thresholds editor and the upload product
 // picker). With "page" it returns one page plus meta (pagination + global KPI
-// totals); "low=true" restricts the page to low-stock products.
+// totals); "low=true" restricts the page to the most depleted (LevelLo)
+// products, "below=true" to every product below its threshold (the dashboard
+// Low-stock tile's rule).
 func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	if !r.URL.Query().Has("page") {
 		stats, err := h.svc.Inventory(r.Context())
@@ -39,9 +41,15 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := pagination.ParseParams(r)
-	lowOnly := r.URL.Query().Get("low") == "true"
+	view := StockAll
+	switch {
+	case r.URL.Query().Get("below") == "true":
+		view = StockBelow
+	case r.URL.Query().Get("low") == "true":
+		view = StockLow
+	}
 	search := r.URL.Query().Get("q")
-	rows, totals, total, err := h.svc.InventoryPaged(r.Context(), p, lowOnly, search)
+	rows, totals, total, err := h.svc.InventoryPaged(r.Context(), p, view, search)
 	if err != nil {
 		response.InternalError(w)
 		return

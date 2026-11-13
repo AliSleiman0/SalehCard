@@ -38,15 +38,17 @@ export type InventoryMeta = PaginationMeta & { totals: InventoryTotals }
  * Per-product code stats. Called without params it returns the full list (used
  * by the thresholds editor and the upload product picker). With `page` it hits
  * the backend-paginated endpoint, returning one page plus `meta` (pagination +
- * global totals); `low` restricts the page to low-stock products.
+ * global totals); `low` restricts the page to the most depleted ("lo" level)
+ * products, `below` to every product under its threshold (the dashboard tile's rule).
  */
 export function listInventory(
-  params: { page?: number; limit?: number; low?: boolean; q?: string } = {}
+  params: { page?: number; limit?: number; low?: boolean; below?: boolean; q?: string } = {}
 ): Promise<ApiResponse<InventoryStats[]> & { meta?: InventoryMeta }> {
   const q = new URLSearchParams()
   if (params.page !== undefined) q.set('page', String(params.page))
   if (params.limit !== undefined) q.set('limit', String(params.limit))
   if (params.low) q.set('low', 'true')
+  if (params.below) q.set('below', 'true')
   if (params.q) q.set('q', params.q)
   const qs = q.toString()
   return apiClient.get<InventoryStats[]>(`/api/admin/inventory${qs ? `?${qs}` : ''}`) as Promise<

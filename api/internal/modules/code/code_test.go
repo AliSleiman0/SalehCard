@@ -304,7 +304,7 @@ func TestInventoryPaged(t *testing.T) {
 	ctx := context.Background()
 
 	// Page 1 of 2 (title-sorted): totals are global regardless of the page.
-	rows, totals, total, err := svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 2}, false, "")
+	rows, totals, total, err := svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 2}, StockAll, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, total)
 	require.Len(t, rows, 2)
@@ -314,14 +314,14 @@ func TestInventoryPaged(t *testing.T) {
 	assert.Equal(t, InventoryTotals{Uploaded: 310, Available: 205, Delivered: 105, LowStock: 2, UnvaluedProducts: 3}, totals)
 
 	// Page 2 returns the tail.
-	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 2, Limit: 2}, false, "")
+	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 2, Limit: 2}, StockAll, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, total)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "Charlie", rows[0].Title)
 
 	// lowOnly filters the rows/count but leaves the global totals intact.
-	rows, totals, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, true, "")
+	rows, totals, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, StockLow, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, total)
 	require.Len(t, rows, 2)
@@ -330,7 +330,7 @@ func TestInventoryPaged(t *testing.T) {
 	assert.Equal(t, 2, totals.LowStock)
 
 	// search filters by case-insensitive title substring, totals stay global.
-	rows, totals, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, false, "ra")
+	rows, totals, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, StockAll, "ra")
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total) // only "Bravo" contains "ra"
 	require.Len(t, rows, 1)
@@ -338,16 +338,50 @@ func TestInventoryPaged(t *testing.T) {
 	assert.Equal(t, 2, totals.LowStock)
 
 	// lowOnly + search compose (AND).
-	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, true, "alpha")
+	rows, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, StockLow, "alpha")
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "Alpha", rows[0].Title)
 
 	// Out-of-range page yields an empty slice, not an error.
-	rows, _, _, err = svc.InventoryPaged(ctx, pagination.Params{Page: 9, Limit: 2}, false, "")
+	rows, _, _, err = svc.InventoryPaged(ctx, pagination.Params{Page: 9, Limit: 2}, StockAll, "")
 	require.NoError(t, err)
 	assert.Empty(t, rows)
+}
+
+// StockBelow uses the dashboard tile's rule (available < threshold), so a
+// mid-level product shows there but not in the narrower StockLow view.
+func TestInventoryPaged_BelowThreshold(t *testing.T) {
+	repo := newFakeRepo()
+	repo.products = []ProductMeta{
+		{ID: "p1", Title: "Alpha"},   // lo: 5 < 40% of 100
+		{ID: "p2", Title: "Bravo"},   // mid: 60 < 100 but >= 40
+		{ID: "p3", Title: "Charlie"}, // healthy: 100 >= 100
+	}
+	repo.counts["p1"] = map[Status]int{StatusAvailable: 5}
+	repo.counts["p2"] = map[Status]int{StatusAvailable: 60}
+	repo.counts["p3"] = map[Status]int{StatusAvailable: 100}
+	for _, id := range []string{"p1", "p2", "p3"} {
+		repo.thresholds[id] = 100
+	}
+	svc := NewCodeService(repo)
+	ctx := context.Background()
+
+	rows, _, total, err := svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, StockBelow, "")
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, total)
+	require.Len(t, rows, 2)
+	assert.Equal(t, "Alpha", rows[0].Title)
+	assert.Equal(t, "Bravo", rows[1].Title)
+
+	low, err := svc.LowStock(ctx) // the dashboard's set
+	require.NoError(t, err)
+	assert.Len(t, low, int(total))
+
+	_, _, total, err = svc.InventoryPaged(ctx, pagination.Params{Page: 1, Limit: 10}, StockLow, "")
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
 }
 
 func TestInventoryPaged_TotalValue(t *testing.T) {
@@ -366,7 +400,7 @@ func TestInventoryPaged_TotalValue(t *testing.T) {
 	}
 	svc := NewCodeService(repo)
 
-	_, totals, _, err := svc.InventoryPaged(context.Background(), pagination.Params{Page: 1, Limit: 10}, false, "")
+	_, totals, _, err := svc.InventoryPaged(context.Background(), pagination.Params{Page: 1, Limit: 10}, StockAll, "")
 	require.NoError(t, err)
 	// Only the two priced products contribute; the unpriced one is excluded, not $0.
 	assert.Equal(t, 40.0, totals.TotalValue)
