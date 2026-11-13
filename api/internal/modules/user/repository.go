@@ -75,6 +75,30 @@ var sortFields = map[string][]string{
 	"joined": {"createdAt"},
 }
 
+// nameSortPipeline returns the aggregation for sort=name / -name: users sort
+// by what the admin table shows — name, else email, else phone — lowercased,
+// so phone-only accounts (no name) don't all pile up at the top and case
+// doesn't split the order. Nested two-argument $ifNull for Cosmos vCore.
+// ok is false for every other sort, which uses a plain Find.
+func (f UserFilter) nameSortPipeline(filter bson.D, p pagination.Params) (mongo.Pipeline, bool) {
+	key, dir := strings.TrimSpace(f.Sort), 1
+	if strings.HasPrefix(key, "-") {
+		key, dir = key[1:], -1
+	}
+	if key != "name" {
+		return nil, false
+	}
+	ifNull := func(a, b any) bson.D { return bson.D{{Key: "$ifNull", Value: bson.A{a, b}}} }
+	label := ifNull("$name", ifNull("$email", ifNull("$phone", "")))
+	return mongo.Pipeline{
+		{{Key: "$match", Value: filter}},
+		{{Key: "$addFields", Value: bson.D{{Key: "_sortName", Value: bson.D{{Key: "$toLower", Value: label}}}}}},
+		{{Key: "$sort", Value: bson.D{{Key: "_sortName", Value: dir}, {Key: "_id", Value: dir}}}},
+		{{Key: "$skip", Value: pagination.Skip(p)}},
+		{{Key: "$limit", Value: int64(p.Limit)}},
+	}, true
+}
+
 // sortDoc is the Mongo sort for f.Sort, always ending on _id so paging over
 // equal values (e.g. many $0.00 wallets) is stable.
 func (f UserFilter) sortDoc() bson.D {
@@ -368,11 +392,15 @@ func (r *MongoRepository) ListAll(ctx context.Context, f UserFilter, p paginatio
 	if err != nil {
 		return nil, 0, err
 	}
-	opts := options.Find().
-		SetSkip(pagination.Skip(p)).
-		SetLimit(int64(p.Limit)).
-		SetSort(f.sortDoc())
-	cur, err := r.collection.Find(ctx, filter, opts)
+	var cur *mongo.Cursor
+	if pipeline, ok := f.nameSortPipeline(filter, p); ok {
+		cur, err = r.collection.Aggregate(ctx, pipeline)
+	} else {
+		cur, err = r.collection.Find(ctx, filter, options.Find().
+			SetSkip(pagination.Skip(p)).
+			SetLimit(int64(p.Limit)).
+			SetSort(f.sortDoc()))
+	}
 	if err != nil {
 		return nil, 0, err
 	}

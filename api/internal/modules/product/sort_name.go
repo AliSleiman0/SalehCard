@@ -3,6 +3,8 @@ package product
 import (
 	"sort"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 )
 
@@ -87,4 +89,73 @@ func sortProductsByName(ps []Product) {
 		}
 		return naturalLess(a, b)
 	})
+}
+
+// --- A→Z result cache --------------------------------------------------------
+//
+// The name sort loads and sorts the whole match set, and the app pages through
+// it (infinite scroll) on a public endpoint, so each sorted set is cached
+// briefly per filter. Package-level because several MongoRepository instances
+// exist per process; every product write through any of them clears it, and
+// writes elsewhere (stock counts, supplier sync) age out within the TTL.
+
+const (
+	nameCacheTTL = 30 * time.Second
+	nameCacheMax = 64
+)
+
+type nameCacheEntry struct {
+	at    time.Time
+	items []Product // sorted; never handed out directly — see cloneProducts
+}
+
+var nameCache = struct {
+	sync.Mutex
+	m map[string]nameCacheEntry
+}{m: map[string]nameCacheEntry{}}
+
+// nameCacheGet returns the cached sorted set for key if still fresh.
+func nameCacheGet(key string, now time.Time) ([]Product, bool) {
+	nameCache.Lock()
+	defer nameCache.Unlock()
+	e, ok := nameCache.m[key]
+	if !ok || now.Sub(e.at) > nameCacheTTL {
+		return nil, false
+	}
+	return e.items, true
+}
+
+// nameCachePut stores a sorted set, evicting the oldest entry when full.
+func nameCachePut(key string, items []Product, now time.Time) {
+	nameCache.Lock()
+	defer nameCache.Unlock()
+	if _, exists := nameCache.m[key]; !exists && len(nameCache.m) >= nameCacheMax {
+		oldestKey, oldest := "", now
+		for k, e := range nameCache.m {
+			if e.at.Before(oldest) || oldestKey == "" {
+				oldestKey, oldest = k, e.at
+			}
+		}
+		delete(nameCache.m, oldestKey)
+	}
+	nameCache.m[key] = nameCacheEntry{at: now, items: items}
+}
+
+// invalidateNameCache drops every cached sorted set (called on product writes).
+func invalidateNameCache() {
+	nameCache.Lock()
+	nameCache.m = map[string]nameCacheEntry{}
+	nameCache.Unlock()
+}
+
+// cloneProducts copies a page out of the cache. The service enriches listed
+// products in place (offer/reseller prices on Variants), so each product is a
+// struct copy with its own Variants slice — never the cached backing array.
+func cloneProducts(src []Product) []Product {
+	out := make([]Product, len(src))
+	for i := range src {
+		out[i] = src[i]
+		out[i].Variants = append([]Variant(nil), src[i].Variants...)
+	}
+	return out
 }
