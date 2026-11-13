@@ -1,11 +1,14 @@
 package category
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
 
@@ -69,4 +72,25 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.OK(w, items)
+}
+
+// Get handles GET /api/v1/categories/{id}: one visible node (hasChildren +
+// rolled-up productCount) plus its root→parent breadcrumb, for the storefront's
+// subcategory drill-down pages. Hidden nodes (or hidden ancestors) → 404.
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	id, err := bson.ObjectIDFromHex(chi.URLParam(r, "id"))
+	if err != nil {
+		response.NotFound(w)
+		return
+	}
+	view, err := h.svc.Node(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			response.NotFound(w)
+			return
+		}
+		response.InternalError(w)
+		return
+	}
+	response.OK(w, view)
 }

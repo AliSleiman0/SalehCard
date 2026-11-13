@@ -73,7 +73,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   finance: 'Money Transfer',
 }
 
+// Legacy taxonomy nodes are slugged "cat-447" — never show those as a label.
+const LEGACY_SLUG = /^cat-\d+$/i
+
 function humanize(cat: string): string {
+  if (!cat || LEGACY_SLUG.test(cat)) return ''
   return (
     CATEGORY_LABELS[cat] ??
     cat
@@ -82,6 +86,15 @@ function humanize(cat: string): string {
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ')
   )
+}
+
+// categoryLabel is the small subtitle under the brand: the assigned taxonomy
+// node's real (localized) name when the API sends one, else a humanized flat
+// category — but never a raw legacy slug like "Cat 447" (empty instead).
+function categoryLabel(api: Product, locale: 'en' | 'ar' | 'tr'): string {
+  const n = api.categoryName
+  const named = n && (n[locale]?.trim() || n.en?.trim())
+  return named || humanize(api.category)
 }
 
 function discountLabel(o: OfferInfo): string {
@@ -141,7 +154,7 @@ export function adaptProduct(api: Product, locale: 'en' | 'ar' | 'tr'): ViewProd
   return {
     id: api.id,
     brand,
-    title: humanize(api.category),
+    title: categoryLabel(api, locale),
     cat: api.category,
     rootDomain: api.rootDomain ?? '',
     art: artForCategory(api.category),

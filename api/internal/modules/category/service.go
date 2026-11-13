@@ -41,6 +41,7 @@ type ListItem struct {
 // Service is the business-logic contract for the category taxonomy.
 type Service interface {
 	List(ctx context.Context, f CategoryFilter, withCounts bool) ([]ListItem, error)
+	Node(ctx context.Context, id bson.ObjectID) (*NodeView, error)
 }
 
 // CategoryService is the concrete Service.
@@ -119,6 +120,51 @@ func (s *CategoryService) List(ctx context.Context, f CategoryFilter, withCounts
 		items[i].ProductCount = &n
 	}
 	return items, nil
+}
+
+// Crumb is one ancestor in a node's breadcrumb trail (root first).
+type Crumb struct {
+	ID         bson.ObjectID `json:"id"`
+	Slug       string        `json:"slug"`
+	Name       I18nString    `json:"name"`
+	Depth      int           `json:"depth"`
+	RootDomain string        `json:"rootDomain,omitempty"`
+}
+
+// NodeView is a single storefront node (with has-children + rolled-up count,
+// exactly as List reports it) plus its root→parent breadcrumb.
+type NodeView struct {
+	Node      ListItem `json:"node"`
+	Ancestors []Crumb  `json:"ancestors"`
+}
+
+// Node returns one visible node for storefront drill-down pages. A node that
+// is hidden — or sits under a hidden ancestor — is reported as not found, so
+// hiding a category hides its whole subtree from direct links too.
+func (s *CategoryService) Node(ctx context.Context, id bson.ObjectID) (*NodeView, error) {
+	// The tree is tiny; List over all nodes gives the same derived fields
+	// (hasChildren, rolled-up counts) the browse grids show.
+	all, err := s.List(ctx, CategoryFilter{IncludeHidden: true}, true)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[bson.ObjectID]ListItem, len(all))
+	for _, it := range all {
+		byID[it.ID] = it
+	}
+	node, ok := byID[id]
+	if !ok || !node.Visible {
+		return nil, apperrors.ErrNotFound
+	}
+	crumbs := make([]Crumb, 0, len(node.Ancestors))
+	for _, aid := range node.Ancestors {
+		a, ok := byID[aid]
+		if !ok || !a.Visible {
+			return nil, apperrors.ErrNotFound
+		}
+		crumbs = append(crumbs, Crumb{ID: a.ID, Slug: a.Slug, Name: a.Name, Depth: a.Depth, RootDomain: a.RootDomain})
+	}
+	return &NodeView{Node: node, Ancestors: crumbs}, nil
 }
 
 // ListAll returns the full tree (all depths, incl. hidden) with has-children +

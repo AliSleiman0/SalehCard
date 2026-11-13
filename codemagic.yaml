@@ -19,6 +19,9 @@ workflows:
         # Without this the build bakes in the dev LAN API and hangs on real
         # devices (see the Android APK note in project memory).
         API_BASE_URL: "https://salehcard-api.azurewebsites.net/api/v1"
+        # App Store Connect app record (Apple ID) for FlashCash Global — used to
+        # read the latest uploaded build number (see the build step).
+        APP_STORE_APPLE_ID: "6822703792"
     triggering:
       events:
         - push
@@ -41,11 +44,24 @@ workflows:
         # No `pod install` step: this project uses Swift Package Manager for
         # plugin integration (there is no ios/Podfile), so Xcode resolves
         # Firebase/plugin dependencies itself as part of the build.
-        # Build number = Codemagic's per-workflow counter offset past the
-        # pubspec's +4, so every upload to App Store Connect is unique.
+        # Build number = one past the highest build already in App Store
+        # Connect, so uploads never collide even if Codemagic's per-workflow
+        # BUILD_NUMBER counter resets (workflow recreated/renamed). The old
+        # counter formula (4 + BUILD_NUMBER) is kept as a floor, and as the
+        # fallback if the App Store Connect lookup fails.
         script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || true)
+          COUNTER=$((4 + BUILD_NUMBER))
+          if [[ "$LATEST" =~ ^[0-9]+$ ]]; then
+            NEXT=$((LATEST + 1))
+            if [ "$COUNTER" -gt "$NEXT" ]; then NEXT=$COUNTER; fi
+          else
+            echo "WARNING: could not read the latest TestFlight build number; falling back to $COUNTER"
+            NEXT=$COUNTER
+          fi
+          echo "Building iOS build number $NEXT (latest in App Store Connect: ${LATEST:-unknown})"
           flutter build ipa --release \
-            --build-number=$((4 + BUILD_NUMBER)) \
+            --build-number=$NEXT \
             --dart-define=API_BASE_URL=$API_BASE_URL \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:

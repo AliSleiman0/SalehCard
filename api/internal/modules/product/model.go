@@ -250,6 +250,9 @@ type Product struct {
 	// unassigned / pre-migration products). The flat Category/RootDomain strings
 	// are kept denormalized from it so the legacy flat filters keep working.
 	CategoryID *bson.ObjectID `bson:"categoryId,omitempty" json:"categoryId,omitempty"`
+	// CategoryName is the assigned node's display name, filled on catalog reads
+	// (response-only, never persisted). Nil when unassigned or the node is unnamed.
+	CategoryName *I18nString `bson:"-" json:"categoryName,omitempty"`
 	Images     []string       `bson:"images"   json:"images"`
 	// Thumbnail is the 256px compressed preview URL (see platform/imaging);
 	// lists/chips prefer it, falling back to Images[0]. Images[0] stays the

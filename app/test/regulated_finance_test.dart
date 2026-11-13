@@ -187,6 +187,42 @@ void main() {
     });
   });
 
+  test('method kinds are an allow-list on restricted builds', () {
+    for (final kind in ['bank', 'cash', 'other']) {
+      // Even a crypto-sounding name is trusted once an admin classified it.
+      expect(isTopUpMethodShownOnRestricted(kind: kind, name: 'USDT'), isTrue,
+          reason: kind);
+    }
+    for (final kind in ['crypto', 'wallet_app', 'some_future_kind']) {
+      expect(isTopUpMethodShownOnRestricted(kind: kind, name: 'Bank'), isFalse,
+          reason: kind);
+    }
+    // Unclassified (legacy) methods fall back to the name deny-list.
+    expect(isTopUpMethodShownOnRestricted(kind: '', name: 'OMT'), isTrue);
+    expect(isTopUpMethodShownOnRestricted(kind: ' ', name: 'ETH (ERC20)'),
+        isFalse);
+    expect(isTopUpMethodShownOnRestricted(kind: '', name: 'Whish Money'),
+        isFalse);
+  });
+
+  test('crypto names missed by the old regex are now recognised', () {
+    for (final name in [
+      'ETH (ERC20)',
+      'Ethereum',
+      'TRON / TRX',
+      'Solana',
+      'USDC',
+      'Litecoin LTC',
+      'BNB Smart Chain',
+      'عملات رقمية',
+    ]) {
+      expect(isCryptoTopUpMethodName(name), isTrue, reason: name);
+    }
+    for (final name in ['Electronic transfer', 'Sham Cash', 'Western Union']) {
+      expect(isCryptoTopUpMethodName(name), isFalse, reason: name);
+    }
+  });
+
   test('crypto top-up method names are recognised', () {
     for (final name in ['USDT (TRC20)', 'Binance Pay', 'Crypto', 'Tether']) {
       expect(isCryptoTopUpMethodName(name), isTrue, reason: name);

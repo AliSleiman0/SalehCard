@@ -68,6 +68,10 @@ type ResellerPriceCleaner interface {
 type CategoryResolver interface {
 	DescendantIDs(ctx context.Context, id string) ([]bson.ObjectID, error)
 	Resolve(ctx context.Context, id string) (slug, rootDomain string, err error)
+	// Names batch-resolves taxonomy node display names (one query) so catalog
+	// reads can show a product's real category name instead of its slug
+	// (legacy nodes are slugged "cat-447"). Missing ids are simply absent.
+	Names(ctx context.Context, ids []bson.ObjectID) (map[bson.ObjectID]I18nString, error)
 }
 
 // ProductService is the concrete implementation of Service.
@@ -165,11 +169,46 @@ func (s *ProductService) enrich(ctx context.Context, ps []*Product) {
 	if len(ps) == 0 {
 		return
 	}
+	s.enrichCategoryNames(ctx, ps)
 	if claims, ok := auth.ClaimsFromContext(ctx); ok && claims.Role == "reseller" {
 		s.enrichReseller(ctx, ps)
 		return
 	}
 	s.enrichOffers(ctx, ps)
+}
+
+// enrichCategoryNames sets the response-only CategoryName from each product's
+// assigned taxonomy node. Best-effort: a lookup failure or a blank node name
+// leaves it nil and clients simply show no category label (never the slug).
+func (s *ProductService) enrichCategoryNames(ctx context.Context, ps []*Product) {
+	if s.categories == nil {
+		return
+	}
+	seen := map[bson.ObjectID]bool{}
+	ids := make([]bson.ObjectID, 0, len(ps))
+	for _, p := range ps {
+		if p.CategoryID != nil && !seen[*p.CategoryID] {
+			seen[*p.CategoryID] = true
+			ids = append(ids, *p.CategoryID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	names, err := s.categories.Names(ctx, ids)
+	if err != nil {
+		slog.Warn("product: category name enrichment failed", "error", err)
+		return
+	}
+	for _, p := range ps {
+		if p.CategoryID == nil {
+			continue
+		}
+		if n, ok := names[*p.CategoryID]; ok && (strings.TrimSpace(n.En) != "" || strings.TrimSpace(n.Ar) != "") {
+			name := n
+			p.CategoryName = &name
+		}
+	}
 }
 
 // enrichReseller overlays the exact checkout price for the calling reseller

@@ -93,18 +93,21 @@ class TopUpMethodDto {
   const TopUpMethodDto({
     required this.id,
     this.name = '',
+    this.kind = '',
     this.instructions = '',
     this.fields = const [],
   });
 
   final String id;
   final String name;
+  final String kind;
   final String instructions;
   final List<TopUpMethodFieldDto> fields;
 
   factory TopUpMethodDto.fromJson(Map<String, dynamic> json) => TopUpMethodDto(
         id: json['id'] as String? ?? '',
         name: json['name'] as String? ?? '',
+        kind: json['kind'] as String? ?? '',
         instructions: json['instructions'] as String? ?? '',
         fields: [
           for (final f in (json['fields'] as List<dynamic>? ?? const []))
@@ -115,6 +118,7 @@ class TopUpMethodDto {
   TopUpMethod toEntity() => TopUpMethod(
         id: id,
         name: name,
+        kind: kind,
         instructions: instructions,
         fields: [for (final f in fields) f.toEntity()],
       );
