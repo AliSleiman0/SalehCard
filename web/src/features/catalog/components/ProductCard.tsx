@@ -42,10 +42,14 @@ export function ProductCard({ p, compact = false }: { p: ViewProduct; compact?: 
         <div className="row between" style={{ alignItems: 'flex-start', gap: 8 }}>
           <div className="h3" style={{ fontSize: 17, lineHeight: 1.1 }}>
             {p.brand}
-            <br />
-            <span className="small muted" style={{ fontFamily: 'var(--font-body)' }}>
-              {p.title}
-            </span>
+            {p.title && (
+              <>
+                <br />
+                <span className="small muted" style={{ fontFamily: 'var(--font-body)' }}>
+                  {p.title}
+                </span>
+              </>
+            )}
           </div>
         </div>
         {p.reviews > 0 && (

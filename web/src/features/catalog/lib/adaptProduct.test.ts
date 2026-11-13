@@ -63,3 +63,23 @@ describe('adaptProduct needsId', () => {
     expect(v.needsId).toBe(false)
   })
 })
+
+describe('adaptProduct category label', () => {
+  it('never shows a raw legacy slug like "Cat 447"', () => {
+    expect(adaptProduct(product({ category: 'cat-447' }), 'en').title).toBe('')
+  })
+
+  it("prefers the assigned node's localized name", () => {
+    const p = product({
+      category: 'cat-447',
+      categoryName: { en: 'Dahab Transfer', ar: 'تحويل ذهب', tr: '' },
+    })
+    expect(adaptProduct(p, 'en').title).toBe('Dahab Transfer')
+    expect(adaptProduct(p, 'ar').title).toBe('تحويل ذهب')
+    expect(adaptProduct(p, 'tr').title).toBe('Dahab Transfer') // falls back to en
+  })
+
+  it('still humanizes ordinary flat categories', () => {
+    expect(adaptProduct(product({ category: 'gift-cards' }), 'en').title).toBe('Gift Cards')
+  })
+})

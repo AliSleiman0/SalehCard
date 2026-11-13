@@ -738,6 +738,9 @@ func (f fakeCategoryResolver) DescendantIDs(context.Context, string) ([]bson.Obj
 func (f fakeCategoryResolver) Resolve(context.Context, string) (string, string, error) {
 	return f.slug, f.root, f.err
 }
+func (f fakeCategoryResolver) Names(context.Context, []bson.ObjectID) (map[bson.ObjectID]product.I18nString, error) {
+	return nil, nil
+}
 
 // recordingResolver records DescendantIDs calls to prove the directOnly path
 // skips the tree expansion.
@@ -752,6 +755,9 @@ func (r *recordingResolver) DescendantIDs(context.Context, string) ([]bson.Objec
 }
 func (r *recordingResolver) Resolve(context.Context, string) (string, string, error) {
 	return "", "", nil
+}
+func (r *recordingResolver) Names(context.Context, []bson.ObjectID) (map[bson.ObjectID]product.I18nString, error) {
+	return nil, nil
 }
 
 func TestProductService_FindAll_DirectOnly(t *testing.T) {

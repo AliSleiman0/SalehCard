@@ -29,7 +29,7 @@ export function LineItem({
       <div className="col" style={{ gap: 3, flex: 1, minWidth: 0 }}>
         <span style={{ fontWeight: 800 }}>{it.brand}</span>
         <span className="small muted">
-          {it.title} · {it.variant}
+          {[it.title, it.variant].filter(Boolean).join(' · ')}
         </span>
         {it.pid && <span className="tiny faint num">ID: {it.pid}</span>}
       </div>

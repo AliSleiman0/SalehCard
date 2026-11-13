@@ -63,6 +63,10 @@ export interface Product {
   id: string
   title: I18nString
   category: string
+  // Assigned taxonomy node + its display name (response-only; absent when the
+  // product is unassigned or the node is unnamed).
+  categoryId?: string
+  categoryName?: I18nString
   // Top-level domain (games, app_topups, …) the product's category resolves to.
   // Optional: only migrated products carry it. Used for browse-by-domain.
   rootDomain?: string
