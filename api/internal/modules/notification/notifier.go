@@ -129,6 +129,20 @@ func (nt *notifier) NotifyMany(ctx context.Context, userIDs []bson.ObjectID, n N
 	return len(recipients)
 }
 
+// pushData is the FCM data payload for n: its structured values plus the
+// notification kind, so a tapped tray notification can route itself (e.g. a
+// complaint reply opens its thread). A copy — the inbox row's map is untouched.
+func pushData(n Note) map[string]string {
+	out := make(map[string]string, len(n.Data)+1)
+	for k, v := range n.Data {
+		out[k] = v
+	}
+	if n.Kind != "" {
+		out["kind"] = n.Kind
+	}
+	return out
+}
+
 // fanOut pushes n to every device token of userID, pruning tokens the provider
 // reports as unregistered.
 func (nt *notifier) fanOut(ctx context.Context, userID bson.ObjectID, n Note) {
@@ -137,8 +151,9 @@ func (nt *notifier) fanOut(ctx context.Context, userID bson.ObjectID, n Note) {
 		slog.Warn("notification: failed to load device tokens", "userId", userID.Hex(), "error", err)
 		return
 	}
+	data := pushData(n)
 	for _, token := range tokens {
-		err := nt.sender.Send(ctx, push.Message{Token: token, Title: n.Title, Body: n.Body, Data: n.Data})
+		err := nt.sender.Send(ctx, push.Message{Token: token, Title: n.Title, Body: n.Body, Data: data})
 		switch {
 		case errors.Is(err, push.ErrUnregistered):
 			if delErr := nt.repo.DeleteTokenValue(ctx, token); delErr != nil {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/i18n/arb/app_localizations.dart';
@@ -244,6 +245,22 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
                 ],
               ),
             ),
+          // Escalate to a tracked complaint the support team follows up on.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: () {
+                  final router = GoRouter.of(context);
+                  Navigator.pop(context);
+                  router.push('/complaints/new');
+                },
+                icon: const Icon(Icons.support_agent_rounded, size: 18),
+                label: Text(l10n.complaintSubmit),
+              ),
+            ),
+          ),
         ],
       ),
     );

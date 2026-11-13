@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
@@ -8,6 +9,7 @@ import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/format/date_time.dart';
+import '../../../complaints/domain/complaint.dart';
 import '../../domain/entities/app_notification.dart';
 import '../providers.dart';
 
@@ -97,70 +99,77 @@ class _NotificationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final reason = item.data['reason'];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: AppTokens.brandGradient,
-              borderRadius: BorderRadius.circular(12),
+    // Complaint rows open their thread; other kinds are informational.
+    final route = notificationRoute(item);
+    return InkWell(
+      onTap: route == null ? null : () => context.push(route),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                gradient: AppTokens.brandGradient,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(_iconFor(item.type), color: Colors.white, size: 20),
             ),
-            child: Icon(_iconFor(item.type), color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _titleFor(item, l10n),
-                        style: TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w800,
-                          color: colors.text,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _titleFor(item, l10n),
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: colors.text,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _shortDate(item.createdAt),
-                      style: TextStyle(fontSize: 12, color: colors.textFaint),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _bodyFor(item, l10n),
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.35,
-                    color: colors.textDim,
+                      const SizedBox(width: 8),
+                      Text(
+                        _shortDate(item.createdAt),
+                        style: TextStyle(fontSize: 12, color: colors.textFaint),
+                      ),
+                    ],
                   ),
-                ),
-                // Rejection reasons are free admin text (server-language) —
-                // rendered raw as a second line.
-                if (reason != null && reason.isNotEmpty) ...[
                   const SizedBox(height: 3),
                   Text(
-                    reason,
+                    _bodyFor(item, l10n),
                     style: TextStyle(
-                      fontSize: 12.5,
-                      height: 1.3,
-                      color: colors.textFaint,
+                      fontSize: 13,
+                      height: 1.35,
+                      color: colors.textDim,
                     ),
                   ),
+                  // Rejection reasons are free admin text (server-language) —
+                  // rendered raw as a second line.
+                  if (reason != null && reason.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      reason,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.3,
+                        color: colors.textFaint,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+            if (route != null)
+              Icon(Icons.chevron_right_rounded, color: colors.textFaint),
+          ],
+        ),
       ),
     );
   }
@@ -179,6 +188,10 @@ class _NotificationRow extends StatelessWidget {
         return Icons.verified_user_outlined;
       case AppNotificationType.kycRejected:
         return Icons.gpp_bad_outlined;
+      case AppNotificationType.complaintReply:
+        return Icons.support_agent_rounded;
+      case AppNotificationType.complaintStatus:
+        return Icons.task_alt_rounded;
       case AppNotificationType.promo:
         return Icons.bolt_rounded;
       case AppNotificationType.general:
@@ -209,6 +222,12 @@ class _NotificationRow extends StatelessWidget {
         return l10n.notifKycApprovedTitle;
       case AppNotificationType.kycRejected:
         return l10n.notifKycRejectedTitle;
+      case AppNotificationType.complaintReply:
+        return l10n.notifComplaintReplyTitle(_complaintRef(item));
+      case AppNotificationType.complaintStatus:
+        return item.data['status'] == 'closed'
+            ? l10n.notifComplaintClosedTitle(_complaintRef(item))
+            : l10n.notifComplaintResolvedTitle(_complaintRef(item));
       case AppNotificationType.promo:
         return l10n.notifPromoTitle;
       case AppNotificationType.general:
@@ -233,6 +252,13 @@ class _NotificationRow extends StatelessWidget {
         return l10n.notifKycApprovedBody;
       case AppNotificationType.kycRejected:
         return l10n.notifKycRejectedBody;
+      // The reply text is the staff member's own words — shown as sent.
+      case AppNotificationType.complaintReply:
+        return item.body;
+      case AppNotificationType.complaintStatus:
+        return item.data['status'] == 'closed'
+            ? l10n.notifComplaintClosedBody
+            : l10n.notifComplaintResolvedBody;
       case AppNotificationType.promo:
         return l10n.notifPromoBody;
       case AppNotificationType.general:
@@ -241,6 +267,23 @@ class _NotificationRow extends StatelessWidget {
   }
 
   static String _shortDate(DateTime at) => formatDateTime(at);
+
+  static String _complaintRef(AppNotification item) {
+    final n = item.data['number'];
+    return n == null || n.isEmpty ? '' : 'C-$n';
+  }
+}
+
+/// The screen an inbox row opens, or null for informational rows.
+String? notificationRoute(AppNotification item) {
+  switch (item.type) {
+    case AppNotificationType.complaintReply:
+      return complaintRouteFor('complaint_reply', item.data);
+    case AppNotificationType.complaintStatus:
+      return complaintRouteFor('complaint_status', item.data);
+    default:
+      return null;
+  }
 }
 
 /// Localized title for [item] (same copy as the notifications list) — shared
