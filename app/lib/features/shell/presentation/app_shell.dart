@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/i18n/arb/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
+import 'widgets/topup_notification_listener.dart';
 // Cart is disabled for now (direct-checkout funnel); re-add this import with
 // the Cart _NavItem / cartCount below.
 // import '../../cart/presentation/controllers/cart_controller.dart';
@@ -42,7 +43,8 @@ class AppShell extends ConsumerWidget {
         navigationShell.goBranch(0);
       },
       child: Scaffold(
-        body: navigationShell,
+        // Pops a top banner when a wallet top-up is approved/rejected.
+        body: TopUpNotificationListener(child: navigationShell),
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             color: colors.topbar,

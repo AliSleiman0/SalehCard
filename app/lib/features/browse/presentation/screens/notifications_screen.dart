@@ -246,3 +246,12 @@ class _NotificationRow extends StatelessWidget {
     return '${local.year}-$m-$d';
   }
 }
+
+/// Localized title for [item] (same copy as the notifications list) — shared
+/// with the in-app top-up pop-up.
+String notificationTitle(AppNotification item, AppLocalizations l10n) =>
+    _NotificationRow._titleFor(item, l10n);
+
+/// Localized body for [item] (same copy as the notifications list).
+String notificationBody(AppNotification item, AppLocalizations l10n) =>
+    _NotificationRow._bodyFor(item, l10n);

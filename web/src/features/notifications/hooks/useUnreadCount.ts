@@ -3,7 +3,7 @@ import { fetchUnreadCount } from '../api/notifications'
 import { useAuthStore } from '@/stores/auth'
 
 // useUnreadCount feeds the bell badge. It NEVER throws — any failure resolves to
-// 0 so a hiccup can't render an error where a count should be. Polls every 60s
+// 0 so a hiccup can't render an error where a count should be. Polls every 20s
 // and on window focus.
 export function useUnreadCount() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -18,7 +18,7 @@ export function useUnreadCount() {
       }
     },
     enabled: isAuthenticated,
-    refetchInterval: 60_000,
+    refetchInterval: 20_000, // also drives the top-up pop-up (NotificationPopups)
     retry: false,
   })
 }

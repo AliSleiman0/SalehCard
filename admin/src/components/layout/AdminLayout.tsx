@@ -5,9 +5,11 @@ import { Topbar } from './Topbar'
 import { LoadingSpinner } from '@/components'
 import { Toaster } from '@/components/Toaster'
 import { useUiStore } from '@/stores/ui'
+import { useNewTopUpAlert } from '@/features/topups/hooks/useNewTopUpAlert'
 
 export function AdminLayout() {
   const { collapsed } = useUiStore()
+  useNewTopUpAlert()
   return (
     <div className="admin" data-collapsed={collapsed}>
       <Sidebar />

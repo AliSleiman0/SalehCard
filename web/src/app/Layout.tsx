@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { useUiStore } from '@/stores/ui'
+import { NotificationPopups } from '@/features/notifications/components/NotificationPopups'
 
 export default function Layout() {
   const { agent, acctDrawer, setAcctDrawer } = useUiStore()
@@ -41,6 +42,7 @@ export default function Layout() {
         {!authRoute && <Footer />}
         {!authRoute && <BottomNav />}
       </div>
+      {!authRoute && <NotificationPopups />}
       <div className="drawer-backdrop" onClick={() => setAcctDrawer(false)} />
     </div>
   )
