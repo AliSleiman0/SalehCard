@@ -23,7 +23,9 @@ export function SearchSuggest() {
   const wrap = useRef<HTMLDivElement>(null)
   const term = useDebouncedValue(text.trim(), 180)
 
-  const query = useProducts({ q: term, limit: 40 }, { enabled: term.length > 0 })
+  // Candidates come back A to Z from the server so prefix matches are not cut
+  // off by an arbitrary first page; buildSuggestions then ranks prefix first.
+  const query = useProducts({ q: term, limit: 60, sort: 'name' }, { enabled: term.length > 0 })
   const items = term ? buildSuggestions(query.data?.data ?? [], term, locale) : []
   const showList = open && term.length > 0
 
