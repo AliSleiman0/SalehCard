@@ -14,6 +14,7 @@ import {
 } from '@/components'
 import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
+import { useKeyedPage } from '@/hooks/useKeyedPage'
 import { useKyc, useSetKycStatus } from '../hooks/useKyc'
 import { adaptKyc, type KycView } from '../lib/adaptKyc'
 import type { KycStatus } from '../api/kyc'
@@ -25,29 +26,51 @@ const FILTERS: [KycStatus | '', string][] = [
   ['', 'All'],
 ]
 
+function statusFromParam(raw: string | null): KycStatus | '' {
+  if (raw === 'all') return ''
+  return FILTERS.some(([k]) => k && k === raw) ? (raw as KycStatus) : 'pending'
+}
+
 export default function KycPage() {
   const { t } = useTranslation()
   const can = useCan()
   const canManage = can('kyc.manage')
-  const [searchParams] = useSearchParams()
-
-  const [status, setStatus] = useState<KycStatus | ''>('pending')
+  // The status filter lives in the URL (?status=pending|approved|rejected|all)
+  // so dashboard tiles can deep-link to it and a refresh keeps it. Absent or
+  // unknown → pending (the work queue); "all" → every status.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const status = statusFromParam(searchParams.get('status'))
+  const setStatus = (k: KycStatus | '') =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('status', k || 'all')
+        return next
+      },
+      { replace: true },
+    )
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
-  const [page, setPage] = useState(1)
   const [toReject, setToReject] = useState<KycView | null>(null)
 
+  // Adopt the URL's ?q= — keyed on the value, not the params object, so a
+  // status-chip URL write doesn't wipe a search typed into the box.
+  const qParam = searchParams.get('q') ?? ''
   useEffect(() => {
-    setSearch(searchParams.get('q') ?? '')
-  }, [searchParams])
+    setSearch(qParam)
+  }, [qParam])
+
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search)
-      setPage(1)
     }, 300)
     return () => clearTimeout(timer)
   }, [search])
+
+  // A status change (chip, dashboard deep link, sidebar) or a new search starts
+  // at page 1 — in the same render, so no request goes out for a stale page.
+  const [page, setPage] = useKeyedPage(`${status}|${debouncedSearch.trim()}`)
 
   const { data, isLoading, isError, refetch } = useKyc({
     page,
@@ -80,10 +103,7 @@ export default function KycPage() {
               <Chip
                 key={k || 'all'}
                 on={status === k}
-                onClick={() => {
-                  setStatus(k)
-                  setPage(1)
-                }}
+                onClick={() => setStatus(k)}
               >
                 {l}
               </Chip>
