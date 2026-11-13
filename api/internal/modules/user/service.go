@@ -71,6 +71,7 @@ type Service interface {
 	Logout(ctx context.Context, rawToken string) error
 	GetProfile(ctx context.Context, id bson.ObjectID) (*User, error)
 	UpdateProfile(ctx context.Context, id bson.ObjectID, input UpdateProfileInput) (*User, error)
+	ChangePassword(ctx context.Context, id bson.ObjectID, in ChangePasswordInput) error
 	// DeleteAccount permanently retires the caller's own account (see
 	// delete.go); force forfeits the wallet balance and ignores in-flight
 	// orders. The result feeds the audit summary (no PII).
@@ -147,8 +148,8 @@ func (s *UserService) Register(ctx context.Context, input RegisterInput) (*AuthR
 	if email == "" || !strings.Contains(email, "@") {
 		return nil, &apperrors.AppError{Code: "INVALID_EMAIL", Message: "a valid email is required", Err: apperrors.ErrBadRequest}
 	}
-	if len(input.Password) < minPasswordLen {
-		return nil, &apperrors.AppError{Code: "WEAK_PASSWORD", Message: "password must be at least 8 characters", Err: apperrors.ErrBadRequest}
+	if err := validateNewPassword(input.Password); err != nil {
+		return nil, err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
@@ -305,8 +306,8 @@ func (s *UserService) VerifyOTP(ctx context.Context, input VerifyOTPInput) (*Aut
 
 	// Optionally set a password (signup flow) when the account has none yet.
 	if input.Password != "" && user.PasswordHash == nil {
-		if len(input.Password) < minPasswordLen {
-			return nil, &apperrors.AppError{Code: "WEAK_PASSWORD", Message: "password must be at least 8 characters", Err: apperrors.ErrBadRequest}
+		if err := validateNewPassword(input.Password); err != nil {
+			return nil, err
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 		if err != nil {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChangePasswordCard } from '../components/ChangePasswordCard'
 import { useTranslation } from 'react-i18next'
 import { Icon, PageHead, Avatar, StatusBadge, Toggle } from '@/components'
 import { useUsers } from '@/features/users/hooks/useUsers'
@@ -147,6 +148,8 @@ export default function SettingsPage() {
         title={t('nav_settings')}
         sub="Store contact, loyalty program and admin accounts"
       />
+
+      <ChangePasswordCard />
 
       <div className="acard" style={{ marginBottom: 18 }}>
         <div className="panelhead">

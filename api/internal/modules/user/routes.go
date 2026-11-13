@@ -115,6 +115,8 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, rec au
 		r.Use(auth.AuthRequired(cfg.JWTSecret))
 		r.Get("/me", h.GetProfile)
 		r.Patch("/me", h.UpdateProfile)
+		// Shares the auth cap so the current-password check can't be brute-forced.
+		r.With(authLimit).Post("/me/password", h.ChangePassword)
 		r.With(deleteLimit).Delete("/me", h.DeleteMe)
 	})
 }

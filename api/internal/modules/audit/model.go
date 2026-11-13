@@ -23,16 +23,19 @@ type Entry struct {
 
 // Actions recorded in the audit log. Naming is <targetType>.<verb>.
 const (
-	ActionRoleChange     = "user.role_change"
-	ActionStatusChange   = "user.status_change"
-	ActionUserDelete     = "user.delete"
-	ActionUserSelfDelete = "user.self_delete"
-	ActionUserBulkSMS    = "user.bulk_sms"
-	ActionUserBulkPush   = "user.bulk_push"
-	ActionWalletAdjust   = "wallet.adjust"
-	ActionBalanceAdjust  = "reseller.balance_adjust"
-	ActionOrderRefund    = "order.refund"
-	ActionOrderStatus    = "order.status"
+	ActionRoleChange        = "user.role_change"
+	ActionStatusChange      = "user.status_change"
+	ActionPasswordChange    = "user.password_change"
+	ActionUserPasswordReset = "user.password_reset"
+	ActionUserProfileEdit   = "user.profile_edit"
+	ActionUserDelete        = "user.delete"
+	ActionUserSelfDelete    = "user.self_delete"
+	ActionUserBulkSMS       = "user.bulk_sms"
+	ActionUserBulkPush      = "user.bulk_push"
+	ActionWalletAdjust      = "wallet.adjust"
+	ActionBalanceAdjust     = "reseller.balance_adjust"
+	ActionOrderRefund       = "order.refund"
+	ActionOrderStatus       = "order.status"
 	// ActionOrderSupplierSettle records supplier-settler outcomes (automatic
 	// completion of an upstream-delivered order, or a stuck-upstream flag);
 	// settler-driven refunds reuse ActionOrderRefund so the finance trail has
