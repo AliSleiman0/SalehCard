@@ -323,6 +323,33 @@ func (r *MongoRepository) FindByID(ctx context.Context, id string) (*Product, er
 	return &p, nil
 }
 
+// ExistingIDs reports which of ids still have a product document. It reads
+// only _id, so it is cheap enough to run on every admin order listing (the
+// admin links an order line to its product and needs to know which products
+// were deleted since — deletes are hard deletes).
+func (r *MongoRepository) ExistingIDs(ctx context.Context, ids []bson.ObjectID) (map[bson.ObjectID]bool, error) {
+	found := make(map[bson.ObjectID]bool, len(ids))
+	if len(ids) == 0 {
+		return found, nil
+	}
+	cursor, err := r.col.Find(ctx,
+		bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}},
+		options.Find().SetProjection(bson.D{{Key: "_id", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ID bson.ObjectID `bson:"_id"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		found[row.ID] = true
+	}
+	return found, nil
+}
+
 // FindByLegacyID retrieves a product by its migration legacyId, or ErrNotFound.
 func (r *MongoRepository) FindByLegacyID(ctx context.Context, legacyID int) (*Product, error) {
 	var p Product

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   Icon,
   PageHead,
@@ -18,7 +18,7 @@ import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
 import { useOrder } from '../hooks/useOrders'
 import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrderMutations'
-import { adaptOrder, codeLines, creditLines, itemQtyLabel } from '../lib/adaptOrder'
+import { adaptOrder, codeLines, creditLines, itemQtyLabel, productEditPath } from '../lib/adaptOrder'
 import type { AdminOrder } from '../api/orders'
 import { SupplierPanel } from '../components/SupplierPanel'
 
@@ -34,6 +34,8 @@ export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const can = useCan()
   const canManage = can('orders.manage')
+  // The product editor route is guarded by the products domain (view).
+  const canViewProducts = can('products.view')
   const { data, isLoading, isError, refetch } = useOrder(id)
   // Codes start masked; each one is revealed on its own.
   const [revealed, setRevealed] = useState<Set<string>>(() => new Set())
@@ -113,49 +115,68 @@ export default function OrderDetailPage() {
               </div>
             </div>
             <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {o.items.map((it, i) => (
-                <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                  <Art art={v.art} size={56} radius={12} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15 }}>{it.title.en}</div>
-                    <div className="faint" style={{ fontSize: 12.5 }}>
-                      {itemQtyLabel(it)} · {o.currency}
-                      {/* A per-unit line's denomination just repeats the amount. */}
-                      {it.denomination && it.amount == null ? ` · ${it.denomination}` : ''}
-                    </div>
-                    {it.fields && it.fields.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 6 }}>
-                        {it.fields.map((f) => (
-                          <span key={f.key} style={{ fontSize: 12.5 }}>
-                            <span className="faint">{f.label?.en || f.key}: </span>
-                            {isOrderFileUrl(f.value) ? (
-                              // A checkout photo field (QR / barcode …): show it, click to open full size.
-                              <a href={f.value} target="_blank" rel="noreferrer" style={{ verticalAlign: 'middle' }}>
-                                <img
-                                  src={f.value}
-                                  alt={f.label?.en || f.key}
-                                  style={{
-                                    width: 72,
-                                    height: 72,
-                                    objectFit: 'cover',
-                                    borderRadius: 8,
-                                    border: '1px solid var(--border)',
-                                  }}
-                                />
-                              </a>
-                            ) : (
-                              <b style={{ fontWeight: 700 }}>{f.value}</b>
-                            )}
-                          </span>
-                        ))}
-                      </div>
+              {o.items.map((it, i) => {
+                // Deleted product (or no Products access) → plain text, never a dead link.
+                const href = productEditPath(o, it.productId, canViewProducts)
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                    {href ? (
+                      // Same target as the name link: skip it in the tab order / for screen readers.
+                      <Link to={href} className="prodlink art" tabIndex={-1} aria-hidden="true">
+                        <Art art={v.art} size={56} radius={12} />
+                      </Link>
+                    ) : (
+                      <Art art={v.art} size={56} radius={12} />
                     )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: 15 }}>
+                        {href ? (
+                          <Link to={href} className="prodlink" title="Open product">
+                            {it.title.en}
+                          </Link>
+                        ) : (
+                          it.title.en
+                        )}
+                      </div>
+                      <div className="faint" style={{ fontSize: 12.5 }}>
+                        {itemQtyLabel(it)} · {o.currency}
+                        {/* A per-unit line's denomination just repeats the amount. */}
+                        {it.denomination && it.amount == null ? ` · ${it.denomination}` : ''}
+                      </div>
+                      {it.fields && it.fields.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 6 }}>
+                          {it.fields.map((f) => (
+                            <span key={f.key} style={{ fontSize: 12.5 }}>
+                              <span className="faint">{f.label?.en || f.key}: </span>
+                              {isOrderFileUrl(f.value) ? (
+                                // A checkout photo field (QR / barcode …): show it, click to open full size.
+                                <a href={f.value} target="_blank" rel="noreferrer" style={{ verticalAlign: 'middle' }}>
+                                  <img
+                                    src={f.value}
+                                    alt={f.label?.en || f.key}
+                                    style={{
+                                      width: 72,
+                                      height: 72,
+                                      objectFit: 'cover',
+                                      borderRadius: 8,
+                                      border: '1px solid var(--border)',
+                                    }}
+                                  />
+                                </a>
+                              ) : (
+                                <b style={{ fontWeight: 700 }}>{f.value}</b>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="num strong" style={{ fontSize: 16 }}>
+                      {money(it.price * it.qty, v.cur)}
+                    </div>
                   </div>
-                  <div className="num strong" style={{ fontSize: 16 }}>
-                    {money(it.price * it.qty, v.cur)}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 

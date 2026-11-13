@@ -82,6 +82,21 @@ export function codeLines(items: AdminOrderItem[], deliveredCode?: string): Code
   return [{ title: codeItem?.title.en ?? '', codes: [deliveredCode] }]
 }
 
+const ZERO_ID = '000000000000000000000000'
+
+/** The admin product-editor path for an order line's product, or null when the
+ *  name should render as plain text: the viewer can't open Products, the line
+ *  has no product id, or the API reports the product deleted since. */
+export function productEditPath(
+  o: Pick<AdminOrder, 'missingProductIds'>,
+  productId: string | undefined,
+  canViewProducts: boolean,
+): string | null {
+  if (!canViewProducts || !productId || productId === ZERO_ID) return null
+  if (o.missingProductIds?.includes(productId)) return null
+  return `/products/${productId}/edit`
+}
+
 /** PayChip keys are wallet/visa/usdt; the API stores card → map it to visa. */
 function payKey(method: string): string {
   return method === 'card' ? 'visa' : method

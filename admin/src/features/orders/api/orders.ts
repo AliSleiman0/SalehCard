@@ -77,6 +77,8 @@ export interface AdminOrder {
   createdAt: string
   updatedAt: string
   customer: OrderCustomer | null
+  /** Line product ids whose product has since been deleted (omitted when none). */
+  missingProductIds?: string[]
 }
 
 export interface OrderListParams {
