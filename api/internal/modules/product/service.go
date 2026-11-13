@@ -361,9 +361,11 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if in.UnitPricing.isClear() {
 		in.UnitPricing = nil
 	}
-	if err := validateUnitPricing(in.UnitPricing, unitPricingTarget{
-		Type: in.FulfillmentType, Mode: mode, Variants: in.Variants, Fields: in.InputFields,
-	}); err != nil {
+	createTarget := unitPricingTarget{Type: in.FulfillmentType, Mode: mode, Variants: in.Variants, Fields: in.InputFields}
+	if err := validateUnitPricing(in.UnitPricing, createTarget); err != nil {
+		return nil, err
+	}
+	if err := validateSupplierAmount(createTarget, in.UnitPricing); err != nil {
 		return nil, err
 	}
 	if in.UnitPricing != nil {
@@ -443,6 +445,9 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 	if err != nil {
 		return nil, err
 	}
+	if err := s.validateSupplierAmountUpdate(ctx, id, in); err != nil {
+		return nil, err
+	}
 	// Switching to per-unit: drop the variants' flat-price reseller overrides
 	// BEFORE the write, so a cleanup failure leaves the product on fixed
 	// pricing (where those overrides are still correct) instead of converting
@@ -510,6 +515,34 @@ func (s *ProductService) validateUnitPricingUpdate(ctx context.Context, id strin
 		return nil, nil // already per-unit: its overrides are per-block by design
 	}
 	return append(variantIDs(cur.Variants), variantIDs(in.Variants)...), nil
+}
+
+// validateSupplierAmountUpdate applies validateSupplierAmount to the product as
+// it will look after a partial update. It reads the stored product only when
+// the update touches type, mode, fields or unit pricing.
+func (s *ProductService) validateSupplierAmountUpdate(ctx context.Context, id string, in UpdateProductInput) error {
+	if in.UnitPricing == nil && in.InputFields == nil && in.FulfillmentType == nil && in.FulfillmentMode == nil {
+		return nil
+	}
+	cur, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	t := unitPricingTarget{Type: cur.FulfillmentType, Mode: cur.FulfillmentMode, Fields: cur.InputFields}
+	if in.FulfillmentType != nil {
+		t.Type = *in.FulfillmentType
+	}
+	if in.FulfillmentMode != nil {
+		t.Mode = *in.FulfillmentMode
+	}
+	if in.InputFields != nil {
+		t.Fields = in.InputFields
+	}
+	up := cur.UnitPricing
+	if in.UnitPricing != nil {
+		up = in.UnitPricing
+	}
+	return validateSupplierAmount(t, up)
 }
 
 // variantIDs returns the hex ids of the variants that have one.

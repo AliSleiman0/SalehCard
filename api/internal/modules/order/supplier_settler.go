@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"strings"
 	"time"
@@ -53,10 +54,16 @@ func backoffDelay(n int) time.Duration {
 // an original request that actually landed is deduped, not double-charged.
 // Sensitive inputs never reach here — resolveOrderFields already dropped them
 // from the item snapshot (a sensitive value can only ride via PlayerID).
+// ok is also false when the line's quantity can't be sent (see supplierQty):
+// callers park/flag such an order for an admin instead of dispatching it.
 func supplierFulfillInput(o *Order) (provID *int, in provider.FulfillInput, ok bool) {
 	for _, it := range o.Items {
 		if it.FulfillmentMode != string(product.FulfillmentModeAPI) {
 			continue
+		}
+		qty, qok := supplierQty(it)
+		if !qok {
+			return it.FulfillmentProvider, provider.FulfillInput{}, false
 		}
 		fields := make(map[string]string, len(it.Fields))
 		for _, f := range it.Fields {
@@ -67,11 +74,33 @@ func supplierFulfillInput(o *Order) (provID *int, in provider.FulfillInput, ok b
 			UpstreamID: it.UpstreamProductID,
 			PlayerID:   it.PlayerID,
 			Fields:     fields,
-			Qty:        it.Qty,
+			Qty:        qty,
 			OrderUUID:  supplierOrderUUID(o),
 		}, true
 	}
 	return nil, provider.FulfillInput{}, false
+}
+
+// maxSupplierQty bounds the quantity sent upstream (a sanity cap far above
+// any real coin amount; also keeps the int conversion safe).
+const maxSupplierQty = 1_000_000_000
+
+// supplierQty is the quantity a supplier is asked for. A per-unit line (coins,
+// live-app credit) carries the customer's typed amount in Amount with Qty == 1:
+// the supplier sells those units, so it gets the amount — sending the cart Qty
+// (1) was the "Qty is Small" rejection seen in prod on 2026-11-13. Any other
+// line sends the cart Qty. ok is false for an amount that isn't a positive
+// whole number within the cap (placement already enforces that, so this only
+// guards corrupt data — never send qty 0 or a truncated amount).
+func supplierQty(it OrderItem) (int, bool) {
+	if it.Amount == nil {
+		return it.Qty, it.Qty > 0
+	}
+	a := *it.Amount
+	if a < 1 || a > maxSupplierQty || a != math.Trunc(a) {
+		return 0, false
+	}
+	return int(a), true
 }
 
 // supplierOrderUUID is the upstream idempotency key for the order's CURRENT
@@ -180,6 +209,9 @@ func (s *SupplierSettler) pollOne(ctx context.Context, o *Order) error {
 	case "accept":
 		return s.settleAccept(ctx, o, o.Fulfillment.ProviderRef, st.Codes, "completed by supplier check")
 	case "reject":
+		if o.Fulfillment.SupplierAttempt > 0 {
+			return s.rejectAdminRoute(ctx, o, "rejected by the supplier")
+		}
 		return s.settleReject(ctx, o, "rejected upstream — refunded")
 	default: // "wait" or anything unrecognized: leave parked.
 		return s.maybeFlagStuck(ctx, o, "still waiting upstream past give-up window")
@@ -305,9 +337,9 @@ func (s *SupplierSettler) redispatchOne(ctx context.Context, o *Order) error {
 	}
 	provID, in, ok := supplierFulfillInput(o)
 	if !ok {
-		// A retry clock on a non-api order shouldn't exist; flag it rather
-		// than retrying forever.
-		return s.flagStuck(ctx, o, "retryable order has no api-mode line")
+		// A retry clock on a non-api order shouldn't exist (or its quantity
+		// can't be sent); flag it rather than retrying forever.
+		return s.flagStuck(ctx, o, "retryable order has no sendable supplier line")
 	}
 
 	res, err := s.svc.providers.Resolve(provID).Fulfill(ctx, in)
@@ -334,6 +366,9 @@ func (s *SupplierSettler) redispatchOne(ctx context.Context, o *Order) error {
 		// The panel adapter wraps everything ambiguous in ErrUnavailable, so a
 		// plain error here is a definitive order-level rejection; upstream
 		// idempotency rules out "the original landed and this is a dup error".
+		if o.Fulfillment.SupplierAttempt > 0 {
+			return s.rejectAdminRoute(ctx, o, "rejected by the supplier on retry: "+err.Error())
+		}
 		return s.settleReject(ctx, o, "rejected upstream on re-dispatch — refunded")
 	}
 }
@@ -344,6 +379,29 @@ func (s *SupplierSettler) maybeFlagStuck(ctx context.Context, o *Order, why stri
 		return nil
 	}
 	return s.flagStuck(ctx, o, why)
+}
+
+// rejectAdminRoute handles a definitive rejection of an attempt an admin chose
+// (SupplierAttempt > 0: a reroute, or a manual order sent to a supplier). It
+// never auto-refunds — the admin picked this route, so they decide next: try
+// another supplier, complete by hand, or refund. The order is flagged stuck
+// and the dead ref dropped (MarkSupplierRejected), so it stops being polled.
+// The upstream detail goes to the audit log only (the timeline is
+// customer-visible). Placement-time orders (attempt 0) keep the auto-refund.
+func (s *SupplierSettler) rejectAdminRoute(ctx context.Context, o *Order, detail string) error {
+	applied, err := s.svc.repo.MarkSupplierRejected(ctx, o.ID, o.Fulfillment.SupplierAttempt, TimelineEvent{
+		Status: "stuck_upstream",
+		Note:   "stuck upstream — needs attention: rejected by the supplier",
+		At:     time.Now().UTC(),
+	})
+	if err != nil || !applied {
+		return err
+	}
+	slog.Warn("supplier settler: admin-chosen supplier rejected the order", "order", o.ID.Hex())
+	s.record(ctx, audit.ActionOrderSupplierSettle, o.ID, map[string]any{
+		"outcome": "rejected_after_reroute", "error": detail, "attempt": o.Fulfillment.SupplierAttempt,
+	})
+	return nil
 }
 
 // flagStuck marks o stuck exactly once (atomic winner via MarkSupplierStuck):

@@ -35,29 +35,68 @@ func rerouteErr(code, msg string, base error) error {
 	return &apperrors.AppError{Code: code, Message: msg, Err: base}
 }
 
-// rerouteEligible reports whether an order may be sent to another supplier and,
-// if not, why. Only a processing api-mode order that is NOT actively being
-// handled upstream qualifies: flagged stuck, or parked with no upstream ref
-// (environmental retry park or an unwired-supplier stub park). An order the
-// supplier accepted and is still working on must wait for the stuck flag.
-func rerouteEligible(o *Order) (itemIndex int, err error) {
+// rerouteEligible reports whether an order may be sent to a supplier and, if
+// not, why. Two shapes qualify, both still processing:
+//
+//   - a supplier (api-mode) order that is NOT actively being handled upstream:
+//     flagged stuck, or parked with no upstream ref (environmental retry park
+//     or an unwired-supplier stub park). An order the supplier accepted and is
+//     still working on must wait for the stuck flag;
+//   - a manual order (fromManual) that was never sent to a supplier: exactly
+//     one line, manual_operator account credit. Excluded on purpose: money
+//     transfers (the recipient is never sent upstream), bridge recharges (the
+//     device completes them unpinned), inventory/mixed carts and multi-line
+//     orders (a supplier accept completes the WHOLE order).
+func rerouteEligible(o *Order) (itemIndex int, fromManual bool, err error) {
 	if o.Status != OrderStatusProcessing {
-		return -1, rerouteErr("REROUTE_NOT_PROCESSING", "only orders that are still processing can be sent to another supplier", apperrors.ErrConflict)
+		return -1, false, rerouteErr("REROUTE_NOT_PROCESSING", "only orders that are still processing can be sent to a supplier", apperrors.ErrConflict)
 	}
-	itemIndex = -1
 	for i, it := range o.Items {
 		if it.FulfillmentMode == string(product.FulfillmentModeAPI) {
-			itemIndex = i
-			break
+			if o.Fulfillment.SupplierStuckAt == nil && o.Fulfillment.ProviderRef != "" {
+				return -1, false, rerouteErr("REROUTE_NOT_STUCK", "the supplier accepted this order and is still working on it — wait until it is flagged stuck", apperrors.ErrConflict)
+			}
+			return i, false, nil
 		}
 	}
-	if itemIndex < 0 {
-		return -1, rerouteErr("REROUTE_NOT_SUPPLIER_ORDER", "this order is not fulfilled by a supplier", apperrors.ErrBadRequest)
+	if manualSupplierEligible(o) {
+		return 0, true, nil
 	}
-	if o.Fulfillment.SupplierStuckAt == nil && o.Fulfillment.ProviderRef != "" {
-		return -1, rerouteErr("REROUTE_NOT_STUCK", "the supplier accepted this order and is still working on it — wait until it is flagged stuck", apperrors.ErrConflict)
+	return -1, false, rerouteErr("REROUTE_NOT_SUPPLIER_ORDER", "only supplier orders and single-item account-credit orders can be sent to a supplier", apperrors.ErrBadRequest)
+}
+
+// orderAtSupplier reports whether a supplier may still be working on o: it has
+// an api-mode line that is not flagged stuck and either carries an upstream
+// ref (accepted, being polled) or a retry clock (a dispatch the settler will
+// re-send). A manual completion then risks double delivery, so the admin must
+// acknowledge it. Parks with neither (an unwired-supplier stub park) and stuck
+// orders are safe to complete by hand.
+func orderAtSupplier(o *Order) bool {
+	f := o.Fulfillment
+	if f.SupplierStuckAt != nil || (f.ProviderRef == "" && f.SupplierNextRetryAt == nil) {
+		return false
 	}
-	return itemIndex, nil
+	for _, it := range o.Items {
+		if it.FulfillmentMode == string(product.FulfillmentModeAPI) {
+			return true
+		}
+	}
+	return false
+}
+
+// manualSupplierEligible is the manual half of rerouteEligible: a single
+// manual_operator account-credit line with no supplier history at all.
+func manualSupplierEligible(o *Order) bool {
+	if len(o.Items) != 1 {
+		return false
+	}
+	it := o.Items[0]
+	if itemMode(it) != product.FulfillmentModeManualOperator ||
+		product.FulfillmentType(it.FulfillmentType) != product.FulfillmentCredit {
+		return false
+	}
+	f := o.Fulfillment
+	return f.SupplierAttempt == 0 && f.ProviderRef == "" && len(f.SupplierAttempts) == 0
 }
 
 // Reroute moves a stuck api-mode order to another supplier and dispatches it
@@ -84,7 +123,7 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 	if err != nil {
 		return nil, err
 	}
-	idx, err := rerouteEligible(o)
+	idx, fromManual, err := rerouteEligible(o)
 	if err != nil {
 		return nil, err
 	}
@@ -92,18 +131,32 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 	if strings.HasPrefix(ref, "search:") && !in.AcknowledgeAmbiguous {
 		return nil, rerouteErr("REROUTE_AMBIGUOUS", "the previous supplier's outcome is unknown and it may still deliver — confirm the double-delivery risk to continue", apperrors.ErrConflict)
 	}
+	if _, ok := supplierQty(o.Items[idx]); !ok {
+		return nil, rerouteErr("REROUTE_BAD_QUANTITY", "this order's quantity can't be sent to a supplier — complete or refund it by hand", apperrors.ErrBadRequest)
+	}
 
 	old := o.Items[idx]
 	now := time.Now().UTC()
-	claimed, err := s.svc.repo.ClaimSupplierReroute(ctx, RerouteClaim{
+	claim := RerouteClaim{
 		OrderID:         o.ID,
 		ItemIndex:       idx,
 		ExpectedAttempt: o.Fulfillment.SupplierAttempt,
 		ExpectedRef:     ref,
+		FromManual:      fromManual,
 		NewProvider:     in.ProviderID,
 		NewUpstreamID:   upstream,
 		NewOrderUUID:    bson.NewObjectID().Hex(),
-		Archived: SupplierAttempt{
+		Event: TimelineEvent{
+			Status: "processing",
+			Note:   fmt.Sprintf("sent to another supplier (#%d) by admin", in.ProviderID),
+			At:     now,
+		},
+	}
+	if fromManual {
+		// Never sent upstream before: no attempt to archive.
+		claim.Event.Note = fmt.Sprintf("sent to supplier (#%d) by admin", in.ProviderID)
+	} else {
+		claim.Archived = &SupplierAttempt{
 			Provider:          old.FulfillmentProvider,
 			UpstreamProductID: old.UpstreamProductID,
 			ProviderRef:       ref,
@@ -111,13 +164,9 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 			StuckAt:           o.Fulfillment.SupplierStuckAt,
 			ReroutedAt:        now,
 			ReroutedBy:        actor,
-		},
-		Event: TimelineEvent{
-			Status: "processing",
-			Note:   fmt.Sprintf("sent to another supplier (#%d) by admin", in.ProviderID),
-			At:     now,
-		},
-	})
+		}
+	}
+	claimed, err := s.svc.repo.ClaimSupplierReroute(ctx, claim)
 	if err != nil {
 		if errors.Is(err, apperrors.ErrConflict) {
 			return nil, rerouteErr("REROUTE_CONFLICT", "the order changed while you were rerouting it — reload and try again", apperrors.ErrConflict)
@@ -132,6 +181,7 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 			TargetType: "order",
 			TargetID:   o.ID.Hex(),
 			Summary: map[string]any{
+				"fromMode":     string(itemMode(old)),
 				"fromProvider": providerLabel(old.FulfillmentProvider), "fromUpstream": old.UpstreamProductID,
 				"fromRef": ref, "toProvider": in.ProviderID, "toUpstream": upstream,
 				"attempt": claimed.Fulfillment.SupplierAttempt,
@@ -158,7 +208,7 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 func (s *SupplierSettler) dispatchRerouted(ctx context.Context, o *Order) error {
 	provID, in, ok := supplierFulfillInput(o)
 	if !ok {
-		return s.flagStuck(ctx, o, "rerouted order has no api-mode line")
+		return s.flagStuck(ctx, o, "rerouted order has no sendable supplier line")
 	}
 	res, err := s.svc.providers.Resolve(provID).Fulfill(ctx, in)
 	switch {

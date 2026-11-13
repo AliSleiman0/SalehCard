@@ -693,7 +693,13 @@ func (s *OrderService) park(ctx context.Context, order *Order, note string) (*Or
 // reference so a re-dispatch with the same order_uuid stays idempotent; any
 // other error is definitively about this order → compensate (refund + fail).
 func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
-	provID, in, _ := supplierFulfillInput(order)
+	provID, in, ok := supplierFulfillInput(order)
+	if !ok {
+		// Unsendable line (e.g. a corrupt per-unit amount): never dispatch a
+		// wrong quantity — park for an admin (no retry clock).
+		slog.Warn("order: supplier line not sendable, parking", "order", order.ID.Hex())
+		return s.park(ctx, order, "needs attention: the supplier quantity could not be determined")
+	}
 
 	res, err := s.providers.Resolve(provID).Fulfill(ctx, in)
 	switch {

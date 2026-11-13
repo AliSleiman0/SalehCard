@@ -583,15 +583,26 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
   const needsChecklist = lines.length > 1
   const [ticked, setTicked] = useState<boolean[]>(() => lines.map(() => false))
   const allTicked = !needsChecklist || ticked.every(Boolean)
+  // Double-delivery guard: the API refuses (ORDER_AT_SUPPLIER) while a supplier
+  // may still deliver; the admin then confirms explicitly.
+  const [atSupplier, setAtSupplier] = useState(false)
+  const [supplierAck, setSupplierAck] = useState(false)
+  const ready = allTicked && (!atSupplier || supplierAck)
 
   const apply = () => {
-    if (!allTicked) return
+    if (!ready) return
     setError('')
     completeM.mutate(
-      { id: order.id, note: note.trim(), transferRef: transferRef.trim() },
+      { id: order.id, note: note.trim(), transferRef: transferRef.trim(), acknowledgeSupplier: atSupplier && supplierAck },
       {
         onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Completion failed.'),
+        onError: (e) => {
+          if (e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER') {
+            setAtSupplier(true)
+            return
+          }
+          setError(e instanceof ApiError ? e.message : 'Completion failed.')
+        },
       },
     )
   }
@@ -640,6 +651,26 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
+        {atSupplier && (
+          <div
+            role="alert"
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 10,
+              border: '1px solid var(--border-strong)',
+              background: 'var(--surface-2)',
+              fontSize: 13,
+            }}
+          >
+            <b>A supplier may still deliver this order.</b> It was sent to a supplier that hasn't finished with it.
+            Completing it by hand can deliver it twice — check the supplier's panel first.
+            <label style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', color: 'var(--danger)' }}>
+              <input type="checkbox" checked={supplierAck} onChange={(e) => setSupplierAck(e.target.checked)} />
+              Complete it anyway
+            </label>
+          </div>
+        )}
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
           <button className="abtn" onClick={onClose} disabled={completeM.isPending}>
@@ -648,7 +679,7 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
           <button
             className="abtn ok"
             onClick={apply}
-            disabled={completeM.isPending || !allTicked}
+            disabled={completeM.isPending || !ready}
             title={allTicked ? undefined : 'Tick every credited account first'}
           >
             <Icon name="check" size={15} /> {completeM.isPending ? 'Completing…' : 'Mark completed'}

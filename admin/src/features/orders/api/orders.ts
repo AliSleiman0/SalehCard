@@ -147,14 +147,18 @@ export function failOrder(id: string, reason = ''): Promise<ApiResponse<AdminOrd
 }
 
 /** Manually complete a processing order (account credit / transfer / parked). */
+/** Completes a processing order by hand. A supplier may still be delivering an
+ *  order it accepted (or will retry): the API then answers 409
+ *  ORDER_AT_SUPPLIER unless acknowledgeSupplier is set (double-delivery guard). */
 export function completeOrder(
   id: string,
-  opts: { note?: string; transferRef?: string } = {},
+  opts: { note?: string; transferRef?: string; acknowledgeSupplier?: boolean } = {},
 ): Promise<ApiResponse<AdminOrder>> {
   return apiClient.put<AdminOrder>(`${ADMIN}/${id}/status`, {
     status: 'completed',
     note: opts.note ?? '',
     transferRef: opts.transferRef ?? '',
+    ...(opts.acknowledgeSupplier ? { acknowledgeSupplier: true } : {}),
   })
 }
 

@@ -423,6 +423,10 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		Status      string `json:"status"`
 		Note        string `json:"note"`
 		TransferRef string `json:"transferRef"`
+		// AcknowledgeSupplier must be true to complete an order a supplier may
+		// still be delivering (orderAtSupplier): the admin accepts the
+		// double-delivery risk explicitly.
+		AcknowledgeSupplier bool `json:"acknowledgeSupplier"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.BadRequest(w, "invalid request body")
@@ -438,12 +442,20 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		extra = bson.D{{Key: "fulfillment.transferRef", Value: ref}}
 	}
 
-	before, err := a.repo.TransitionStatus(r.Context(), id,
-		[]OrderStatus{OrderStatusProcessing},
-		OrderStatusCompleted,
-		TimelineEvent{Status: "completed", Note: strings.TrimSpace(body.Note), At: time.Now().UTC()},
-		extra,
-	)
+	event := TimelineEvent{Status: "completed", Note: strings.TrimSpace(body.Note), At: time.Now().UTC()}
+	var before *Order
+	if body.AcknowledgeSupplier {
+		before, err = a.repo.TransitionStatus(r.Context(), id, []OrderStatus{OrderStatusProcessing}, OrderStatusCompleted, event, extra)
+	} else {
+		before, err = a.repo.CompleteUnlessAtSupplier(r.Context(), id, event, extra)
+		if errors.Is(err, apperrors.ErrConflict) {
+			if cur, ferr := a.repo.FindByID(r.Context(), id); ferr == nil && cur.Status == OrderStatusProcessing && orderAtSupplier(cur) {
+				response.Error(w, http.StatusConflict, "ORDER_AT_SUPPLIER",
+					"a supplier may still deliver this order — confirm to complete it anyway")
+				return
+			}
+		}
+	}
 	if err != nil {
 		a.writeTransitionError(w, err, "only processing orders can be completed")
 		return
@@ -456,6 +468,7 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		Summary: map[string]any{
 			"fromStatus": string(before.Status), "toStatus": string(OrderStatusCompleted),
 			"transferRef": strings.TrimSpace(body.TransferRef), "note": strings.TrimSpace(body.Note),
+			"acknowledgedSupplier": body.AcknowledgeSupplier && orderAtSupplier(before),
 		},
 	})
 	a.ntf.Notify(r.Context(), before.UserID, orderCompletedNote(id.Hex(), before.Total, before.Currency))

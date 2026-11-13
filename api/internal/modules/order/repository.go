@@ -72,9 +72,21 @@ type Repository interface {
 	// OLD supplier (it loses with ErrConflict).
 	TransitionSupplierStatus(ctx context.Context, id bson.ObjectID, attempt int, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error)
 	// ClaimSupplierReroute atomically switches a processing order's api-mode
-	// line to another supplier (see RerouteClaim). ErrConflict when the order
-	// moved on since it was read (status, attempt or upstream ref changed).
+	// line to another supplier — or converts a manual line into a supplier
+	// line (see RerouteClaim). ErrConflict when the order moved on since it was
+	// read (status, attempt, upstream ref or the line's mode changed).
 	ClaimSupplierReroute(ctx context.Context, c RerouteClaim) (*Order, error)
+	// CompleteUnlessAtSupplier is TransitionStatus(processing→completed) that
+	// additionally refuses (ErrConflict) while the order is at a supplier
+	// (see orderAtSupplier) — atomically, so a reroute/dispatch landing between
+	// the admin's read and the write can't slip a manual completion past it.
+	CompleteUnlessAtSupplier(ctx context.Context, id bson.ObjectID, event TimelineEvent, extraSet bson.D) (*Order, error)
+	// MarkSupplierRejected records a definitive rejection on an admin-chosen
+	// supplier attempt WITHOUT refunding: flags the order stuck (even if it
+	// already was), drops the dead upstream ref and the retry clock so the
+	// settler stops polling/retrying it, and appends one timeline event.
+	// Pinned to the attempt; returns true only when it applied.
+	MarkSupplierRejected(ctx context.Context, id bson.ObjectID, attempt int, event TimelineEvent) (bool, error)
 
 	// Admin dashboard aggregations.
 	DayStats(ctx context.Context, day time.Time) (count int, revenue float64, err error)
@@ -611,6 +623,53 @@ func (r *MongoRepository) MarkSupplierStuck(ctx context.Context, id bson.ObjectI
 	return true, nil
 }
 
+// CompleteUnlessAtSupplier implements Repository.CompleteUnlessAtSupplier. The
+// extra filter is the negation of orderAtSupplier, written positively: no
+// api-mode line, OR flagged stuck, OR neither an upstream ref nor a retry clock.
+func (r *MongoRepository) CompleteUnlessAtSupplier(ctx context.Context, id bson.ObjectID, event TimelineEvent, extraSet bson.D) (*Order, error) {
+	notAtSupplier := bson.E{Key: "$or", Value: bson.A{
+		bson.D{{Key: "items.fulfillmentMode", Value: bson.D{{Key: "$ne", Value: "api"}}}},
+		bson.D{{Key: "fulfillment.supplierStuckAt", Value: bson.D{{Key: "$exists", Value: true}}}},
+		bson.D{
+			{Key: "fulfillment.providerRef", Value: bson.D{{Key: "$in", Value: bson.A{"", nil}}}},
+			{Key: "fulfillment.supplierNextRetryAt", Value: bson.D{{Key: "$exists", Value: false}}},
+		},
+	}}
+	return r.transitionStatus(ctx, id, []OrderStatus{OrderStatusProcessing}, OrderStatusCompleted, event, extraSet, bson.D{notAtSupplier})
+}
+
+// MarkSupplierRejected implements Repository.MarkSupplierRejected. Unlike
+// MarkSupplierStuck it applies even to an already-flagged order (a stuck,
+// still-polled attempt can be rejected later) and drops providerRef, so the
+// rejected attempt leaves the pollable class instead of being re-rejected —
+// and re-audited — every tick.
+func (r *MongoRepository) MarkSupplierRejected(ctx context.Context, id bson.ObjectID, attempt int, event TimelineEvent) (bool, error) {
+	now := time.Now().UTC()
+	res, err := r.collection.UpdateOne(ctx,
+		bson.D{
+			{Key: "_id", Value: id},
+			{Key: "status", Value: OrderStatusProcessing},
+			attemptFilter(attempt),
+		},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "fulfillment.supplierStuckAt", Value: now},
+				{Key: "updatedAt", Value: now},
+			}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "fulfillment.providerRef", Value: ""},
+				{Key: "fulfillment.supplierRetryCount", Value: ""},
+				{Key: "fulfillment.supplierNextRetryAt", Value: ""},
+			}},
+			{Key: "$push", Value: bson.D{{Key: "fulfillment.statusTimeline", Value: event}}},
+		},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.ModifiedCount > 0, nil
+}
+
 // ListAll returns a paginated slice of orders matching f (admin), newest first.
 func (r *MongoRepository) ListAll(ctx context.Context, f OrderFilter, p pagination.Params) ([]*Order, int64, error) {
 	filter := f.build()
@@ -1039,21 +1098,27 @@ func mongoFmt2Go(mongoFmt string) string {
 	return "2006-01-02"
 }
 
-// RerouteClaim is one guarded "send to another supplier" switch. The filter
+// RerouteClaim is one guarded "send to (another) supplier" switch. The filter
 // pins exactly the state the admin action validated — still processing, same
-// reroute attempt, same upstream ref — so a settler tick that promoted the
-// park (SetSupplierRef) or settled it, a concurrent admin refund, or a double
-// click all lose with ErrConflict instead of interleaving.
+// reroute attempt, same upstream ref, and the line still in the mode it was
+// read in — so a settler tick that promoted the park (SetSupplierRef) or
+// settled it, a concurrent admin refund or completion, or a double click all
+// lose with ErrConflict instead of interleaving.
 type RerouteClaim struct {
 	OrderID         bson.ObjectID
-	ItemIndex       int // index of the api-mode line in Items
+	ItemIndex       int // index of the line in Items (api-mode, or the manual line when FromManual)
 	ExpectedAttempt int
 	ExpectedRef     string // current fulfillment.providerRef ("" = none)
-	NewProvider     int
-	NewUpstreamID   string
-	NewOrderUUID    string
-	Archived        SupplierAttempt // the abandoned attempt, for history
-	Event           TimelineEvent
+	// FromManual converts a never-sent manual_operator line into an api-mode
+	// supplier line (the filter pins the manual mode, the update flips it).
+	FromManual    bool
+	NewProvider   int
+	NewUpstreamID string
+	NewOrderUUID  string
+	// Archived is the abandoned attempt, for history; nil when there is none
+	// (a manual line was never sent to a supplier).
+	Archived *SupplierAttempt
+	Event    TimelineEvent
 }
 
 // ClaimSupplierReroute implements Repository.ClaimSupplierReroute. One
@@ -1081,31 +1146,42 @@ func (r *MongoRepository) ClaimSupplierReroute(ctx context.Context, c RerouteCla
 		filter = append(filter, bson.E{Key: "fulfillment.providerRef", Value: c.ExpectedRef})
 	}
 	item := fmt.Sprintf("items.%d.", c.ItemIndex)
+	if c.FromManual {
+		// A legacy line may predate the stored mode (absent → derived manual).
+		filter = append(filter, bson.E{Key: item + "fulfillmentMode", Value: bson.D{{Key: "$in", Value: bson.A{"manual_operator", "", nil}}}})
+	} else {
+		filter = append(filter, bson.E{Key: item + "fulfillmentMode", Value: "api"})
+	}
+	set := bson.D{
+		{Key: item + "fulfillmentProvider", Value: c.NewProvider},
+		{Key: item + "upstreamProductId", Value: c.NewUpstreamID},
+		{Key: "fulfillment.supplierAttempt", Value: c.ExpectedAttempt + 1},
+		{Key: "fulfillment.supplierOrderUUID", Value: c.NewOrderUUID},
+		{Key: "fulfillment.supplierAttemptAt", Value: now},
+		// Fallback retry clock: the immediate dispatch overwrites it (ref,
+		// completion, backoff or stuck flag). If that never lands (crash,
+		// DB error) the settler still re-dispatches this attempt — same key —
+		// instead of the order sitting unwatched in processing forever.
+		{Key: "fulfillment.supplierNextRetryAt", Value: now.Add(rerouteFallbackRetry)},
+		{Key: "updatedAt", Value: now},
+	}
+	if c.FromManual {
+		set = append(set, bson.E{Key: item + "fulfillmentMode", Value: "api"})
+	}
+	push := bson.D{{Key: "fulfillment.statusTimeline", Value: c.Event}}
+	if c.Archived != nil {
+		push = append(bson.D{{Key: "fulfillment.supplierAttempts", Value: *c.Archived}}, push...)
+	}
 	var out Order
 	err := r.collection.FindOneAndUpdate(ctx, filter,
 		bson.D{
-			{Key: "$set", Value: bson.D{
-				{Key: item + "fulfillmentProvider", Value: c.NewProvider},
-				{Key: item + "upstreamProductId", Value: c.NewUpstreamID},
-				{Key: "fulfillment.supplierAttempt", Value: c.ExpectedAttempt + 1},
-				{Key: "fulfillment.supplierOrderUUID", Value: c.NewOrderUUID},
-				{Key: "fulfillment.supplierAttemptAt", Value: now},
-				// Fallback retry clock: the immediate dispatch overwrites it (ref,
-				// completion, backoff or stuck flag). If that never lands (crash,
-				// DB error) the settler still re-dispatches this attempt — same key —
-				// instead of the order sitting unwatched in processing forever.
-				{Key: "fulfillment.supplierNextRetryAt", Value: now.Add(rerouteFallbackRetry)},
-				{Key: "updatedAt", Value: now},
-			}},
+			{Key: "$set", Value: set},
 			{Key: "$unset", Value: bson.D{
 				{Key: "fulfillment.providerRef", Value: ""},
 				{Key: "fulfillment.supplierRetryCount", Value: ""},
 				{Key: "fulfillment.supplierStuckAt", Value: ""},
 			}},
-			{Key: "$push", Value: bson.D{
-				{Key: "fulfillment.supplierAttempts", Value: c.Archived},
-				{Key: "fulfillment.statusTimeline", Value: c.Event},
-			}},
+			{Key: "$push", Value: push},
 		},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&out)
