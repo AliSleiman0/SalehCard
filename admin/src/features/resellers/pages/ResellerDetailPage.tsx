@@ -36,7 +36,6 @@ type Tab = 'overview' | 'balance' | 'pricing' | 'orders'
 
 export default function ResellerDetailPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const { data, isLoading, isError, refetch } = useReseller(id)
   const [tab, setTab] = useState<Tab>('overview')
@@ -48,6 +47,7 @@ export default function ResellerDetailPage() {
   if (isError || !detail || !view) {
     return (
       <div className="page">
+        <PageHead back="/resellers" title={t('nav_resellers')} />
         <ErrorState message={t('rd_load_error')} onRetry={() => refetch()} />
       </div>
     )
@@ -58,6 +58,7 @@ export default function ResellerDetailPage() {
   return (
     <div className="page">
       <PageHead
+        back="/resellers"
         crumbs={[t('nav_resellers'), view.name]}
         title={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
@@ -75,9 +76,6 @@ export default function ResellerDetailPage() {
         }
         sub={view.email || view.phone}
       >
-        <button className="abtn" onClick={() => navigate('/resellers')}>
-          <Icon name="chevleft" size={15} /> {t('back')}
-        </button>
         <button className="abtn primary" onClick={() => setTab('balance')}>
           <Icon name="coins" size={15} /> {t('rd_adjust_balance')}
         </button>

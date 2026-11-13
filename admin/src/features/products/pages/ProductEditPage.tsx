@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, Toggle, StatusBadge, LoadingSpinner, ErrorState, ffKey, type FfKey } from '@/components'
+import { useGoBack } from '@/lib/goBack'
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useCategoryTree } from '@/features/categories/hooks/useCategories'
@@ -73,6 +74,7 @@ const KNOWN_GAME_SLUGS = ['pubgm-global', 'dfm-garena', 'free-fire']
 export default function ProductEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const goBack = useGoBack('/products')
   const can = useCan()
   const canManage = can('products.manage')
   const { id } = useParams<{ id: string }>()
@@ -505,7 +507,7 @@ export default function ProductEditPage() {
     setMtError(mtErr)
     if (mtErr) return
     const input = buildInput()
-    const onSuccess = () => navigate('/products')
+    const onSuccess = () => goBack()
     if (isNew) create.mutate(input, { onSuccess })
     else update.mutate(input, { onSuccess })
   }
@@ -523,6 +525,7 @@ export default function ProductEditPage() {
   if (!isNew && isError)
     return (
       <div className="page">
+        <PageHead back="/products" title={t('nav_products')} />
         <ErrorState message="Could not load product" onRetry={() => refetch()} />
       </div>
     )
@@ -530,13 +533,11 @@ export default function ProductEditPage() {
   return (
     <div className="page">
       <PageHead
+        back="/products"
         crumbs={[t('nav_products'), isNew ? t('new_product') : headTitle]}
         title={isNew ? t('new_product') : 'Edit product'}
         sub={isNew ? 'Create a new product listing' : id}
       >
-        <button className="abtn" onClick={() => navigate('/products')}>
-          <Icon name="chevleft" size={15} /> {t('back')}
-        </button>
         {canManage && (
           <button className="abtn primary" onClick={onSave} disabled={pending}>
             <Icon name="check" size={15} /> {pending ? 'Saving…' : t('save')}

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/format/date_time.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/status_badge.dart';
@@ -25,6 +26,9 @@ class ComplaintsListScreen extends ConsumerWidget {
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.topbar,
+        // Normally pushed from the Menu tab; complaint detail's fallback reaches
+        // it via go as the stack root.
+        leading: const AppBackButton(fallback: '/account'),
         title: Text(l10n.complaintsTitle),
       ),
       floatingActionButton: (async.value?.isNotEmpty ?? false)

@@ -7,6 +7,7 @@ import '../../../../core/format/date_time.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../data/complaint_repository.dart';
@@ -79,11 +80,7 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
         backgroundColor: colors.topbar,
         // Reached by push from the list, or by go from a notification tap with
         // nothing beneath — fall back to the list rather than stranding the user.
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go('/complaints'),
-        ),
+        leading: const AppBackButton(fallback: '/complaints'),
         title: Text(async.value?.ref ?? l10n.complaintsTitle),
       ),
       body: async.when(

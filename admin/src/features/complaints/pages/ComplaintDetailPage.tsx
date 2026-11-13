@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { ErrorState, Icon, LoadingSpinner, PageHead, Toggle } from '@/components'
 import { ApiError } from '@/lib/api-client'
 import { money } from '@/lib/utils'
@@ -27,7 +27,6 @@ const MAX_BODY = 2000
 
 export default function ComplaintDetailPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const { id = '' } = useParams<{ id: string }>()
   const can = useCan()
   const canManage = can('complaints.manage')
@@ -47,6 +46,7 @@ export default function ComplaintDetailPage() {
   if ((isError && !data) || !data?.data) {
     return (
       <div className="page">
+        <PageHead back="/complaints" title={t('nav_complaints')} />
         <ErrorState message="Couldn't load this complaint." onRetry={() => refetch()} />
       </div>
     )
@@ -75,6 +75,7 @@ export default function ComplaintDetailPage() {
   return (
     <div className="page">
       <PageHead
+        back="/complaints"
         crumbs={[t('nav_complaints'), c.ref]}
         title={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
@@ -87,9 +88,6 @@ export default function ComplaintDetailPage() {
         }
         sub={`${CATEGORY_LABEL[c.category]} · ${c.subject}`}
       >
-        <button className="abtn" onClick={() => navigate('/complaints')}>
-          <Icon name="chevleft" size={15} /> {t('back')}
-        </button>
       </PageHead>
 
       <div className="formgrid">

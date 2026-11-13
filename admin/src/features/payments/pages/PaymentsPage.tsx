@@ -84,6 +84,7 @@ export default function PaymentsPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_finance'), t('nav_payments')]}
         title={t('nav_payments')}
       />

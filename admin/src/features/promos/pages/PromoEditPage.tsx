@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Icon, PageHead, Chip, LoadingSpinner, ErrorState } from '@/components'
+import { useGoBack } from '@/lib/goBack'
 import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
 import { usePromo, useCreatePromo, useUpdatePromo } from '../hooks/usePromos'
@@ -22,7 +23,7 @@ function randomCode(): string {
 
 export default function PromoEditPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const goBack = useGoBack('/promos')
   const can = useCan()
   const canManage = can('promos.manage')
   const { id } = useParams<{ id: string }>()
@@ -60,6 +61,7 @@ export default function PromoEditPage() {
   if (!isNew && (isError || !data?.data)) {
     return (
       <div className="page">
+        <PageHead back="/promos" title={t('nav_promos')} />
         <ErrorState message="Couldn't load this promo." onRetry={() => refetch()} />
       </div>
     )
@@ -99,9 +101,9 @@ export default function PromoEditPage() {
     }
     const onError = (e: unknown) => setError(e instanceof ApiError ? e.message : 'Save failed.')
     if (isNew) {
-      create.mutate(input, { onSuccess: () => navigate('/promos'), onError })
+      create.mutate(input, { onSuccess: () => goBack(), onError })
     } else {
-      update.mutate(input, { onSuccess: () => navigate('/promos'), onError })
+      update.mutate(input, { onSuccess: () => goBack(), onError })
     }
   }
 
@@ -111,13 +113,11 @@ export default function PromoEditPage() {
   return (
     <div className="page">
       <PageHead
+        back="/promos"
         crumbs={[t('nav_promos'), isNew ? 'New promo' : code]}
         title={isNew ? 'New promo code' : 'Edit promo'}
         sub={isNew ? 'Create a discount or cashback campaign' : code}
       >
-        <button className="abtn" onClick={() => navigate('/promos')}>
-          <Icon name="chevleft" size={15} /> {t('back')}
-        </button>
         {canManage && (
           <button className="abtn primary" onClick={save} disabled={saving}>
             <Icon name="check" size={15} /> {t('save')}

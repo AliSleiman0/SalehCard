@@ -321,3 +321,17 @@ Still to check:
 3. **Order entry point**: Orders → an order → "Report a problem" pre-selects category Order and that order.
 4. **Caps**: a sixth open complaint → "You already have several open complaints"; the 11th create from one IP
    within an hour → 429 (`RATE_LIMIT_COMPLAINT_MAX`, default 10/hour).
+
+## Back buttons (feat/back-buttons, KICKOFF-2026-11-14 §6)
+
+Verified locally 2026-11-14 in Chrome (admin): every page shows "‹ Back" except the Dashboard; Orders →
+filter → order → Back keeps the filter; an order opened in a new tab → Back → Orders → Back → Dashboard (never
+leaves the site); load-error state has Back; Arabic shows "رجوع" with a mirrored chevron; Enter on the focused
+button works. Still to check:
+
+1. **App on a device/emulator** (only unit-tested): checkout → order success → "View order" → back → Orders
+   now shows a back arrow → Menu tab. Also a confirmed USDT deposit → Wallet → back arrow → Home.
+2. **Admin custom role without Dashboard access** on prod: open `/orders` in a new tab → Back goes to the
+   role's first permitted page (unit-tested only).
+3. **Save/delete exits** now return to where the admin came from (e.g. a product opened from Categories →
+   Save → back on Categories), falling back to the list on a pasted link.

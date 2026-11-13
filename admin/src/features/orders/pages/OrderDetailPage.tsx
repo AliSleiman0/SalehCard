@@ -49,6 +49,7 @@ export default function OrderDetailPage() {
   if ((isError && !data) || !data?.data) {
     return (
       <div className="page">
+        <PageHead back="/orders" title={t('nav_orders')} />
         <ErrorState message="Couldn't load this order." onRetry={() => refetch()} />
       </div>
     )
@@ -84,6 +85,7 @@ export default function OrderDetailPage() {
   return (
     <div className="page">
       <PageHead
+        back="/orders"
         crumbs={[t('nav_orders'), v.id.slice(-8)]}
         title={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
@@ -92,9 +94,6 @@ export default function OrderDetailPage() {
         }
         sub={`Placed ${v.date} · ${v.customer}`}
       >
-        <button className="abtn" onClick={() => navigate('/orders')}>
-          <Icon name="chevleft" size={15} /> {t('back')}
-        </button>
         {refundable && (
           <button className="abtn danger" onClick={() => setRefundOpen(true)}>
             <Icon name="refresh" size={15} /> {t('refund')}

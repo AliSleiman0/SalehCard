@@ -87,6 +87,7 @@ export default function AuditLogPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_system'), 'Activity log']}
         title="Activity log"
         sub={meta ? `${meta.total.toLocaleString()} recorded actions` : ''}
