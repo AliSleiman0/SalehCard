@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Icon,
   PageHead,
@@ -24,7 +24,7 @@ import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import { useOrders } from '../hooks/useOrders'
 import { useRefundBulk } from '../hooks/useOrderMutations'
-import { adaptOrder } from '../lib/adaptOrder'
+import { adaptOrder, productEditPath } from '../lib/adaptOrder'
 import { listOrders, type OrderStatus, type PaymentMethod, type AdminOrder } from '../api/orders'
 import type { FulfillmentType } from '@/types'
 
@@ -65,6 +65,8 @@ export default function OrderListPage() {
   const navigate = useNavigate()
   const can = useCan()
   const canManage = can('orders.manage')
+  // The product editor route is guarded by the products domain (view).
+  const canViewProducts = can('products.view')
   const [searchParams, setSearchParams] = useSearchParams()
 
   const status = statusFromParam(searchParams.get('status'))
@@ -308,54 +310,76 @@ export default function OrderListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((o) => (
-                    <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <Checkbox on={bulk.sel.includes(o.id)} onClick={() => bulk.toggle(o.id)} />
-                      </td>
-                      <td>
-                        <span className="mono strong">{o.id.slice(-8)}</span>
-                      </td>
-                      <td>
-                        <div className="cellprod">
-                          <Avatar name={o.customer} />
-                          <div className="pn">
-                            <b>{o.customer}</b>
-                            <span>{o.email}</span>
+                  {rows.map((o) => {
+                    // Only the first line's name is shown in a row; it links to that product.
+                    const first = o.raw.items[0]
+                    const productHref = first ? productEditPath(o.raw, first.productId, canViewProducts) : null
+                    return (
+                      <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <Checkbox on={bulk.sel.includes(o.id)} onClick={() => bulk.toggle(o.id)} />
+                        </td>
+                        <td>
+                          <span className="mono strong">{o.id.slice(-8)}</span>
+                        </td>
+                        <td>
+                          <div className="cellprod">
+                            <Avatar name={o.customer} />
+                            <div className="pn">
+                              <b>{o.customer}</b>
+                              <span>{o.email}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="cellprod">
-                          <Art art={o.art} size={28} radius={6} />
-                          <div className="pn">
-                            <b style={{ fontSize: 12.5 }}>{o.product}</b>
-                            <span>×{o.qty}</span>
+                        </td>
+                        <td>
+                          <div className="cellprod">
+                            <Art art={o.art} size={28} radius={6} />
+                            <div className="pn">
+                              <b style={{ fontSize: 12.5 }}>
+                                {productHref ? (
+                                  <>
+                                    {/* stopPropagation: open the product, not the row's order. */}
+                                    <Link
+                                      to={productHref}
+                                      className="prodlink"
+                                      title="Open product"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {o.productTitle}
+                                    </Link>
+                                    {o.productMore}
+                                  </>
+                                ) : (
+                                  o.product
+                                )}
+                              </b>
+                              <span>×{o.qty}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <FfBadge ff={o.ff} />
-                      </td>
-                      <td className="num strong">{money(o.amount, o.cur)}</td>
-                      <td>
-                        <PayChip p={o.pay} />
-                      </td>
-                      <td>
-                        <StatusBadge s={o.status} />
-                      </td>
-                      <td className="muted" style={{ fontSize: 12 }}>
-                        {o.date}
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className="row-actions">
-                          <span className="iact">
-                            <Icon name="chevright" size={16} />
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td>
+                          <FfBadge ff={o.ff} />
+                        </td>
+                        <td className="num strong">{money(o.amount, o.cur)}</td>
+                        <td>
+                          <PayChip p={o.pay} />
+                        </td>
+                        <td>
+                          <StatusBadge s={o.status} />
+                        </td>
+                        <td className="muted" style={{ fontSize: 12 }}>
+                          {o.date}
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className="row-actions">
+                            <span className="iact">
+                              <Icon name="chevright" size={16} />
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

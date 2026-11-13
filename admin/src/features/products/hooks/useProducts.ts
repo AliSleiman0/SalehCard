@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   listProducts,
   getProduct,
@@ -62,11 +62,21 @@ export function useUpdateProduct(id: string) {
   })
 }
 
+/** Cached admin orders carry missingProductIds (which line products were
+ *  deleted); refetch them after a delete so a stale view never links to it. */
+function invalidateOrderViews(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ['admin', 'orders'] })
+  qc.invalidateQueries({ queryKey: ['admin', 'order'] })
+}
+
 export function useDeleteProduct() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deleteProduct(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'products'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'products'] })
+      invalidateOrderViews(qc)
+    },
   })
 }
 
@@ -99,13 +109,14 @@ export function useBulkProductAction() {
   return useMutation({
     mutationFn: ({ ids, action, categoryId }: { ids: string[]; action: BulkAction; categoryId?: string }) =>
       bulkProductAction(ids, action, categoryId),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['admin', 'products'] })
       // assign-category moves product counts around the taxonomy tree and the
       // product-category facets — refresh both so the Categories page + filters
       // reflect the reassignment.
       qc.invalidateQueries({ queryKey: ['admin', 'categories'] })
       qc.invalidateQueries({ queryKey: ['admin', 'products', 'categories'] })
+      if (vars.action === 'delete') invalidateOrderViews(qc)
     },
   })
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/loyalty"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/payments"
@@ -43,11 +44,22 @@ type CustomerInfo struct {
 	Phone *string `json:"phone,omitempty"`
 }
 
+// productLookup is the slice of the product repository the admin order handler
+// needs to tell which order lines point at a since-deleted product.
+type productLookup interface {
+	ExistingIDs(ctx context.Context, ids []bson.ObjectID) (map[bson.ObjectID]bool, error)
+}
+
 // adminOrderView is an order plus its resolved customer. Embedding *Order
-// promotes all of the order's JSON fields and just adds `customer`.
+// promotes all of the order's JSON fields and just adds `customer` and
+// `missingProductIds` (the line product ids with no product document any more —
+// the admin renders those names as plain text instead of a link to the
+// product editor). Omitted when every product still exists, or when the
+// lookup failed (the admin then links; the editor shows its own not-found).
 type adminOrderView struct {
 	*Order
-	Customer *CustomerInfo `json:"customer"`
+	Customer          *CustomerInfo `json:"customer"`
+	MissingProductIDs []string      `json:"missingProductIds,omitempty"`
 }
 
 // walletRefunder is the slice of the wallet service the admin order handler
@@ -65,6 +77,7 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, r
 	a := &adminHandler{
 		repo:     repo,
 		users:    user.NewMongoRepository(db),
+		products: product.NewMongoRepository(db),
 		wallet:   wallet.NewService(db),
 		payments: payments.New(payments.Config{Provider: cfg.PaymentProvider}),
 		rec:      rec,
@@ -105,6 +118,7 @@ func soldByProductHandler(repo *MongoRepository) http.HandlerFunc {
 type adminHandler struct {
 	repo     Repository
 	users    customerLookup
+	products productLookup // nil = skip the deleted-product check
 	wallet   walletRefunder
 	payments *payments.Registry
 	rec      audit.Recorder
@@ -181,11 +195,65 @@ func (a *adminHandler) detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response.OK(w, a.viewOf(r.Context(), o))
+}
+
+// viewOf builds the admin view of a single order. Both lookups are best
+// effort: a missing customer leaves `customer` null, a failed product lookup
+// leaves `missingProductIds` empty.
+func (a *adminHandler) viewOf(ctx context.Context, o *Order) adminOrderView {
 	view := adminOrderView{Order: o}
-	if u, err := a.users.FindByID(r.Context(), o.UserID); err == nil {
+	if u, err := a.users.FindByID(ctx, o.UserID); err == nil {
 		view.Customer = customerOf(u)
 	}
-	response.OK(w, view)
+	view.MissingProductIDs = missingProductIDs(o, a.existingProducts(ctx, []*Order{o}))
+	return view
+}
+
+// existingProducts resolves which of the orders' line products still exist, in
+// one query. nil means "unknown" (no lookup wired, or it failed): callers then
+// report nothing missing rather than fail the whole order read over a link.
+func (a *adminHandler) existingProducts(ctx context.Context, orders []*Order) map[bson.ObjectID]bool {
+	if a.products == nil {
+		return nil
+	}
+	seen := map[bson.ObjectID]bool{}
+	ids := []bson.ObjectID{}
+	for _, o := range orders {
+		for _, it := range o.Items {
+			if it.ProductID.IsZero() || seen[it.ProductID] {
+				continue
+			}
+			seen[it.ProductID] = true
+			ids = append(ids, it.ProductID)
+		}
+	}
+	found, err := a.products.ExistingIDs(ctx, ids)
+	if err != nil {
+		slog.Warn("admin orders: product existence lookup failed", "error", err)
+		return nil
+	}
+	return found
+}
+
+// missingProductIDs lists (deduped, in line order) the order's line product
+// ids absent from existing. A nil existing map means unknown → none reported.
+// A line with no product id (zero) is never reported: it was not "deleted
+// since", there is just nothing to link (the admin guards that itself).
+func missingProductIDs(o *Order, existing map[bson.ObjectID]bool) []string {
+	if existing == nil {
+		return nil
+	}
+	var missing []string
+	seen := map[bson.ObjectID]bool{}
+	for _, it := range o.Items {
+		if it.ProductID.IsZero() || seen[it.ProductID] || existing[it.ProductID] {
+			continue
+		}
+		seen[it.ProductID] = true
+		missing = append(missing, it.ProductID.Hex())
+	}
+	return missing
 }
 
 // refund handles POST /api/admin/orders/{id}/refund — reverse a processing or
@@ -460,15 +528,11 @@ func (a *adminHandler) respondFresh(w http.ResponseWriter, r *http.Request, id b
 		response.InternalError(w)
 		return
 	}
-	view := adminOrderView{Order: o}
-	if u, err := a.users.FindByID(r.Context(), o.UserID); err == nil {
-		view.Customer = customerOf(u)
-	}
-	response.OK(w, view)
+	response.OK(w, a.viewOf(r.Context(), o))
 }
 
-// enrich resolves the customer for every order in a single batched query and
-// returns the order+customer views in the same order.
+// enrich resolves the customer for every order in a single batched query (plus
+// one batched product-existence query) and returns the views in the same order.
 func (a *adminHandler) enrich(ctx context.Context, orders []*Order) ([]adminOrderView, error) {
 	ids := make([]bson.ObjectID, 0, len(orders))
 	for _, o := range orders {
@@ -483,9 +547,10 @@ func (a *adminHandler) enrich(ctx context.Context, orders []*Order) ([]adminOrde
 		byID[u.ID] = u
 	}
 
+	existing := a.existingProducts(ctx, orders)
 	views := make([]adminOrderView, len(orders))
 	for i, o := range orders {
-		views[i] = adminOrderView{Order: o}
+		views[i] = adminOrderView{Order: o, MissingProductIDs: missingProductIDs(o, existing)}
 		if u, ok := byID[o.UserID]; ok {
 			views[i].Customer = customerOf(u)
 		}
