@@ -235,10 +235,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   color: colors.textDim)),
         ));
       }
+      // The PDP-entered id pre-fills the first typed field (never a photo field).
+      final idIndex = fields.indexWhere((f) => f.type != 'file');
       for (var i = 0; i < fields.length; i++) {
         final field = fields[i];
         final key = '${item.key}|${field.key}';
-        final initial = i == 0 ? (item.playerId ?? '') : '';
+        final initial = i == idIndex ? (item.playerId ?? '') : '';
         widgets.add(Padding(
           padding: const EdgeInsets.only(top: 12),
           child: DynamicInputField(
@@ -330,7 +332,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               if ((values[field.key] ?? '').isNotEmpty)
                 PlaceOrderField(key: field.key, value: values[field.key]!),
           ];
-          playerId = fieldList.isNotEmpty ? fieldList.first.value : null;
+          // A photo field (QR / barcode URL) is never the player id.
+          final fileKeys = {
+            for (final field in fields)
+              if (field.type == 'file') field.key,
+          };
+          final idFields =
+              fieldList.where((f) => !fileKeys.contains(f.key)).toList();
+          playerId = idFields.isNotEmpty ? idFields.first.value : null;
         }
       } else if (item.playerId != null && item.playerId!.isNotEmpty) {
         playerId = item.playerId;

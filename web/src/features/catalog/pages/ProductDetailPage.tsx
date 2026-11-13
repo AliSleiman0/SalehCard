@@ -150,7 +150,10 @@ export default function ProductDetailPage() {
 
   // Whether checkout collects fields via the schema (first field lives on this
   // page; the rest, if any, on the checkout page).
-  const hasFields = p.inputFields.length > 0 && fulfill !== 'code'
+  // The PDP id box is the first TYPED field; photo fields (QR / barcode) are
+  // collected at checkout and never become the player id.
+  const idField = p.inputFields.find((f) => f.type !== 'file')
+  const hasFields = !!idField && fulfill !== 'code'
   const verifyActive = p.verifyEnabled && isAuthenticated
   const verifyGuestBlock = p.verifyEnabled && !isAuthenticated
   const buyDisabled =
@@ -372,7 +375,7 @@ export default function ProductDetailPage() {
                   </a>
                 </div>
               )}
-              <DynamicField field={p.inputFields[0]} value={pid} onChange={setPlayerId} />
+              <DynamicField field={idField!} value={pid} onChange={setPlayerId} />
               {pickId && (
                 <div className="panel card-pad" style={{ padding: 10 }}>
                   {savedIds.map((sv) => (

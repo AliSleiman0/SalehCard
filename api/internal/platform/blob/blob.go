@@ -57,3 +57,11 @@ func New(cfg Config) (Storage, error) {
 		return nil, fmt.Errorf("unknown storage provider %q", cfg.Provider)
 	}
 }
+
+// URLBuilder is implemented by adapters that can tell, without uploading,
+// the public URL an object stored under key gets. Callers use it to verify a
+// client-submitted URL really points at OUR storage (host + keyspace), not
+// just at a path that looks like ours.
+type URLBuilder interface {
+	PublicURL(key string) string
+}

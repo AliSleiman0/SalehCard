@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LoadingSpinner, ErrorState, EmptyState } from '@/components'
 import { useLocaleStore } from '@/stores/locale'
-import { useCategoryNode } from '../hooks/useCategories'
+import { useCategories, useCategoryNode } from '../hooks/useCategories'
 import { useNodeProducts } from '../hooks/useNodeProducts'
 import { adaptProduct } from '../lib/adaptProduct'
 import { crumbLink, crumbName, localizedName } from '../lib/adaptCategory'
@@ -28,6 +28,11 @@ function NodeView({ id }: { id: string | undefined }) {
   const view = nodeQ.data?.data
   const hasChildren = !!view?.node.hasChildren
   const productsQ = useNodeProducts(view ? id : undefined, hasChildren)
+  // Visible subcategories (same query as SubcategoryGrid, so it is shared):
+  // hasChildren also counts hidden nodes, so it alone cannot tell whether
+  // the page will show any tiles.
+  const childrenQ = useCategories({ parentId: view?.node.id, withCounts: true }, { enabled: hasChildren })
+  const visibleChildren = hasChildren ? (childrenQ.data?.data?.length ?? 0) : 0
 
   const products = useMemo(
     () =>
@@ -69,7 +74,9 @@ function NodeView({ id }: { id: string | undefined }) {
 
       <div style={{ marginBottom: 22 }}>
         <h1 className="h1">{title}</h1>
-        {view.node.productCount !== undefined && (
+        {/* The rolled-up count matches the list only on a leaf (under a node with
+            subcategories the list shows just the node's own products). */}
+        {!hasChildren && view.node.productCount !== undefined && (
           <p className="muted small">
             {view.node.productCount} {t('results')}
           </p>
@@ -85,7 +92,7 @@ function NodeView({ id }: { id: string | undefined }) {
       ) : products.length === 0 ? (
         // A node with subcategories and no products of its own shows just the
         // subcategory tiles; an empty leaf says so.
-        hasChildren ? null : (
+        visibleChildren > 0 || (hasChildren && childrenQ.isLoading) ? null : (
           <EmptyState icon="search" title={t('no_results')} sub={t('no_results_sub')} />
         )
       ) : (

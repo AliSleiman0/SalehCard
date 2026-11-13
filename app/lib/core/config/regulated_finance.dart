@@ -47,7 +47,7 @@ bool isRootDomainAllowed(String? rootDomain) =>
 final _cryptoMethodName = RegExp(
   r'usd[ct]|tether|crypto|bitcoin|\bbtc\b|binance|\bbnb\b|\bbsc\b|trc-?20|'
   r'bep-?20|erc-?20|ethereum|\beth\b|\btron\b|\btrx\b|solana|\bsol\b|'
-  r'litecoin|\bltc\b|polygon|matic|doge|wallet address|'
+  r'litecoin|\bltc\b|\bpolygon\b|\bmatic\b|\bdoge(coin)?\b|wallet address|'
   r'كريبتو|بيتكوين|تيثر|عملات رقمية',
   caseSensitive: false,
 );
@@ -75,7 +75,13 @@ bool isTopUpMethodShownOnRestricted({
   required String name,
 }) {
   final k = kind.trim();
-  if (k.isNotEmpty) return restrictedAllowedMethodKinds.contains(k);
+  // Defense in depth: an allow-listed kind must ALSO pass the name deny-list,
+  // so one mis-set Type (a USDT method marked "Other") can never expose a
+  // crypto or Whish rail to App Review.
+  if (k.isNotEmpty) {
+    return restrictedAllowedMethodKinds.contains(k) &&
+        !isTopUpMethodHiddenOnRestricted(name);
+  }
   return !isTopUpMethodHiddenOnRestricted(name);
 }
 

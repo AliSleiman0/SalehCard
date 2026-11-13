@@ -217,7 +217,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         product.categoryName?.resolve(localeCode).trim() ?? '';
     final needsInput =
         product.fulfillmentType != 'code' && nonQuantityFields.isNotEmpty;
-    final firstField = needsInput ? nonQuantityFields.first : null;
+    // The PDP id box is the first TYPED field: a photo field (QR / barcode) is
+    // collected at checkout and must never become the player id.
+    final typedFields = nonQuantityFields.where((f) => f.type != 'file');
+    final firstField =
+        needsInput && typedFields.isNotEmpty ? typedFields.first : null;
     // Purchase-time ID verification only kicks in when the product is configured
     // for it AND has a field to type the ID into.
     final verifyActive = product.requiresIdVerification && firstField != null;

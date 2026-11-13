@@ -11,6 +11,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/config"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/photoupload"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/ratelimit"
 )
 
@@ -23,7 +24,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, store 
 		slog.Warn("kyc: failed to ensure indexes", "error", err)
 	}
 	repo := NewMongoRepository(db.Collection("kyc_submissions"), db.Collection("users"))
-	h := NewHandler(NewService(repo), store)
+	h := NewHandler(NewService(repo).WithDocChecker(photoupload.NewChecker(store, "kyc/")), store)
 
 	// Per-IP rate limit on document uploads — each accepted upload writes
 	// billed blob storage.

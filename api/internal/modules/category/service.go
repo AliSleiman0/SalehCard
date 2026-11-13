@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -48,6 +49,32 @@ type Service interface {
 type CategoryService struct {
 	repo    Repository
 	counter ProductCounter
+
+	// tree caches the full tree with rolled-up counts for Node (the public,
+	// unauthenticated drill-down endpoint), so a page view does not re-scan the
+	// tree and re-run both product aggregations. TTL only: admin edits run on a
+	// separate service instance, and a 30s-stale storefront count is fine.
+	treeMu sync.Mutex
+	tree   []ListItem
+	treeAt time.Time
+}
+
+// nodeTreeTTL bounds how stale the cached drill-down tree may be.
+const nodeTreeTTL = 30 * time.Second
+
+// cachedTree returns the full tree (hidden nodes included) with counts.
+func (s *CategoryService) cachedTree(ctx context.Context) ([]ListItem, error) {
+	s.treeMu.Lock()
+	defer s.treeMu.Unlock()
+	if s.tree != nil && time.Since(s.treeAt) < nodeTreeTTL {
+		return s.tree, nil
+	}
+	all, err := s.List(ctx, CategoryFilter{IncludeHidden: true}, true)
+	if err != nil {
+		return nil, err
+	}
+	s.tree, s.treeAt = all, time.Now()
+	return all, nil
 }
 
 // NewCategoryService constructs a CategoryService. counter may be nil.
@@ -144,7 +171,7 @@ type NodeView struct {
 func (s *CategoryService) Node(ctx context.Context, id bson.ObjectID) (*NodeView, error) {
 	// The tree is tiny; List over all nodes gives the same derived fields
 	// (hasChildren, rolled-up counts) the browse grids show.
-	all, err := s.List(ctx, CategoryFilter{IncludeHidden: true}, true)
+	all, err := s.cachedTree(ctx)
 	if err != nil {
 		return nil, err
 	}

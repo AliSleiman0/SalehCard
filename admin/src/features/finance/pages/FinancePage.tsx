@@ -506,7 +506,7 @@ function UsdtQueueTab() {
 
       {isLoading ? (
         <LoadingSpinner />
-      ) : isError ? (
+      ) : isError && !data ? (
         <ErrorState message="Couldn't load the USDT queue." onRetry={() => refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState

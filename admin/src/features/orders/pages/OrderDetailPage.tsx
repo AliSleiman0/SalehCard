@@ -42,7 +42,9 @@ export default function OrderDetailPage() {
   const [failOpen, setFailOpen] = useState(false)
 
   if (isLoading) return <div className="page"><LoadingSpinner /></div>
-  if (isError || !data?.data) {
+  // A failed BACKGROUND poll (30s auto-refresh) keeps showing the cached order
+  // (and any open modal); only a load with no data at all shows the error.
+  if ((isError && !data) || !data?.data) {
     return (
       <div className="page">
         <ErrorState message="Couldn't load this order." onRetry={() => refetch()} />

@@ -91,7 +91,8 @@ function buildBaseLine(
       productId: item.id,
       variantId: item.variantId,
       qty: item.qty,
-      playerId: filled.length ? filled[0].value : undefined,
+      // A photo field (QR / barcode URL) is never the account / player id.
+      playerId: filled.find((f) => fields.find((d) => d.key === f.key)?.type !== 'file')?.value,
       fields: filled.length ? filled : undefined,
     }
   }

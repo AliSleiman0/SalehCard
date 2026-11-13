@@ -102,7 +102,7 @@ export default function KycPage() {
 
         {isLoading ? (
           <LoadingSpinner />
-        ) : isError ? (
+        ) : isError && !data ? (
           <ErrorState message="Couldn't load KYC submissions." onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState title="No submissions found" />

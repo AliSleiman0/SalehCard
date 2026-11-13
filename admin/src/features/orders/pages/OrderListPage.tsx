@@ -241,7 +241,7 @@ export default function OrderListPage() {
 
         {isLoading ? (
           <LoadingSpinner />
-        ) : isError ? (
+        ) : isError && !data ? (
           <ErrorState message="Couldn't load orders." onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState title="No orders found" />
