@@ -20,6 +20,7 @@ import { useOrder } from '../hooks/useOrders'
 import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrderMutations'
 import { adaptOrder, codeLines, creditLines, itemQtyLabel } from '../lib/adaptOrder'
 import type { AdminOrder } from '../api/orders'
+import { SupplierPanel } from '../components/SupplierPanel'
 
 export default function OrderDetailPage() {
   const { t } = useTranslation()
@@ -90,6 +91,8 @@ export default function OrderDetailPage() {
           </button>
         )}
       </PageHead>
+
+      <SupplierPanel order={o} canManage={canManage} />
 
       <div className="formgrid">
         <div className="fieldset">

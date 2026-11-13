@@ -19,6 +19,10 @@ export interface AdminOrderItem {
   amount?: number
   price: number
   fulfillmentType: FulfillmentType
+  /** Supplier routing snapshot ("api" lines are fulfilled by a supplier). */
+  fulfillmentMode?: string
+  fulfillmentProvider?: number
+  upstreamProductId?: string
   playerId?: string
   recipient?: { name: string; country: string; detail: string }
   /** Labeled customer inputs captured at checkout (Account ID, Zone ID, Email…). */
@@ -27,10 +31,29 @@ export interface AdminOrderItem {
   codes?: string[]
 }
 
+/** One abandoned supplier attempt (kept for reconciling a late delivery). */
+export interface SupplierAttempt {
+  provider?: number
+  upstreamProductId?: string
+  providerRef?: string
+  orderUuid?: string
+  stuckAt?: string
+  reroutedAt: string
+  reroutedBy?: string
+}
+
 export interface OrderFulfillment {
   deliveredCode?: string
   creditedToId?: string
   transferRef?: string
+  /** Supplier order id of the current attempt (api-mode orders). */
+  providerRef?: string
+  /** Set once the supplier settler gave up waiting — eligible for a reroute. */
+  supplierStuckAt?: string
+  supplierAttempt?: number
+  supplierAttemptAt?: string
+  /** Abandoned attempts, archived on each "send to another supplier". */
+  supplierAttempts?: SupplierAttempt[]
   statusTimeline: { status: string; note: string; at: string }[]
 }
 
@@ -125,4 +148,25 @@ export function completeOrder(
     note: opts.note ?? '',
     transferRef: opts.transferRef ?? '',
   })
+}
+
+/** A supplier a stuck order can be sent to. */
+export interface RerouteProvider {
+  id: number
+  name: string
+}
+
+export function listRerouteProviders(): Promise<ApiResponse<RerouteProvider[]>> {
+  return apiClient.get<RerouteProvider[]>('/api/admin/orders/reroute-providers')
+}
+
+export interface RerouteInput {
+  providerId: number
+  upstreamProductId: string
+  acknowledgeAmbiguous?: boolean
+}
+
+/** Sends a stuck supplier order to another supplier and dispatches it there now. */
+export function rerouteOrder(id: string, input: RerouteInput): Promise<ApiResponse<AdminOrder>> {
+  return apiClient.post<AdminOrder>(`/api/admin/orders/${id}/reroute`, input)
 }

@@ -68,10 +68,31 @@ func supplierFulfillInput(o *Order) (provID *int, in provider.FulfillInput, ok b
 			PlayerID:   it.PlayerID,
 			Fields:     fields,
 			Qty:        it.Qty,
-			OrderUUID:  o.ID.Hex(),
+			OrderUUID:  supplierOrderUUID(o),
 		}, true
 	}
 	return nil, provider.FulfillInput{}, false
+}
+
+// supplierOrderUUID is the upstream idempotency key for the order's CURRENT
+// attempt: the order id for the original dispatch, a fresh per-attempt key
+// after an admin reroute (so the new attempt is new to every supplier, while
+// retries within one attempt stay deduped).
+func supplierOrderUUID(o *Order) string {
+	if o.Fulfillment.SupplierOrderUUID != "" {
+		return o.Fulfillment.SupplierOrderUUID
+	}
+	return o.ID.Hex()
+}
+
+// supplierClockStart is when the current upstream attempt began: the reroute
+// time when the order was rerouted, else its creation. The give-up window is
+// measured from here, so a rerouted old order gets a fresh window.
+func supplierClockStart(o *Order) time.Time {
+	if t := o.Fulfillment.SupplierAttemptAt; t != nil && t.After(o.CreatedAt) {
+		return *t
+	}
+	return o.CreatedAt
 }
 
 // SupplierSettler is the background reconciler for parked api-mode orders
@@ -281,7 +302,7 @@ func (s *SupplierSettler) settleReject(ctx context.Context, o *Order, reason str
 // bookkeeping-only (no timeline spam); outcomes settle through the guarded
 // paths above.
 func (s *SupplierSettler) redispatchOne(ctx context.Context, o *Order) error {
-	if time.Since(o.CreatedAt) > s.giveUp {
+	if time.Since(supplierClockStart(o)) > s.giveUp {
 		return s.flagStuck(ctx, o, "re-dispatch retries exhausted")
 	}
 	provID, in, ok := supplierFulfillInput(o)
@@ -316,7 +337,7 @@ func (s *SupplierSettler) redispatchOne(ctx context.Context, o *Order) error {
 
 // maybeFlagStuck flags o once its age exceeds the give-up window.
 func (s *SupplierSettler) maybeFlagStuck(ctx context.Context, o *Order, why string) error {
-	if o.Fulfillment.SupplierStuckAt != nil || time.Since(o.CreatedAt) <= s.giveUp {
+	if o.Fulfillment.SupplierStuckAt != nil || time.Since(supplierClockStart(o)) <= s.giveUp {
 		return nil
 	}
 	return s.flagStuck(ctx, o, why)

@@ -320,6 +320,12 @@ func (s *Server) Routes() {
 			// handler lives in the code module — mount it here so it requires
 			// orders.manage, not inventory.manage.
 			code.RegisterOrderResendRoutes(g, s.db, rec, ntf)
+			// "Send to another supplier" for stuck api-mode orders (orders.manage).
+			rerouteOpts := make([]order.RerouteProvider, 0, len(provOpts))
+			for _, p := range provOpts {
+				rerouteOpts = append(rerouteOpts, order.RerouteProvider{ID: p.ID, Name: p.Name})
+			}
+			order.RegisterRerouteRoutes(g, orderSvc, rec, rerouteOpts, s.cfg.SupplierSettlerInterval, s.cfg.SupplierSettlerGiveUp)
 		})
 		domain("users", func(g chi.Router) {
 			user.RegisterAdminRoutes(g, s.db, rec, smsSender, s.cfg.BulkSMSMax, ntf, s.cfg.BulkPushMax)

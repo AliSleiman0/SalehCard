@@ -66,6 +66,10 @@ type Repository interface {
 	// supplierStuckAt-absent filter), clearing the retry clock so re-dispatch
 	// stops permanently. Returns true only for the winning call.
 	MarkSupplierStuck(ctx context.Context, id bson.ObjectID, event TimelineEvent) (bool, error)
+	// ClaimSupplierReroute atomically switches a processing order's api-mode
+	// line to another supplier (see RerouteClaim). ErrConflict when the order
+	// moved on since it was read (status, attempt or upstream ref changed).
+	ClaimSupplierReroute(ctx context.Context, c RerouteClaim) (*Order, error)
 
 	// Admin dashboard aggregations.
 	DayStats(ctx context.Context, day time.Time) (count int, revenue float64, err error)
@@ -972,4 +976,82 @@ func mongoFmt2Go(mongoFmt string) string {
 		return "2006-01"
 	}
 	return "2006-01-02"
+}
+
+// RerouteClaim is one guarded "send to another supplier" switch. The filter
+// pins exactly the state the admin action validated — still processing, same
+// reroute attempt, same upstream ref — so a settler tick that promoted the
+// park (SetSupplierRef) or settled it, a concurrent admin refund, or a double
+// click all lose with ErrConflict instead of interleaving.
+type RerouteClaim struct {
+	OrderID         bson.ObjectID
+	ItemIndex       int // index of the api-mode line in Items
+	ExpectedAttempt int
+	ExpectedRef     string // current fulfillment.providerRef ("" = none)
+	NewProvider     int
+	NewUpstreamID   string
+	NewOrderUUID    string
+	Archived        SupplierAttempt // the abandoned attempt, for history
+	Event           TimelineEvent
+}
+
+// ClaimSupplierReroute implements Repository.ClaimSupplierReroute. One
+// FindOneAndUpdate: archive the old attempt, point the line at the new
+// supplier, bump the attempt + fresh idempotency key, restart the give-up
+// clock and clear the old ref / retry clock / stuck flag — so the settler
+// stops polling the old supplier and treats the order as a fresh attempt.
+func (r *MongoRepository) ClaimSupplierReroute(ctx context.Context, c RerouteClaim) (*Order, error) {
+	now := time.Now().UTC()
+	filter := bson.D{
+		{Key: "_id", Value: c.OrderID},
+		{Key: "status", Value: OrderStatusProcessing},
+	}
+	if c.ExpectedAttempt == 0 {
+		filter = append(filter, bson.E{Key: "fulfillment.supplierAttempt", Value: bson.D{{Key: "$exists", Value: false}}})
+	} else {
+		filter = append(filter, bson.E{Key: "fulfillment.supplierAttempt", Value: c.ExpectedAttempt})
+	}
+	if c.ExpectedRef == "" {
+		filter = append(filter, bson.E{Key: "$or", Value: bson.A{
+			bson.D{{Key: "fulfillment.providerRef", Value: bson.D{{Key: "$exists", Value: false}}}},
+			bson.D{{Key: "fulfillment.providerRef", Value: ""}},
+		}})
+	} else {
+		filter = append(filter, bson.E{Key: "fulfillment.providerRef", Value: c.ExpectedRef})
+	}
+	item := fmt.Sprintf("items.%d.", c.ItemIndex)
+	var out Order
+	err := r.collection.FindOneAndUpdate(ctx, filter,
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: item + "fulfillmentProvider", Value: c.NewProvider},
+				{Key: item + "upstreamProductId", Value: c.NewUpstreamID},
+				{Key: "fulfillment.supplierAttempt", Value: c.ExpectedAttempt + 1},
+				{Key: "fulfillment.supplierOrderUUID", Value: c.NewOrderUUID},
+				{Key: "fulfillment.supplierAttemptAt", Value: now},
+				{Key: "updatedAt", Value: now},
+			}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "fulfillment.providerRef", Value: ""},
+				{Key: "fulfillment.supplierRetryCount", Value: ""},
+				{Key: "fulfillment.supplierNextRetryAt", Value: ""},
+				{Key: "fulfillment.supplierStuckAt", Value: ""},
+			}},
+			{Key: "$push", Value: bson.D{
+				{Key: "fulfillment.supplierAttempts", Value: c.Archived},
+				{Key: "fulfillment.statusTimeline", Value: c.Event},
+			}},
+		},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&out)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			if _, ferr := r.FindByID(ctx, c.OrderID); ferr != nil {
+				return nil, apperrors.ErrNotFound
+			}
+			return nil, apperrors.ErrConflict
+		}
+		return nil, err
+	}
+	return &out, nil
 }

@@ -27,3 +27,10 @@ func (r *Registry) Resolve(id *int) Provider {
 	}
 	return NewStub(0)
 }
+
+// Has reports whether a real adapter (not the stub fallback) is registered
+// for id — e.g. a valid target for an admin supplier reroute.
+func (r *Registry) Has(id int) bool {
+	_, ok := r.adapters[id]
+	return ok
+}
