@@ -562,9 +562,12 @@ deployed API + admin; web came with the manual full redeploy of `8287849` (all t
 Still open:
 
 - **Grant `complaints.view` / `complaints.manage`** to any custom support role in admin → Roles. Super admins
-  already see it. A custom role without it gets 403 and no "Complaints" nav item. Script (interactive, signs in
-  as a super admin, dry run with `-DryRun`, asks before changing anything, audited as `role.update`):
-  `powershell -ExecutionPolicy Bypass -File deploy\grant-role-permission.ps1` (`-Domain <area>` for others).
+  already see it. A custom role without it gets 403 and no "Complaints" nav item. Script (no admin password:
+  uses your `az login` to read MONGO_URI from the App Service, opens a temporary Cosmos firewall rule for your
+  IP, previews with `dbtool role-grant`, applies after you type `yes`, always removes the rule; audited as
+  `role.update` by "dbtool (ops CLI)"):
+  `powershell -ExecutionPolicy Bypass -File deploy\grant-role-permission.ps1` (`-DryRun`, `-Level view`,
+  `-RoleId <id>`, `-Domain <area>` for other areas).
 - **Android push is off in the app itself, not just blocked by the API-key restriction (§19). This affects
   prod:** every Android build since commit `7eb3eba` (2026-08-07, package re-registered as
   `com.flashcashglobal.app`) has it, including the Play builds 1.0.4+ (Codemagic builds from the repo files

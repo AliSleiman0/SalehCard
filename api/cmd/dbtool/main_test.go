@@ -45,3 +45,30 @@ func TestTallyStatus(t *testing.T) {
 		t.Errorf("tallyStatus = %v, want available:2 delivered:1", got)
 	}
 }
+
+func TestGrantPerms(t *testing.T) {
+	got, err := grantPerms("complaints", "manage")
+	if err != nil || len(got) != 2 || got[0] != "complaints.view" || got[1] != "complaints.manage" {
+		t.Fatalf("manage: %v %v", got, err)
+	}
+	if got, _ := grantPerms("complaints", "view"); len(got) != 1 || got[0] != "complaints.view" {
+		t.Fatalf("view: %v", got)
+	}
+	if _, err := grantPerms("nope", "view"); err == nil {
+		t.Error("unknown area must be refused")
+	}
+	if _, err := grantPerms("complaints", "admin"); err == nil {
+		t.Error("unknown level must be refused")
+	}
+}
+
+func TestMissingPermsAndReorder(t *testing.T) {
+	m := missingPerms([]string{"orders.view", "complaints.view"}, []string{"complaints.view", "complaints.manage"})
+	if len(m) != 1 || m[0] != "complaints.manage" {
+		t.Fatalf("missing: %v", m)
+	}
+	r := reorderFlags([]string{"complaints", "manage", "all", "--apply"})
+	if r[0] != "--apply" || r[3] != "all" {
+		t.Fatalf("reorder: %v", r)
+	}
+}
