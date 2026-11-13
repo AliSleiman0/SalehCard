@@ -94,7 +94,7 @@ export default function ComplaintListPage() {
           <div className="fsearch">
             <Icon name="search" size={15} />
             <input
-              placeholder="Number (C-1042), phone, email or name…"
+              placeholder="Number (C-1042), subject, phone, email or name…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

@@ -237,9 +237,6 @@ func (r *MongoRepository) AdminList(ctx context.Context, f AdminFilter, p pagina
 		if err != nil {
 			return nil, 0, err
 		}
-		if len(or) == 0 {
-			return []Complaint{}, 0, nil
-		}
 		filter = append(filter, bson.E{Key: "$or", Value: or})
 	}
 	return r.find(ctx, filter, bson.D{{Key: "updatedAt", Value: -1}}, p)
@@ -249,7 +246,8 @@ func (r *MongoRepository) AdminList(ctx context.Context, f AdminFilter, p pagina
 var numberRx = regexp.MustCompile(`^[cC]-?(\d+)$|^(\d+)$`)
 
 // searchClause turns the console search box into an $or: the complaint number,
-// and/or the ids of customers whose email or phone matches (capped).
+// the subject, and/or the ids of customers whose name, email or phone matches
+// (capped).
 func (r *MongoRepository) searchClause(ctx context.Context, s string) (bson.A, error) {
 	or := bson.A{}
 	if m := numberRx.FindStringSubmatch(s); m != nil {
@@ -259,6 +257,7 @@ func (r *MongoRepository) searchClause(ctx context.Context, s string) (bson.A, e
 		}
 	}
 	rx := bson.D{{Key: "$regex", Value: regexp.QuoteMeta(s)}, {Key: "$options", Value: "i"}}
+	or = append(or, bson.D{{Key: "subject", Value: rx}})
 	cur, err := r.users.Find(ctx, bson.D{{Key: "$or", Value: bson.A{
 		bson.D{{Key: "email", Value: rx}},
 		bson.D{{Key: "phone", Value: rx}},
