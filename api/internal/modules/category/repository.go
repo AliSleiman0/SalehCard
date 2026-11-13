@@ -42,6 +42,9 @@ func NewMongoRepository(db *mongo.Database) *MongoRepository {
 // descendant expansion.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	col := db.Collection("categories")
+	if err := migrateLegacyIDIndex(ctx, col); err != nil {
+		return err
+	}
 	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "legacyId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 		{Keys: bson.D{{Key: "slug", Value: 1}}},
@@ -53,6 +56,40 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		{Keys: bson.D{{Key: "depth", Value: 1}}},
 	})
 	return err
+}
+
+// legacyIDIndexName is the driver-generated name of the legacyId index.
+const legacyIDIndexName = "legacyId_1"
+
+// migrateLegacyIDIndex drops a pre-tree, NON-sparse unique legacyId index.
+//
+// Databases created before the catalog tree have legacyId_1 as plain unique.
+// Mongo refuses to change an existing index's options, so the CreateMany in
+// EnsureIndexes failed with IndexOptionsConflict, silently skipping the newer
+// parentId / ancestors indexes too. Worse, the non-sparse index indexes every
+// admin-created node (no legacyId) as null, so the second admin-created node
+// collided (E11000) and the console showed "an unexpected error occurred".
+//
+// Only a non-sparse legacyId_1 is dropped, so this is a no-op once migrated
+// (no drop/recreate churn on every boot); CreateMany then rebuilds it sparse.
+func migrateLegacyIDIndex(ctx context.Context, col *mongo.Collection) error {
+	cur, err := col.Indexes().List(ctx)
+	if err != nil {
+		return err
+	}
+	var specs []struct {
+		Name   string `bson:"name"`
+		Sparse bool   `bson:"sparse"`
+	}
+	if err := cur.All(ctx, &specs); err != nil {
+		return err
+	}
+	for _, s := range specs {
+		if s.Name == legacyIDIndexName && !s.Sparse {
+			return col.Indexes().DropOne(ctx, legacyIDIndexName)
+		}
+	}
+	return nil
 }
 
 // FindAll returns categories matching f, sorted by sortOrder then legacyId.

@@ -2,6 +2,7 @@ package category
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -16,7 +17,9 @@ func RegisterRoutes(r chi.Router, db *mongo.Database) {
 	repo := NewMongoRepository(db)
 
 	// Best-effort index creation at startup.
-	_ = EnsureIndexes(context.Background(), db)
+	if err := EnsureIndexes(context.Background(), db); err != nil {
+		slog.Warn("category: failed to ensure indexes", "error", err)
+	}
 
 	svc := NewCategoryService(repo, product.NewMongoRepository(db))
 	h := NewHandler(svc)
