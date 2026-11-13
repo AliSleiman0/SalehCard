@@ -30,6 +30,9 @@ workflows:
         # testers only); promote to production from Play Console, or change
         # this to `production` once the pipeline is trusted.
         PLAY_TRACK: "internal"
+        # Floor for the version code: above anything already uploaded or built
+        # by hand (1.0.7+10 was built locally on 2026-11-13).
+        MIN_VERSION_CODE: "11"
     triggering:
       events:
         - push
@@ -56,14 +59,24 @@ workflows:
       - name: Get Flutter packages
         script: flutter pub get
       - name: Flutter build appbundle
-        # Version code = highest already on Play (any track) + 1, so uploads
+        # Version code = highest already on Play (all tracks) + 1, so uploads
         # never collide, whatever pubspec says or how often the workflow is
         # recreated. Version name comes from pubspec.yaml.
+        # Fails the build if Play can't be asked (an earlier version silently
+        # fell back to 0 → version code 1 → Play refused the release), and
+        # never goes below MIN_VERSION_CODE (above every code already used).
         script: |
+          set -euo pipefail
           LATEST=$(google-play get-latest-build-number \
             --package-name "$PACKAGE_NAME" \
-            --tracks internal,alpha,beta,production || echo 0)
+            --credentials @env:GCLOUD_SERVICE_ACCOUNT_CREDENTIALS)
+          LATEST=$(echo "$LATEST" | tail -n 1 | tr -dc '0-9')
+          if [ -z "$LATEST" ]; then
+            echo "ERROR: could not read the latest version code from Google Play" >&2
+            exit 1
+          fi
           BUILD=$((LATEST + 1))
+          if [ "$BUILD" -lt "$MIN_VERSION_CODE" ]; then BUILD=$MIN_VERSION_CODE; fi
           echo "Play latest version code: $LATEST -> building $BUILD"
           flutter build appbundle --release \
             --build-number=$BUILD \
