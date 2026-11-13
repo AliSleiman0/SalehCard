@@ -15,11 +15,13 @@ import {
   type WalletAdjustInput,
 } from '../api/users'
 import type { UserRole } from '@/types'
+import { LIVE_REFETCH_MS } from '@/lib/query-client'
 
 export function useUsers(params: UserListParams = {}, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['admin', 'users', params],
     queryFn: () => listUsers(params),
+    refetchInterval: LIVE_REFETCH_MS,
     // Keep the current page visible while the next page/filter/search loads.
     placeholderData: keepPreviousData,
     // Cross-domain callers (Settings' admin-accounts card) pass enabled:false
