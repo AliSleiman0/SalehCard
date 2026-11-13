@@ -1,6 +1,7 @@
 package product
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -118,7 +119,8 @@ func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetByIDPublic handles the customer-facing GET /api/v1/products/{id}: a hidden
-// product reads as not found, so a stale link or cached id can't surface it.
+// or trashed product reads as not found, so a stale link or cached id can't
+// surface it.
 func (h *Handler) GetByIDPublic(w http.ResponseWriter, r *http.Request) {
 	product, err := h.svc.FindByID(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -129,7 +131,7 @@ func (h *Handler) GetByIDPublic(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w)
 		return
 	}
-	if !product.Available {
+	if !product.Purchasable() {
 		response.NotFound(w)
 		return
 	}
@@ -177,6 +179,12 @@ func (h *Handler) VerifyAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		response.InternalError(w)
+		return
+	}
+	// A hidden or trashed product can't be bought, so don't spend a billed
+	// upstream lookup on it — it reads as not found, like GetByIDPublic.
+	if !product.Purchasable() {
+		response.NotFound(w)
 		return
 	}
 	if product.Verification == nil {
@@ -269,22 +277,46 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, updated)
 }
 
-// Delete handles DELETE /api/v1/products/{id}.
+// Delete handles DELETE /api/admin/products/{id}: a SOFT delete (moves the
+// product to the trash). It is reversible via Restore; Purge erases for good.
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	h.trashOp(w, r, h.svc.Delete, audit.ActionProductSoftDelete)
+}
+
+// Restore handles POST /api/admin/products/{id}/restore: takes a product back
+// out of the trash, returning it to its prior live/draft state.
+func (h *Handler) Restore(w http.ResponseWriter, r *http.Request) {
+	h.trashOp(w, r, h.svc.Restore, audit.ActionProductRestore)
+}
+
+// Purge handles DELETE /api/admin/products/{id}/permanent: permanently erases a
+// product that is already in the trash (409 PRODUCT_NOT_DELETED otherwise).
+// The route is gated to super admins (auth.RequireSuperAdmin in admin.go).
+func (h *Handler) Purge(w http.ResponseWriter, r *http.Request) {
+	h.trashOp(w, r, h.svc.Purge, audit.ActionProductDelete)
+}
+
+// trashOp runs a single-product trash operation, maps its errors, audits the
+// action and replies 204.
+func (h *Handler) trashOp(w http.ResponseWriter, r *http.Request, op func(context.Context, string) error, action string) {
 	id := chi.URLParam(r, "id")
 
-	if err := h.svc.Delete(r.Context(), id); err != nil {
-		if errors.Is(err, apperrors.ErrNotFound) {
+	if err := op(r.Context(), id); err != nil {
+		switch {
+		case errors.Is(err, apperrors.ErrNotFound):
 			response.NotFound(w)
-			return
+		case errors.Is(err, apperrors.ErrConflict):
+			response.Error(w, http.StatusConflict, "PRODUCT_NOT_DELETED",
+				"move the product to the trash before deleting it permanently")
+		default:
+			response.InternalError(w)
 		}
-		response.InternalError(w)
 		return
 	}
 
 	if h.rec != nil {
 		h.rec.Record(r.Context(), audit.Entry{
-			Action:     audit.ActionProductDelete,
+			Action:     action,
 			TargetType: "product",
 			TargetID:   id,
 		})

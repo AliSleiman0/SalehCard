@@ -327,6 +327,8 @@ func (f *fakeProductSvc) Update(context.Context, string, product.UpdateProductIn
 	return nil, nil
 }
 func (f *fakeProductSvc) Delete(context.Context, string) error                   { return nil }
+func (f *fakeProductSvc) Restore(context.Context, string) error                  { return nil }
+func (f *fakeProductSvc) Purge(context.Context, string) error                    { return nil }
 func (f *fakeProductSvc) Bulk(context.Context, product.BulkInput) (int64, error) { return 0, nil }
 
 // fakeCodeSvc tracks available stock and whether claims should fail.
@@ -420,6 +422,7 @@ func (f *fakeWalletSvc) ListTransactions(context.Context, bson.ObjectID) ([]*wal
 func codeProduct(price float64, resellerPrice *float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentCode,
 		FulfillmentMode: product.FulfillmentModeInventory,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "1x", Price: price, ResellerPrice: resellerPrice}},
@@ -429,6 +432,7 @@ func codeProduct(price float64, resellerPrice *float64) *product.Product {
 func creditProduct(price float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentCredit,
 		FulfillmentMode: product.FulfillmentModeManualOperator,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "1800 UC", Price: price}},
@@ -438,6 +442,7 @@ func creditProduct(price float64) *product.Product {
 func apiProduct(price float64, providerID *int) *product.Product {
 	return &product.Product{
 		ID:                  bson.NewObjectID(),
+		Available:           true,
 		FulfillmentType:     product.FulfillmentCredit,
 		FulfillmentMode:     product.FulfillmentModeAPI,
 		FulfillmentProvider: providerID,
@@ -449,6 +454,7 @@ func bridgeProduct(price float64) *product.Product {
 	face := price
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentCredit,
 		FulfillmentMode: product.FulfillmentModeBridgeDevice,
 		Bridge:          &product.BridgeSpec{Provider: product.BridgeProviderTouch, Method: product.BridgeMethodTransferCredit},
@@ -459,6 +465,7 @@ func bridgeProduct(price float64) *product.Product {
 func transferProduct(price float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentTransfer,
 		FulfillmentMode: product.FulfillmentModeManualOperator,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "Variable", Price: price}},
