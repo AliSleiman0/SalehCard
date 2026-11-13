@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Icon, ImageArt, Price, Button } from '@/components'
 import { useCurrencyStore } from '@/stores/currency'
-import { OrderStatusBadge } from '@/features/orders/components/OrderParts'
+import { BalanceLine, OrderStatusBadge } from '@/features/orders/components/OrderParts'
 import type { OrderView } from '@/features/orders/types'
 
 export function OrderRow({ o }: { o: OrderView }) {
@@ -22,6 +22,7 @@ export function OrderRow({ o }: { o: OrderView }) {
         <span className="tiny faint num">
           {o.id} · {o.date}
         </span>
+        <BalanceLine o={o} />
       </div>
       <OrderStatusBadge status={o.status} />
       <Price usd={o.total} cur={cur} className="num small" />

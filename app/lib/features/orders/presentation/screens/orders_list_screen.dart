@@ -14,6 +14,7 @@ import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/format/date_time.dart';
 import '../../../checkout/domain/entities/order.dart';
 import '../../../checkout/presentation/providers.dart';
+import '../widgets/balance_line.dart';
 
 /// A client-side status filter for the order history list.
 enum _OrderFilter { all, completed, processing, refunded }
@@ -309,6 +310,10 @@ class _OrderRow extends StatelessWidget {
                         : '#${order.reference} · $date',
                     style: TextStyle(fontSize: 12.5, color: colors.textDim),
                   ),
+                  if (order.walletBalanceAfter != null) ...[
+                    const SizedBox(height: 2),
+                    BalanceLine(order: order, fontSize: 11.5),
+                  ],
                 ],
               ),
             ),

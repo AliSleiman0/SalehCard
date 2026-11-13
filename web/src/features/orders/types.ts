@@ -10,6 +10,10 @@ export interface OrderView {
   total: number
   method: string
   fulfill: 'code' | 'credit' | 'transfer'
+  /** Wallet balance before / after the charge, and after a refund (wallet orders). */
+  balanceBefore?: number
+  balanceAfter?: number
+  refundBalanceAfter?: number
   status?: string
   date?: string
   code?: string
