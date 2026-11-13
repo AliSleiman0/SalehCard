@@ -25,21 +25,45 @@ const FILTERS: [KycStatus | '', string][] = [
   ['', 'All'],
 ]
 
+function statusFromParam(raw: string | null): KycStatus | '' {
+  if (raw === 'all') return ''
+  return FILTERS.some(([k]) => k && k === raw) ? (raw as KycStatus) : 'pending'
+}
+
 export default function KycPage() {
   const { t } = useTranslation()
   const can = useCan()
   const canManage = can('kyc.manage')
-  const [searchParams] = useSearchParams()
-
-  const [status, setStatus] = useState<KycStatus | ''>('pending')
+  // The status filter lives in the URL (?status=pending|approved|rejected|all)
+  // so dashboard tiles can deep-link to it and a refresh keeps it. Absent or
+  // unknown → pending (the work queue); "all" → every status.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const status = statusFromParam(searchParams.get('status'))
+  const setStatus = (k: KycStatus | '') =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('status', k || 'all')
+        return next
+      },
+      { replace: true },
+    )
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [page, setPage] = useState(1)
   const [toReject, setToReject] = useState<KycView | null>(null)
 
+  // Adopt the URL's ?q= — keyed on the value, not the params object, so a
+  // status-chip URL write doesn't wipe a search typed into the box.
+  const qParam = searchParams.get('q') ?? ''
   useEffect(() => {
-    setSearch(searchParams.get('q') ?? '')
-  }, [searchParams])
+    setSearch(qParam)
+  }, [qParam])
+
+  // A status change from outside (dashboard deep link, sidebar) starts at page 1.
+  useEffect(() => {
+    setPage(1)
+  }, [status])
 
   useEffect(() => {
     const timer = setTimeout(() => {

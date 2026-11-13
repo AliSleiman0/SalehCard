@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import {
   Icon,
   PageHead,
@@ -24,6 +25,11 @@ const FILTERS: [TopUpStatus | '', string][] = [
   ['', 'All'],
 ]
 
+function statusFromParam(raw: string | null): TopUpStatus | '' {
+  if (raw === 'all') return ''
+  return FILTERS.some(([k]) => k && k === raw) ? (raw as TopUpStatus) : 'pending'
+}
+
 const STATUS_CLASS: Record<TopUpStatus, string> = {
   pending: 'st st-warn',
   approved: 'st st-ok',
@@ -39,8 +45,25 @@ export default function TopupsPage() {
   const { t } = useTranslation()
   const can = useCan()
   const canManage = can('topups.manage')
-  const [status, setStatus] = useState<TopUpStatus | ''>('pending')
+  // The status filter lives in the URL (?status=pending|approved|rejected|all)
+  // so dashboard tiles can deep-link to it and a refresh keeps it. Absent or
+  // unknown → pending (the work queue); "all" → every status.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const status = statusFromParam(searchParams.get('status'))
+  const setStatus = (k: TopUpStatus | '') =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('status', k || 'all')
+        return next
+      },
+      { replace: true },
+    )
   const [page, setPage] = useState(1)
+  // A status change from outside (dashboard deep link, sidebar) starts at page 1.
+  useEffect(() => {
+    setPage(1)
+  }, [status])
   const [toReject, setToReject] = useState<AdminTopUp | null>(null)
 
   const { data, isLoading, isError, refetch } = useTopUps({ page, status: status || undefined })

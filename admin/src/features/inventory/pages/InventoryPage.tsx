@@ -108,7 +108,10 @@ const PAGE_SIZE = 20
 function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
   const { t } = useTranslation()
   const canManage = useCan()('inventory.manage')
-  const [lowOnly, setLowOnly] = useState(false)
+  // The low-only view lives in the URL (?view=low) so the dashboard's
+  // Low-stock tile can deep-link to it and a refresh keeps it.
+  const [params, setSearchParams] = useSearchParams()
+  const lowOnly = params.get('view') === 'low'
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -136,7 +139,15 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
 
   // Switch the low-only view and jump back to the first page.
   const setView = (low: boolean) => {
-    setLowOnly(low)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (low) next.set('view', 'low')
+        else next.delete('view')
+        return next
+      },
+      { replace: true },
+    )
     setPage(1)
   }
 

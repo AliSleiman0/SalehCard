@@ -86,6 +86,10 @@ export interface OrderListParams {
   fulfillmentType?: FulfillmentType | ''
   paymentMethod?: PaymentMethod | ''
   q?: string
+  /** "today" = the current business-timezone day (server-computed window). */
+  date?: 'today' | ''
+  /** Only processing orders the supplier settler flagged stuck (overrides status). */
+  supplierStuck?: boolean
 }
 
 const ADMIN = '/api/admin/orders'
@@ -98,6 +102,8 @@ export function listOrders(params: OrderListParams): Promise<ApiResponse<AdminOr
   if (params.fulfillmentType) q.set('fulfillmentType', params.fulfillmentType)
   if (params.paymentMethod) q.set('paymentMethod', params.paymentMethod)
   if (params.q) q.set('q', params.q)
+  if (params.date) q.set('date', params.date)
+  if (params.supplierStuck) q.set('supplierStuck', 'true')
   const qs = q.toString()
   return apiClient.get<AdminOrder[]>(qs ? `${ADMIN}?${qs}` : ADMIN)
 }

@@ -116,6 +116,14 @@ type OrderFilter struct {
 	OrderID         *bson.ObjectID  // exact order-id match (search parsed as hex)
 	UserIDs         []bson.ObjectID // email-search matches (search mode)
 	SearchRaw       string          // raw term; matched against deliveredCode in search mode
+
+	// CreatedFrom/CreatedTo bound createdAt to [from, to) when set — e.g. the
+	// dashboard's "today" deep link (see businessDay).
+	CreatedFrom *time.Time
+	CreatedTo   *time.Time
+	// SupplierStuck narrows to processing orders the supplier settler flagged
+	// stuck — exactly what the dashboard "Stuck upstream" tile counts.
+	SupplierStuck bool
 }
 
 // build assembles the MongoDB filter document for f.
@@ -129,6 +137,26 @@ func (f OrderFilter) build() bson.D {
 	}
 	if f.FulfillmentType != "" {
 		filter = append(filter, bson.E{Key: "items.fulfillmentType", Value: f.FulfillmentType})
+	}
+	if f.CreatedFrom != nil || f.CreatedTo != nil {
+		rng := bson.D{}
+		if f.CreatedFrom != nil {
+			rng = append(rng, bson.E{Key: "$gte", Value: *f.CreatedFrom})
+		}
+		if f.CreatedTo != nil {
+			rng = append(rng, bson.E{Key: "$lt", Value: *f.CreatedTo})
+		}
+		filter = append(filter, bson.E{Key: "createdAt", Value: rng})
+	}
+	if f.SupplierStuck {
+		// Same predicate as the dashboard's stuckUpstream count. An explicit
+		// status param would collide on the "status" key, so stuck wins: a
+		// stuck order is by definition still processing.
+		filter = withoutKey(filter, "status")
+		filter = append(filter,
+			bson.E{Key: "status", Value: OrderStatusProcessing},
+			bson.E{Key: "fulfillment.supplierStuckAt", Value: bson.D{{Key: "$exists", Value: true}, {Key: "$ne", Value: nil}}},
+		)
 	}
 	if f.OrderID != nil {
 		filter = append(filter, bson.E{Key: "_id", Value: *f.OrderID})
@@ -151,6 +179,25 @@ func (f OrderFilter) build() bson.D {
 		filter = append(filter, bson.E{Key: "$or", Value: or})
 	}
 	return filter
+}
+
+// withoutKey returns d without any element keyed k.
+func withoutKey(d bson.D, k string) bson.D {
+	out := d[:0:0]
+	for _, e := range d {
+		if e.Key != k {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// businessDay returns the [start, end) bounds of the business-timezone day
+// containing t (local midnight to next local midnight). See BUSINESS_TZ.
+func businessDay(t time.Time) (time.Time, time.Time) {
+	d := t.In(businessLocation)
+	start := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, businessLocation)
+	return start, start.AddDate(0, 0, 1)
 }
 
 // MongoRepository is a MongoDB-backed implementation of Repository.
@@ -591,9 +638,7 @@ func (r *MongoRepository) ListAll(ctx context.Context, f OrderFilter, p paginati
 // the business-timezone day that contains `day` (i.e. [local midnight, next
 // local midnight)). See businessLocation / BUSINESS_TZ.
 func (r *MongoRepository) DayStats(ctx context.Context, day time.Time) (int, float64, error) {
-	d := day.In(businessLocation)
-	start := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, businessLocation)
-	end := start.AddDate(0, 0, 1)
+	start, end := businessDay(day)
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.D{
 			{Key: "status", Value: OrderStatusCompleted},

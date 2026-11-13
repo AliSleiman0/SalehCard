@@ -40,11 +40,19 @@ const FF_API: Record<FfKey, FulfillmentType> = {
   transfer: 'transfer',
 }
 
-// Statuses accepted from the ?status= URL param (e.g. dashboard KPI deep-links).
-// Anything else falls back to 'all'.
+// The list's main filters live in the URL so dashboard KPI tiles can deep-link
+// to them and a filtered view is shareable and survives a refresh:
+//   ?status=pending|processing|completed|failed|refunded
+//   ?type=code|credit|transfer      (fulfillment type)
+//   ?date=today                     (current business day, server-side window)
+//   ?stuck=1                        (supplier-stuck processing orders)
+// Anything unrecognised falls back to "no filter".
 const ORDER_STATUSES: readonly OrderStatus[] = ['pending', 'processing', 'completed', 'failed', 'refunded']
 function statusFromParam(raw: string | null): OrderStatus | 'all' {
   return ORDER_STATUSES.includes(raw as OrderStatus) ? (raw as OrderStatus) : 'all'
+}
+function ffFromParam(raw: string | null): FfKey | 'all' {
+  return raw === 'code' || raw === 'credit' || raw === 'transfer' ? raw : 'all'
 }
 
 export default function OrderListPage() {
@@ -52,10 +60,28 @@ export default function OrderListPage() {
   const navigate = useNavigate()
   const can = useCan()
   const canManage = can('orders.manage')
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const [status, setStatus] = useState<OrderStatus | 'all'>(() => statusFromParam(searchParams.get('status')))
-  const [ff, setFf] = useState<'all' | FfKey>('all')
+  const status = statusFromParam(searchParams.get('status'))
+  const ff = ffFromParam(searchParams.get('type'))
+  const today = searchParams.get('date') === 'today'
+  const stuck = searchParams.get('stuck') === '1'
+  // Write (or clear) URL filter params in one history-replacing update.
+  const setParams = (patch: Record<string, string | null>) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [k, v] of Object.entries(patch)) {
+          if (v) next.set(k, v)
+          else next.delete(k)
+        }
+        return next
+      },
+      { replace: true },
+    )
+  // Picking a status leaves the stuck view (stuck orders are always processing).
+  const setStatus = (v: OrderStatus | 'all') => setParams({ status: v === 'all' ? null : v, stuck: null })
+  const setFf = (v: FfKey | 'all') => setParams({ type: v === 'all' ? null : v })
   const [pay, setPay] = useState<PaymentMethod | 'all'>('all')
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
@@ -63,17 +89,17 @@ export default function OrderListPage() {
   const [exporting, setExporting] = useState(false)
 
   // Adopt the URL's ?q= (e.g. the top-bar global search navigates to /orders?q=…).
+  // Keyed on the value, not the params object, so a filter's URL write doesn't
+  // wipe a search typed into the box.
+  const qParam = searchParams.get('q') ?? ''
   useEffect(() => {
-    const q = searchParams.get('q') ?? ''
-    setSearch(q)
-  }, [searchParams])
+    setSearch(qParam)
+  }, [qParam])
 
-  // Adopt the URL's ?status= (e.g. the dashboard KPI tiles deep-link to
-  // /orders?status=failed). Garbage/absent → 'all'.
+  // Any URL filter change (in-page or a dashboard deep link) starts at page 1.
   useEffect(() => {
-    setStatus(statusFromParam(searchParams.get('status')))
     setPage(1)
-  }, [searchParams])
+  }, [status, ff, today, stuck])
 
   // Debounce the search term so we issue one request per pause, not per keystroke
   // (each non-hex term also drives a user-email lookup server-side).
@@ -91,6 +117,8 @@ export default function OrderListPage() {
     fulfillmentType: ff === 'all' ? ('' as const) : FF_API[ff],
     paymentMethod: pay === 'all' ? ('' as const) : pay,
     q: debouncedSearch.trim(),
+    date: today ? ('today' as const) : ('' as const),
+    supplierStuck: stuck,
   }
 
   const { data, isLoading, isError, refetch } = useOrders({ page, ...filters })
@@ -185,13 +213,25 @@ export default function OrderListPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select className="select" value={status} onChange={(e) => onFilter(setStatus)(e.target.value as OrderStatus | 'all')}>
+          <select
+            className="select"
+            value={stuck ? 'processing' : status}
+            onChange={(e) => setStatus(e.target.value as OrderStatus | 'all')}
+          >
             <option value="all">All statuses</option>
             <option value="completed">Completed</option>
             <option value="processing">Processing</option>
             <option value="pending">Pending</option>
             <option value="refunded">Refunded</option>
             <option value="failed">Failed</option>
+          </select>
+          <select
+            className="select"
+            value={today ? 'today' : 'any'}
+            onChange={(e) => setParams({ date: e.target.value === 'today' ? 'today' : null })}
+          >
+            <option value="any">Any date</option>
+            <option value="today">Today</option>
           </select>
           <select className="select" value={pay} onChange={(e) => onFilter(setPay)(e.target.value as PaymentMethod | 'all')}>
             <option value="all">All payment</option>
@@ -211,12 +251,15 @@ export default function OrderListPage() {
               <Chip
                 key={k}
                 on={ff === k}
-                onClick={() => onFilter(setFf)(k as 'all' | FfKey)}
+                onClick={() => setFf(k as 'all' | FfKey)}
                 dotColor={k !== 'all' ? FF_DOT[k as FfKey] : undefined}
               >
                 {l}
               </Chip>
             ))}
+            <Chip on={stuck} onClick={() => setParams({ stuck: stuck ? null : '1', status: null })} dotColor="var(--danger)">
+              Supplier stuck
+            </Chip>
           </div>
         </div>
 

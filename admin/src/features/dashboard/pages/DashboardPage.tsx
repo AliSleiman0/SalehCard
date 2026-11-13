@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Icon, PageHead, Spark, AreaChart, Donut, Avatar, FfBadge, StatusBadge, Art, artForCategory } from '@/components'
 import type { DonutDatum } from '@/components'
 import { money, downloadCsv, formatLongDate } from '@/lib/utils'
@@ -10,8 +10,13 @@ import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import { useBridgeDevices } from '@/features/bridge/hooks/useBridge'
 import { useSuppliersList } from '@/features/suppliers/hooks/useSuppliers'
 import { useCan } from '@/stores/auth'
+import { itemAllowed } from '@/app/nav'
 
 type Range = 'daily' | 'weekly' | 'monthly'
+
+// "Today's revenue" / "Today's orders" count completed orders created today
+// (business TZ), so both open the list with exactly that filter.
+const TODAY_COMPLETED = '/orders?status=completed&date=today'
 
 const LOW_BALANCE = 50 // USD; below this a bridge SIM is "running dry" (PO, 2026-07-14)
 
@@ -34,19 +39,16 @@ interface KpiProps {
   spark?: number[]
   sparkColor?: string
   cls?: string
-  onClick?: () => void
+  // Page the tile opens. A real <Link> (ctrl/middle-click open a new tab,
+  // focusable, Enter activates). Pass undefined when the viewer can't open
+  // that page (see tileLink) and the tile renders as a plain, inert card.
+  to?: string
 }
 
-function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkColor, cls, onClick }: KpiProps) {
-  return (
-    <div
-      className={'kpi' + (cls ? ' ' + cls : '')}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick() : undefined}
-      style={onClick ? { cursor: 'pointer' } : undefined}
-    >
+function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkColor, cls, to }: KpiProps) {
+  const className = 'kpi' + (to ? ' kpi-link' : '') + (cls ? ' ' + cls : '')
+  const body = (
+    <>
       <div className="k-top">
         <div className="k-ic" style={{ background: iconBg }}>
           {icon}
@@ -68,8 +70,25 @@ function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkC
           <Spark data={spark} color={sparkColor} h={30} fill />
         </div>
       )}
-    </div>
+    </>
   )
+  return to ? (
+    <Link to={to} className={className}>
+      {body}
+    </Link>
+  ) : (
+    <div className={className}>{body}</div>
+  )
+}
+
+/**
+ * tileLink gates a KPI tile's target the same way the sidebar gates nav items:
+ * the link exists only when the viewer holds "<domain>.view" (or the
+ * super-admin wildcard), so a custom role never gets a link into a page its
+ * route guard would bounce.
+ */
+function tileLink(can: (perm: string) => boolean, domain: string, to: string): string | undefined {
+  return itemAllowed({ domain }, can) ? to : undefined
 }
 
 // BridgeBalanceTiles renders one KPI tile per non-null SIM balance (Touch / Alfa)
@@ -77,7 +96,7 @@ function Kpi({ icon, iconBg, label, value, delta, deltaDir, since, spark, sparkC
 // direct child of .kpigrid. Keeping useBridgeDevices() inside this child (only
 // mounted when the viewer has bridge.view) means the query never fires for
 // non-bridge admins. Balances come live from the shared 15s-polling bridge query.
-function BridgeBalanceTiles({ onOpen }: { onOpen: () => void }) {
+function BridgeBalanceTiles({ to }: { to?: string }) {
   const { data } = useBridgeDevices()
   const devices = data?.data ?? []
   const tiles: React.ReactNode[] = []
@@ -96,7 +115,7 @@ function BridgeBalanceTiles({ onOpen }: { onOpen: () => void }) {
           value={`$${bal.toFixed(2)}`}
           since={d.name}
           cls={bal < LOW_BALANCE ? 'alert' : undefined}
-          onClick={onOpen}
+          to={to}
         />,
       )
     }
@@ -108,7 +127,7 @@ function BridgeBalanceTiles({ onOpen }: { onOpen: () => void }) {
 // (panel / telecom) showing its live balance + health. Its own query only fires
 // for admins with suppliers.view (the tiles are gated at the call site), and it
 // shares the 30s-polling supplier-list query with the /suppliers page.
-function SuppliersBalanceTiles({ onOpen }: { onOpen: () => void }) {
+function SuppliersBalanceTiles({ to }: { to?: string }) {
   const { data } = useSuppliersList()
   const suppliers = data?.data?.suppliers ?? []
   const danger = new Set(['auth_error', 'ip_blocked', 'unreachable', 'maintenance'])
@@ -123,7 +142,7 @@ function SuppliersBalanceTiles({ onOpen }: { onOpen: () => void }) {
           value={sup.balanceText}
           since={sup.kind}
           cls={sup.health === 'low_balance' ? 'alert' : danger.has(sup.health) ? 'crit' : undefined}
-          onClick={onOpen}
+          to={to}
         />
       ))}
     </>
@@ -208,6 +227,7 @@ export default function DashboardPage() {
           since="vs yesterday"
           spark={s?.revenueSpark}
           sparkColor="#8a3bff"
+          to={tileLink(can, 'orders', TODAY_COMPLETED)}
         />
         <Kpi
           icon={<Icon name="bag" size={17} />}
@@ -219,6 +239,7 @@ export default function DashboardPage() {
           since="vs yesterday"
           spark={s?.ordersSpark}
           sparkColor="#3b5bff"
+          to={tileLink(can, 'orders', TODAY_COMPLETED)}
         />
         <Kpi
           icon={<Icon name="users" size={17} />}
@@ -226,6 +247,7 @@ export default function DashboardPage() {
           label="Active users"
           value={s ? s.activeUsers.toLocaleString() : '—'}
           since="last 24h"
+          to={tileLink(can, 'users', '/users')}
         />
         <Kpi
           icon={<Icon name="coins" size={17} />}
@@ -233,6 +255,7 @@ export default function DashboardPage() {
           label="Wallet top-ups"
           value={s ? money(s.walletTopups) : '—'}
           since="today"
+          to={tileLink(can, 'topups', '/topups?status=approved')}
         />
         <Kpi
           icon={<Icon name="send" size={17} />}
@@ -241,6 +264,7 @@ export default function DashboardPage() {
           value={s ? String(s.pendingTransfers) : '—'}
           since="needs action"
           cls="alert"
+          to={tileLink(can, 'orders', '/orders?status=processing&type=transfer')}
         />
         <Kpi
           icon={<Icon name="coins" size={17} />}
@@ -249,7 +273,7 @@ export default function DashboardPage() {
           value={s ? String(s.pendingTopups) : '—'}
           since="awaiting approval"
           cls="alert"
-          onClick={() => navigate('/topups')}
+          to={tileLink(can, 'topups', '/topups?status=pending')}
         />
         <Kpi
           icon={<Icon name="id" size={17} />}
@@ -258,7 +282,7 @@ export default function DashboardPage() {
           value={s ? String(s.pendingKyc) : '—'}
           since="awaiting review"
           cls="alert"
-          onClick={() => navigate('/kyc')}
+          to={tileLink(can, 'kyc', '/kyc?status=pending')}
         />
         <Kpi
           icon={<Icon name="alert" size={17} />}
@@ -267,6 +291,7 @@ export default function DashboardPage() {
           value={s ? String(s.lowStockCount) : '—'}
           since="codes running out"
           cls="crit"
+          to={tileLink(can, 'inventory', '/inventory?view=low')}
         />
         <Kpi
           icon={<Icon name="bag" size={17} />}
@@ -274,7 +299,7 @@ export default function DashboardPage() {
           label="Completed orders"
           value={s ? s.ordersCompleted.toLocaleString() : '—'}
           since="all-time"
-          onClick={() => navigate('/orders?status=completed')}
+          to={tileLink(can, 'orders', '/orders?status=completed')}
         />
         <Kpi
           icon={<Icon name="bag" size={17} />}
@@ -283,7 +308,7 @@ export default function DashboardPage() {
           value={s ? String(s.ordersPending) : '—'}
           since="all-time"
           cls="alert"
-          onClick={() => navigate('/orders?status=pending')}
+          to={tileLink(can, 'orders', '/orders?status=pending')}
         />
         <Kpi
           icon={<Icon name="alert" size={17} />}
@@ -292,7 +317,7 @@ export default function DashboardPage() {
           value={s ? String(s.ordersFailed) : '—'}
           since="all-time"
           cls="crit"
-          onClick={() => navigate('/orders?status=failed')}
+          to={tileLink(can, 'orders', '/orders?status=failed')}
         />
         <Kpi
           icon={<Icon name="coins" size={17} />}
@@ -301,7 +326,7 @@ export default function DashboardPage() {
           value={s ? String(s.ordersRefunded) : '—'}
           since="all-time"
           cls="alert"
-          onClick={() => navigate('/orders?status=refunded')}
+          to={tileLink(can, 'orders', '/orders?status=refunded')}
         />
         <Kpi
           icon={<Icon name="server" size={17} />}
@@ -310,10 +335,10 @@ export default function DashboardPage() {
           value={s ? String(s.stuckUpstream) : '—'}
           since="supplier needs attention"
           cls="crit"
-          onClick={() => navigate('/suppliers')}
+          to={tileLink(can, 'orders', '/orders?stuck=1')}
         />
-        {can('bridge.view') && <BridgeBalanceTiles onOpen={() => navigate('/bridge')} />}
-        {can('suppliers.view') && <SuppliersBalanceTiles onOpen={() => navigate('/suppliers')} />}
+        {can('bridge.view') && <BridgeBalanceTiles to="/bridge" />}
+        {can('suppliers.view') && <SuppliersBalanceTiles to="/suppliers" />}
       </div>
 
       <div className="dash-2col mb16">
@@ -468,7 +493,7 @@ export default function DashboardPage() {
                 {s ? s.lowStockCount : lowStock.length}
               </span>
               <div className="ph-act">
-                <button className="abtn xs" onClick={() => navigate('/inventory')}>
+                <button className="abtn xs" onClick={() => navigate('/inventory?view=low')}>
                   Manage
                 </button>
               </div>
