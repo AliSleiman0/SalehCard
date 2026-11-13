@@ -6,6 +6,7 @@ import { RequireAuth, RequireReseller, RedirectIfAuthed } from './RequireAuth'
 const HomePage = lazy(() => import('@/features/catalog/pages/HomePage'))
 const CategoriesPage = lazy(() => import('@/features/catalog/pages/CategoriesPage'))
 const CategoryPage = lazy(() => import('@/features/catalog/pages/CategoryPage'))
+const CatalogNodePage = lazy(() => import('@/features/catalog/pages/CatalogNodePage'))
 const ProductDetailPage = lazy(() => import('@/features/catalog/pages/ProductDetailPage'))
 const CartPage = lazy(() => import('@/features/cart/pages/CartPage'))
 const CheckoutPage = lazy(() => import('@/features/checkout/pages/CheckoutPage'))
@@ -46,6 +47,7 @@ export default function AppRouter() {
           <Route path="/" element={<HomePage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />
+          <Route path="/catalog/:id" element={<CatalogNodePage />} />
           <Route path="/product/:id" element={<ProductDetailRoute />} />
           <Route path="/search" element={<SearchPage />} />
           <Route

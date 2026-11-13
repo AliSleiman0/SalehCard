@@ -12,6 +12,7 @@ import { useCategories } from '../hooks/useCategories'
 import { adaptProduct } from '../lib/adaptProduct'
 import { adaptRootCategory } from '../lib/adaptCategory'
 import { ProductGrid } from '../components/ProductGrid'
+import { SubcategoryGrid } from '../components/SubcategoryGrid'
 
 import { sortAZ } from '../lib/sortAZ'
 
@@ -40,10 +41,14 @@ function CategoryView({ slug }: { slug: string | undefined }) {
   // actual product prices below, so high-priced items are never hidden by default.
   const [maxP, setMaxP] = useState<number | null>(null)
 
-  const query = useProducts({ rootDomain: cat, limit: 50 })
-  const view = (useCategories({ depth: 0 }).data?.data ?? [])
-    .map((x) => adaptRootCategory(x, locale))
-    .find((v) => v.key === cat)
+  // The API caps a page at 100; A→Z on the server so the first page is the
+  // same slice the default A→Z sort shows (was 50, unsorted).
+  const query = useProducts({ rootDomain: cat, limit: 100, sort: 'name' })
+  const roots = useCategories({ depth: 0 }).data?.data ?? []
+  // The root tree node for this domain: its subcategories (Jawaker, Clash of
+  // Clans, Alfa / MTC…) are shown as tiles above the product list.
+  const rootNode = roots.find((x) => (x.rootDomain || x.slug) === cat)
+  const view = rootNode ? adaptRootCategory(rootNode, locale) : undefined
   const title = view?.name || rootMeta(cat).label || cat
 
   const all = useMemo(
@@ -103,6 +108,8 @@ function CategoryView({ slug }: { slug: string | undefined }) {
           ]}
         />
       </div>
+
+      {rootNode?.hasChildren && <SubcategoryGrid parentId={rootNode.id} />}
 
       <div className="cols-acct">
         {/* filters */}

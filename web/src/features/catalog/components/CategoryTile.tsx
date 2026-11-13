@@ -2,12 +2,12 @@ import { useNavigate } from 'react-router-dom'
 import { ImageArt } from '@/components'
 import { type ViewCategory } from '../lib/adaptCategory'
 
-// CategoryTile renders a single root category as a clickable art tile.
-// Shared by HomePage and the /categories index page.
+// CategoryTile renders a category as a clickable art tile: root domains (Home,
+// /categories) and subcategories (drill-down grids), linking to `c.to` when set.
 export function CategoryTile({ c }: { c: ViewCategory }) {
   const navigate = useNavigate()
   return (
-    <div className="cattile hover-pop" onClick={() => navigate('/category/' + c.key)}>
+    <div className="cattile hover-pop" onClick={() => navigate(c.to ?? '/category/' + c.key)}>
       <ImageArt
         art={c.art}
         src={c.image}

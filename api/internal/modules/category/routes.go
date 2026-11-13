@@ -22,4 +22,5 @@ func RegisterRoutes(r chi.Router, db *mongo.Database) {
 	h := NewHandler(svc)
 
 	r.Get("/api/v1/categories", h.List)
+	r.Get("/api/v1/categories/{id}", h.Get)
 }
