@@ -213,6 +213,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         : unitPrice * _qty;
     final tint = ProductChip.tintFor(product.id.hashCode.abs());
     final title = product.title.resolve(localeCode);
+    final categoryLabel =
+        product.categoryName?.resolve(localeCode).trim() ?? '';
     final needsInput =
         product.fulfillmentType != 'code' && nonQuantityFields.isNotEmpty;
     final firstField = needsInput ? nonQuantityFields.first : null;
@@ -234,16 +236,18 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 outOfStockLabel: l10n.outOfStock,
               ),
               const SizedBox(height: 16),
-              Text(
-                product.category.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
-                  color: AppTokens.brand2,
+              if (categoryLabel.isNotEmpty) ...[
+                Text(
+                  categoryLabel.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                    color: AppTokens.brand2,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
+                const SizedBox(height: 6),
+              ],
               Text(
                 title,
                 style: TextStyle(

@@ -155,6 +155,7 @@ class Product {
     required this.variants,
     required this.stock,
     required this.available,
+    this.categoryName,
     this.rootDomain,
     this.thumbnail,
     this.fulfillmentType = 'code',
@@ -170,6 +171,11 @@ class Product {
   final String id;
   final I18nString title;
   final String category;
+
+  /// The assigned taxonomy node's real name, for display. Null when the
+  /// product is unassigned or the node is unnamed — never show [category]
+  /// itself to customers (legacy nodes are slugged `cat-447`).
+  final I18nString? categoryName;
 
   /// Top-level catalog domain (`games`, `telecom`, ...); null when the server
   /// didn't send one. Restricted builds hide anything outside their allowlist.

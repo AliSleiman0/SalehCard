@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -251,6 +252,36 @@ func (r *MongoRepository) FindSubtree(ctx context.Context, id bson.ObjectID) ([]
 		return nil, err
 	}
 	return cats, nil
+}
+
+// Names batch-resolves node display names for the product module's
+// CategoryResolver port (catalog reads show a product's category name rather
+// than its slug, which is "cat-447" for legacy nodes). One indexed _id $in
+// query; ids that don't exist are simply absent from the map.
+func (r *MongoRepository) Names(ctx context.Context, ids []bson.ObjectID) (map[bson.ObjectID]product.I18nString, error) {
+	out := make(map[bson.ObjectID]product.I18nString, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	cur, err := r.col.Find(ctx,
+		bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}},
+		options.Find().SetProjection(bson.D{{Key: "name", Value: 1}}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var rows []struct {
+		ID   bson.ObjectID `bson:"_id"`
+		Name I18nString    `bson:"name"`
+	}
+	if err := cur.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		out[row.ID] = product.I18nString{En: row.Name.En, Ar: row.Name.Ar, Tr: row.Name.Tr}
+	}
+	return out, nil
 }
 
 // DescendantIDs returns the node id plus every descendant id. It satisfies the

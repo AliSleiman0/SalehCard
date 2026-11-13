@@ -267,9 +267,11 @@ export default function ProductDetailPage() {
           <div>
             <div className="col" style={{ gap: 2 }}>
               <h1 className="h1">{p.brand}</h1>
-              <span className="muted" style={{ fontSize: 18, fontWeight: 700 }}>
-                {p.title}
-              </span>
+              {p.title && (
+                <span className="muted" style={{ fontSize: 18, fontWeight: 700 }}>
+                  {p.title}
+                </span>
+              )}
             </div>
             <div className="row wrap-gap" style={{ gap: 12, marginTop: 10 }}>
               {p.reviews > 0 && (
