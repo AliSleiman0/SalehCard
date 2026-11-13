@@ -4,6 +4,19 @@ import type { ApiResponse } from '@/types'
 /** Input kind a manual top-up method collects from the customer. */
 export type MethodFieldType = 'text' | 'number' | 'select' | 'file'
 
+/** A method's payment rail. Store-scoped app builds show only bank / cash / other
+ *  methods; '' = not classified yet. */
+export type MethodKind = '' | 'bank' | 'cash' | 'wallet_app' | 'crypto' | 'other'
+
+export const METHOD_KINDS: { value: MethodKind; label: string }[] = [
+  { value: '', label: 'Not set' },
+  { value: 'bank', label: 'Bank transfer' },
+  { value: 'cash', label: 'Cash / transfer office (OMT, Sham Cash…)' },
+  { value: 'wallet_app', label: 'Payment app (Whish…)' },
+  { value: 'crypto', label: 'Crypto (USDT, BTC, ETH…)' },
+  { value: 'other', label: 'Other' },
+]
+
 /** One customer-input spec on a manual top-up method. */
 export interface MethodField {
   key: string
@@ -18,6 +31,7 @@ export interface MethodField {
 export interface TopUpMethod {
   id: string
   name: string
+  kind?: MethodKind
   instructions: string
   enabled: boolean
   sortOrder: number
@@ -29,6 +43,7 @@ export interface TopUpMethod {
 /** Create/update payload (server validates + normalizes). */
 export interface MethodInput {
   name: string
+  kind: MethodKind
   instructions: string
   enabled: boolean
   sortOrder: number

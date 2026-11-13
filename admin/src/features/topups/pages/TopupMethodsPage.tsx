@@ -16,7 +16,8 @@ import {
   useUpdateMethod,
   useDeleteMethod,
 } from '../hooks/useTopupMethods'
-import type { MethodField, MethodFieldType, MethodInput, TopUpMethod } from '../api/methods'
+import { METHOD_KINDS } from '../api/methods'
+import type { MethodField, MethodFieldType, MethodInput, MethodKind, TopUpMethod } from '../api/methods'
 
 const FIELD_TYPES: [MethodFieldType, string][] = [
   ['text', 'Text'],
@@ -82,6 +83,7 @@ export default function TopupMethodsPage() {
                   ) : (
                     <span className="bdg">Disabled</span>
                   )}
+                  <span className="bdg">{METHOD_KINDS.find((k) => k.value === (m.kind ?? ''))?.label ?? m.kind}</span>
                   <span className="faint" style={{ fontSize: 12.5 }}>
                     {m.fields.length} input{m.fields.length === 1 ? '' : 's'}
                   </span>
@@ -133,6 +135,7 @@ function blankField(): MethodField {
 /** MethodEditor is the create/edit modal with a repeatable field builder. */
 function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose: () => void }) {
   const [name, setName] = useState(method?.name ?? '')
+  const [kind, setKind] = useState<MethodKind>(method?.kind ?? '')
   const [instructions, setInstructions] = useState(method?.instructions ?? '')
   const [enabled, setEnabled] = useState(method?.enabled ?? true)
   const [sortOrder, setSortOrder] = useState(method?.sortOrder ?? 0)
@@ -182,6 +185,7 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
 
     const input: MethodInput = {
       name: name.trim(),
+      kind,
       instructions: instructions.trim(),
       enabled,
       sortOrder: Number(sortOrder) || 0,
@@ -211,6 +215,21 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
+
+        <label className="alabel" style={{ marginTop: 12 }}>
+          Type
+        </label>
+        <select className="afield" value={kind} onChange={(e) => setKind(e.target.value as MethodKind)}>
+          {METHOD_KINDS.map((k) => (
+            <option key={k.value} value={k.value}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+        <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
+          Controls where the method is offered: some app-store builds only show bank, cash and other
+          methods, so set crypto and payment-app methods correctly.
+        </div>
 
         <label className="alabel" style={{ marginTop: 12 }}>
           Instructions (how the customer pays — e.g. the account to send to)

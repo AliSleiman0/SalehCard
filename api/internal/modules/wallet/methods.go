@@ -33,6 +33,29 @@ func validMethodFieldType(t MethodFieldType) bool {
 	return false
 }
 
+// MethodKind classifies a top-up method's rail. Store-scoped clients use it as
+// an ALLOW-list (the iOS build shows only bank/cash/other methods), so a new
+// crypto or wallet-app rail is hidden there by its kind, not by guessing at its
+// name. Empty = unclassified (pre-existing methods until an admin sets it).
+type MethodKind string
+
+const (
+	MethodKindBank      MethodKind = "bank"       // bank / wire transfer
+	MethodKindCash      MethodKind = "cash"       // cash, money-transfer offices (OMT, Sham Cash …)
+	MethodKindWalletApp MethodKind = "wallet_app" // third-party payment apps (Whish …)
+	MethodKindCrypto    MethodKind = "crypto"     // any crypto rail (USDT, BTC, ETH …)
+	MethodKindOther     MethodKind = "other"
+)
+
+// validMethodKind reports whether k is a known kind ("" = unclassified).
+func validMethodKind(k MethodKind) bool {
+	switch k {
+	case "", MethodKindBank, MethodKindCash, MethodKindWalletApp, MethodKindCrypto, MethodKindOther:
+		return true
+	}
+	return false
+}
+
 // Method field / name / instructions length caps — sanity bounds on admin input.
 const (
 	maxMethodNameLen         = 80
@@ -63,6 +86,7 @@ type MethodField struct {
 type TopUpMethod struct {
 	ID           bson.ObjectID `bson:"_id,omitempty" json:"id"`
 	Name         string        `bson:"name"          json:"name"`
+	Kind         MethodKind    `bson:"kind,omitempty" json:"kind,omitempty"`
 	Instructions string        `bson:"instructions"  json:"instructions"`
 	Enabled      bool          `bson:"enabled"       json:"enabled"`
 	SortOrder    int           `bson:"sortOrder"     json:"sortOrder"`
@@ -74,6 +98,7 @@ type TopUpMethod struct {
 // MethodInput is the admin create/update payload for a top-up method.
 type MethodInput struct {
 	Name         string        `json:"name"`
+	Kind         MethodKind    `json:"kind"`
 	Instructions string        `json:"instructions"`
 	Enabled      bool          `json:"enabled"`
 	SortOrder    int           `json:"sortOrder"`
@@ -90,6 +115,10 @@ func (in MethodInput) normalizeAndValidate() (*TopUpMethod, error) {
 	}
 	if len(name) > maxMethodNameLen {
 		return nil, badMethod("method name is too long")
+	}
+	kind := MethodKind(strings.TrimSpace(string(in.Kind)))
+	if !validMethodKind(kind) {
+		return nil, badMethod("unknown method kind: " + string(kind))
 	}
 	instructions := strings.TrimSpace(in.Instructions)
 	if len(instructions) > maxMethodInstructionsLen {
@@ -150,6 +179,7 @@ func (in MethodInput) normalizeAndValidate() (*TopUpMethod, error) {
 
 	return &TopUpMethod{
 		Name:         name,
+		Kind:         kind,
 		Instructions: instructions,
 		Enabled:      in.Enabled,
 		SortOrder:    in.SortOrder,
@@ -224,6 +254,7 @@ func (r *MethodRepo) Update(ctx context.Context, id bson.ObjectID, in MethodInpu
 			{Key: "enabled", Value: clean.Enabled},
 			{Key: "sortOrder", Value: clean.SortOrder},
 			{Key: "fields", Value: clean.Fields},
+			{Key: "kind", Value: clean.Kind},
 			{Key: "updatedAt", Value: time.Now().UTC()},
 		}}},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
