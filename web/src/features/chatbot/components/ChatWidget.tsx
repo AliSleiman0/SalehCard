@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { Icon } from '@/components'
 import { useLocaleStore } from '@/stores/locale'
 import { fetchChatbot, type ChatEntry } from '../api/chatbot'
@@ -15,6 +16,7 @@ type Msg = { from: 'bot' | 'user'; text: string }
 // Hidden entirely while the admin has not added any questions.
 export function ChatWidget() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const locale = useLocaleStore((s) => s.locale)
   const [open, setOpen] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([])
@@ -127,6 +129,19 @@ export function ChatWidget() {
                 )}
               </div>
             )}
+            <div className="row" style={{ gap: 10, marginTop: 8, alignItems: 'center' }}>
+              {!(wa || support.phone || support.email) && <span className="tiny faint">{t('chat_need_help')}</span>}
+              <a
+                className="tiny clickable"
+                style={{ fontWeight: 700 }}
+                onClick={() => {
+                  setOpen(false)
+                  navigate('/complaints/new')
+                }}
+              >
+                {t('complaint_submit')}
+              </a>
+            </div>
           </div>
         </div>
       )}

@@ -1029,4 +1029,146 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadFailed => 'Upload failed. Please try another photo.';
+
+  @override
+  String get complaintsTitle => 'Complaints';
+
+  @override
+  String get complaintsEmptyTitle => 'No complaints yet';
+
+  @override
+  String get complaintsEmptySub =>
+      'If something went wrong with an order, a top-up or your account, tell us and we will follow up.';
+
+  @override
+  String get complaintsLoadFailed => 'Couldn\'t load your complaints.';
+
+  @override
+  String get complaintSubmit => 'Submit a complaint';
+
+  @override
+  String get reportProblem => 'Report a problem';
+
+  @override
+  String get complaintNewTitle => 'Submit a complaint';
+
+  @override
+  String get complaintNewSub =>
+      'Our support team will reply here and send you a notification.';
+
+  @override
+  String get complaintCategory => 'Category';
+
+  @override
+  String get complaintCatOrder => 'An order';
+
+  @override
+  String get complaintCatTopup => 'A wallet top-up';
+
+  @override
+  String get complaintCatAccount => 'My account';
+
+  @override
+  String get complaintCatOther => 'Something else';
+
+  @override
+  String get complaintOrderOptional => 'Which order? (optional)';
+
+  @override
+  String get complaintNoOrder => 'Not about a specific order';
+
+  @override
+  String get complaintSubject => 'Subject';
+
+  @override
+  String get complaintSubjectHint => 'A short summary of the problem';
+
+  @override
+  String get complaintMessage => 'Describe the problem';
+
+  @override
+  String get complaintMessageHint =>
+      'What happened? Include anything that helps us look into it.';
+
+  @override
+  String get complaintPhotoOptional => 'Photo (optional)';
+
+  @override
+  String get complaintAttachPhoto => 'Attach a screenshot or photo';
+
+  @override
+  String get complaintRemovePhoto => 'Remove photo';
+
+  @override
+  String get complaintStatusOpen => 'Open';
+
+  @override
+  String get complaintStatusInProgress => 'In progress';
+
+  @override
+  String get complaintStatusResolved => 'Resolved';
+
+  @override
+  String get complaintStatusClosed => 'Closed';
+
+  @override
+  String get complaintLastActivity => 'Last activity';
+
+  @override
+  String get complaintLinkedOrder => 'Order';
+
+  @override
+  String get complaintYou => 'You';
+
+  @override
+  String get complaintSupport => 'Support';
+
+  @override
+  String get complaintReplyHint => 'Write a reply…';
+
+  @override
+  String get complaintSend => 'Send';
+
+  @override
+  String get complaintSendFailed => 'Could not send. Please try again.';
+
+  @override
+  String get complaintResolvedHint =>
+      'Support marked this as resolved. Reply if the problem is still there and it will reopen.';
+
+  @override
+  String get complaintClosedHint =>
+      'This complaint is closed. Submit a new one if you need more help.';
+
+  @override
+  String get complaintErrSubject => 'Please enter a subject.';
+
+  @override
+  String get complaintErrMessage => 'Please describe the problem.';
+
+  @override
+  String get complaintTooManyOpen =>
+      'You already have several open complaints. Please wait for one to be resolved.';
+
+  @override
+  String notifComplaintReplyTitle(String ref) {
+    return 'Reply to your complaint $ref';
+  }
+
+  @override
+  String notifComplaintResolvedTitle(String ref) {
+    return 'Your complaint $ref was resolved';
+  }
+
+  @override
+  String notifComplaintClosedTitle(String ref) {
+    return 'Your complaint $ref was closed';
+  }
+
+  @override
+  String get notifComplaintResolvedBody =>
+      'If the problem is still there, reply to reopen it.';
+
+  @override
+  String get notifComplaintClosedBody => 'Thank you for contacting support.';
 }

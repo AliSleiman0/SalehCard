@@ -141,6 +141,9 @@ func TestNotifier_Notify_InsertsRowAndFansOut(t *testing.T) {
 	assert.ElementsMatch(t, []string{"tok-a", "tok-b"}, gotTokens)
 	assert.Equal(t, "Order completed", sender.sent[0].Title)
 	assert.Equal(t, "abc", sender.sent[0].Data["orderId"])
+	// The push data carries the kind (tap routing); the inbox row's map does not.
+	assert.Equal(t, KindOrderCompleted, sender.sent[0].Data["kind"])
+	assert.NotContains(t, row.Data, "kind")
 }
 
 func TestNotifier_FanOut_PrunesUnregisteredTokens(t *testing.T) {

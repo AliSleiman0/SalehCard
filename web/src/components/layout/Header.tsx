@@ -56,7 +56,7 @@ export function Header() {
   // The category bar is a persistent browse affordance on every page except the
   // focused auth screens, so the store is always reachable (incl. the dashboard).
   const showCatNav = pathname !== '/login' && pathname !== '/register'
-  const onAcctPage = ['/dashboard', '/wallet', '/orders', '/saved-ids'].some((p) =>
+  const onAcctPage = ['/dashboard', '/wallet', '/orders', '/saved-ids', '/complaints'].some((p) =>
     pathname.startsWith(p),
   )
 

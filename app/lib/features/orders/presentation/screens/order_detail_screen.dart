@@ -295,6 +295,16 @@ class _Body extends StatelessWidget {
             labelOf: _statusLabel,
           ),
         ],
+        const SizedBox(height: 20),
+        Center(
+          child: TextButton.icon(
+            onPressed: () => context.push(
+              '/complaints/new?category=order&orderId=${order.id}',
+            ),
+            icon: const Icon(Icons.report_gmailerrorred_rounded, size: 18),
+            label: Text(l10n.reportProblem),
+          ),
+        ),
       ],
     );
   }

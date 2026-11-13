@@ -1927,6 +1927,264 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Upload failed. Please try another photo.'**
   String get uploadFailed;
+
+  /// No description provided for @complaintsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Complaints'**
+  String get complaintsTitle;
+
+  /// No description provided for @complaintsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No complaints yet'**
+  String get complaintsEmptyTitle;
+
+  /// No description provided for @complaintsEmptySub.
+  ///
+  /// In en, this message translates to:
+  /// **'If something went wrong with an order, a top-up or your account, tell us and we will follow up.'**
+  String get complaintsEmptySub;
+
+  /// No description provided for @complaintsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your complaints.'**
+  String get complaintsLoadFailed;
+
+  /// No description provided for @complaintSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit a complaint'**
+  String get complaintSubmit;
+
+  /// No description provided for @reportProblem.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a problem'**
+  String get reportProblem;
+
+  /// No description provided for @complaintNewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit a complaint'**
+  String get complaintNewTitle;
+
+  /// No description provided for @complaintNewSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Our support team will reply here and send you a notification.'**
+  String get complaintNewSub;
+
+  /// No description provided for @complaintCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get complaintCategory;
+
+  /// No description provided for @complaintCatOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'An order'**
+  String get complaintCatOrder;
+
+  /// No description provided for @complaintCatTopup.
+  ///
+  /// In en, this message translates to:
+  /// **'A wallet top-up'**
+  String get complaintCatTopup;
+
+  /// No description provided for @complaintCatAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'My account'**
+  String get complaintCatAccount;
+
+  /// No description provided for @complaintCatOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else'**
+  String get complaintCatOther;
+
+  /// No description provided for @complaintOrderOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Which order? (optional)'**
+  String get complaintOrderOptional;
+
+  /// No description provided for @complaintNoOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Not about a specific order'**
+  String get complaintNoOrder;
+
+  /// No description provided for @complaintSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get complaintSubject;
+
+  /// No description provided for @complaintSubjectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A short summary of the problem'**
+  String get complaintSubjectHint;
+
+  /// No description provided for @complaintMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the problem'**
+  String get complaintMessage;
+
+  /// No description provided for @complaintMessageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened? Include anything that helps us look into it.'**
+  String get complaintMessageHint;
+
+  /// No description provided for @complaintPhotoOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo (optional)'**
+  String get complaintPhotoOptional;
+
+  /// No description provided for @complaintAttachPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach a screenshot or photo'**
+  String get complaintAttachPhoto;
+
+  /// No description provided for @complaintRemovePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get complaintRemovePhoto;
+
+  /// No description provided for @complaintStatusOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get complaintStatusOpen;
+
+  /// No description provided for @complaintStatusInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get complaintStatusInProgress;
+
+  /// No description provided for @complaintStatusResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get complaintStatusResolved;
+
+  /// No description provided for @complaintStatusClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get complaintStatusClosed;
+
+  /// No description provided for @complaintLastActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Last activity'**
+  String get complaintLastActivity;
+
+  /// No description provided for @complaintLinkedOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Order'**
+  String get complaintLinkedOrder;
+
+  /// No description provided for @complaintYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get complaintYou;
+
+  /// No description provided for @complaintSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Support'**
+  String get complaintSupport;
+
+  /// No description provided for @complaintReplyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a reply…'**
+  String get complaintReplyHint;
+
+  /// No description provided for @complaintSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get complaintSend;
+
+  /// No description provided for @complaintSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send. Please try again.'**
+  String get complaintSendFailed;
+
+  /// No description provided for @complaintResolvedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Support marked this as resolved. Reply if the problem is still there and it will reopen.'**
+  String get complaintResolvedHint;
+
+  /// No description provided for @complaintClosedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This complaint is closed. Submit a new one if you need more help.'**
+  String get complaintClosedHint;
+
+  /// No description provided for @complaintErrSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a subject.'**
+  String get complaintErrSubject;
+
+  /// No description provided for @complaintErrMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Please describe the problem.'**
+  String get complaintErrMessage;
+
+  /// No description provided for @complaintTooManyOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have several open complaints. Please wait for one to be resolved.'**
+  String get complaintTooManyOpen;
+
+  /// No description provided for @notifComplaintReplyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply to your complaint {ref}'**
+  String notifComplaintReplyTitle(String ref);
+
+  /// No description provided for @notifComplaintResolvedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your complaint {ref} was resolved'**
+  String notifComplaintResolvedTitle(String ref);
+
+  /// No description provided for @notifComplaintClosedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your complaint {ref} was closed'**
+  String notifComplaintClosedTitle(String ref);
+
+  /// No description provided for @notifComplaintResolvedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'If the problem is still there, reply to reopen it.'**
+  String get notifComplaintResolvedBody;
+
+  /// No description provided for @notifComplaintClosedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you for contacting support.'**
+  String get notifComplaintClosedBody;
 }
 
 class _AppLocalizationsDelegate
