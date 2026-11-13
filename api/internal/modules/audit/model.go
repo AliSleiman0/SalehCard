@@ -85,6 +85,9 @@ const (
 	ActionCategoryCreate = "category.create"
 	ActionCategoryUpdate = "category.update"
 	ActionCategoryDelete = "category.delete"
+	// ActionCategoryProductReorder records an admin arranging the products of
+	// one category node (target = the node; summary = the full new order).
+	ActionCategoryProductReorder = "category.product_reorder"
 
 	ActionBridgeDeviceCreate  = "bridge.device_create"
 	ActionBridgeDeviceUpdate  = "bridge.device_update"

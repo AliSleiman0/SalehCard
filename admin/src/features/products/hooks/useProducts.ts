@@ -8,6 +8,8 @@ import {
   bulkProductAction,
   uploadProductImage,
   listFulfillmentProviders,
+  getCategoryProductOrder,
+  saveCategoryProductOrder,
   type ProductListParams,
   type ProductInput,
   type BulkAction,
@@ -65,6 +67,24 @@ export function useDeleteProduct() {
   return useMutation({
     mutationFn: (id: string) => deleteProduct(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'products'] }),
+  })
+}
+
+export function useCategoryProductOrder(categoryId: string) {
+  return useQuery({
+    queryKey: ['admin', 'products', 'order', categoryId],
+    queryFn: () => getCategoryProductOrder(categoryId),
+  })
+}
+
+export function useSaveCategoryProductOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ categoryId, productIds }: { categoryId: string; productIds: string[] }) =>
+      saveCategoryProductOrder(categoryId, productIds),
+    // Covers the arrange list itself and every product listing (the category
+    // panel previews the customer order).
+    onSettled: () => qc.invalidateQueries({ queryKey: ['admin', 'products'] }),
   })
 }
 
