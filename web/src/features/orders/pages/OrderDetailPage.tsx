@@ -73,6 +73,13 @@ export default function OrderDetailPage() {
             {t('continue_shop')}
           </Button>
         </div>
+        <a
+          className="small clickable faint"
+          style={{ textAlign: 'center' }}
+          onClick={() => navigate(`/complaints/new?category=order&orderId=${raw.id}`)}
+        >
+          {t('report_problem')}
+        </a>
       </Card>
     </div>
   )

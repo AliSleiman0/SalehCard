@@ -76,6 +76,7 @@ export const NAV: NavGroup[] = [
       { to: '/users', icon: 'users', label: 'nav_users', domain: 'users' },
       { to: '/resellers', icon: 'handshake', label: 'nav_resellers', domain: 'resellers' },
       { to: '/kyc', icon: 'id', label: 'nav_kyc', domain: 'kyc' },
+      { to: '/complaints', icon: 'flag', label: 'nav_complaints', domain: 'complaints' },
     ],
   },
   {

@@ -23,7 +23,7 @@ type Service interface {
 	// the filtered total count for pagination. lowOnly restricts the returned rows
 	// to low-stock products; search restricts them to a case-insensitive title
 	// substring. Neither filter affects the global totals.
-	InventoryPaged(ctx context.Context, p pagination.Params, lowOnly bool, search string) (rows []InventoryStats, totals InventoryTotals, total int64, err error)
+	InventoryPaged(ctx context.Context, p pagination.Params, view StockView, search string) (rows []InventoryStats, totals InventoryTotals, total int64, err error)
 	LowStock(ctx context.Context) ([]InventoryStats, error)
 	// ClaimForOrder claims qty available codes for a product against an order,
 	// re-mirroring product stock. On any shortfall it releases what it claimed
@@ -157,7 +157,7 @@ func (s *CodeService) Inventory(ctx context.Context) ([]InventoryStats, error) {
 // stats set once (via Inventory), computes the global KPI totals over it, then
 // sorts by title (so skip/limit paging is deterministic), optionally filters to
 // low-stock rows and/or a title search, and slices the requested page.
-func (s *CodeService) InventoryPaged(ctx context.Context, p pagination.Params, lowOnly bool, search string) ([]InventoryStats, InventoryTotals, int64, error) {
+func (s *CodeService) InventoryPaged(ctx context.Context, p pagination.Params, view StockView, search string) ([]InventoryStats, InventoryTotals, int64, error) {
 	all, err := s.Inventory(ctx)
 	if err != nil {
 		return nil, InventoryTotals{}, 0, err
@@ -187,10 +187,10 @@ func (s *CodeService) InventoryPaged(ctx context.Context, p pagination.Params, l
 
 	q := strings.ToLower(strings.TrimSpace(search))
 	rows := all
-	if lowOnly || q != "" {
+	if view != StockAll || q != "" {
 		rows = make([]InventoryStats, 0, len(all))
 		for _, st := range all {
-			if lowOnly && st.Level != LevelLo {
+			if !view.matches(st) {
 				continue
 			}
 			if q != "" && !strings.Contains(strings.ToLower(st.Title), q) {
@@ -210,6 +210,32 @@ func (s *CodeService) InventoryPaged(ctx context.Context, p pagination.Params, l
 		end = len(rows)
 	}
 	return rows[skip:end], totals, total, nil
+}
+
+// StockView narrows the paged inventory listing.
+type StockView string
+
+const (
+	// StockAll lists every product.
+	StockAll StockView = ""
+	// StockLow lists only the most depleted products (LevelLo) — the same set
+	// the inventory page's "Low-stock products" total counts.
+	StockLow StockView = "low"
+	// StockBelow lists every product whose available count is below its
+	// threshold (LevelLo + LevelMid) — the same rule as LowStock and the
+	// dashboard's lowStockCount tile.
+	StockBelow StockView = "below"
+)
+
+func (v StockView) matches(st InventoryStats) bool {
+	switch v {
+	case StockLow:
+		return st.Level == LevelLo
+	case StockBelow:
+		return st.Available < st.Threshold
+	default:
+		return true
+	}
 }
 
 // LowStock returns the subset of inventory whose available count is below the

@@ -64,6 +64,10 @@ AppNotificationType notificationTypeFromKind(String kind) {
       return AppNotificationType.kycApproved;
     case 'kyc_rejected':
       return AppNotificationType.kycRejected;
+    case 'complaint_reply':
+      return AppNotificationType.complaintReply;
+    case 'complaint_status':
+      return AppNotificationType.complaintStatus;
     default:
       return AppNotificationType.general;
   }

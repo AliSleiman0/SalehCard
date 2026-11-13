@@ -71,6 +71,13 @@ class AccountMenuScreen extends ConsumerWidget {
             onTap: () => context.push('/orders'),
           ),
           const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.support_agent_rounded),
+            title: Text(l10n.complaintsTitle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/complaints'),
+          ),
+          const Divider(height: 1),
           // Help bot (predefined Q&A) — only when the admin has added questions.
           if (ref.watch(chatbotProvider).value?.entries.isNotEmpty ?? false) ...[
             ListTile(

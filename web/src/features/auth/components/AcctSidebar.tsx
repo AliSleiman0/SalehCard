@@ -9,13 +9,14 @@ import { useLogout } from '@/features/auth/hooks/useLogout'
 import { displayName, initials } from '@/features/auth/userDisplay'
 import { DeleteAccountModal } from './DeleteAccountModal'
 
-type SidebarKey = 'dashboard' | 'wallet' | 'orders' | 'savedids' | 'reseller'
+type SidebarKey = 'dashboard' | 'wallet' | 'orders' | 'savedids' | 'complaints' | 'reseller'
 
 const PATHS: Record<Exclude<SidebarKey, 'reseller'>, string> = {
   dashboard: '/dashboard',
   wallet: '/wallet',
   orders: '/orders',
   savedids: '/saved-ids',
+  complaints: '/complaints',
 }
 
 export function AcctSidebar({ active }: { active: SidebarKey }) {
@@ -30,6 +31,7 @@ export function AcctSidebar({ active }: { active: SidebarKey }) {
     { v: 'wallet', icon: 'wallet', l: t('nav_wallet') },
     { v: 'orders', icon: 'shield', l: t('order_history') },
     { v: 'savedids', icon: 'user', l: t('saved_players') },
+    { v: 'complaints', icon: 'chat', l: t('complaints') },
   ]
   return (
     <aside className="sidenav acct-drawer">

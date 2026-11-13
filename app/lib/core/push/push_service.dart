@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/browse/presentation/providers.dart';
+import '../../features/complaints/data/complaint_repository.dart';
+import '../../features/complaints/domain/complaint.dart';
+import '../router/app_router.dart';
 import '../../firebase_options.dart';
 
 /// Whether Firebase initialized successfully — push calls are no-ops until it
@@ -21,7 +24,9 @@ Future<void> initFirebase() async {
     return;
   }
   try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     // Background/killed "notification" messages are shown in the system tray
     // by FCM itself; the handler just has to exist.
     FirebaseMessaging.onBackgroundMessage(_onBackgroundMessage);
@@ -90,10 +95,46 @@ class PushService {
       );
     });
     // A push while the app is foregrounded: no tray banner — refresh the bell
-    // badge and the inbox instead so the UI updates live.
-    FirebaseMessaging.onMessage.listen((_) {
+    // badge and the inbox instead so the UI updates live (and an open
+    // complaint thread / list, for complaint pushes).
+    FirebaseMessaging.onMessage.listen((message) {
       _ref.invalidate(unreadNotificationsCountProvider);
       _ref.invalidate(notificationsProvider);
+      if (complaintNotificationKinds.contains(message.data['kind'])) {
+        _ref.invalidate(complaintsProvider);
+        _ref.invalidate(complaintDetailProvider);
+      }
     });
+    // Tapping a tray notification while the app was in the background.
+    FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) => _open(message, coldStart: false),
+    );
+    // Tapping a tray notification that launched the app from killed. register()
+    // runs once the session is authenticated, so the router guard lets it through.
+    unawaited(
+      FirebaseMessaging.instance.getInitialMessage().then((message) {
+        if (message != null) _open(message, coldStart: true);
+      }),
+    );
+  }
+
+  /// Routes a tapped notification to its screen. Only complaint notifications
+  /// deep-link today; every other kind just opens the app as before.
+  void _open(RemoteMessage message, {required bool coldStart}) {
+    final route = pushRouteFor(message.data);
+    if (route == null) return;
+    _ref.invalidate(complaintDetailProvider);
+    final router = _ref.read(routerProvider);
+    if (coldStart) {
+      // Land on home first so back from the complaint has somewhere to go.
+      router.go('/home');
+    }
+    router.push(route);
   }
 }
+
+/// The in-app route for a push payload, or null when it should just open the
+/// app. The server puts the notification kind into the FCM data map next to the
+/// structured values (complaintId, number, ...).
+String? pushRouteFor(Map<String, dynamic> data) =>
+    complaintRouteFor(data['kind']?.toString(), data);

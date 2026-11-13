@@ -167,9 +167,10 @@ func selectorFilter(sel Selector) (bson.D, bool) {
 	return bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}}, true
 }
 
-// andTrash combines a selector filter with a deletedAt guard via $and, so the
-// guard never collides with the selector's own deletedAt clause in one document.
-func andTrash(filter bson.D, guard bson.E) bson.D {
+// andWith combines a selector filter with one extra clause via $and, so the
+// clause never collides with a same-key clause of the selector (e.g. its own
+// deletedAt view, or a categoryId filter) in one document.
+func andWith(filter bson.D, guard bson.E) bson.D {
 	return bson.D{{Key: "$and", Value: bson.A{filter, bson.D{guard}}}}
 }
 
@@ -224,6 +225,7 @@ func (r *MongoRepository) BulkSetCategory(ctx context.Context, sel Selector, cat
 				{Key: "categoryId", Value: ""},
 				{Key: "category", Value: ""},
 				{Key: "rootDomain", Value: ""},
+				{Key: "position", Value: ""}, // a rank only means something inside a node
 			}},
 		}
 	} else {
@@ -231,12 +233,29 @@ func (r *MongoRepository) BulkSetCategory(ctx context.Context, sel Selector, cat
 		if err != nil {
 			return 0, apperrors.ErrBadRequest
 		}
-		update = bson.D{{Key: "$set", Value: bson.D{
+		set := bson.D{
 			{Key: "categoryId", Value: catOID},
 			{Key: "category", Value: slug},
 			{Key: "rootDomain", Value: rootDomain},
 			{Key: "updatedAt", Value: now},
-		}}}
+		}
+		// Products already in the node keep their rank; products actually
+		// moving drop their old node's rank in the same per-document write as
+		// the move (they join unarranged, A to Z). Stayers go first so a mover
+		// is never matched twice.
+		stay, err := r.col.UpdateMany(ctx,
+			andWith(filter, bson.E{Key: "categoryId", Value: catOID}),
+			bson.D{{Key: "$set", Value: set}})
+		if err != nil {
+			return 0, err
+		}
+		moved, err := r.col.UpdateMany(ctx,
+			andWith(filter, bson.E{Key: "categoryId", Value: bson.D{{Key: "$ne", Value: catOID}}}),
+			bson.D{{Key: "$set", Value: set}, {Key: "$unset", Value: bson.D{{Key: "position", Value: ""}}}})
+		if err != nil {
+			return stay.ModifiedCount, err
+		}
+		return stay.ModifiedCount + moved.ModifiedCount, nil
 	}
 
 	res, err := r.col.UpdateMany(ctx, filter, update)
@@ -256,12 +275,7 @@ func (r *MongoRepository) BulkSoftDelete(ctx context.Context, sel Selector) (int
 		return 0, nil
 	}
 	now := time.Now().UTC()
-	res, err := r.col.UpdateMany(ctx, andTrash(filter, notDeleted),
-		bson.D{{Key: "$set", Value: bson.D{
-			{Key: "deletedAt", Value: now},
-			{Key: "updatedAt", Value: now},
-		}}},
-	)
+	res, err := r.col.UpdateMany(ctx, andWith(filter, notDeleted), softDeleteUpdate(now))
 	if err != nil {
 		return 0, err
 	}
@@ -276,11 +290,25 @@ func (r *MongoRepository) BulkRestore(ctx context.Context, sel Selector) (int64,
 	if !ok {
 		return 0, nil
 	}
-	res, err := r.col.UpdateMany(ctx, andTrash(filter, inTrash), restoreUpdate())
+	res, err := r.col.UpdateMany(ctx, andWith(filter, inTrash), restoreUpdate())
 	if err != nil {
 		return 0, err
 	}
 	return res.ModifiedCount, nil
+}
+
+// softDeleteUpdate stamps deletedAt and drops the product's manual rank in its
+// category (Position): a trashed product is not arrangeable, and on restore it
+// rejoins the node unarranged (A to Z) rather than colliding with a rank the
+// admin has since given another product. available is never touched.
+func softDeleteUpdate(now time.Time) bson.D {
+	return bson.D{
+		{Key: "$set", Value: bson.D{
+			{Key: "deletedAt", Value: now},
+			{Key: "updatedAt", Value: now},
+		}},
+		{Key: "$unset", Value: bson.D{{Key: "position", Value: ""}}},
+	}
 }
 
 // restoreUpdate clears deletedAt (and only that, plus updatedAt).
@@ -299,7 +327,7 @@ func (r *MongoRepository) BulkPurge(ctx context.Context, ids []string) (int64, e
 	if !ok {
 		return 0, nil
 	}
-	res, err := r.col.DeleteMany(ctx, andTrash(filter, inTrash))
+	res, err := r.col.DeleteMany(ctx, andWith(filter, inTrash))
 	if err != nil {
 		return 0, err
 	}
@@ -316,7 +344,7 @@ func (r *MongoRepository) FindAll(ctx context.Context, f ListFilter, p paginatio
 	}
 
 	if f.Sort == SortByName {
-		return r.findAllByName(ctx, filter, p)
+		return r.findAllByName(ctx, filter, p, f.manualOrder)
 	}
 
 	skip := pagination.Skip(p)
@@ -351,12 +379,18 @@ func (r *MongoRepository) FindAll(ctx context.Context, f ListFilter, p paginatio
 // findAllByName serves an A to Z page: loads the match set (capped), sorts it
 // naturally in Go, then slices the requested page. The sorted set is cached
 // briefly per filter (see nameCache) and pages are cloned out of it.
-func (r *MongoRepository) findAllByName(ctx context.Context, filter bson.D, p pagination.Params) ([]Product, int64, error) {
+func (r *MongoRepository) findAllByName(ctx context.Context, filter bson.D, p pagination.Params, manual bool) ([]Product, int64, error) {
 	key := ""
 	if raw, err := bson.MarshalExtJSON(filter, true, false); err == nil {
 		key = string(raw)
+		if manual {
+			key = "manual:" + key
+		}
 	}
 	now := time.Now()
+	// Captured before the read: a write that lands mid-read bumps the
+	// generation, so this (possibly stale) set is not cached.
+	gen := nameCacheGeneration()
 	all, hit := []Product(nil), false
 	if key != "" {
 		all, hit = nameCacheGet(key, now)
@@ -375,9 +409,13 @@ func (r *MongoRepository) findAllByName(ctx context.Context, filter bson.D, p pa
 		for i := range all {
 			all[i].normalize()
 		}
-		sortProductsByName(all)
+		if manual {
+			sortProductsCatalog(all)
+		} else {
+			sortProductsByName(all)
+		}
 		if key != "" {
-			nameCachePut(key, all, now)
+			nameCachePutIfCurrent(key, all, now, gen)
 		}
 	}
 	return pageOf(all, p)
@@ -416,6 +454,33 @@ func (r *MongoRepository) FindByID(ctx context.Context, id string) (*Product, er
 	p.normalize()
 
 	return &p, nil
+}
+
+// ExistingIDs reports which of ids still have a product document. It reads
+// only _id, so it is cheap enough to run on every admin order listing (the
+// admin links an order line to its product and needs to know which products
+// were deleted since — deletes are hard deletes).
+func (r *MongoRepository) ExistingIDs(ctx context.Context, ids []bson.ObjectID) (map[bson.ObjectID]bool, error) {
+	found := make(map[bson.ObjectID]bool, len(ids))
+	if len(ids) == 0 {
+		return found, nil
+	}
+	cursor, err := r.col.Find(ctx,
+		bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}},
+		options.Find().SetProjection(bson.D{{Key: "_id", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ID bson.ObjectID `bson:"_id"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		found[row.ID] = true
+	}
+	return found, nil
 }
 
 // FindByLegacyID retrieves a product by its migration legacyId, or ErrNotFound.
@@ -778,9 +843,11 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	}
 	// Taxonomy re-assignment: the service resolved CategoryID and set the derived
 	// RootDomain. Persist the node ref + denormalized rootDomain together.
+	var moveTo *bson.ObjectID
 	if in.CategoryID != nil {
-		if oid, oerr := bson.ObjectIDFromHex(*in.CategoryID); oerr == nil {
-			set = append(set, bson.E{Key: "categoryId", Value: oid})
+		if catOID, oerr := bson.ObjectIDFromHex(*in.CategoryID); oerr == nil {
+			set = append(set, bson.E{Key: "categoryId", Value: catOID})
+			moveTo = &catOID
 		}
 	}
 	if in.RootDomain != nil {
@@ -883,6 +950,25 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	opts := options.FindOneAndUpdate().SetReturnDocument(after)
 
 	var updated Product
+	if moveTo != nil {
+		// A real move drops the product's rank in the node it leaves, in the
+		// same document-atomic write as the move (filter: not already there).
+		// The editor sends categoryId on every save, so no match here means
+		// "already in that node" (or gone) → the plain update below, which
+		// keeps the rank.
+		err = r.col.FindOneAndUpdate(ctx,
+			bson.D{{Key: "_id", Value: oid}, {Key: "categoryId", Value: bson.D{{Key: "$ne", Value: *moveTo}}}},
+			bson.D{{Key: "$set", Value: set}, {Key: "$unset", Value: bson.D{{Key: "position", Value: ""}}}},
+			opts,
+		).Decode(&updated)
+		if err == nil {
+			updated.normalize()
+			return &updated, nil
+		}
+		if err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	}
 	err = r.col.FindOneAndUpdate(
 		ctx,
 		bson.D{{Key: "_id", Value: oid}},
@@ -909,13 +995,7 @@ func (r *MongoRepository) SoftDelete(ctx context.Context, id string) error {
 		return apperrors.ErrNotFound
 	}
 	now := time.Now().UTC()
-	res, err := r.col.UpdateOne(ctx,
-		bson.D{{Key: "_id", Value: oid}, notDeleted},
-		bson.D{{Key: "$set", Value: bson.D{
-			{Key: "deletedAt", Value: now},
-			{Key: "updatedAt", Value: now},
-		}}},
-	)
+	res, err := r.col.UpdateOne(ctx, bson.D{{Key: "_id", Value: oid}, notDeleted}, softDeleteUpdate(now))
 	if err != nil {
 		return err
 	}

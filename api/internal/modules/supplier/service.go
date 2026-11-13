@@ -3,6 +3,7 @@ package supplier
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -537,26 +538,38 @@ func slugify(s string) string {
 }
 
 // formatMoney renders a balance in its supplier currency for the admin card.
+// A negative balance (a supplier account overdrawn on credit) puts the sign
+// before the currency symbol: -$450.29, never $-450.-29.
 func formatMoney(v float64, currency string) string {
+	// A garbage upstream value (NaN/±Inf, or beyond what int64 cents can
+	// hold) has no sensible rendering; show the "unknown" dash instead.
+	if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > 1e15 {
+		return "—"
+	}
 	switch currency {
 	case "USD":
-		return "$" + humanizeFloat(v)
+		cents := int64(math.Round(v * 100))
+		if cents < 0 {
+			return "-$" + humanizeCents(-cents)
+		}
+		return "$" + humanizeCents(cents)
 	case "LBP":
-		return humanizeInt(int64(v)) + " LBP"
+		return humanizeInt(int64(math.Round(v))) + " LBP"
 	default:
-		return fmt.Sprintf("%.2f %s", v, currency)
+		// Round to cents first so a tiny negative prints "0.00", not "-0.00".
+		cents := math.Round(v * 100)
+		if cents == 0 {
+			cents = 0 // normalise -0
+		}
+		return fmt.Sprintf("%.2f %s", cents/100, currency)
 	}
 }
 
-// humanizeFloat formats a USD amount with thousands separators and 2 decimals.
-func humanizeFloat(v float64) string {
-	whole := int64(v)
-	frac := int64((v-float64(whole))*100 + 0.5)
-	if frac >= 100 {
-		whole++
-		frac -= 100
-	}
-	return fmt.Sprintf("%s.%02d", humanizeInt(whole), frac)
+// humanizeCents formats a non-negative amount in cents as whole units with
+// thousands separators and 2 decimals (45029 → "450.29"). Working in integer
+// cents keeps the sign and the rounding carry out of the fractional part.
+func humanizeCents(cents int64) string {
+	return fmt.Sprintf("%s.%02d", humanizeInt(cents/100), cents%100)
 }
 
 // humanizeInt inserts thousands separators into an integer.

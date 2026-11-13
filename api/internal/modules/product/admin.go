@@ -42,6 +42,11 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, s
 	r.Post("/products", h.Create)
 	r.Post("/products/bulk", h.Bulk)
 	r.Post("/products/images", h.UploadImage)
+	// Manual product order inside a category (catalog_order.go). Static paths,
+	// so chi matches them before /products/{id}.
+	ord := &orderService{store: repo, categories: categories}
+	r.Get("/products/order", productOrderListHandler(ord))
+	r.Put("/products/order", productOrderSaveHandler(ord, h.rec))
 	r.Get("/products/{id}", h.GetByID)
 	r.Put("/products/{id}", h.Update)
 	// DELETE soft-deletes (trash); restore undoes it. Both need products.manage
@@ -104,6 +109,11 @@ func (h *Handler) AdminList(w http.ResponseWriter, r *http.Request) {
 	}
 	if fm := q.Get("fulfillmentMode"); fm != "" {
 		f.FulfillmentMode = FulfillmentMode(fm)
+	}
+	// Same catalog order the customer list uses, so the Categories page can
+	// preview what customers see.
+	if q.Get("sort") == SortByName {
+		f.Sort = SortByName
 	}
 
 	p := pagination.ParseParams(r)

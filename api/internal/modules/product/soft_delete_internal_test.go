@@ -66,13 +66,13 @@ func TestSelectorFilter(t *testing.T) {
 	}
 }
 
-// andTrash keeps the selector's own deletedAt clause and the write's guard in
+// andWith keeps the selector's own deletedAt clause and the write's guard in
 // separate $and branches (one document can't hold the same key twice).
 func TestAndTrash(t *testing.T) {
-	got := andTrash(bson.D{notDeleted}, inTrash)
+	got := andWith(bson.D{notDeleted}, inTrash)
 	arr, ok := got[0].Value.(bson.A)
 	if got[0].Key != "$and" || !ok || len(arr) != 2 {
-		t.Fatalf("andTrash = %#v", got)
+		t.Fatalf("andWith = %#v", got)
 	}
 }
 

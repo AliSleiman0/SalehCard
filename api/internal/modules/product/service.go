@@ -143,6 +143,9 @@ func (s *ProductService) FindAll(ctx context.Context, f ListFilter, p pagination
 		}
 		f.CategoryIDs = ids
 	}
+	// Admin-arranged ranks apply only to a single-node listing: directOnly, a
+	// leaf node (its expansion is itself), or an unexpanded raw node id.
+	f.manualOrder = f.Sort == SortByName && f.CategoryID != "" && len(f.CategoryIDs) <= 1
 	products, total, err := s.repo.FindAll(ctx, f, p)
 	if err != nil {
 		return nil, 0, err

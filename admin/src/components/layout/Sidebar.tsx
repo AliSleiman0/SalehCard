@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Icon } from '@/components'
 import { NAV, itemAllowed } from '@/app/nav'
 import { useDashboardStats } from '@/features/dashboard/hooks/useDashboard'
+import { useComplaintCounts } from '@/features/complaints/hooks/useComplaints'
 import { useCan } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { cn } from '@/lib/utils'
@@ -30,9 +31,13 @@ export function Sidebar() {
   // request); refreshes on window focus / navigation. Skipped without
   // dashboard.view — the stats endpoint would 403.
   const { data: statsRes } = useDashboardStats({ enabled: can('dashboard.view') })
+  // Complaints badge: complaints awaiting a staff reply (its own cheap counts
+  // endpoint, skipped without complaints.view).
+  const { data: complaintCounts } = useComplaintCounts({ enabled: can('complaints.view') })
   const pendingByRoute: Record<string, number | undefined> = {
     '/topups': statsRes?.data?.pendingTopups,
     '/kyc': statsRes?.data?.pendingKyc,
+    '/complaints': complaintCounts?.data?.awaitingReply,
   }
 
   return (

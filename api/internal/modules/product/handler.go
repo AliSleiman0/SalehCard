@@ -226,6 +226,13 @@ func writeProductError(w http.ResponseWriter, err error) {
 			return
 		}
 		response.BadRequest(w, err.Error())
+	case errors.Is(err, apperrors.ErrConflict):
+		var appErr *apperrors.AppError
+		if errors.As(err, &appErr) {
+			response.Error(w, http.StatusConflict, appErr.Code, appErr.Message)
+			return
+		}
+		response.Error(w, http.StatusConflict, "CONFLICT", err.Error())
 	default:
 		response.InternalError(w)
 	}
