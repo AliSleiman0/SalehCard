@@ -1,6 +1,6 @@
 // Package todo is the admin console's shared team to-do list (client feedback
-// 2026-11-12 #18): short tasks any admin with todos.view can see, and admins
-// with todos.manage can add, tick off, edit or delete.
+// 2026-11-12 #18): short tasks every admin can see, add, tick off, edit or
+// delete. No RBAC domain — it sits behind AdminOnly only.
 package todo
 
 import (
@@ -82,8 +82,8 @@ func (in *Input) validate(creating bool) (string, error) {
 
 type handler struct{ col *mongo.Collection }
 
-// RegisterAdminRoutes mounts the to-do routes on the /api/admin group (wrapped
-// by the server in the "todos" RBAC domain: GET is todos.view, else manage).
+// RegisterAdminRoutes mounts the to-do routes on the /api/admin group (behind
+// AdminOnly; deliberately no RBAC domain — every admin uses the shared list).
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 	col := db.Collection("admin_todos")
 	_, _ = col.Indexes().CreateOne(context.Background(), mongo.IndexModel{

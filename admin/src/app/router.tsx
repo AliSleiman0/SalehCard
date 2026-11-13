@@ -78,7 +78,7 @@ export default function AppRouter() {
         <Route path="/offers" element={guard('offers', <OffersListPage />)} />
         <Route path="/offers/new" element={guard('offers', <OffersEditPage />)} />
         <Route path="/offers/:id/edit" element={guard('offers', <OffersEditPage />)} />
-        <Route path="/todos" element={guard('todos', <TodosPage />)} />
+        <Route path="/todos" element={<TodosPage />} />
         <Route path="/expenses" element={guard('expenses', <ExpensesListPage />)} />
         <Route path="/expenses/new" element={guard('expenses', <ExpenseEditPage />)} />
         <Route path="/expenses/:id/edit" element={guard('expenses', <ExpenseEditPage />)} />

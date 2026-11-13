@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Checkbox, EmptyState, ErrorState, Icon, LoadingSpinner, PageHead } from '@/components'
 import { ApiError } from '@/lib/api-client'
-import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import { createTodo, deleteTodo, listTodos, updateTodo, type Todo, type TodoInput } from '../api/todos'
 import { dateInputToIso, dueState } from '../lib/due'
@@ -27,7 +26,8 @@ function fmtDate(iso: string, withTime = false): string {
 export default function TodosPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const canManage = useCan()('todos.manage')
+  // Every admin can add / tick / delete — it is a shared team list.
+  const canManage = true
   const [title, setTitle] = useState('')
   const [note, setNote] = useState('')
   const [due, setDue] = useState('')

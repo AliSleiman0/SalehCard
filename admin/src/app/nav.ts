@@ -54,7 +54,8 @@ export const NAV: NavGroup[] = [
     group: 'grp_overview',
     items: [
       { to: '/', icon: 'grid', label: 'nav_dashboard', domain: 'dashboard' },
-      { to: '/todos', icon: 'checkc', label: 'nav_todos', domain: 'todos' },
+      // Shared team list: every admin (no RBAC domain).
+      { to: '/todos', icon: 'checkc', label: 'nav_todos' },
     ],
   },
   {
