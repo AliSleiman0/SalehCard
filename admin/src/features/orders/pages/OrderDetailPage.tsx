@@ -121,8 +121,9 @@ export default function OrderDetailPage() {
                 return (
                   <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
                     {href ? (
-                      // Same target as the name link: skip it in the tab order / for screen readers.
-                      <Link to={href} className="prodlink art" tabIndex={-1} aria-hidden="true">
+                      // Same target as the name link: out of the tab order (one stop per
+                      // line), but labelled rather than aria-hidden — it can still take focus on click.
+                      <Link to={href} className="prodlink art" tabIndex={-1} aria-label={`Open product ${it.title.en}`}>
                         <Art art={v.art} size={56} radius={12} />
                       </Link>
                     ) : (

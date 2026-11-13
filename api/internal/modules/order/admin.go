@@ -231,6 +231,8 @@ func (a *adminHandler) existingProducts(ctx context.Context, orders []*Order) ma
 
 // missingProductIDs lists (deduped, in line order) the order's line product
 // ids absent from existing. A nil existing map means unknown → none reported.
+// A line with no product id (zero) is never reported: it was not "deleted
+// since", there is just nothing to link (the admin guards that itself).
 func missingProductIDs(o *Order, existing map[bson.ObjectID]bool) []string {
 	if existing == nil {
 		return nil
@@ -238,7 +240,7 @@ func missingProductIDs(o *Order, existing map[bson.ObjectID]bool) []string {
 	var missing []string
 	seen := map[bson.ObjectID]bool{}
 	for _, it := range o.Items {
-		if seen[it.ProductID] || existing[it.ProductID] {
+		if it.ProductID.IsZero() || seen[it.ProductID] || existing[it.ProductID] {
 			continue
 		}
 		seen[it.ProductID] = true

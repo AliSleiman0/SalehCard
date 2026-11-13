@@ -272,7 +272,6 @@ export default function OrderListPage() {
                     // Only the first line's name is shown in a row; it links to that product.
                     const first = o.raw.items[0]
                     const productHref = first ? productEditPath(o.raw, first.productId, canViewProducts) : null
-                    const extra = o.raw.items.length - 1
                     return (
                       <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
                         <td onClick={(e) => e.stopPropagation()}>
@@ -304,9 +303,9 @@ export default function OrderListPage() {
                                       title="Open product"
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      {first.title.en}
+                                      {o.productTitle}
                                     </Link>
-                                    {extra > 0 ? ` +${extra} more` : ''}
+                                    {o.productMore}
                                   </>
                                 ) : (
                                   o.product

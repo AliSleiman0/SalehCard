@@ -148,3 +148,14 @@ func TestAdminList_ReportsDeletedProductsPerOrder(t *testing.T) {
 		}
 	}
 }
+
+// A line with no product id was never "deleted since" — it must not be
+// reported (the field's contract), even though it can't be linked either.
+func TestMissingProductIDs_SkipsZeroProductID(t *testing.T) {
+	gone := bson.NewObjectID()
+	o := orderWithProducts(bson.ObjectID{}, gone)
+	got := missingProductIDs(o, map[bson.ObjectID]bool{})
+	if !slices.Equal(got, []string{gone.Hex()}) {
+		t.Fatalf("missingProductIds = %v, want only [%s]", got, gone.Hex())
+	}
+}
