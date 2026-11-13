@@ -4,6 +4,7 @@ import {
   amountInRange,
   clampQty,
   fmtAmount,
+  groupAmountInput,
   lineBelowMinimum,
   normalizeDigits,
   parseAmount,
@@ -140,5 +141,28 @@ describe('fromPrice for unit-priced products', () => {
   it('falls back to one block with no minimum', () => {
     const p = { variants, unit: { blockUnits: 1000, minAmount: 0 } }
     expect(fromPrice(p, false)).toBe(1.5)
+  })
+})
+
+describe('groupAmountInput', () => {
+  it('groups the integer part as the customer types', () => {
+    expect(groupAmountInput('')).toBe('')
+    expect(groupAmountInput('5')).toBe('5')
+    expect(groupAmountInput('1000')).toBe('1,000')
+    expect(groupAmountInput('45000')).toBe('45,000')
+    expect(groupAmountInput('1234567')).toBe('1,234,567')
+  })
+  it('keeps a typed decimal point / fraction for the fraction warning', () => {
+    expect(groupAmountInput('1234.')).toBe('1,234.')
+    expect(groupAmountInput('1000.5')).toBe('1,000.5')
+  })
+  it('round-trips through sanitizeAmountInput (state stays ungrouped)', () => {
+    for (const raw of ['5', '1000', '45000', '1000.5', '1234.']) {
+      expect(sanitizeAmountInput(groupAmountInput(raw))).toBe(raw)
+    }
+  })
+  it('accepts pasted / Arabic-Indic input', () => {
+    expect(groupAmountInput('١٠٠٠')).toBe('1,000')
+    expect(groupAmountInput('5,000')).toBe('5,000')
   })
 })

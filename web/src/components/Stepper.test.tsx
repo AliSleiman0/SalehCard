@@ -81,6 +81,20 @@ describe('Stepper', () => {
     expect(set).toHaveBeenCalledWith(12)
   })
 
+  it('pushes in-range values live while typing (total updates before blur)', async () => {
+    const user = userEvent.setup()
+    const set = vi.fn()
+    render(<Stepper value={10} set={set} min={10} max={5000} />)
+
+    const input = screen.getByLabelText('Quantity')
+    await user.clear(input)
+    await user.type(input, '250')
+
+    // "2" is below min → held as draft (no snap to 10); "25" and "250" are in
+    // range → pushed live.
+    expect(set.mock.calls.map((c) => c[0])).toEqual([25, 250])
+  })
+
   it('still steps up and down with the +/- buttons, clamped', async () => {
     const user = userEvent.setup()
     const set = vi.fn()

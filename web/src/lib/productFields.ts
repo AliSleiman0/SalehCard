@@ -99,6 +99,18 @@ export function amountInRange(amount: number, min: number, max: number): boolean
   return true
 }
 
+/** Display form of a sanitised amount (see sanitizeAmountInput) with the
+ * integer part thousands-grouped as the customer types: "45000" → "45,000",
+ * "1234." → "1,234.", "1000.5" → "1,000.5". Feeding the result back through
+ * sanitizeAmountInput yields the same raw value, so state stays ungrouped. */
+export function groupAmountInput(raw: string): string {
+  const s = sanitizeAmountInput(raw)
+  const dot = s.indexOf('.')
+  const int = dot < 0 ? s : s.slice(0, dot)
+  const grouped = int.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return dot < 0 ? grouped : `${grouped}${s.slice(dot)}`
+}
+
 /** Thousands-separated display, e.g. 45000 → "45,000". */
 export function fmtAmount(n: number): string {
   return n.toLocaleString('en-US', { maximumFractionDigits: 2 })

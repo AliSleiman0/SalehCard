@@ -25,7 +25,7 @@
 .icon-btn { width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); cursor: pointer; position: relative; transition: .15s; flex: none; }
 .icon-btn:hover { border-color: var(--border-strong); background: var(--surface-3); }
 .cart-count { position: absolute; top: -5px; inset-inline-end: -5px; background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 800; min-width: 18px; height: 18px; border-radius: 999px; display: grid; place-items: center; padding: 0 4px; }
-.wallet-pill { display: flex; align-items: center; gap: 9px; background: var(--grad-soft); border: 1px solid var(--border-strong); border-radius: var(--r-pill); padding: 8px 14px 8px 12px; cursor: pointer; font-weight: 700; }
+.wallet-pill { display: flex; align-items: center; gap: 9px; background: var(--grad-soft); border: 1px solid var(--border-strong); border-radius: var(--r-pill); padding: 8px 14px 8px 12px; cursor: pointer; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
 .wallet-pill .dot-grad { width: 26px; height: 26px; border-radius: 8px; background: var(--grad); display: grid; place-items: center; color: #fff; }
 .avatar { width: 42px; height: 42px; border-radius: 999px; background: var(--grad); color: #fff; display: grid; place-items: center; font-weight: 800; cursor: pointer; flex: none; }
 

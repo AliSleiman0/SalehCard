@@ -10,6 +10,7 @@ import {
   amountInRange,
   clampQty,
   fmtAmount,
+  groupAmountInput,
   lineBelowMinimum,
   parseAmount,
   sanitizeAmountInput,
@@ -311,7 +312,7 @@ export default function ProductDetailPage() {
                 inputMode="numeric"
                 aria-label={up.label}
                 placeholder={amountHint}
-                value={amountRaw}
+                value={groupAmountInput(amountRaw)}
                 onChange={(e) => setAmountRaw(sanitizeAmountInput(e.target.value))}
                 style={amountError ? { borderColor: 'var(--danger)' } : undefined}
               />

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/format/localized_digits.dart';
+import '../../../../core/format/grouping_formatter.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
@@ -125,6 +126,8 @@ class DynamicInputField extends StatelessWidget {
             ? [
                 const LocalizedDigitsFormatter(),
                 FilteringTextInputFormatter.digitsOnly,
+                // "1,000" not "1000" — readers strip it via stripGrouping.
+                const ThousandsGroupingFormatter(),
               ]
             : isAmount
                 ? [
