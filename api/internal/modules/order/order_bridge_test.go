@@ -35,6 +35,7 @@ func (f *fakeBridge) DispatchOrder(_ context.Context, in bridge.DispatchInput) e
 func rechargeLineProduct(price float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentCredit,
 		FulfillmentMode: product.FulfillmentModeBridgeDevice,
 		Bridge:          &product.BridgeSpec{Provider: product.BridgeProviderAlfa, Method: product.BridgeMethodRechargeLine},

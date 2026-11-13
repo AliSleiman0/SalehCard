@@ -20,7 +20,8 @@ export interface ProductListParams {
   // (used by the Categories page's inline product panel).
   categoryId?: string
   fulfillmentType?: FulfillmentType
-  status?: 'active' | 'draft' | 'out'
+  // 'deleted' lists only the trash; every other value (and none) excludes it.
+  status?: 'active' | 'draft' | 'out' | 'deleted'
   available?: boolean
   search?: string
 }
@@ -102,8 +103,19 @@ export function updateProduct(id: string, input: Partial<ProductInput>): Promise
   return apiClient.put<Product>(`${ADMIN}/${id}`, input)
 }
 
+/** Soft delete: moves the product to the trash (restorable). */
 export function deleteProduct(id: string): Promise<ApiResponse<unknown>> {
   return apiClient.delete(`${ADMIN}/${id}`)
+}
+
+/** Takes a product back out of the trash, to its prior active/draft state. */
+export function restoreProduct(id: string): Promise<ApiResponse<unknown>> {
+  return apiClient.post(`${ADMIN}/${id}/restore`)
+}
+
+/** Permanently erases a product that is already in the trash. Super admin only. */
+export function purgeProduct(id: string): Promise<ApiResponse<unknown>> {
+  return apiClient.delete(`${ADMIN}/${id}/permanent`)
 }
 
 export interface UploadImageResult {
@@ -130,14 +142,22 @@ export function listFulfillmentProviders(): Promise<ApiResponse<FulfillmentProvi
   return apiClient.get<FulfillmentProviderOption[]>(`${ADMIN}/fulfillment-providers`)
 }
 
-export type BulkAction = 'activate' | 'deactivate' | 'delete' | 'assign-category'
+// 'delete' moves to the trash (soft); 'restore' takes out of it; 'purge'
+// permanently erases already-trashed products (super admin, explicit ids only).
+export type BulkAction = 'activate' | 'deactivate' | 'delete' | 'restore' | 'purge' | 'assign-category'
+
+/** "Select all matching": the admin list filters a bulk action applies to,
+ *  across every page (the server ignores `ids` when this is sent). */
+export type BulkFilter = Pick<ProductListParams, 'category' | 'categoryId' | 'fulfillmentType' | 'status' | 'search'>
 
 // For 'assign-category', pass the target taxonomy node id in categoryId; an empty
 // string unassigns (clears the product's category). Ignored for other actions.
+// Pass `filter` to act on every product matching it instead of `ids`.
 export function bulkProductAction(
   ids: string[],
   action: BulkAction,
   categoryId?: string,
+  filter?: BulkFilter,
 ): Promise<ApiResponse<{ modified: number }>> {
-  return apiClient.post<{ modified: number }>(`${ADMIN}/bulk`, { ids, action, categoryId })
+  return apiClient.post<{ modified: number }>(`${ADMIN}/bulk`, { ids, action, categoryId, filter })
 }

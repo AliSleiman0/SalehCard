@@ -229,6 +229,16 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			}
 			return nil, err
 		}
+		// A hidden (draft) or trashed product is not for sale, even when the
+		// caller still holds its id (a stale app screen, a cached link). The
+		// catalog never lists it; checkout must refuse it too.
+		if !p.Purchasable() {
+			return nil, &apperrors.AppError{
+				Code:    "PRODUCT_UNAVAILABLE",
+				Message: "This product is no longer available",
+				Err:     apperrors.ErrBadRequest,
+			}
+		}
 		variant, ok := findVariant(p, in.VariantID)
 		if !ok {
 			return nil, badRequest("unknown variant for product " + in.ProductID)

@@ -47,7 +47,9 @@ const (
 	ActionSupplierSync           = "supplier.sync"
 	ActionSupplierImport         = "supplier.import"
 	ActionSupplierSettingsUpdate = "supplier.settings_update"
-	ActionProductDelete          = "product.delete"
+	ActionProductDelete          = "product.delete"      // permanent erase (super admin, trash only)
+	ActionProductSoftDelete      = "product.soft_delete" // moved to the trash (reversible)
+	ActionProductRestore         = "product.restore"     // taken back out of the trash
 	ActionProductImageUpload     = "product.image_upload"
 	ActionKYCDecision            = "kyc.decision"
 	ActionReviewDecision         = "review.decision"

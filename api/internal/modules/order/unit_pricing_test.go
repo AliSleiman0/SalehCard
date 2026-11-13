@@ -17,6 +17,7 @@ import (
 func unitProduct(blockPrice, blockUnits, lo, hi float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentCredit,
 		FulfillmentMode: product.FulfillmentModeManualOperator,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "per 90,000", Price: blockPrice}},

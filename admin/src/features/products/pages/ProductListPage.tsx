@@ -17,19 +17,27 @@ import {
   artForCategory,
   ffKey,
   type FfKey,
+  type IconName,
 } from '@/components'
 import { downloadCsv } from '@/lib/utils'
 import { useBulk } from '@/hooks/useBulk'
-import { useCan } from '@/stores/auth'
+import { useCan, useIsSuperAdmin } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import { useCategoryTree } from '@/features/categories/hooks/useCategories'
 import { orderedTree, pathLabel, type AdminCategory } from '@/features/categories/api/categories'
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
-import { useProducts, useDeleteProduct, useBulkProductAction } from '../hooks/useProducts'
+import {
+  useProducts,
+  useDeleteProduct,
+  useRestoreProduct,
+  usePurgeProduct,
+  useBulkProductAction,
+} from '../hooks/useProducts'
 import { useSoldByProduct } from '../hooks/useSoldByProduct'
-import { listProducts, type ProductListParams } from '../api/products'
+import { listProducts, type BulkAction, type ProductListParams } from '../api/products'
 import { productStatus, priceRange } from '../lib/view'
+import { bulkActionsFor, bulkConfirmText, bulkDoneText, canSelectAllMatching } from '../lib/trash'
 import { amountIgnoredByPrice } from '../lib/unitPricing'
 import type { FulfillmentType, Product } from '@/types'
 
@@ -39,7 +47,18 @@ const FF_DOT: Record<FfKey, string> = {
   transfer: 'var(--ff-transfer)',
 }
 
-type StatusFilter = 'all' | 'active' | 'draft' | 'out'
+// 'deleted' is the trash view: only soft-deleted products (every other filter
+// value excludes them).
+type StatusFilter = 'all' | 'active' | 'draft' | 'out' | 'deleted'
+
+// Bulk-bar button per action (assign-category opens the category modal instead).
+const BULK_BUTTONS: Record<Exclude<BulkAction, 'assign-category'>, { label: string; icon: IconName; cls: string }> = {
+  activate: { label: 'Activate', icon: 'check', cls: 'abtn xs ok' },
+  deactivate: { label: 'Deactivate', icon: 'eyeoff', cls: 'abtn xs' },
+  delete: { label: 'Move to trash', icon: 'trash', cls: 'abtn xs danger' },
+  restore: { label: 'Restore', icon: 'refresh', cls: 'abtn xs ok' },
+  purge: { label: 'Delete permanently', icon: 'trash', cls: 'abtn xs danger' },
+}
 
 // Prefers the compressed thumbnail, falling back to the display image, then to
 // the gradient placeholder — both up front (no thumbnail/image) and on a
@@ -100,7 +119,16 @@ export default function ProductListPage() {
 
   const { data, isLoading, isError, refetch } = useProducts({ ...filters, page })
   const del = useDeleteProduct()
+  const restore = useRestoreProduct()
+  const purge = usePurgeProduct()
   const bulkAction = useBulkProductAction()
+  const isSuperAdmin = useIsSuperAdmin()
+  const trashView = status === 'deleted'
+  // "Select all N matching": the bulk action then targets every product matching
+  // the filters (sent as a filter, not ids). Only meaningful while the whole page
+  // is selected; any filter/page change drops it.
+  const [matchAllRaw, setMatchAll] = useState(false)
+  useEffect(() => setMatchAll(false), [cat, ff, status, debouncedSearch, page])
   const { data: catsRes } = useProductCategories()
   const { data: soldRes } = useSoldByProduct({ enabled: canViewSold })
   const cats = catsRes?.data ?? []
@@ -110,6 +138,13 @@ export default function ProductListPage() {
   const meta = data?.meta
   const ids = rows.map((r) => r.id)
   const bulk = useBulk(ids)
+  const matchAll = matchAllRaw && bulk.all
+  const total = meta?.total ?? rows.length
+  const selCount = matchAll ? total : bulk.sel.length
+  const clearSelection = () => {
+    bulk.clear()
+    setMatchAll(false)
+  }
 
   // Reset to page 1 whenever a non-search filter changes (search resets via its debounce).
   const onFilter =
@@ -141,9 +176,49 @@ export default function ProductListPage() {
     )
   }
 
-  const runBulk = (action: 'activate' | 'deactivate' | 'delete') => {
-    if (action === 'delete' && !window.confirm(`Delete ${bulk.sel.length} product(s)? This cannot be undone.`)) return
-    bulkAction.mutate({ ids: bulk.sel, action }, { onSuccess: () => bulk.clear() })
+  // Runs a bulk action on the selected rows — or, with "all matching", on every
+  // product matching the current filters (purge is never offered for that).
+  const runBulk = (action: BulkAction, categoryId?: string, onDone?: () => void) => {
+    const confirmText = bulkConfirmText(action, selCount, matchAll)
+    if (confirmText && !window.confirm(confirmText)) return
+    bulkAction.mutate(
+      { ids: matchAll ? [] : bulk.sel, action, categoryId, filter: matchAll ? filters : undefined },
+      {
+        onSuccess: (res) => {
+          const n = res.data?.modified ?? 0
+          toast.success(
+            action === 'assign-category'
+              ? categoryId
+                ? `Moved ${n} product(s).`
+                : `Unassigned ${n} product(s).`
+              : bulkDoneText(action, n),
+          )
+          clearSelection()
+          onDone?.()
+        },
+        onError: () => toast.error('Could not update the products.'),
+      },
+    )
+  }
+
+  const trashOne = (p: Product) => {
+    if (!window.confirm(`Move "${p.title.en}" to the trash? You can restore it from the Deleted view.`)) return
+    del.mutate(p.id, {
+      onSuccess: () => toast.success('Moved to the trash.'),
+      onError: () => toast.error('Could not move the product to the trash.'),
+    })
+  }
+  const restoreOne = (p: Product) =>
+    restore.mutate(p.id, {
+      onSuccess: () => toast.success(`Restored "${p.title.en}".`),
+      onError: () => toast.error('Could not restore the product.'),
+    })
+  const purgeOne = (p: Product) => {
+    if (!window.confirm(`Permanently delete "${p.title.en}"? This cannot be undone.`)) return
+    purge.mutate(p.id, {
+      onSuccess: () => toast.success('Permanently deleted.'),
+      onError: () => toast.error('Could not delete the product permanently.'),
+    })
   }
 
   // Export every product matching the current filters (across all pages — the
@@ -194,8 +269,8 @@ export default function ProductListPage() {
       <PageHead
         crumbs={[t('grp_catalog'), t('nav_products')]}
         title={t('nav_products')}
-        sub={`${(meta?.total ?? 0).toLocaleString()} products${
-          cat !== 'all' || ff !== 'all' || status !== 'all' || debouncedSearch ? ' (filtered)' : ''
+        sub={`${(meta?.total ?? 0).toLocaleString()} ${trashView ? 'products in the trash' : 'products'}${
+          cat !== 'all' || ff !== 'all' || (status !== 'all' && !trashView) || debouncedSearch ? ' (filtered)' : ''
         }`}
       >
         <button className="abtn" onClick={handleExport} disabled={exporting}>
@@ -229,12 +304,18 @@ export default function ProductListPage() {
           <select
             className="select"
             value={status}
-            onChange={(e) => onFilter(setStatus)(e.target.value as StatusFilter)}
+            onChange={(e) => {
+              // Switching into/out of the trash must never carry a selection
+              // across — the bulk actions differ between the two views.
+              clearSelection()
+              onFilter(setStatus)(e.target.value as StatusFilter)
+            }}
           >
             <option value="all">{t('all')} {t('status').toLowerCase()}</option>
             <option value="active">{t('active')}</option>
             <option value="draft">{t('draft')}</option>
             <option value="out">{t('out_of_stock')}</option>
+            <option value="deleted">Deleted (trash)</option>
           </select>
           <div className="chiprow">
             {(
@@ -259,23 +340,39 @@ export default function ProductListPage() {
 
         {canManage && bulk.some && (
           <div className="bulkbar">
-            <Checkbox on onClick={bulk.clear} />
+            <Checkbox on onClick={clearSelection} />
             <span>
-              {bulk.sel.length} {t('selected')}
+              {matchAll ? `All ${total.toLocaleString()} matching` : bulk.sel.length} {t('selected')}
             </span>
+            {/* "Select all matching" reaches past this page — the owner's
+                one-click way to trash (or restore / move) the whole filtered catalog. */}
+            {canSelectAllMatching(bulk.all, rows.length, total) &&
+              (matchAll ? (
+                <button className="abtn xs ghost" onClick={() => setMatchAll(false)}>
+                  Only this page
+                </button>
+              ) : (
+                <button className="abtn xs ghost" onClick={() => setMatchAll(true)}>
+                  Select all {total.toLocaleString()} matching
+                </button>
+              ))}
             <div className="ba-act">
-              <button className="abtn xs ok" onClick={() => runBulk('activate')}>
-                <Icon name="check" size={13} /> {t('activate')}
-              </button>
-              <button className="abtn xs" onClick={() => runBulk('deactivate')}>
-                <Icon name="eyeoff" size={13} /> {t('deactivate')}
-              </button>
-              <button className="abtn xs" onClick={() => setAssignOpen(true)}>
-                <Icon name="layers" size={13} /> Move to category
-              </button>
-              <button className="abtn xs danger" onClick={() => runBulk('delete')}>
-                <Icon name="trash" size={13} /> {t('delete')}
-              </button>
+              {bulkActionsFor(trashView, isSuperAdmin, matchAll).map((action) =>
+                action === 'assign-category' ? (
+                  <button key={action} className="abtn xs" onClick={() => setAssignOpen(true)}>
+                    <Icon name="layers" size={13} /> Move to category
+                  </button>
+                ) : (
+                  <button
+                    key={action}
+                    className={BULK_BUTTONS[action].cls}
+                    disabled={bulkAction.isPending}
+                    onClick={() => runBulk(action)}
+                  >
+                    <Icon name={BULK_BUTTONS[action].icon} size={13} /> {BULK_BUTTONS[action].label}
+                  </button>
+                ),
+              )}
             </div>
           </div>
         )}
@@ -348,14 +445,19 @@ export default function ProductListPage() {
                         <span className="iact" onClick={() => navigate(`/products/${p.id}/edit`)}>
                           <Icon name="edit" size={15} />
                         </span>
-                        {canManage && (
-                          <span
-                            className="iact danger"
-                            onClick={() => {
-                              if (window.confirm(`Delete "${p.title.en}"?`)) del.mutate(p.id)
-                            }}
-                          >
+                        {canManage && !p.deletedAt && (
+                          <span className="iact danger" title="Move to trash" onClick={() => trashOne(p)}>
                             <Icon name="trash" size={15} />
+                          </span>
+                        )}
+                        {canManage && p.deletedAt && (
+                          <span className="iact" title="Restore" onClick={() => restoreOne(p)}>
+                            <Icon name="refresh" size={15} />
+                          </span>
+                        )}
+                        {isSuperAdmin && p.deletedAt && (
+                          <span className="iact danger" title="Delete permanently" onClick={() => purgeOne(p)}>
+                            <Icon name="xc" size={15} />
                           </span>
                         )}
                       </div>
@@ -379,26 +481,10 @@ export default function ProductListPage() {
 
       {assignOpen && (
         <AssignCategoryModal
-          count={bulk.sel.length}
+          count={selCount}
           pending={bulkAction.isPending}
           onClose={() => setAssignOpen(false)}
-          onConfirm={(categoryId) =>
-            bulkAction.mutate(
-              { ids: bulk.sel, action: 'assign-category', categoryId },
-              {
-                onSuccess: (res) => {
-                  toast.success(
-                    categoryId
-                      ? `Moved ${res.data?.modified ?? 0} product(s).`
-                      : `Unassigned ${res.data?.modified ?? 0} product(s).`,
-                  )
-                  bulk.clear()
-                  setAssignOpen(false)
-                },
-                onError: () => toast.error('Could not move the products.'),
-              },
-            )
-          }
+          onConfirm={(categoryId) => runBulk('assign-category', categoryId, () => setAssignOpen(false))}
         />
       )}
     </div>

@@ -34,6 +34,8 @@ func (f fakeProducts) Update(context.Context, string, product.UpdateProductInput
 	return nil, nil
 }
 func (f fakeProducts) Delete(context.Context, string) error                   { return nil }
+func (f fakeProducts) Restore(context.Context, string) error                  { return nil }
+func (f fakeProducts) Purge(context.Context, string) error                    { return nil }
 func (f fakeProducts) Bulk(context.Context, product.BulkInput) (int64, error) { return 0, nil }
 
 func fp(v float64) *float64 { return &v }

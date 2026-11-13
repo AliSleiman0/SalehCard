@@ -116,6 +116,9 @@ export interface Product {
   bridge?: BridgeSpec
   stock: number
   available: boolean
+  /** Set when the product is soft-deleted ("in trash"): hidden from customers
+   *  and the normal lists, restorable. Independent of `available`. */
+  deletedAt?: string
   ratings: RatingsSummary
   inputFields?: InputField[]
   verification?: Verification

@@ -5,12 +5,15 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  restoreProduct,
+  purgeProduct,
   bulkProductAction,
   uploadProductImage,
   listFulfillmentProviders,
   type ProductListParams,
   type ProductInput,
   type BulkAction,
+  type BulkFilter,
 } from '../api/products'
 
 export function useProducts(params: ProductListParams = {}, opts?: { enabled?: boolean }) {
@@ -60,12 +63,32 @@ export function useUpdateProduct(id: string) {
   })
 }
 
-export function useDeleteProduct() {
+// Trash mutations move products in/out of every list (and the category counts),
+// so they refresh the product lists, the single product, and the tree.
+function useTrashMutation(fn: (id: string) => Promise<unknown>) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => deleteProduct(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'products'] }),
+    mutationFn: fn,
+    onSuccess: (_res, id) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'products'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'product', id] })
+      qc.invalidateQueries({ queryKey: ['admin', 'categories'] })
+    },
   })
+}
+
+/** Soft delete (move to trash). */
+export function useDeleteProduct() {
+  return useTrashMutation(deleteProduct)
+}
+
+export function useRestoreProduct() {
+  return useTrashMutation(restoreProduct)
+}
+
+/** Permanent erase of a trashed product (super admin). */
+export function usePurgeProduct() {
+  return useTrashMutation(purgeProduct)
 }
 
 export function useUploadProductImage() {
@@ -77,8 +100,17 @@ export function useUploadProductImage() {
 export function useBulkProductAction() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ ids, action, categoryId }: { ids: string[]; action: BulkAction; categoryId?: string }) =>
-      bulkProductAction(ids, action, categoryId),
+    mutationFn: ({
+      ids,
+      action,
+      categoryId,
+      filter,
+    }: {
+      ids: string[]
+      action: BulkAction
+      categoryId?: string
+      filter?: BulkFilter
+    }) => bulkProductAction(ids, action, categoryId, filter),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'products'] })
       // assign-category moves product counts around the taxonomy tree and the
