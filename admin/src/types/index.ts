@@ -49,7 +49,7 @@ export interface RatingsSummary {
   count: number
 }
 
-export type InputFieldType = 'text' | 'amount' | 'quantity' | 'select'
+export type InputFieldType = 'text' | 'amount' | 'quantity' | 'select' | 'file'
 
 // Customer-input field spec on a product. The label is 2-locale (en/ar) — this
 // mirrors the Go `InputField`/`I18nLabel`. Admins edit key, type, labels, and

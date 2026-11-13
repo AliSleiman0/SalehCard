@@ -24,7 +24,7 @@ export interface InputFieldConstraints {
 export interface InputField {
   key: string
   label: Partial<I18nString>
-  type: 'text' | 'amount' | 'quantity' | 'select'
+  type: 'text' | 'amount' | 'quantity' | 'select' | 'file'
   constraints?: InputFieldConstraints
   sensitive: boolean
 }
@@ -63,6 +63,10 @@ export interface Product {
   id: string
   title: I18nString
   category: string
+  // Assigned taxonomy node + its display name (response-only; absent when the
+  // product is unassigned or the node is unnamed).
+  categoryId?: string
+  categoryName?: I18nString
   // Top-level domain (games, app_topups, …) the product's category resolves to.
   // Optional: only migrated products carry it. Used for browse-by-domain.
   rootDomain?: string
@@ -85,8 +89,10 @@ export interface Product {
 // productCount is only present for root domains (depth 0) when withCounts is set.
 export interface Category {
   id: string
-  legacyId: number
+  legacyId?: number
   parentLegacyId?: number
+  // Tree pointer (absent on roots / "collections").
+  parentId?: string
   slug: string
   name: I18nString
   image?: string
@@ -95,6 +101,23 @@ export interface Category {
   depth: number
   visible: boolean
   productCount?: number
+  // True when the node has subcategories (drill down instead of listing).
+  hasChildren?: boolean
+}
+
+// One breadcrumb ancestor of a category node (root first).
+export interface CategoryCrumb {
+  id: string
+  slug: string
+  name: I18nString
+  depth: number
+  rootDomain?: string
+}
+
+// GET /api/v1/categories/{id}: the node + its root→parent breadcrumb.
+export interface CategoryNodeView {
+  node: Category
+  ancestors: CategoryCrumb[]
 }
 
 export type UserRole = 'customer' | 'reseller' | 'admin'
@@ -168,6 +191,11 @@ export interface Order {
   total: number
   currency: string
   paymentMethod: PaymentMethod
+  // Wallet balance around the charge (and refund), from the ledger. Present on
+  // wallet-paid orders from the customer order endpoints.
+  walletBalanceBefore?: number
+  walletBalanceAfter?: number
+  refundBalanceAfter?: number
   status: OrderStatus
   fulfillment: Fulfillment
   createdAt: string

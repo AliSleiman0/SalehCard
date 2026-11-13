@@ -1020,4 +1020,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get helpNeedHelp => 'Still need help?';
+
+  @override
+  String get uploadPhoto => 'Upload a photo (QR code / barcode)';
+
+  @override
+  String get replacePhoto => 'Replace photo';
+
+  @override
+  String get uploadFailed => 'Upload failed. Please try another photo.';
 }

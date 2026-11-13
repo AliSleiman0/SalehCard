@@ -194,6 +194,7 @@ class ProductDto {
     required this.id,
     this.title,
     this.category,
+    this.categoryName,
     this.rootDomain,
     this.images,
     this.thumbnail,
@@ -212,6 +213,9 @@ class ProductDto {
   final String id;
   final Map<String, dynamic>? title;
   final String? category;
+  /// Assigned taxonomy node's display name `{en,ar,tr}` (absent when the
+  /// product is unassigned or the node is unnamed).
+  final Map<String, dynamic>? categoryName;
   final String? rootDomain;
   final List<String>? images;
   final String? thumbnail;
@@ -235,6 +239,8 @@ class ProductDto {
         id: id,
         title: I18nString.fromJson(title),
         category: category ?? '',
+        categoryName:
+            categoryName == null ? null : I18nString.fromJson(categoryName),
         rootDomain: rootDomain,
         images: images ?? const [],
         thumbnail: thumbnail,

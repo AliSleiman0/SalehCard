@@ -21,6 +21,12 @@ import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrde
 import { adaptOrder, codeLines, creditLines, itemQtyLabel } from '../lib/adaptOrder'
 import type { AdminOrder } from '../api/orders'
 
+/** isOrderFileUrl detects a checkout photo-field upload (re-encoded JPEG under
+ *  the order-files/ keyspace — the API rejects any other link for a file field). */
+function isOrderFileUrl(v: string): boolean {
+  return /^https?:\/\//.test(v) && v.includes('/order-files/') && v.endsWith('.jpg')
+}
+
 export default function OrderDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -117,7 +123,24 @@ export default function OrderDetailPage() {
                         {it.fields.map((f) => (
                           <span key={f.key} style={{ fontSize: 12.5 }}>
                             <span className="faint">{f.label?.en || f.key}: </span>
-                            <b style={{ fontWeight: 700 }}>{f.value}</b>
+                            {isOrderFileUrl(f.value) ? (
+                              // A checkout photo field (QR / barcode …): show it, click to open full size.
+                              <a href={f.value} target="_blank" rel="noreferrer" style={{ verticalAlign: 'middle' }}>
+                                <img
+                                  src={f.value}
+                                  alt={f.label?.en || f.key}
+                                  style={{
+                                    width: 72,
+                                    height: 72,
+                                    objectFit: 'cover',
+                                    borderRadius: 8,
+                                    border: '1px solid var(--border)',
+                                  }}
+                                />
+                              </a>
+                            ) : (
+                              <b style={{ fontWeight: 700 }}>{f.value}</b>
+                            )}
                           </span>
                         ))}
                       </div>

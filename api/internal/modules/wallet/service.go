@@ -322,6 +322,13 @@ func (s *WalletService) GetBalance(ctx context.Context, userID bson.ObjectID) (f
 	return s.repo.GetBalance(ctx, userID)
 }
 
+// LedgerByRefs returns the user's purchase + refund ledger rows for the given
+// order ids (oldest first). Each row carries BalanceAfter, so an order page can
+// show the wallet balance before and after the charge (client msgs #15/#16).
+func (s *WalletService) LedgerByRefs(ctx context.Context, userID bson.ObjectID, refs []string) ([]*WalletTransaction, error) {
+	return s.repo.FindByRefs(ctx, userID, refs)
+}
+
 // ListTransactions returns the user's ledger history, newest first.
 func (s *WalletService) ListTransactions(ctx context.Context, userID bson.ObjectID) ([]*WalletTransaction, error) {
 	return s.repo.FindByUserID(ctx, userID)

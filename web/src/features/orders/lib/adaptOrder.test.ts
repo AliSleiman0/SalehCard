@@ -102,3 +102,21 @@ describe('adaptOrder code lines', () => {
     expect(v.code).toBeUndefined()
   })
 })
+
+describe('adaptOrder wallet balances', () => {
+  it('passes the ledger balances through', () => {
+    const v = adaptOrder(
+      order([item({})], { walletBalanceBefore: 100, walletBalanceAfter: 87.7, refundBalanceAfter: 100 }),
+      'en',
+    )
+    expect(v.balanceBefore).toBe(100)
+    expect(v.balanceAfter).toBe(87.7)
+    expect(v.refundBalanceAfter).toBe(100)
+  })
+
+  it('leaves them undefined when the API sends none', () => {
+    const v = adaptOrder(order([item({})]), 'en')
+    expect(v.balanceBefore).toBeUndefined()
+    expect(v.balanceAfter).toBeUndefined()
+  })
+})

@@ -89,10 +89,13 @@ body {
   line-height: 1.5;
 }
 [lang="ar"], [dir="rtl"] { --font-body: "IBM Plex Sans Arabic", "Plus Jakarta Sans", sans-serif; }
-[dir="rtl"] { --font-display: "Aref Ruqaa", "DM Serif Display", serif; }
+/* Arabic headings use the same clean sans as Arabic body text (bold) — the old
+   calligraphic Aref Ruqaa read as "broken" Arabic (client msg #88). */
+[dir="rtl"] { --font-display: "IBM Plex Sans Arabic", "Plus Jakarta Sans", sans-serif; }
 
 h1,h2,h3,h4 { font-family: var(--font-display); font-weight: 400; margin: 0; line-height: 1.08; letter-spacing: -.01em; }
 [dir="rtl"] h1,[dir="rtl"] h2,[dir="rtl"] h3,[dir="rtl"] h4 { font-weight: 700; line-height: 1.3; }
+[dir="rtl"] .display-xl,[dir="rtl"] .display-l,[dir="rtl"] .h1,[dir="rtl"] .h2,[dir="rtl"] .h3 { font-weight: 700; line-height: 1.3; letter-spacing: 0; }
 p { margin: 0; }
 button { font-family: inherit; }
 a { color: inherit; text-decoration: none; }

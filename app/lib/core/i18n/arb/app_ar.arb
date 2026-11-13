@@ -393,5 +393,8 @@
   "helpSearchHint": "اكتب للبحث في الأسئلة…",
   "helpAllQuestions": "كل الأسئلة",
   "helpNoMatch": "لا توجد أسئلة مطابقة",
-  "helpNeedHelp": "هل ما زلت بحاجة للمساعدة؟"
+  "helpNeedHelp": "هل ما زلت بحاجة للمساعدة؟",
+  "uploadPhoto": "ارفع صورة (رمز QR / باركود)",
+  "replacePhoto": "استبدال الصورة",
+  "uploadFailed": "فشل الرفع. يرجى تجربة صورة أخرى."
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -28,7 +29,9 @@ type adminHandler struct {
 // /api/admin group, guarded by AdminOnly + the "categories" RBAC domain).
 // Mutations are recorded via rec.
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
-	_ = EnsureIndexes(context.Background(), db)
+	if err := EnsureIndexes(context.Background(), db); err != nil {
+		slog.Warn("category: failed to ensure indexes", "error", err)
+	}
 	svc := NewCategoryService(NewMongoRepository(db), product.NewMongoRepository(db))
 	a := &adminHandler{svc: svc, rec: rec}
 
@@ -181,6 +184,9 @@ func writeCatError(w http.ResponseWriter, err error) {
 			msg = appErr.Message
 		}
 		response.BadRequest(w, msg)
+	case mongo.IsDuplicateKeyError(err):
+		// A unique-index clash must never surface as the generic 500.
+		response.Error(w, http.StatusConflict, "DUPLICATE", "a category with the same identifier already exists")
 	default:
 		response.InternalError(w)
 	}

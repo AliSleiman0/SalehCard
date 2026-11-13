@@ -969,13 +969,17 @@ export default function ProductEditPage() {
                               value={f.type}
                               onChange={(e) => patch({ type: e.target.value as InputFieldType })}
                             >
-                              {(['text', 'select', 'amount', 'quantity'] as const)
+                              {(['text', 'select', 'amount', 'quantity', 'file'] as const)
                                 // Per-unit products are bought by amount — no pack
                                 // count (kept only so a stray row still renders).
                                 .filter((t) => t !== 'quantity' || !perUnit || f.type === 'quantity')
                                 .map((t) => (
                                   <option key={t} value={t}>
-                                    {t === 'quantity' ? 'quantity (number of packs)' : t}
+                                    {t === 'quantity'
+                                      ? 'quantity (number of packs)'
+                                      : t === 'file'
+                                        ? 'file (photo: QR / barcode)'
+                                        : t}
                                   </option>
                                 ))}
                             </select>

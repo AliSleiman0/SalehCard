@@ -20,3 +20,11 @@ export async function fetchOrders(): Promise<ApiResponse<Order[]>> {
 export async function fetchOrder(id: string): Promise<ApiResponse<Order>> {
   return apiClient.get<Order>(`/api/v1/orders/${id}`)
 }
+
+/** Uploads a checkout photo-field image (QR code, barcode …; multipart
+ * `image`) → its stored URL, submitted as that field's value on the order. */
+export async function uploadOrderFieldFile(file: Blob): Promise<ApiResponse<{ url: string }>> {
+  const form = new FormData()
+  form.append('image', file, 'photo.jpg')
+  return apiClient.postForm<{ url: string }>('/api/v1/orders/field-files', form)
+}

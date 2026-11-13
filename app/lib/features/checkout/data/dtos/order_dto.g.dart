@@ -95,6 +95,9 @@ OrderDto _$OrderDtoFromJson(Map<String, dynamic> json) => OrderDto(
   total: (json['total'] as num?)?.toDouble() ?? 0,
   currency: json['currency'] as String? ?? 'USD',
   paymentMethod: json['paymentMethod'] as String? ?? '',
+  walletBalanceBefore: (json['walletBalanceBefore'] as num?)?.toDouble(),
+  walletBalanceAfter: (json['walletBalanceAfter'] as num?)?.toDouble(),
+  refundBalanceAfter: (json['refundBalanceAfter'] as num?)?.toDouble(),
   status: json['status'] as String? ?? '',
   fulfillment: json['fulfillment'] == null
       ? null
@@ -111,6 +114,9 @@ Map<String, dynamic> _$OrderDtoToJson(OrderDto instance) => <String, dynamic>{
   'total': instance.total,
   'currency': instance.currency,
   'paymentMethod': instance.paymentMethod,
+  'walletBalanceBefore': instance.walletBalanceBefore,
+  'walletBalanceAfter': instance.walletBalanceAfter,
+  'refundBalanceAfter': instance.refundBalanceAfter,
   'status': instance.status,
   'fulfillment': instance.fulfillment?.toJson(),
   'createdAt': instance.createdAt,

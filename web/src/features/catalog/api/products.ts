@@ -6,6 +6,10 @@ export interface ProductsParams {
   limit?: number
   category?: string
   rootDomain?: string
+  /** A taxonomy node: lists the node + all its subcategories' products. */
+  categoryId?: string
+  /** With categoryId: only products attached directly to that node. */
+  directOnly?: boolean
   available?: boolean
   q?: string
   /** 'name' = natural A to Z on the server (ignored by older APIs). */
@@ -21,6 +25,8 @@ export async function fetchProducts(
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   if (params.category !== undefined) query.set('category', params.category)
   if (params.rootDomain !== undefined) query.set('rootDomain', params.rootDomain)
+  if (params.categoryId !== undefined) query.set('categoryId', params.categoryId)
+  if (params.directOnly) query.set('directOnly', 'true')
   if (params.available !== undefined) query.set('available', String(params.available))
   if (params.q !== undefined) query.set('q', params.q)
   if (params.sort !== undefined) query.set('sort', params.sort)

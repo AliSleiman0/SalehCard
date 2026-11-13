@@ -1,4 +1,81 @@
 workflows:
+  # Android: builds the signed release AAB from main and uploads it to Google
+  # Play. One-time setup in Codemagic (see HANDOFF / app/README notes):
+  #   1. Team settings > codemagic.yaml settings > Code signing identities >
+  #      Android keystores: upload app/android/upload-keystore.jks with its
+  #      passwords + alias, reference name `flashcash_upload`.
+  #   2. Environment variables, group `google_play`: secure variable
+  #      GCLOUD_SERVICE_ACCOUNT_CREDENTIALS = the Play service-account JSON
+  #      (the account needs "Release apps" permission in Play Console).
+  android-release:
+    name: Android Release (Google Play)
+    max_build_duration: 60
+    instance_type: linux_x2
+    working_directory: app
+    environment:
+      flutter: 3.44.8
+      java: 17
+      android_signing:
+        - flashcash_upload
+      groups:
+        - google_play
+      vars:
+        PACKAGE_NAME: "com.flashcashglobal.app"
+        # Without this the build bakes in the dev LAN API and hangs on real
+        # devices (see the Android APK note in project memory).
+        API_BASE_URL: "https://salehcard-api.azurewebsites.net/api/v1"
+        # Play track the build is uploaded to. Start on `internal` (instant,
+        # testers only); promote to production from Play Console, or change
+        # this to `production` once the pipeline is trusted.
+        PLAY_TRACK: "internal"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    # Only build when the Flutter app changed.
+    when:
+      changeset:
+        includes:
+          - 'app/'
+          - 'codemagic.yaml'
+    scripts:
+      - name: Write key.properties from the Codemagic keystore
+        # Gradle reads android/key.properties (see app/build.gradle.kts);
+        # Codemagic exposes the uploaded keystore via CM_KEYSTORE_* vars.
+        script: |
+          cat > android/key.properties <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Flutter build appbundle
+        # Version code = highest already on Play (any track) + 1, so uploads
+        # never collide, whatever pubspec says or how often the workflow is
+        # recreated. Version name comes from pubspec.yaml.
+        script: |
+          LATEST=$(google-play get-latest-build-number \
+            --package-name "$PACKAGE_NAME" \
+            --tracks internal,alpha,beta,production || echo 0)
+          BUILD=$((LATEST + 1))
+          echo "Play latest version code: $LATEST -> building $BUILD"
+          flutter build appbundle --release \
+            --build-number=$BUILD \
+            --dart-define=API_BASE_URL=$API_BASE_URL
+    artifacts:
+      - build/**/outputs/bundle/**/*.aab
+      - build/**/outputs/**/mapping.txt
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: $PLAY_TRACK
+        # Upload as a completed release on the track (not a draft).
+        submit_as_draft: false
+
   ios-release:
     name: iOS Release (TestFlight)
     max_build_duration: 60
@@ -19,6 +96,9 @@ workflows:
         # Without this the build bakes in the dev LAN API and hangs on real
         # devices (see the Android APK note in project memory).
         API_BASE_URL: "https://salehcard-api.azurewebsites.net/api/v1"
+        # App Store Connect app record (Apple ID) for FlashCash Global — used to
+        # read the latest uploaded build number (see the build step).
+        APP_STORE_APPLE_ID: "6822703792"
     triggering:
       events:
         - push
@@ -41,11 +121,24 @@ workflows:
         # No `pod install` step: this project uses Swift Package Manager for
         # plugin integration (there is no ios/Podfile), so Xcode resolves
         # Firebase/plugin dependencies itself as part of the build.
-        # Build number = Codemagic's per-workflow counter offset past the
-        # pubspec's +4, so every upload to App Store Connect is unique.
+        # Build number = one past the highest build already in App Store
+        # Connect, so uploads never collide even if Codemagic's per-workflow
+        # BUILD_NUMBER counter resets (workflow recreated/renamed). The old
+        # counter formula (4 + BUILD_NUMBER) is kept as a floor, and as the
+        # fallback if the App Store Connect lookup fails.
         script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || true)
+          COUNTER=$((4 + BUILD_NUMBER))
+          if [[ "$LATEST" =~ ^[0-9]+$ ]]; then
+            NEXT=$((LATEST + 1))
+            if [ "$COUNTER" -gt "$NEXT" ]; then NEXT=$COUNTER; fi
+          else
+            echo "WARNING: could not read the latest TestFlight build number; falling back to $COUNTER"
+            NEXT=$COUNTER
+          fi
+          echo "Building iOS build number $NEXT (latest in App Store Connect: ${LATEST:-unknown})"
           flutter build ipa --release \
-            --build-number=$((4 + BUILD_NUMBER)) \
+            --build-number=$NEXT \
             --dart-define=API_BASE_URL=$API_BASE_URL \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:

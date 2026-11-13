@@ -51,6 +51,10 @@ func (f *fakeBalanceRepo) Debit(_ context.Context, id bson.ObjectID, amount floa
 	return f.balances[id], nil
 }
 
+func (f *fakeBalanceRepo) FindByRefs(context.Context, bson.ObjectID, []string) ([]*WalletTransaction, error) {
+	return nil, nil
+}
+
 func (f *fakeBalanceRepo) TopUpsForDay(_ context.Context, _ time.Time) (float64, error) {
 	return 0, nil
 }

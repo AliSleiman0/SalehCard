@@ -19,6 +19,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/payments"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/photoupload"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -886,12 +887,18 @@ func (s *OrderService) GetOrder(ctx context.Context, userID, id bson.ObjectID) (
 	if o.UserID != userID {
 		return nil, apperrors.ErrNotFound
 	}
+	s.attachWalletBalances(ctx, userID, []*Order{o})
 	return o, nil
 }
 
 // ListOrders returns the caller's order history, newest first.
 func (s *OrderService) ListOrders(ctx context.Context, userID bson.ObjectID) ([]*Order, error) {
-	return s.repo.FindByUserID(ctx, userID)
+	orders, err := s.repo.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	s.attachWalletBalances(ctx, userID, orders)
+	return orders, nil
 }
 
 // findVariant locates a variant by hex id within a product.
@@ -1045,6 +1052,14 @@ func validateFieldInputs(p *product.Product, in []OrderFieldInput) error {
 		values[f.Key] = f.Value
 	}
 	for _, def := range p.InputFields {
+		// A photo field must carry one of OUR stored uploads, never an
+		// arbitrary customer-typed link (shown to operators as an image).
+		if def.Type == product.InputFieldFile {
+			if v := strings.TrimSpace(values[def.Key]); v != "" && !photoupload.IsStoredURL(v, OrderFilesPrefix) {
+				return badRequest(fmt.Sprintf("%s must be an uploaded photo", fieldName(def)))
+			}
+			continue
+		}
 		// Quantity is enforced against the line's real qty by
 		// validateQuantityField — never against the client-typed value.
 		if def.Type == product.InputFieldQuantity || def.Constraints == nil {

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Icon, Logo } from '@/components'
 import { ControlsMenu } from './ControlsMenu'
+import { AccountMenu } from './AccountMenu'
 import { useUiStore } from '@/stores/ui'
 import { useWallet } from '@/features/wallet/hooks/useWallet'
 import { useCurrencyStore } from '@/stores/currency'
@@ -29,14 +30,27 @@ export function Header() {
   const cats = (useCategories({ depth: 0 }).data?.data ?? [])
     .map((c) => adaptRootCategory(c, locale))
     .sort((a, b) => a.order - b.order)
-  const [menu, setMenu] = useState(false)
+  // At most one header popover is open: language/currency controls or the
+  // avatar's account menu. Any outside click or Escape closes it.
+  const [menu, setMenu] = useState<null | 'controls' | 'account'>(null)
+  const toggle = (m: 'controls' | 'account') => setMenu((cur) => (cur === m ? null : m))
   const unread = useUnreadCount().data ?? 0
 
   useEffect(() => {
-    const h = () => setMenu(false)
-    window.addEventListener('click', h)
-    return () => window.removeEventListener('click', h)
+    const close = () => setMenu(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('click', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('keydown', onKey)
+    }
   }, [])
+
+  // Navigating anywhere closes an open popover.
+  useEffect(() => setMenu(null), [pathname])
 
   const onCat = pathname.startsWith('/category/') ? pathname.split('/')[2] : null
   // The category bar is a persistent browse affordance on every page except the
@@ -92,13 +106,15 @@ export function Header() {
               className="icon-btn"
               onClick={(e) => {
                 e.stopPropagation()
-                setMenu((m) => !m)
+                toggle('controls')
               }}
               title="Language & currency"
+              aria-haspopup="menu"
+              aria-expanded={menu === 'controls'}
             >
               <Icon name="globe" size={19} />
             </button>
-            {menu && <ControlsMenu />}
+            {menu === 'controls' && <ControlsMenu />}
           </div>
 
           {isAuthenticated && (
@@ -113,12 +129,29 @@ export function Header() {
             {cartCount > 0 && <span className="cart-count num">{cartCount}</span>}
           </button>
 
-          <div
-            className="avatar desktop-only"
-            onClick={() => navigate(isAuthenticated ? '/dashboard' : '/login')}
-          >
-            {isAuthenticated ? initials(user) : <Icon name="user" size={18} />}
-          </div>
+          {isAuthenticated ? (
+            <div className="desktop-only" style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="avatar"
+                style={{ border: 0 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggle('account')
+                }}
+                title={t('account_menu')}
+                aria-haspopup="menu"
+                aria-expanded={menu === 'account'}
+              >
+                {initials(user)}
+              </button>
+              {menu === 'account' && <AccountMenu onClose={() => setMenu(null)} />}
+            </div>
+          ) : (
+            <div className="avatar desktop-only" onClick={() => navigate('/login')}>
+              <Icon name="user" size={18} />
+            </div>
+          )}
         </div>
       </div>
 

@@ -133,12 +133,18 @@ type Order struct {
 	PaymentMethod PaymentMethod `bson:"paymentMethod" json:"paymentMethod"`
 	// PaymentRef is the gateway transaction id for card/usdt orders (empty for
 	// wallet orders); used to reverse the charge on refund / compensation.
-	PaymentRef     string      `bson:"paymentRef,omitempty" json:"paymentRef,omitempty"`
-	Status         OrderStatus `bson:"status"        json:"status"`
-	Fulfillment    Fulfillment `bson:"fulfillment"   json:"fulfillment"`
-	IdempotencyKey string      `bson:"idempotencyKey,omitempty" json:"-"`
-	CreatedAt      time.Time   `bson:"createdAt"     json:"createdAt"`
-	UpdatedAt      time.Time   `bson:"updatedAt"     json:"updatedAt"`
+	PaymentRef string `bson:"paymentRef,omitempty" json:"paymentRef,omitempty"`
+	// Wallet balance around this order's charge (and refund), read from the
+	// ledger rows whose ref is this order — response-only, filled on the
+	// customer order endpoints, nil for non-wallet orders (client msgs #15/#16).
+	WalletBalanceBefore *float64    `bson:"-" json:"walletBalanceBefore,omitempty"`
+	WalletBalanceAfter  *float64    `bson:"-" json:"walletBalanceAfter,omitempty"`
+	RefundBalanceAfter  *float64    `bson:"-" json:"refundBalanceAfter,omitempty"`
+	Status              OrderStatus `bson:"status"        json:"status"`
+	Fulfillment         Fulfillment `bson:"fulfillment"   json:"fulfillment"`
+	IdempotencyKey      string      `bson:"idempotencyKey,omitempty" json:"-"`
+	CreatedAt           time.Time   `bson:"createdAt"     json:"createdAt"`
+	UpdatedAt           time.Time   `bson:"updatedAt"     json:"updatedAt"`
 }
 
 // PlaceOrderItemInput is a single requested line. The client sends only what it

@@ -398,5 +398,8 @@
   "helpSearchHint": "Type to search questions…",
   "helpAllQuestions": "All questions",
   "helpNoMatch": "No matching questions",
-  "helpNeedHelp": "Still need help?"
+  "helpNeedHelp": "Still need help?",
+  "uploadPhoto": "Upload a photo (QR code / barcode)",
+  "replacePhoto": "Replace photo",
+  "uploadFailed": "Upload failed. Please try another photo."
 }

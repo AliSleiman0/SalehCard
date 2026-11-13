@@ -242,7 +242,7 @@ func (s *Server) Routes() {
 	// dispatcher, and we close the loop by handing the order service back to the
 	// payment module (OrderSettler for confirmed on-chain payments) and the bridge
 	// module (OrderSettler for confirmed device recharges).
-	orderSvc := order.RegisterRoutes(s.router, s.db, s.cfg, ntf, paySvc, bridgeReg.Service)
+	orderSvc := order.RegisterRoutes(s.router, s.db, s.cfg, ntf, paySvc, bridgeReg.Service, store)
 	paySvc.SetOrderSettler(orderSvc)
 	bridgeReg.Service.SetOrderSettler(orderSvc)
 	if bridgeReg.Service.Enabled() {

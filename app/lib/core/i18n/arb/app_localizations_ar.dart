@@ -1018,4 +1018,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get helpNeedHelp => 'هل ما زلت بحاجة للمساعدة؟';
+
+  @override
+  String get uploadPhoto => 'ارفع صورة (رمز QR / باركود)';
+
+  @override
+  String get replacePhoto => 'استبدال الصورة';
+
+  @override
+  String get uploadFailed => 'فشل الرفع. يرجى تجربة صورة أخرى.';
 }
