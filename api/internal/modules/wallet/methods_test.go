@@ -198,3 +198,22 @@ func TestMethodInputValidation(t *testing.T) {
 		t.Fatalf("options not normalized: %+v", m.Fields)
 	}
 }
+
+func TestMethodInputKind(t *testing.T) {
+	for _, k := range []MethodKind{"", MethodKindBank, MethodKindCash, MethodKindWalletApp, MethodKindCrypto, MethodKindOther} {
+		m, err := MethodInput{Name: "Sham Cash", Kind: k}.normalizeAndValidate()
+		if err != nil {
+			t.Fatalf("kind %q: unexpected error %v", k, err)
+		}
+		if m.Kind != k {
+			t.Fatalf("kind %q not kept: got %q", k, m.Kind)
+		}
+	}
+	m, err := MethodInput{Name: "x", Kind: "  bank "}.normalizeAndValidate()
+	if err != nil || m.Kind != MethodKindBank {
+		t.Fatalf("kind should be trimmed: %v %q", err, m.Kind)
+	}
+	if _, err := (MethodInput{Name: "x", Kind: "paypal"}).normalizeAndValidate(); err == nil {
+		t.Fatal("unknown kind must be rejected")
+	}
+}

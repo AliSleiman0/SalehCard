@@ -111,12 +111,17 @@ class TopUpMethod {
   const TopUpMethod({
     required this.id,
     required this.name,
+    this.kind = '',
     this.instructions = '',
     this.fields = const [],
   });
 
   final String id;
   final String name;
+
+  /// Admin-set payment rail: `bank`, `cash`, `wallet_app`, `crypto`, `other`,
+  /// or '' when not classified yet (see [isTopUpMethodShownOnRestricted]).
+  final String kind;
   final String instructions;
   final List<TopUpMethodField> fields;
 }

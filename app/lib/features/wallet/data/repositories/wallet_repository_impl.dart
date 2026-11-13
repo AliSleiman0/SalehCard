@@ -48,7 +48,10 @@ class WalletRepositoryImpl implements WalletRepository {
       return Right([
         for (final method in dtos.map((d) => d.toEntity()))
           if (!restrictToRealWorldServices ||
-              !isTopUpMethodHiddenOnRestricted(method.name))
+              isTopUpMethodShownOnRestricted(
+                kind: method.kind,
+                name: method.name,
+              ))
             method,
       ]);
     } catch (error) {

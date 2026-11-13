@@ -41,10 +41,14 @@ String? get catalogRootDomainScope =>
 bool isRootDomainAllowed(String? rootDomain) =>
     !restrictToRealWorldServices || iosAllowedRootDomains.contains(rootDomain);
 
-/// Manual top-up methods that are crypto rails (matched on the admin-defined
-/// method name, which is the only identifying field the API returns).
+/// Manual top-up methods that are crypto rails, matched on the admin-defined
+/// method name. Only the fallback for methods with no `kind` yet — see
+/// [isTopUpMethodShownOnRestricted].
 final _cryptoMethodName = RegExp(
-  r'usdt|usdc|tether|crypto|bitcoin|\bbtc\b|binance|trc20|bep20',
+  r'usd[ct]|tether|crypto|bitcoin|\bbtc\b|binance|\bbnb\b|\bbsc\b|trc-?20|'
+  r'bep-?20|erc-?20|ethereum|\beth\b|\btron\b|\btrx\b|solana|\bsol\b|'
+  r'litecoin|\bltc\b|polygon|matic|doge|wallet address|'
+  r'كريبتو|بيتكوين|تيثر|عملات رقمية',
   caseSensitive: false,
 );
 
@@ -57,6 +61,23 @@ final _restrictedMethodName = RegExp(r'whish', caseSensitive: false);
 /// plus payment apps not yet integrated there.
 bool isTopUpMethodHiddenOnRestricted(String name) =>
     isCryptoTopUpMethodName(name) || _restrictedMethodName.hasMatch(name);
+
+/// Method kinds a restricted build may offer. An ALLOW-list: crypto, wallet_app
+/// and any kind added later are hidden by default.
+const restrictedAllowedMethodKinds = {'bank', 'cash', 'other'};
+
+/// Whether a manual top-up method is shown on restricted builds. A classified
+/// method (admin-set `kind`) is shown only if its kind is allow-listed; an
+/// unclassified one (legacy, empty `kind`) falls back to the name deny-list so
+/// existing methods keep working until an admin sets their kind.
+bool isTopUpMethodShownOnRestricted({
+  required String kind,
+  required String name,
+}) {
+  final k = kind.trim();
+  if (k.isNotEmpty) return restrictedAllowedMethodKinds.contains(k);
+  return !isTopUpMethodHiddenOnRestricted(name);
+}
 
 /// Resolves which category slugs are allowed on restricted builds, so items
 /// that only carry a category slug (offers, order lines) can be filtered. The
