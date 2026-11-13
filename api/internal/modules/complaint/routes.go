@@ -77,6 +77,7 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, n
 func mountAdmin(r chi.Router, h *adminHandler) {
 	r.Get("/complaints", h.list)
 	r.Get("/complaints/counts", h.counts)
+	r.Get("/complaints/assignees", h.assignees)
 	r.Get("/complaints/{id}", h.detail)
 	r.Post("/complaints/{id}/messages", h.reply)
 	r.Put("/complaints/{id}/status", h.setStatus)

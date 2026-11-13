@@ -111,6 +111,17 @@ func (h *adminHandler) counts(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, map[string]any{"byStatus": c, "awaitingReply": awaiting})
 }
 
+// assignees lists the admins a complaint can be assigned to. It lives inside
+// the complaints domain so a support role needs no users.view to use it.
+func (h *adminHandler) assignees(w http.ResponseWriter, r *http.Request) {
+	out, err := h.repo.Admins(r.Context())
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	response.OK(w, out)
+}
+
 func (h *adminHandler) detail(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {

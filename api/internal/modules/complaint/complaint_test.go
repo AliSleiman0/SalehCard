@@ -153,6 +153,7 @@ func (f *fakeRepo) Users(_ context.Context, ids []bson.ObjectID) (map[bson.Objec
 	}
 	return out, nil
 }
+func (f *fakeRepo) Admins(context.Context) ([]Contact, error) { return []Contact{}, nil }
 func (f *fakeRepo) Order(_ context.Context, id bson.ObjectID) (*OrderSummary, error) {
 	o, ok := f.orders[id]
 	if !ok {

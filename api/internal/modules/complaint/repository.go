@@ -82,6 +82,8 @@ type Repository interface {
 	Counts(ctx context.Context) (Counts, int64, error)
 	Users(ctx context.Context, ids []bson.ObjectID) (map[bson.ObjectID]Contact, error)
 	Order(ctx context.Context, id bson.ObjectID) (*OrderSummary, error)
+	// Admins lists the active admin accounts (the assignee picker).
+	Admins(ctx context.Context) ([]Contact, error)
 }
 
 // MongoRepository is the MongoDB-backed Repository.
@@ -348,6 +350,23 @@ func (r *MongoRepository) Users(ctx context.Context, ids []bson.ObjectID) (map[b
 	}
 	for _, c := range rows {
 		out[c.ID] = c
+	}
+	return out, nil
+}
+
+// Admins implements Repository (capped; suspended / deleted excluded).
+func (r *MongoRepository) Admins(ctx context.Context) ([]Contact, error) {
+	cur, err := r.users.Find(ctx, bson.D{
+		{Key: "role", Value: "admin"},
+		{Key: "status", Value: bson.D{{Key: "$nin", Value: bson.A{"suspended", "deleted"}}}},
+	}, options.Find().SetLimit(200).SetSort(bson.D{{Key: "name", Value: 1}, {Key: "email", Value: 1}}).
+		SetProjection(bson.D{{Key: "name", Value: 1}, {Key: "email", Value: 1}, {Key: "phone", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	out := []Contact{}
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
