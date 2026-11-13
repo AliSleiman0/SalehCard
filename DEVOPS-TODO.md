@@ -562,8 +562,16 @@ deployed API + admin; web came with the manual full redeploy of `8287849` (all t
 Still open:
 
 - **Grant `complaints.view` / `complaints.manage`** to any custom support role in admin → Roles. Super admins
-  already see it. A custom role without it gets 403 and no "Complaints" nav item.
-- **Android push is off in the app itself, not just blocked by the API-key restriction (§19).** On a debug
+  already see it. A custom role without it gets 403 and no "Complaints" nav item. Script (interactive, signs in
+  as a super admin, dry run with `-DryRun`, asks before changing anything, audited as `role.update`):
+  `powershell -ExecutionPolicy Bypass -File deploy\grant-role-permission.ps1` (`-Domain <area>` for others).
+- **Android push is off in the app itself, not just blocked by the API-key restriction (§19). This affects
+  prod:** every Android build since commit `7eb3eba` (2026-08-07, package re-registered as
+  `com.flashcashglobal.app`) has it, including the Play builds 1.0.4+ (Codemagic builds from the repo files
+  as-is). That commit brought a new `google-services.json` with a new API key but left `firebase_options.dart`
+  on the old key; before it the two matched. iOS config is consistent, but `ios/Runner` has no
+  `.entitlements` with `aps-environment`, so iOS push needs that capability (plus an APNs key in Firebase)
+  as a separate fix. On a debug
   build, `initFirebase()` logs `[core/duplicate-app] A Firebase App named "[DEFAULT]" already exists` and
   disables push. The `apiKey` in `app/lib/firebase_options.dart` does not match the `current_key` that
   `app/android/app/google-services.json` holds for `com.flashcashglobal.app` (appId, sender id and bucket do
