@@ -17,6 +17,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/bridge"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/category"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/chatbot"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/dashboard"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/expense"
@@ -257,6 +258,7 @@ func (s *Server) Routes() {
 	wallet.RegisterRoutes(s.router, s.db, s.cfg, store)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
+	chatbot.RegisterRoutes(s.router, s.db)
 	kyc.RegisterRoutes(s.router, s.db, s.cfg, store)
 	notification.RegisterRoutes(s.router, s.db, s.cfg)
 
@@ -328,6 +330,7 @@ func (s *Server) Routes() {
 		domain("promos", func(g chi.Router) { promo.RegisterAdminRoutes(g, s.db) })
 		domain("offers", func(g chi.Router) { offer.RegisterAdminRoutes(g, s.db) })
 		domain("reviews", func(g chi.Router) { review.RegisterAdminRoutes(g, s.db, rec) })
+		domain("chatbot", func(g chi.Router) { chatbot.RegisterAdminRoutes(g, s.db, rec) })
 		domain("topups", func(g chi.Router) { wallet.RegisterAdminRoutes(g, s.db, rec, ntf) })
 		domain("expenses", func(g chi.Router) { expense.RegisterAdminRoutes(g, s.db) })
 		domain("kyc", func(g chi.Router) { kyc.RegisterAdminRoutes(g, s.db, rec, ntf) })

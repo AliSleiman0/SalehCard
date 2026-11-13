@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/brand_logo.dart';
 import '../../../../core/widgets/notification_bell.dart';
 import '../../../../core/widgets/product_chip.dart';
+import '../../../help/presentation/help_sheet.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../browse/domain/entities/category.dart';
 import '../../../browse/presentation/providers.dart';
@@ -96,6 +97,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       backgroundColor: colors.bg,
+      floatingActionButton: const HelpFab(),
       body: SafeArea(
         bottom: false,
         child: Column(

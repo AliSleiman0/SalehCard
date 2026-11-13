@@ -393,6 +393,12 @@
   },
   "amountTooSmall": "This amount is too small to purchase.",
   "unitPricedUnavailable": "This product can't be bought right now. Please try again later.",
+  "helpTitle": "Help",
+  "helpGreeting": "Hi! Pick a question below, or type to search.",
+  "helpSearchHint": "Type to search questions…",
+  "helpAllQuestions": "All questions",
+  "helpNoMatch": "No matching questions",
+  "helpNeedHelp": "Still need help?",
   "uploadPhoto": "Upload a photo (QR code / barcode)",
   "replacePhoto": "Replace photo",
   "uploadFailed": "Upload failed. Please try another photo."

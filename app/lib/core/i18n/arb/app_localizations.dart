@@ -1874,6 +1874,42 @@ abstract class AppLocalizations {
   /// **'This product can\'t be bought right now. Please try again later.'**
   String get unitPricedUnavailable;
 
+  /// No description provided for @helpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Help'**
+  String get helpTitle;
+
+  /// No description provided for @helpGreeting.
+  ///
+  /// In en, this message translates to:
+  /// **'Hi! Pick a question below, or type to search.'**
+  String get helpGreeting;
+
+  /// No description provided for @helpSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type to search questions…'**
+  String get helpSearchHint;
+
+  /// No description provided for @helpAllQuestions.
+  ///
+  /// In en, this message translates to:
+  /// **'All questions'**
+  String get helpAllQuestions;
+
+  /// No description provided for @helpNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching questions'**
+  String get helpNoMatch;
+
+  /// No description provided for @helpNeedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Still need help?'**
+  String get helpNeedHelp;
+
   /// No description provided for @uploadPhoto.
   ///
   /// In en, this message translates to:

@@ -37,6 +37,8 @@ export default function SettingsPage() {
   const { data: settingsRes, isLoading: settingsLoading } = useSettings()
   const update = useUpdateSettings()
   const [supportEmail, setSupportEmail] = useState('')
+  const [supportPhone, setSupportPhone] = useState('')
+  const [supportWhatsapp, setSupportWhatsapp] = useState('')
   const [supportError, setSupportError] = useState<string | null>(null)
   const [supportSaved, setSupportSaved] = useState(false)
 
@@ -61,6 +63,8 @@ export default function SettingsPage() {
     const s = settingsRes?.data
     if (!s) return
     setSupportEmail(s.supportEmail)
+    setSupportPhone(s.supportPhone ?? '')
+    setSupportWhatsapp(s.supportWhatsapp ?? '')
     setLoyaltyEnabled(s.loyaltyEnabled)
     setEarnRate(String(s.loyaltyEarnUsdPerPoint))
     setTwoFAEnabled(s.adminSmsTwoFactorEnabled)
@@ -90,11 +94,15 @@ export default function SettingsPage() {
     setSupportError(null)
     setSupportSaved(false)
     update.mutate(
-      { supportEmail: supportEmail.trim() },
+      {
+        supportEmail: supportEmail.trim(),
+        supportPhone: supportPhone.trim(),
+        supportWhatsapp: supportWhatsapp.trim(),
+      },
       {
         onSuccess: () => setSupportSaved(true),
         onError: (e) =>
-          setSupportError(e instanceof ApiError ? e.message : 'Could not save the support email.'),
+          setSupportError(e instanceof ApiError ? e.message : 'Could not save the support contact.'),
       },
     )
   }
@@ -169,6 +177,31 @@ export default function SettingsPage() {
               />
               <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
                 Shown on the public privacy-policy and account-deletion pages.
+              </div>
+            </div>
+            <div>
+              <label className="alabel">Support phone</label>
+              <input
+                className="afield"
+                type="tel"
+                dir="ltr"
+                placeholder="+961 70 000 000"
+                value={supportPhone}
+                onChange={(e) => setSupportPhone(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="alabel">Support WhatsApp</label>
+              <input
+                className="afield"
+                type="tel"
+                dir="ltr"
+                placeholder="+961 70 000 000"
+                value={supportWhatsapp}
+                onChange={(e) => setSupportWhatsapp(e.target.value)}
+              />
+              <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
+                Linked from the storefront help bot ("Still need help?"). Leave empty to hide.
               </div>
             </div>
           </div>

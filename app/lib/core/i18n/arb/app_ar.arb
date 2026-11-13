@@ -388,6 +388,12 @@
   },
   "amountTooSmall": "هذه الكمية صغيرة جداً للشراء.",
   "unitPricedUnavailable": "لا يمكن شراء هذا المنتج حالياً. يرجى المحاولة لاحقاً.",
+  "helpTitle": "المساعدة",
+  "helpGreeting": "مرحباً! اختر سؤالاً من الأسفل أو اكتب للبحث.",
+  "helpSearchHint": "اكتب للبحث في الأسئلة…",
+  "helpAllQuestions": "كل الأسئلة",
+  "helpNoMatch": "لا توجد أسئلة مطابقة",
+  "helpNeedHelp": "هل ما زلت بحاجة للمساعدة؟",
   "uploadPhoto": "ارفع صورة (رمز QR / باركود)",
   "replacePhoto": "استبدال الصورة",
   "uploadFailed": "فشل الرفع. يرجى تجربة صورة أخرى."

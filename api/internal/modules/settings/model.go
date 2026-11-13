@@ -27,10 +27,13 @@ type ExchangeRate struct {
 // document. Provider secrets are NEVER stored here (they live in env/config);
 // the read-only integration status is derived separately (see integrationsView).
 type Settings struct {
-	ID                string `bson:"_id"                json:"-"`
-	StoreName         string `bson:"storeName"          json:"storeName"`
-	SupportEmail      string `bson:"supportEmail"       json:"supportEmail"`
-	SupportPhone      string `bson:"supportPhone"       json:"supportPhone"`
+	ID           string `bson:"_id"                json:"-"`
+	StoreName    string `bson:"storeName"          json:"storeName"`
+	SupportEmail string `bson:"supportEmail"       json:"supportEmail"`
+	SupportPhone string `bson:"supportPhone"       json:"supportPhone"`
+	// SupportWhatsapp is the WhatsApp number the storefront help bot links to
+	// ("still need help?"), e.g. +96170123456. Empty hides the WhatsApp link.
+	SupportWhatsapp   string `bson:"supportWhatsapp,omitempty" json:"supportWhatsapp"`
 	DefaultLanguage   string `bson:"defaultLanguage"    json:"defaultLanguage"` // en / ar / tr
 	DefaultCurrency   string `bson:"defaultCurrency"    json:"defaultCurrency"` // USD / TRY
 	LowStockThreshold int    `bson:"lowStockThreshold"  json:"lowStockThreshold"`
@@ -71,6 +74,7 @@ type UpdateInput struct {
 	StoreName         *string `json:"storeName"`
 	SupportEmail      *string `json:"supportEmail"`
 	SupportPhone      *string `json:"supportPhone"`
+	SupportWhatsapp   *string `json:"supportWhatsapp"`
 	DefaultLanguage   *string `json:"defaultLanguage"`
 	DefaultCurrency   *string `json:"defaultCurrency"`
 	LowStockThreshold *int    `json:"lowStockThreshold"`

@@ -9,6 +9,8 @@ import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../help/data/chatbot_repository.dart';
+import '../../../help/presentation/help_sheet.dart';
 import '../widgets/delete_account_sheet.dart';
 
 /// Menu / settings tab — foundation version: language + theme toggles and
@@ -69,6 +71,16 @@ class AccountMenuScreen extends ConsumerWidget {
             onTap: () => context.push('/orders'),
           ),
           const Divider(height: 1),
+          // Help bot (predefined Q&A) — only when the admin has added questions.
+          if (ref.watch(chatbotProvider).value?.entries.isNotEmpty ?? false) ...[
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline_rounded),
+              title: Text(l10n.helpTitle),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => showHelpSheet(context),
+            ),
+            const Divider(height: 1),
+          ],
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
             title: Text(l10n.privacyPolicyMenuLabel),

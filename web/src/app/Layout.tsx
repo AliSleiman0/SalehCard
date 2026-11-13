@@ -5,6 +5,7 @@ import { Footer } from '@/components/layout/Footer'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { useUiStore } from '@/stores/ui'
 import { NotificationPopups } from '@/features/notifications/components/NotificationPopups'
+import { ChatWidget } from '@/features/chatbot/components/ChatWidget'
 
 export default function Layout() {
   const { agent, acctDrawer, setAcctDrawer } = useUiStore()
@@ -52,6 +53,7 @@ export default function Layout() {
         {!authRoute && <BottomNav />}
       </div>
       {!authRoute && <NotificationPopups />}
+      {!authRoute && <ChatWidget />}
       <div className="drawer-backdrop" onClick={() => setAcctDrawer(false)} />
     </div>
   )

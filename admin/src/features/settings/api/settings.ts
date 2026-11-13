@@ -18,6 +18,8 @@ export interface AdminSettings {
   storeName: string
   supportEmail: string
   supportPhone: string
+  /** WhatsApp number the storefront help bot links to (empty = hidden). */
+  supportWhatsapp: string
   defaultLanguage: string
   defaultCurrency: string
   lowStockThreshold: number
@@ -40,6 +42,7 @@ export interface SettingsInput {
   storeName?: string
   supportEmail?: string
   supportPhone?: string
+  supportWhatsapp?: string
   defaultLanguage?: string
   defaultCurrency?: string
   lowStockThreshold?: number

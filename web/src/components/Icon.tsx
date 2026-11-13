@@ -27,6 +27,7 @@ export type IconName =
   | 'google'
   | 'repeat'
   | 'bell'
+  | 'chat'
 
 const P: Record<IconName, string> = {
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
@@ -58,6 +59,7 @@ const P: Record<IconName, string> = {
   google: 'G',
   repeat: 'M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3',
   bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
 }
 
 export function Icon({
