@@ -133,6 +133,9 @@ class OrderDto {
     this.total = 0,
     this.currency = 'USD',
     this.paymentMethod = '',
+    this.walletBalanceBefore,
+    this.walletBalanceAfter,
+    this.refundBalanceAfter,
     this.status = '',
     this.fulfillment,
     this.createdAt,
@@ -146,6 +149,12 @@ class OrderDto {
   final double total;
   final String currency;
   final String paymentMethod;
+
+  /// Wallet balance before / after the charge and after a refund (wallet
+  /// orders only; from the ledger).
+  final double? walletBalanceBefore;
+  final double? walletBalanceAfter;
+  final double? refundBalanceAfter;
   final String status;
   final FulfillmentDto? fulfillment;
   final String? createdAt;
@@ -164,6 +173,9 @@ class OrderDto {
         total: total,
         currency: currency,
         paymentMethod: paymentMethod,
+        walletBalanceBefore: walletBalanceBefore,
+        walletBalanceAfter: walletBalanceAfter,
+        refundBalanceAfter: refundBalanceAfter,
         status: orderStatusFromString(status),
         fulfillment: fulfillment?.toEntity() ?? const Fulfillment(),
         createdAt: createdAt == null ? null : DateTime.tryParse(createdAt!),

@@ -15,6 +15,7 @@ import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/format/date_time.dart';
 import '../../../checkout/domain/entities/order.dart';
 import '../../../checkout/presentation/providers.dart';
+import '../widgets/balance_line.dart';
 
 /// Order detail, wired to `GET /orders/{id}` via [orderDetailProvider]. Renders
 /// the delivered-code, processing, and refunded (display-only) variants plus the
@@ -153,6 +154,10 @@ class _Body extends StatelessWidget {
             ),
           ],
         ),
+        if (order.walletBalanceAfter != null) ...[
+          const SizedBox(height: 10),
+          BalanceLine(order: order, fontSize: 13),
+        ],
         const SizedBox(height: 20),
         if (codeLines.isNotEmpty) ...[
           for (final line in codeLines) ...[

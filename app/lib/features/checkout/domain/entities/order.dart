@@ -135,6 +135,9 @@ class Order {
     this.createdAt,
     this.updatedAt,
     this.paymentIntent,
+    this.walletBalanceBefore,
+    this.walletBalanceAfter,
+    this.refundBalanceAfter,
   });
 
   final String id;
@@ -154,6 +157,12 @@ class Order {
   /// wallet/card orders and for orders re-fetched via GET /orders.
   final PaymentIntent? paymentIntent;
 
+  /// Wallet balance before / after this order's charge, and after its refund
+  /// (wallet-paid orders; null otherwise).
+  final double? walletBalanceBefore;
+  final double? walletBalanceAfter;
+  final double? refundBalanceAfter;
+
   /// Returns a copy with [paymentIntent] attached (used by the order datasource
   /// to carry the intent parsed from the place-order response).
   Order withPaymentIntent(PaymentIntent? intent) => Order(
@@ -169,6 +178,9 @@ class Order {
         createdAt: createdAt,
         updatedAt: updatedAt,
         paymentIntent: intent,
+        walletBalanceBefore: walletBalanceBefore,
+        walletBalanceAfter: walletBalanceAfter,
+        refundBalanceAfter: refundBalanceAfter,
       );
 
   bool get isProcessing => status == OrderStatus.processing;

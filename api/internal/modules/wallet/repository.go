@@ -24,6 +24,9 @@ var ErrInsufficientFunds = &apperrors.AppError{
 type Repository interface {
 	Create(ctx context.Context, tx *WalletTransaction) error
 	FindByUserID(ctx context.Context, userID bson.ObjectID) ([]*WalletTransaction, error)
+	// FindByRefs returns the user's purchase + refund ledger rows whose ref is in
+	// refs (order ids), oldest first — one indexed query for an order page.
+	FindByRefs(ctx context.Context, userID bson.ObjectID, refs []string) ([]*WalletTransaction, error)
 	GetBalance(ctx context.Context, userID bson.ObjectID) (float64, error)
 	Credit(ctx context.Context, userID bson.ObjectID, amount float64) (float64, error)
 	Debit(ctx context.Context, userID bson.ObjectID, amount float64) (float64, error)
@@ -57,6 +60,8 @@ func NewMongoRepository(db *mongo.Database) *MongoRepository {
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	models := []mongo.IndexModel{
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}},
+		// Order pages join their ledger rows by ref (balance before / after).
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "ref", Value: 1}}},
 		// One on-chain settlement credit per payment-intent ref: the payment
 		// module's watcher retries settlement until it succeeds, and this
 		// unique constraint is what makes the retried TopUp a safe no-op
@@ -111,6 +116,30 @@ func (r *MongoRepository) FindByUserID(ctx context.Context, userID bson.ObjectID
 	}
 	defer cur.Close(ctx)
 	out := []*WalletTransaction{}
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// FindByRefs implements Repository.FindByRefs.
+func (r *MongoRepository) FindByRefs(ctx context.Context, userID bson.ObjectID, refs []string) ([]*WalletTransaction, error) {
+	out := []*WalletTransaction{}
+	if len(refs) == 0 {
+		return out, nil
+	}
+	cur, err := r.tx.Find(ctx,
+		bson.D{
+			{Key: "userId", Value: userID},
+			{Key: "ref", Value: bson.D{{Key: "$in", Value: refs}}},
+			{Key: "type", Value: bson.D{{Key: "$in", Value: bson.A{TxTypePurchase, TxTypeRefund}}}},
+		},
+		options.Find().SetSort(bson.D{{Key: "createdAt", Value: 1}}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
 	if err := cur.All(ctx, &out); err != nil {
 		return nil, err
 	}

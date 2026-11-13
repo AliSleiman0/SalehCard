@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Icon, ImageArt, Price, Badge, Button, CodeVault, useToast } from '@/components'
 import { useCurrencyStore } from '@/stores/currency'
+import { fmtPrice } from '@/lib/utils'
 import type { OrderView } from '../types'
 
 // Single source of truth for order-status badges (head, list rows, credit card).
@@ -50,6 +51,21 @@ export function StatusNotice({ status }: { status?: string }) {
   )
 }
 
+// BalanceLine shows the wallet balance before → after the charge (and after a
+// refund) on wallet-paid orders (client msgs #15/#16). Renders nothing otherwise.
+export function BalanceLine({ o }: { o: OrderView }) {
+  const { t } = useTranslation()
+  const cur = useCurrencyStore((s) => s.currency)
+  if (o.balanceBefore === undefined || o.balanceAfter === undefined) return null
+  return (
+    <span className="tiny faint num">
+      {t('balance')}: {fmtPrice(o.balanceBefore, cur)} → {fmtPrice(o.balanceAfter, cur)}
+      {o.refundBalanceAfter !== undefined &&
+        ` · ${t('refunded')} → ${fmtPrice(o.refundBalanceAfter, cur)}`}
+    </span>
+  )
+}
+
 export function OrderHead({ o }: { o: OrderView }) {
   const cur = useCurrencyStore((s) => s.currency)
   return (
@@ -68,6 +84,7 @@ export function OrderHead({ o }: { o: OrderView }) {
           <span className="tiny faint num">
             {o.id} · {o.method}
           </span>
+          <BalanceLine o={o} />
           <div style={{ marginTop: 4 }}>
             <OrderStatusBadge status={o.status} />
           </div>

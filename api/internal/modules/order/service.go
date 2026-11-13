@@ -887,12 +887,18 @@ func (s *OrderService) GetOrder(ctx context.Context, userID, id bson.ObjectID) (
 	if o.UserID != userID {
 		return nil, apperrors.ErrNotFound
 	}
+	s.attachWalletBalances(ctx, userID, []*Order{o})
 	return o, nil
 }
 
 // ListOrders returns the caller's order history, newest first.
 func (s *OrderService) ListOrders(ctx context.Context, userID bson.ObjectID) ([]*Order, error) {
-	return s.repo.FindByUserID(ctx, userID)
+	orders, err := s.repo.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	s.attachWalletBalances(ctx, userID, orders)
+	return orders, nil
 }
 
 // findVariant locates a variant by hex id within a product.

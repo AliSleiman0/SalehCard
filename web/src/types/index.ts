@@ -191,6 +191,11 @@ export interface Order {
   total: number
   currency: string
   paymentMethod: PaymentMethod
+  // Wallet balance around the charge (and refund), from the ledger. Present on
+  // wallet-paid orders from the customer order endpoints.
+  walletBalanceBefore?: number
+  walletBalanceAfter?: number
+  refundBalanceAfter?: number
   status: OrderStatus
   fulfillment: Fulfillment
   createdAt: string
