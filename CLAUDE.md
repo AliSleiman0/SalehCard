@@ -151,6 +151,16 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   the double-refund lock; **delivered codes are never re-pooled on refund**).
   **Payments are wallet-only** — card/usdt are rejected (`PAYMENT_METHOD_UNAVAILABLE`)
   until a real gateway exists; only the wallet ledger moves real balance.
+- **Admin order → product links** (PR #136): on the admin order detail (Items card: name +
+  thumbnail) and orders list (first line's name), product names link to `/products/{id}/edit`.
+  Product deletes are **hard deletes**, so the admin order endpoints (list, detail, and the
+  post-action fresh view) return **`missingProductIds`**: line product ids with no product
+  document, from one batched `_id`-only lookup per response (`product.MongoRepository.ExistingIDs`).
+  Those names render as plain text. The lookup is best effort (on error the order still loads and
+  names link), zero product ids are never reported, links are gated on `products.view`, and a
+  product delete invalidates the cached admin order queries. Helper: `productEditPath` in
+  `admin/src/features/orders/lib/adaptOrder.ts`. If soft delete lands, soft-deleted products still
+  exist, so they keep linking (to the editor, where they can be restored).
 - **Per-product input fields** (`Product.InputFields` — key/label/type/sensitive): the fields a
   customer enters at checkout for non-`code` products (Account ID, Zone ID, Email, Server…). Admins
   define them in the product editor (add/remove, editable key + type + label). Captured values are
