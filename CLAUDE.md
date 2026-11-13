@@ -172,6 +172,20 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   rating + text per product — `POST /api/v1/reviews`, `GET /api/v1/reviews/mine`, public list at
   `GET /api/v1/products/{id}/reviews`; the app has a star-input + write-review sheet. Admins moderate
   under `/api/admin/reviews` (decisions audited).
+- **Manual product order inside a category** (`product/catalog_order.go`, live since 2026-11-14, PR #138):
+  admin Categories → expand a node → **Arrange order** (drag handle or top/up/down/bottom arrows).
+  - **Scope:** the order is per taxonomy node, over the products placed **directly** in it.
+    `Product.position` is the 1-based rank within its own node. It is deliberately **not** the legacy
+    `sortOrder`, which still holds old-site migration values.
+  - **Who sees it:** only a **one-node** `sort=name` listing honours it (`directOnly`, or a leaf node;
+    the service sets `ListFilter.manualOrder`). Root-domain, collection-subtree and catalog-wide search
+    listings stay plain A→Z. Unarranged products follow the arranged ones, A→Z.
+  - **API:** `GET`/`PUT /api/admin/products/order` (products.view / products.manage). The PUT must
+    carry exactly the node's current direct set, or it gets `409 STALE_ORDER`; more than 1000 direct
+    products → 400. Audited as `category.product_reorder`.
+  - **Moves:** moving a product to another node clears its rank **in the same document-atomic write**.
+  - **Extending it:** `directFilter()` is the single definition of "arrangeable products". Any
+    listing exclusion (e.g. soft delete) must be added there too, or every arrange save will 409.
 - **Product image uploads** (`internal/platform/blob`, ports & adapters like `sms`): a `Storage`
   port with `azure` (Azure Blob, connection-string auth, public-read container) + `local` (dev —
   writes to `UPLOADS_DIR`, served by the API at `/uploads/*`) adapters, selected by
@@ -241,9 +255,12 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
 
 - Default branch is `main`. Commit/push only when asked.
 - End commit messages with the `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>` trailer.
-- **CI/CD**: `.github/workflows/ci.yml` (build/lint/test on PRs — note golangci-lint runs, stricter
-  than `go vet`) + `deploy.yml` (**auto-deploys to Azure on push to `main`**, path-filtered per
+- **CI/CD**: `.github/workflows/ci.yml` (build/lint/test — note golangci-lint runs, stricter than
+  `go vet`) + `deploy.yml` (**auto-deploys to Azure on push to `main`**, path-filtered per
   `api`/`web`/`admin`, via OIDC — no stored secrets). Merging a PR to `main` ships prod.
+  **CI runs only on push to `main`** (in parallel with the deploy), **not on PRs**. Run the gates
+  locally before merging, on the branch with the latest `main` merged in: that is the only
+  pre-merge check.
 - **GitHub repo is `AliSleiman0/SalehCard`** (capital S/C — renamed from lowercase; `origin` still
   redirects). OIDC subject matching is **case-sensitive** — keep Azure federated creds on `SalehCard`.
 - **Azure CLI works locally again (2026-07-05)**: the old "`az` fails TLS" gotcha was Norton's

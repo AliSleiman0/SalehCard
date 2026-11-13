@@ -321,3 +321,21 @@ Still to check:
 3. **Order entry point**: Orders → an order → "Report a problem" pre-selects category Order and that order.
 4. **Caps**: a sixth open complaint → "You already have several open complaints"; the 11th create from one IP
    within an hour → 429 (`RATE_LIMIT_COMPLAINT_MAX`, default 10/hour).
+
+## Manual product order inside a category (PR #138, live 2026-11-14)
+
+Verified locally 2026-11-14: API checks, admin arrow buttons + Save in Chrome, and the web per-category page
+shows the saved order. Still to check:
+
+1. **A real hand drag** in the admin (Categories → a category → Arrange order → drag a row by its ⋮ handle).
+   Automation (Playwright, the Chrome extension) can't start a native HTML5 drag, so only the arrow buttons
+   and synthetic drag events were tested.
+2. **Touch:** on a phone or tablet, reorder with the arrow buttons (HTML5 drag-and-drop doesn't work on most
+   touch browsers).
+3. **Prod, once the client arranges a real category:**
+   - the Android app's category screen shows that order;
+   - for a category that has subcategories, the app's "Products" section (direct products) shows it;
+   - the web `/catalog/<id>` page shows it;
+   - the whole-domain pages (e.g. Games) and search stay A→Z.
+4. **Moving an arranged product** to another category (editor or bulk "Move to category") puts it at the end
+   of the new category, A→Z among the unarranged ones.
