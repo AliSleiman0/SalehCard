@@ -7,6 +7,31 @@ left is credentials + supplier-side allowlisting + in-console config (canary).
 
 ---
 
+## Update — 2026-11-14 (first real orders, PR #147)
+
+The client's first real supplier order (2026-11-13, SOULCHILL, their own $1.98 test, order
+`6af76aab`) was refused twice by Jentel. The connections, tokens and NAT allowlist were fine:
+1. `109 Product Not Found`: the product was linked with the text "soulchill" instead of Jentel's
+   product number (the editor's supplier product id was free text).
+2. `112 Qty is Small`: **our bug**. We sent `qty = 1` (the cart qty) instead of the 1,000 units the
+   customer typed. Turning on "Fulfil via supplier" had silently disabled per-unit pricing.
+
+**PR #147 (merged + deployed 2026-11-14, merge `8c61922`)** fixes both and adds what the client
+asked for (the old admin's "re-send via API" button):
+- the per-unit amount is sent as the supplier qty, and per-unit pricing works on supplier products
+- the product editor and the order page pick the supplier product from its live catalog
+- "Send via supplier" on manual orders
+- no auto-refund on admin-chosen routes
+- a double-delivery confirmation on complete/refund
+
+Details in `CLAUDE.md` → "Supplier fulfillment".
+
+**Prod data still to fix (owner's OK first; see `DEVOPS-TODO.md §20`, step 6):**
+- re-link SOULCHILL and "soul star"
+- the 10 PUBG/Free Fire products on non-existent supplier `#5`
+- refund `6af76aab`
+- the canary
+
 ## TL;DR for the next session
 
 The 4-phase supplier integration (three white-label game panels + umanage telecom) is
