@@ -1007,10 +1007,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpTitle => 'Help';
 
   @override
-  String get helpGreeting => 'Hi! Pick a question below, or type to search.';
+  String get helpCenterTitle => 'Help Center';
 
   @override
-  String get helpSearchHint => 'Type to search questions…';
+  String get helpSubtitle => 'Get quick answers to common questions';
+
+  @override
+  String get helpGreetingTitle => 'Hi! 👋 I\'m here to help.';
+
+  @override
+  String get helpGreeting =>
+      'Choose a question below to get an instant answer.';
+
+  @override
+  String get helpSearchHint => 'Type your question...';
 
   @override
   String get helpAllQuestions => 'All questions';
@@ -1019,7 +1029,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpNoMatch => 'No matching questions';
 
   @override
-  String get helpNeedHelp => 'Still need help?';
+  String get helpNoAnswer =>
+      'Sorry, I couldn\'t find an answer to that. Try one of the questions above, or contact us below.';
+
+  @override
+  String get helpOtherWays => 'Other ways to get help';
+
+  @override
+  String get helpWhatsappSub => 'Chat with us';
+
+  @override
+  String get helpReportIssue => 'Report an issue';
+
+  @override
+  String get helpSend => 'Send';
 
   @override
   String get uploadPhoto => 'Upload a photo (QR code / barcode)';

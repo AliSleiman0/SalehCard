@@ -30,3 +30,50 @@ Uri? whatsappUri(String raw) {
   if (digits.startsWith('00')) digits = digits.substring(2);
   return digits.length >= 6 ? Uri.parse('https://wa.me/$digits') : null;
 }
+
+/// Which icon a question card shows (the Help Center design gives every card a
+/// tinted icon tile; questions carry no icon of their own, so it is inferred).
+enum HelpIconKind { cart, wallet, shield, help }
+
+const _cartWords = [
+  'buy', 'purchase', 'order', 'product', 'checkout', 'cart', //
+  'شراء', 'اشتري', 'طلب', 'منتج',
+];
+const _walletWords = [
+  'wallet', 'top up', 'top-up', 'topup', 'balance', 'deposit', 'fund', //
+  'محفظة', 'المحفظة', 'شحن', 'رصيد', 'إيداع',
+];
+const _shieldWords = [
+  'verify', 'verification', 'identity', 'kyc', 'id card', 'passport', //
+  'توثيق', 'تحقق', 'هوية', 'الهوية',
+];
+
+/// Infers [entry]'s card icon from its question text (EN + AR) and admin
+/// keywords. Checked in order: identity → wallet → purchase → generic.
+HelpIconKind helpIconKind(ChatEntry entry) {
+  final hay = [
+    entry.question.values['en'] ?? '',
+    entry.question.values['ar'] ?? '',
+    ...entry.keywords,
+  ].join(' ').toLowerCase();
+  bool any(List<String> words) => words.any(hay.contains);
+  if (any(_shieldWords)) return HelpIconKind.shield;
+  if (any(_walletWords)) return HelpIconKind.wallet;
+  if (any(_cartWords)) return HelpIconKind.cart;
+  return HelpIconKind.help;
+}
+
+/// The grey subtitle under a question card: the answer's first line, cut at
+/// its first sentence end when that comes early enough to read as a summary.
+String helpSubtitle(String answer) {
+  final firstLine = answer
+      .trim()
+      .split('\n')
+      .map((l) => l.trim())
+      .firstWhere((l) => l.isNotEmpty, orElse: () => '');
+  final end = RegExp(r'[.!?؟。](\s|$)').firstMatch(firstLine);
+  if (end != null && end.start >= 20) {
+    return firstLine.substring(0, end.start + 1);
+  }
+  return firstLine;
+}

@@ -1005,10 +1005,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get helpTitle => 'المساعدة';
 
   @override
-  String get helpGreeting => 'مرحباً! اختر سؤالاً من الأسفل أو اكتب للبحث.';
+  String get helpCenterTitle => 'مركز المساعدة';
 
   @override
-  String get helpSearchHint => 'اكتب للبحث في الأسئلة…';
+  String get helpSubtitle => 'إجابات سريعة على الأسئلة الشائعة';
+
+  @override
+  String get helpGreetingTitle => 'مرحباً! 👋 أنا هنا للمساعدة.';
+
+  @override
+  String get helpGreeting => 'اختر سؤالاً من الأسفل للحصول على إجابة فورية.';
+
+  @override
+  String get helpSearchHint => 'اكتب سؤالك...';
 
   @override
   String get helpAllQuestions => 'كل الأسئلة';
@@ -1017,7 +1026,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get helpNoMatch => 'لا توجد أسئلة مطابقة';
 
   @override
-  String get helpNeedHelp => 'هل ما زلت بحاجة للمساعدة؟';
+  String get helpNoAnswer =>
+      'عذراً، لم أجد إجابة لذلك. جرّب أحد الأسئلة أعلاه أو تواصل معنا من الأسفل.';
+
+  @override
+  String get helpOtherWays => 'طرق أخرى للحصول على المساعدة';
+
+  @override
+  String get helpWhatsappSub => 'تحدث معنا';
+
+  @override
+  String get helpReportIssue => 'أبلغ عن مشكلة';
+
+  @override
+  String get helpSend => 'إرسال';
 
   @override
   String get uploadPhoto => 'ارفع صورة (رمز QR / باركود)';
