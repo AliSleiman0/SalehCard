@@ -308,11 +308,15 @@ check:
 4. **The Android emulator can mimic iOS:** `flutter run --dart-define=FORCE_IOS_SCOPE=true`
    (debug only) shows the iOS scope.
 
-## Customer complaints (feat/complaints)
+## Customer complaints (PR #141, in prod 2026-11-14)
 
 Verified locally 2026-11-14 (Chrome web + admin, Android emulator): submit with photo, internal note hidden
 from the customer, reply, resolve then reopen by customer reply, inbox row tap opens the thread.
-Still to check:
+Not yet exercised in prod. Still to check:
+
+0. **Prod smoke (web + admin):** file a complaint on the prod website with a test customer, answer it from
+   the prod admin console (a note, then a reply), and confirm the customer sees the reply but not the note.
+   Close it afterwards. Test complaints stay in the queue; there is no delete.
 
 1. **Push tray tap on a real device** (needs DEVOPS-TODO §24 fixed first): an admin reply should show a tray
    notification "Reply to your complaint C-xxxx"; tapping it with the app in the background, and again with

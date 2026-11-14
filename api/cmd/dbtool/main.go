@@ -21,6 +21,10 @@
 //	order <id>                Show an order summary (status, total, user, items)
 //	intents [N]               Show the N most recent USDT payment intents (default 20, read-only)
 //	deposits [N]              Show the N most recent on-chain USDT deposits seen by the watcher (default 20)
+//	roles                     List custom admin roles, their permissions and how many admins hold each
+//	role-grant <area> <view|manage> <roleId|all>
+//	                          Add an RBAC area to custom roles, e.g. "role-grant complaints manage all"
+//	                          (DRY RUN; pass --apply; idempotent; writes an admin_audit_log row per role)
 //
 // Examples:
 //
@@ -61,6 +65,9 @@ Commands:
   order <id>                Order summary (read-only)
   intents [N]               N most recent USDT payment intents (default 20, read-only)
   deposits [N]              N most recent on-chain USDT deposits the watcher saw (default 20, read-only)
+  roles                     Custom admin roles + permissions + holder counts (read-only)
+  role-grant <area> <view|manage> <roleId|all>
+                            Grant an RBAC area to custom roles (DRY RUN unless --apply; audited)
 `
 
 // mask hides all but the last 4 characters of a code/PIN value.
@@ -141,6 +148,16 @@ func main() {
 		cmdIntents(ctx, db, optInt(args, 20))
 	case "deposits":
 		cmdDeposits(ctx, db, optInt(args, 20))
+	case "roles":
+		cmdRoles(ctx, db)
+	case "role-grant":
+		fs := flag.NewFlagSet("role-grant", flag.ExitOnError)
+		apply := fs.Bool("apply", false, "write the change (default is a dry run)")
+		_ = fs.Parse(reorderFlags(args))
+		if fs.NArg() < 3 {
+			log.Fatalf("usage: role-grant <area> <view|manage> <roleId|all> [--apply]")
+		}
+		cmdRoleGrant(ctx, db, fs.Arg(0), fs.Arg(1), fs.Arg(2), *apply)
 	default:
 		fmt.Printf("unknown command %q\n\n%s", cmd, usage)
 		os.Exit(2)
