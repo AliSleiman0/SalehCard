@@ -361,9 +361,11 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if in.UnitPricing.isClear() {
 		in.UnitPricing = nil
 	}
-	if err := validateUnitPricing(in.UnitPricing, unitPricingTarget{
-		Type: in.FulfillmentType, Mode: mode, Variants: in.Variants, Fields: in.InputFields,
-	}); err != nil {
+	createTarget := unitPricingTarget{Type: in.FulfillmentType, Mode: mode, Variants: in.Variants, Fields: in.InputFields}
+	if err := validateUnitPricing(in.UnitPricing, createTarget); err != nil {
+		return nil, err
+	}
+	if err := validateSupplierAmount(createTarget, in.UnitPricing); err != nil {
 		return nil, err
 	}
 	if in.UnitPricing != nil {
@@ -439,8 +441,22 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 		in.InputFields = fields
 	}
 	in.UnitPricing = normalizeUnitPricing(in.UnitPricing)
-	stale, err := s.validateUnitPricingUpdate(ctx, id, in)
+	// The pricing-shape validators need the stored product; load it once, and
+	// only when the update touches something they depend on.
+	var cur *Product
+	if in.UnitPricing != nil || in.InputFields != nil || in.Variants != nil ||
+		in.FulfillmentType != nil || in.FulfillmentMode != nil {
+		loaded, err := s.repo.FindByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		cur = loaded
+	}
+	stale, err := validateUnitPricingUpdate(cur, in)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateSupplierAmountUpdate(cur, in); err != nil {
 		return nil, err
 	}
 	// Switching to per-unit: drop the variants' flat-price reseller overrides
@@ -464,24 +480,15 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 }
 
 // validateUnitPricingUpdate checks per-unit pricing against the product as it
-// will look after a partial update: the stored product overlaid with whichever
-// of type/mode/variants/fields/unitPricing the update carries. It only reads the
-// stored product when the result could be unit-priced and the update touches
-// something the invariants depend on. When the update switches the product
-// from fixed to per-unit pricing it returns the variant ids (stored and
-// incoming) whose per-reseller custom prices must be dropped.
-func (s *ProductService) validateUnitPricingUpdate(ctx context.Context, id string, in UpdateProductInput) ([]string, error) {
-	if in.UnitPricing.isClear() {
+// will look after a partial update: the stored product cur overlaid with
+// whichever of type/mode/variants/fields/unitPricing the update carries. cur is
+// nil when the update touches nothing the invariants depend on (Update loads
+// it only then). When the update switches the product from fixed to per-unit
+// pricing it returns the variant ids (stored and incoming) whose per-reseller
+// custom prices must be dropped.
+func validateUnitPricingUpdate(cur *Product, in UpdateProductInput) ([]string, error) {
+	if in.UnitPricing.isClear() || cur == nil {
 		return nil, nil
-	}
-	touches := in.UnitPricing != nil || in.InputFields != nil || in.Variants != nil ||
-		in.FulfillmentType != nil || in.FulfillmentMode != nil
-	if !touches {
-		return nil, nil
-	}
-	cur, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return nil, err
 	}
 	up := cur.UnitPricing
 	if in.UnitPricing != nil {
@@ -510,6 +517,30 @@ func (s *ProductService) validateUnitPricingUpdate(ctx context.Context, id strin
 		return nil, nil // already per-unit: its overrides are per-block by design
 	}
 	return append(variantIDs(cur.Variants), variantIDs(in.Variants)...), nil
+}
+
+// validateSupplierAmountUpdate applies validateSupplierAmount to the product as
+// it will look after a partial update (cur overlaid with the update; nil cur =
+// the update touches nothing it depends on).
+func validateSupplierAmountUpdate(cur *Product, in UpdateProductInput) error {
+	if cur == nil {
+		return nil
+	}
+	t := unitPricingTarget{Type: cur.FulfillmentType, Mode: cur.FulfillmentMode, Fields: cur.InputFields}
+	if in.FulfillmentType != nil {
+		t.Type = *in.FulfillmentType
+	}
+	if in.FulfillmentMode != nil {
+		t.Mode = *in.FulfillmentMode
+	}
+	if in.InputFields != nil {
+		t.Fields = in.InputFields
+	}
+	up := cur.UnitPricing
+	if in.UnitPricing != nil {
+		up = in.UnitPricing
+	}
+	return validateSupplierAmount(t, up)
 }
 
 // variantIDs returns the hex ids of the variants that have one.

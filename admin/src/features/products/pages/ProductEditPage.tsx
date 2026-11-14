@@ -35,6 +35,7 @@ import {
 } from '../lib/unitPricing'
 import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
+import { SupplierProductPicker } from '@/features/suppliers/components/SupplierProductPicker'
 import type { FulfillmentType, Locale, InputFieldType } from '@/types'
 
 const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
@@ -143,7 +144,8 @@ export default function ProductEditPage() {
   const [mtError, setMtError] = useState('')
   // Per-unit ("customer enters amount") pricing: the single variant prices a
   // block of N units and an amount-type input field drives the line price.
-  // String-backed (unitPricing.ts); only honored on manual account-credit.
+  // String-backed (unitPricing.ts); honored on account-credit products (manual
+  // or supplier-fulfilled) and money transfers.
   const [unit, setUnit] = useState<UnitPricingForm>(() => toUnitForm())
   const [unitNotice, setUnitNotice] = useState('')
   // What switching to per-unit changed in the input fields (removed quantity
@@ -218,12 +220,13 @@ export default function ProductEditPage() {
     return values
   }, [cats, category])
 
-  // Per-unit pricing is offered only on manually fulfilled account-credit
-  // products (the server rejects it with the bridge or a supplier API); any
+  // Per-unit pricing is offered on account-credit products fulfilled by hand or
+  // by a supplier (the supplier is sent the typed amount as its quantity); the
+  // bridge has its own qty semantics, so the server rejects it there and any
   // other configuration is forced back to fixed packages.
   // Money transfers can be sold by amount too (send 1,000 → pay 1,000 × rate);
   // bridge/API dispatch only exist on credit products, so they never block it.
-  const unitEligible = (ff === 'credit' && !bridgeOn && !apiOn) || ff === 'transfer'
+  const unitEligible = (ff === 'credit' && !bridgeOn) || ff === 'transfer'
   const perUnit = unit.enabled && unitEligible
   const unitForm: UnitPricingForm = { ...unit, enabled: perUnit }
   // A fixed-price credit product that still collects an amount charges the
@@ -261,6 +264,15 @@ export default function ProductEditPage() {
         `Removed the quantity field${removed.length > 1 ? 's' : ''} ${removed.map((k) => `"${k}"`).join(', ')} — per-unit products are bought by amount.`,
       )
   }
+  // The amount range customers may type on a per-unit supplier product — the
+  // picker checks it against the supplier's accepted quantities.
+  const supplierAmountRange = useMemo(() => {
+    if (!perUnit) return undefined
+    const d = driverRow(unit, inputFields)
+    if (!d) return undefined
+    const n = (s: string) => (s.trim() && Number.isFinite(Number(s)) ? Number(s) : undefined)
+    return { min: n(d.min), max: n(d.max) }
+  }, [perUnit, unit, inputFields])
   // Per-unit keeps only the first price row: warn about the packages a save deletes.
   const droppedPkgs = perUnit ? droppedPackages(variants) : []
 
@@ -309,15 +321,27 @@ export default function ProductEditPage() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="alabel">Upstream product ID</label>
-            <input
-              className="afield"
+          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+            <label className="alabel">Supplier product</label>
+            <SupplierProductPicker
+              providerId={Number(apiProvider) || 0}
               value={upstreamProductId}
-              onChange={(e) => setUpstreamProductId(e.target.value)}
-              placeholder="e.g. 364"
+              onChange={setUpstreamProductId}
+              amountRange={supplierAmountRange}
             />
           </div>
+        </div>
+      )}
+      {apiOn && apiProvider && providerOptions.length > 0 && !providerOptions.some((o) => String(o.id) === apiProvider) && (
+        <div className="ahint" style={{ margin: '10px 0 0', color: 'var(--warn)' }}>
+          Supplier #{apiProvider} isn't connected — orders for this product wait for manual completion. Pick a
+          connected supplier.
+        </div>
+      )}
+      {apiOn && ff === 'credit' && !perUnit && ignoredAmounts.length > 0 && (
+        <div className="ahint" style={{ margin: '10px 0 0', color: 'var(--warn)' }}>
+          This product asks for an amount but has a fixed price. Turn on per-unit pricing so the price and the quantity
+          sent to the supplier follow the amount — the server refuses to save it otherwise.
         </div>
       )}
       {apiOn && providerOptions.length === 0 && (

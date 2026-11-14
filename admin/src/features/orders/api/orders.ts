@@ -114,15 +114,21 @@ export function getOrder(id: string): Promise<ApiResponse<AdminOrder>> {
   return apiClient.get<AdminOrder>(`${ADMIN}/${id}`)
 }
 
-/** Refund a processing or completed order (credits a wallet charge back). */
-export function refundOrder(id: string, reason = ''): Promise<ApiResponse<AdminOrder>> {
-  return apiClient.post<AdminOrder>(`${ADMIN}/${id}/refund`, { reason })
+/** Refund a processing or completed order (credits a wallet charge back). An
+ *  order a supplier may still deliver answers 409 ORDER_AT_SUPPLIER unless
+ *  acknowledgeSupplier is set (double-delivery guard). */
+export function refundOrder(id: string, reason = '', acknowledgeSupplier = false): Promise<ApiResponse<AdminOrder>> {
+  return apiClient.post<AdminOrder>(`${ADMIN}/${id}/refund`, {
+    reason,
+    ...(acknowledgeSupplier ? { acknowledgeSupplier: true } : {}),
+  })
 }
 
 /** Per-order outcome of a bulk refund. */
 export interface BulkRefundOutcome {
   id: string
-  status: 'refunded' | 'conflict' | 'error'
+  /** at_supplier = skipped: a supplier may still deliver it (refund it from its page to confirm). */
+  status: 'refunded' | 'conflict' | 'at_supplier' | 'error'
   message?: string
 }
 
@@ -147,14 +153,18 @@ export function failOrder(id: string, reason = ''): Promise<ApiResponse<AdminOrd
 }
 
 /** Manually complete a processing order (account credit / transfer / parked). */
+/** Completes a processing order by hand. A supplier may still be delivering an
+ *  order it accepted (or will retry): the API then answers 409
+ *  ORDER_AT_SUPPLIER unless acknowledgeSupplier is set (double-delivery guard). */
 export function completeOrder(
   id: string,
-  opts: { note?: string; transferRef?: string } = {},
+  opts: { note?: string; transferRef?: string; acknowledgeSupplier?: boolean } = {},
 ): Promise<ApiResponse<AdminOrder>> {
   return apiClient.put<AdminOrder>(`${ADMIN}/${id}/status`, {
     status: 'completed',
     note: opts.note ?? '',
     transferRef: opts.transferRef ?? '',
+    ...(opts.acknowledgeSupplier ? { acknowledgeSupplier: true } : {}),
   })
 }
 

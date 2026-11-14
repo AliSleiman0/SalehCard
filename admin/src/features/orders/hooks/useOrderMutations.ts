@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { refundOrder, refundBulkOrders, completeOrder, failOrder } from '../api/orders'
 import { toast } from '@/stores/toast'
+import { ApiError } from '@/lib/api-client'
 
 /** Invalidates the order detail + list queries after a mutation. */
 function useInvalidateOrders() {
@@ -14,12 +15,16 @@ function useInvalidateOrders() {
 export function useRefundOrder() {
   const invalidate = useInvalidateOrders()
   return useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason?: string }) => refundOrder(id, reason ?? ''),
+    mutationFn: ({ id, reason, acknowledgeSupplier }: { id: string; reason?: string; acknowledgeSupplier?: boolean }) =>
+      refundOrder(id, reason ?? '', acknowledgeSupplier ?? false),
     onSuccess: (_, { id }) => {
       invalidate(id)
       toast.success('Order refunded')
     },
-    onError: () => toast.error('Refund failed'),
+    // ORDER_AT_SUPPLIER is a confirm step the dialog handles, not a failure.
+    onError: (e) => {
+      if (!(e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER')) toast.error('Refund failed')
+    },
   })
 }
 
@@ -35,13 +40,25 @@ export function useRefundBulk() {
 export function useCompleteOrder() {
   const invalidate = useInvalidateOrders()
   return useMutation({
-    mutationFn: ({ id, note, transferRef }: { id: string; note?: string; transferRef?: string }) =>
-      completeOrder(id, { note, transferRef }),
+    mutationFn: ({
+      id,
+      note,
+      transferRef,
+      acknowledgeSupplier,
+    }: {
+      id: string
+      note?: string
+      transferRef?: string
+      acknowledgeSupplier?: boolean
+    }) => completeOrder(id, { note, transferRef, acknowledgeSupplier }),
     onSuccess: (_, { id }) => {
       invalidate(id)
       toast.success('Order completed')
     },
-    onError: () => toast.error('Could not complete order'),
+    // ORDER_AT_SUPPLIER is a confirm step the dialog handles, not a failure.
+    onError: (e) => {
+      if (!(e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER')) toast.error('Could not complete order')
+    },
   })
 }
 

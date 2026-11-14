@@ -57,9 +57,11 @@ func normalizeUnitPricing(u *UnitPricing) *UnitPricing {
 
 // validateUnitPricing enforces the per-unit invariants: a positive block size,
 // a driving amount field with a positive min and max ≥ min, exactly one
-// variant (the block price), an account_credit or transfer product fulfilled by hand (v1:
-// supplier/bridge dispatch has its own qty semantics), and no quantity-type
-// field (its pack-count bounds would contradict qty == 1).
+// variant (the block price), an account_credit or transfer product fulfilled by
+// hand — or an account_credit product fulfilled by a supplier, which is sent
+// the typed amount as its quantity (order.supplierFulfillInput) — and no
+// quantity-type field (its pack-count bounds would contradict qty == 1).
+// Bridge dispatch has its own qty semantics and stays excluded.
 func validateUnitPricing(u *UnitPricing, t unitPricingTarget) error {
 	if u == nil || u.isClear() {
 		return nil
@@ -76,8 +78,11 @@ func validateUnitPricing(u *UnitPricing, t unitPricingTarget) error {
 	if mode == "" {
 		mode = DeriveMode(t.Type)
 	}
-	if mode != FulfillmentModeManualOperator {
-		return badRequest("per-unit pricing is only available on manually fulfilled products")
+	// Supplier (api) fulfillment: only account credit — a money transfer's
+	// recipient is never sent upstream.
+	supplierCredit := mode == FulfillmentModeAPI && t.Type == FulfillmentCredit
+	if mode != FulfillmentModeManualOperator && !supplierCredit {
+		return badRequest("per-unit pricing is only available on manually fulfilled or supplier-fulfilled account-credit products")
 	}
 	if len(t.Variants) != 1 {
 		return badRequest("per-unit pricing needs exactly one price row")
@@ -158,4 +163,22 @@ func FromPriceWith(p *Product, adjust func(float64) float64) float64 {
 		}
 	}
 	return from
+}
+
+// validateSupplierAmount refuses a supplier-fulfilled (api) account-credit
+// product that collects an amount-type field but has a fixed price. The
+// supplier is sent the typed amount as its quantity only on per-unit products,
+// so a fixed price would let a customer type any amount for one package price
+// (and the supplier would be sent qty 1 — the "Qty is Small" rejection seen in
+// prod on 2026-11-13). up must be the effective spec (nil = fixed pricing).
+func validateSupplierAmount(t unitPricingTarget, up *UnitPricing) error {
+	if t.Mode != FulfillmentModeAPI || t.Type != FulfillmentCredit || (up != nil && !up.isClear()) {
+		return nil
+	}
+	for _, f := range t.Fields {
+		if f.Type == InputFieldAmount {
+			return badRequest(fmt.Sprintf("this supplier product asks for an amount (%q) but has a fixed price — turn on per-unit pricing so the price and the quantity sent to the supplier follow the amount", f.Key))
+		}
+	}
+	return nil
 }

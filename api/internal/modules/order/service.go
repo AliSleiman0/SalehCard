@@ -693,7 +693,16 @@ func (s *OrderService) park(ctx context.Context, order *Order, note string) (*Or
 // reference so a re-dispatch with the same order_uuid stays idempotent; any
 // other error is definitively about this order → compensate (refund + fail).
 func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
-	provID, in, _ := supplierFulfillInput(order)
+	provID, in, ok := supplierFulfillInput(order)
+	if !ok {
+		// Unsendable line (e.g. a corrupt per-unit amount): never dispatch a
+		// wrong quantity. Flag it stuck (no retry clock) so it shows in the
+		// stuck-orders list and dashboard count for an admin to resolve.
+		slog.Warn("order: supplier line not sendable, flagged stuck", "order", order.ID.Hex())
+		now := time.Now().UTC()
+		order.Fulfillment.SupplierStuckAt = &now
+		return s.park(ctx, order, "stuck upstream — needs attention")
+	}
 
 	res, err := s.providers.Resolve(provID).Fulfill(ctx, in)
 	switch {

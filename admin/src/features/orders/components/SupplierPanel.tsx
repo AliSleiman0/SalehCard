@@ -1,12 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon, Modal } from '@/components'
 import { ApiError } from '@/lib/api-client'
 import { toast } from '@/stores/toast'
-import { useCan } from '@/stores/auth'
-import { getSupplierCatalog } from '@/features/suppliers/api/suppliers'
-import { listRerouteProviders, rerouteOrder, type AdminOrder } from '../api/orders'
-import { rerouteState } from '../lib/reroute'
+import { SupplierProductPicker } from '@/features/suppliers/components/SupplierProductPicker'
+import { listRerouteProviders, rerouteOrder, type AdminOrder, type AdminOrderItem } from '../api/orders'
+import { rerouteState, supplierQty } from '../lib/reroute'
 
 function fmt(iso?: string): string {
   if (!iso) return ''
@@ -16,21 +15,48 @@ function fmt(iso?: string): string {
 
 /** SupplierPanel shows where a supplier-fulfilled order was sent (supplier,
  *  product, supplier ref, stuck flag, earlier attempts) and — for a stuck order
- *  — the "Send to another supplier" action (client msgs #5–#8). */
+ *  — the "Send to another supplier" action (client msgs #5–#8). For a pending
+ *  manual account-credit order it offers "Send via supplier", like the old
+ *  admin's "إعادة الطلب API" button (client screenshots, 2026-11-12). */
 export function SupplierPanel({ order, canManage }: { order: AdminOrder; canManage: boolean }) {
   const [open, setOpen] = useState(false)
-  const line = order.items.find((it) => it.fulfillmentMode === 'api')
+  const { eligible, fromManual } = rerouteState(order)
+  const apiLine = order.items.find((it) => it.fulfillmentMode === 'api')
+  const show = !!apiLine || (fromManual && canManage)
   const { data: provRes } = useQuery({
     queryKey: ['admin', 'orders', 'reroute-providers'],
     queryFn: listRerouteProviders,
-    enabled: !!line,
+    enabled: show,
     staleTime: 5 * 60 * 1000,
   })
-  if (!line) return null
+  if (!show) return null
   const providers = provRes?.data ?? []
   const name = (id?: number) => providers.find((p) => p.id === id)?.name ?? (id != null ? `#${id}` : '—')
   const f = order.fulfillment
-  const { eligible } = rerouteState(order)
+  const line = apiLine ?? order.items[0]
+
+  if (!apiLine) {
+    // Manual order, never sent to a supplier.
+    if (providers.length === 0) return null
+    return (
+      <div className="acard" style={{ marginBottom: 16 }}>
+        <div className="panelhead">
+          <Icon name="server" size={17} />
+          <h3>Supplier</h3>
+          <div className="ph-act">
+            <button className="abtn xs primary" onClick={() => setOpen(true)}>
+              <Icon name="send" size={13} /> Send via supplier
+            </button>
+          </div>
+        </div>
+        <div className="muted" style={{ padding: '12px 18px 16px', fontSize: 13 }}>
+          This order is fulfilled by hand. You can send it to a connected supplier instead — they deliver it
+          automatically and charge their prepaid balance.
+        </div>
+        {open && <RerouteModal order={order} line={line} providers={providers} onClose={() => setOpen(false)} />}
+      </div>
+    )
+  }
 
   return (
     <div className="acard" style={{ marginBottom: 16 }}>
@@ -54,15 +80,21 @@ export function SupplierPanel({ order, canManage }: { order: AdminOrder; canMana
       <div style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <div>
           <div className="faint" style={{ fontSize: 12 }}>Supplier</div>
-          <b>{name(line.fulfillmentProvider)}</b>
+          <b>{name(apiLine.fulfillmentProvider)}</b>
         </div>
         <div>
           <div className="faint" style={{ fontSize: 12 }}>Supplier product</div>
-          <b className="mono">{line.upstreamProductId || '—'}</b>
+          <b className="mono">{apiLine.upstreamProductId || '—'}</b>
+        </div>
+        <div>
+          <div className="faint" style={{ fontSize: 12 }}>Quantity sent</div>
+          <b>{supplierQty(apiLine).toLocaleString('en-US')}</b>
         </div>
         <div>
           <div className="faint" style={{ fontSize: 12 }}>Supplier reference</div>
-          <b className="mono">{f.providerRef || '—'}</b>
+          <b className="mono" style={{ overflowWrap: 'anywhere' }}>
+            {f.providerRef || '—'}
+          </b>
         </div>
         {!!f.supplierAttempt && (
           <div>
@@ -103,47 +135,41 @@ export function SupplierPanel({ order, canManage }: { order: AdminOrder; canMana
           </table>
         </div>
       )}
-      {open && <RerouteModal order={order} providers={providers} onClose={() => setOpen(false)} />}
+      {open && <RerouteModal order={order} line={line} providers={providers} onClose={() => setOpen(false)} />}
     </div>
   )
 }
 
+/** The parameter names an order line sends upstream: its field keys plus
+ *  playerId (the panel adapter adds it when the line has a player id). */
+function sentParams(line: AdminOrderItem): string[] {
+  const keys = (line.fields ?? []).map((f) => f.key)
+  if (line.playerId) keys.push('playerId')
+  return keys
+}
+
 function RerouteModal({
   order,
+  line,
   providers,
   onClose,
 }: {
   order: AdminOrder
+  line: AdminOrderItem
   providers: { id: number; name: string }[]
   onClose: () => void
 }) {
   const qc = useQueryClient()
-  const can = useCan()
-  const { ambiguous } = rerouteState(order)
-  const current = order.items.find((it) => it.fulfillmentMode === 'api')?.fulfillmentProvider
+  const { ambiguous, fromManual } = rerouteState(order)
+  const current = fromManual ? undefined : line.fulfillmentProvider
   const [providerId, setProviderId] = useState<number>(
     providers.find((p) => p.id !== current)?.id ?? providers[0]?.id ?? 0,
   )
   const [upstream, setUpstream] = useState('')
-  const [search, setSearch] = useState('')
   const [ack, setAck] = useState(false)
   const [understood, setUnderstood] = useState(false)
   const [error, setError] = useState('')
-
-  // The supplier catalog lives under the suppliers domain; admins without it
-  // type the supplier product id instead.
-  const canBrowse = can('suppliers.view')
-  const catalog = useQuery({
-    queryKey: ['admin', 'suppliers', providerId, 'catalog'],
-    queryFn: () => getSupplierCatalog(providerId),
-    enabled: canBrowse && providerId > 0,
-    staleTime: 5 * 60 * 1000,
-  })
-  const matches = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const all = catalog.data?.data?.products ?? []
-    return (q ? all.filter((p) => p.name.toLowerCase().includes(q) || p.upstreamId.includes(q)) : all).slice(0, 40)
-  }, [catalog.data, search])
+  const qty = supplierQty(line)
 
   const send = useMutation({
     mutationFn: () =>
@@ -152,7 +178,10 @@ function RerouteModal({
       qc.invalidateQueries({ queryKey: ['admin', 'order', order.id] })
       qc.invalidateQueries({ queryKey: ['admin', 'orders'] })
       const st = res.data?.status
-      toast.success(st === 'completed' ? 'Delivered by the new supplier' : 'Sent to the new supplier')
+      const stuck = !!res.data?.fulfillment.supplierStuckAt
+      if (st === 'completed') toast.success('Delivered by the supplier')
+      else if (stuck) toast.error('The supplier refused it — try another supplier or refund')
+      else toast.success('Sent to the supplier')
       onClose()
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not send the order.'),
@@ -161,12 +190,15 @@ function RerouteModal({
   const ready = providerId > 0 && upstream.trim() !== '' && understood && (!ambiguous || ack)
 
   return (
-    <Modal onClose={onClose} maxWidth={620}>
+    <Modal onClose={onClose} maxWidth={640}>
       <div style={{ padding: 22, maxHeight: '84vh', overflowY: 'auto' }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Send to another supplier</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
+          {fromManual ? 'Send via supplier' : 'Send to another supplier'}
+        </h3>
         <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
-          The order is sent to the chosen supplier right away. The current supplier is no longer checked; its reference
-          stays in the history.
+          {fromManual
+            ? 'The order is sent to the chosen supplier right away and completes automatically when they deliver.'
+            : 'The order is sent to the chosen supplier right away. The current supplier is no longer checked; its reference stays in the history.'}
         </p>
 
         <label className="alabel">Supplier</label>
@@ -180,56 +212,39 @@ function RerouteModal({
         </select>
 
         <label className="alabel" style={{ marginTop: 12 }}>
-          Supplier product id
+          Supplier product
         </label>
-        <input
-          className="afield mono"
-          placeholder="e.g. 364"
+        <SupplierProductPicker
+          providerId={providerId}
           value={upstream}
-          onChange={(e) => setUpstream(e.target.value)}
+          onChange={setUpstream}
+          qty={qty}
+          sends={sentParams(line)}
         />
-        {canBrowse && (
-          <div style={{ marginTop: 8 }}>
-            <input
-              className="afield"
-              placeholder="Search this supplier's catalog…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <div style={{ maxHeight: 180, overflowY: 'auto', marginTop: 6, border: '1px solid var(--border)', borderRadius: 8 }}>
-              {catalog.isLoading ? (
-                <div className="faint" style={{ padding: 10, fontSize: 13 }}>
-                  Loading catalog…
-                </div>
-              ) : matches.length === 0 ? (
-                <div className="faint" style={{ padding: 10, fontSize: 13 }}>
-                  No products
-                </div>
-              ) : (
-                matches.map((p) => (
-                  <div
-                    key={p.upstreamId}
-                    onClick={() => setUpstream(p.upstreamId)}
-                    style={{
-                      padding: '7px 10px',
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      background: upstream === p.upstreamId ? 'var(--surface-2)' : undefined,
-                    }}
-                  >
-                    <span>{p.name}</span>
-                    <span className="faint mono">
-                      {p.upstreamId} · {p.price} {p.currency}
-                      {p.available ? '' : ' · unavailable'}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
+
+        <div style={{ marginTop: 14, fontSize: 13 }}>
+          <div className="faint" style={{ fontSize: 12, marginBottom: 4 }}>
+            What we'll send
           </div>
-        )}
+          <div>
+            Quantity <b>{qty.toLocaleString('en-US')}</b>
+            {line.amount != null ? ' (the units the customer asked for)' : ''}
+            {line.playerId ? (
+              <>
+                {' '}
+                · player <b className="mono">{line.playerId}</b>
+              </>
+            ) : null}
+          </div>
+          {(line.fields ?? []).length > 0 && (
+            <div className="faint" style={{ marginTop: 2 }}>
+              {(line.fields ?? []).map((f) => `${f.key}=${f.value}`).join(' · ')}
+            </div>
+          )}
+          <div style={{ marginTop: 2 }}>
+            Customer paid <b>${order.total.toFixed(2)}</b>
+          </div>
+        </div>
 
         <div
           style={{
@@ -241,8 +256,10 @@ function RerouteModal({
             fontSize: 13,
           }}
         >
-          <b>Double-delivery risk.</b> If the previous supplier still completes this order, the customer may receive it
-          twice and both suppliers may charge us. Check the previous supplier's panel first when you can.
+          <b>Double-delivery risk.</b>{' '}
+          {fromManual
+            ? 'Make sure nobody has already credited this order by hand — otherwise the customer receives it twice and the supplier charges us.'
+            : "If the previous supplier still completes this order, the customer may receive it twice and both suppliers may charge us. Check the previous supplier's panel first when you can."}
           <label style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
             <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} /> I
             understand
