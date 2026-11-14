@@ -24,7 +24,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCkCvsyiMWcL9Hw3soGkdJeb8jhS2AuUsQ',
+    // Must equal the current_key that google-services.json holds for this
+    // package: the Google Services plugin starts the default app natively from
+    // that file, and a different key here makes initializeApp throw
+    // [core/duplicate-app], which disabled push on every build from 2026-08-07.
+    // (The old key is also app-restricted to com.salehcard.salehcard_app.)
+    apiKey: 'AIzaSyBulqkBTjKBFfc5GomKWYUc6YlpmHAVqm8',
     // The `com.flashcashglobal.app` client (new package — `flashcash.global`
     // was permanently claimed by a discarded Play developer account and
     // could not be reused; that old `com.salehcard.salehcard_app` client

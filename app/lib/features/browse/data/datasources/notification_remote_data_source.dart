@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../core/network/api_envelope.dart';
 import '../dtos/notification_dto.dart';
@@ -38,7 +39,7 @@ class NotificationRemoteDataSource {
   Future<void> registerDevice(String token) async {
     await _dio.post<dynamic>(
       '/notifications/devices',
-      data: {'token': token, 'platform': 'android'},
+      data: {'token': token, 'platform': pushPlatform()},
     );
   }
 
@@ -50,3 +51,8 @@ class NotificationRemoteDataSource {
     );
   }
 }
+
+/// The platform reported with a device token (`ios` or `android`), so the
+/// server can tell APNs-backed tokens apart.
+String pushPlatform() =>
+    defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';

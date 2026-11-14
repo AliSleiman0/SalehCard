@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/browse/presentation/providers.dart';
 import '../../features/complaints/data/complaint_repository.dart';
@@ -58,7 +59,19 @@ class PushService {
     if (!_firebaseReady) return;
     try {
       final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission(); // Android 13+ POST_NOTIFICATIONS
+      await messaging
+          .requestPermission(); // Android 13+ POST_NOTIFICATIONS / iOS alert
+      // iOS: FCM can only mint a token once APNs has handed the app its device
+      // token (asynchronously, after the permission prompt); getToken() throws
+      // apns-token-not-set before that.
+      if (defaultTargetPlatform == TargetPlatform.iOS &&
+          !await _waitForApnsToken(messaging)) {
+        debugPrint(
+          'push: no APNs token (push capability / APNs key missing?) — skipping registration',
+        );
+        _listen(); // a later onTokenRefresh still registers the device
+        return;
+      }
       final token = await messaging.getToken();
       if (token != null && token.isNotEmpty) {
         await _ref.read(notificationRepositoryProvider).registerDevice(token);
@@ -67,6 +80,18 @@ class PushService {
     } catch (error) {
       debugPrint('push: device registration failed ($error)');
     }
+  }
+
+  /// Polls for the APNs device token for up to ~10s. False when it never
+  /// arrives (simulator, notifications denied, or the build lacks the push
+  /// entitlement).
+  Future<bool> _waitForApnsToken(FirebaseMessaging messaging) async {
+    for (var i = 0; i < 20; i++) {
+      final apns = await messaging.getAPNSToken();
+      if (apns != null && apns.isNotEmpty) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    return false;
   }
 
   /// Removes this device's token from the API and deletes it locally so the
@@ -113,24 +138,34 @@ class PushService {
     // runs once the session is authenticated, so the router guard lets it through.
     unawaited(
       FirebaseMessaging.instance.getInitialMessage().then((message) {
-        if (message != null) _open(message, coldStart: true);
+        debugPrint('push: initial message ${message?.data['kind']}');
+        if (message != null) unawaited(_open(message, coldStart: true));
       }),
     );
   }
 
   /// Routes a tapped notification to its screen. Only complaint notifications
   /// deep-link today; every other kind just opens the app as before.
-  void _open(RemoteMessage message, {required bool coldStart}) {
+  Future<void> _open(RemoteMessage message, {required bool coldStart}) async {
     final route = pushRouteFor(message.data);
     if (route == null) return;
     _ref.invalidate(complaintDetailProvider);
     final router = _ref.read(routerProvider);
     if (coldStart) {
-      // Land on home first so back from the complaint has somewhere to go.
-      router.go('/home');
+      // On a cold start the router is still on /splash while the session
+      // restores; a push issued now is computed against that stale stack and
+      // then lost when the auth redirect lands on /home. Wait until the
+      // redirect has run, then push on top of home (so back returns there).
+      for (var i = 0; i < 50 && _onSplash(router); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
     }
+    debugPrint('push: opening $route (coldStart=$coldStart)');
     router.push(route);
   }
+
+  static bool _onSplash(GoRouter router) =>
+      router.routerDelegate.currentConfiguration.uri.path == '/splash';
 }
 
 /// The in-app route for a push payload, or null when it should just open the
