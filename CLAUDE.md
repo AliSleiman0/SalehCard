@@ -151,6 +151,25 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   the double-refund lock; **delivered codes are never re-pooled on refund**).
   **Payments are wallet-only** — card/usdt are rejected (`PAYMENT_METHOD_UNAVAILABLE`)
   until a real gateway exists; only the wallet ledger moves real balance.
+- **Supplier fulfillment** (`platform/provider` panels jentel/speedcard/gift4card + umanage;
+  `order/supplier_settler.go`, `supplier_reroute.go`; live since PR #97, fixed in **PR #147**,
+  2026-11-14). A product is tied to a supplier by `FulfillmentProvider` + `UpstreamProductID` (the
+  supplier's OWN product id), chosen in the product editor from the supplier's live catalog
+  (`SupplierProductPicker`; typing a name like "soulchill" gets `109 Product Not Found`). Both are
+  copied onto the order line. **Quantity sent = the typed units on a per-unit line (`OrderItem.Amount`),
+  else the cart qty** (`supplierQty`; one shared builder `supplierFulfillInput` for placement, retry
+  and reroute). Per-unit pricing is allowed on supplier account-credit products, and a supplier product
+  with an amount box but a fixed price is refused on save. Admins can **send an order to a supplier**
+  from the order page (`POST /api/admin/orders/{id}/reroute`): a stuck/ref-less supplier order
+  ("Send to another supplier"), or a never-sent **single-line manual account-credit order** ("Send via
+  supplier" — the guarded claim pins the line's mode and flips it to `api`). Each attempt gets a fresh
+  upstream idempotency key. **A rejection of an admin-chosen route (attempt > 0) never auto-refunds**:
+  it is flagged stuck for the admin (placement-time orders keep the auto-refund).
+  **Double-delivery guard:** while a supplier may still deliver (`orderAtSupplier` = processing api
+  order with a live ref, even if stuck, or a live retry clock; Mongo twin `notAtSupplierFilter`, kept
+  in step by `TestAtSupplierRule_Mongo`), manual completion and refunds return `409
+  ORDER_AT_SUPPLIER` unless the body carries `acknowledgeSupplier: true` (bulk refund skips such
+  orders as `at_supplier`). See `HANDOFF-SUPPLIERS.md` + `DEVOPS-TODO.md §20`.
 - **Per-product input fields** (`Product.InputFields` — key/label/type/sensitive): the fields a
   customer enters at checkout for non-`code` products (Account ID, Zone ID, Email, Server…). Admins
   define them in the product editor (add/remove, editable key + type + label). Captured values are
