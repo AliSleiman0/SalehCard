@@ -47,7 +47,9 @@ const (
 	ActionSupplierSync           = "supplier.sync"
 	ActionSupplierImport         = "supplier.import"
 	ActionSupplierSettingsUpdate = "supplier.settings_update"
-	ActionProductDelete          = "product.delete"
+	ActionProductDelete          = "product.delete"      // permanent erase (super admin, trash only)
+	ActionProductSoftDelete      = "product.soft_delete" // moved to the trash (reversible)
+	ActionProductRestore         = "product.restore"     // taken back out of the trash
 	ActionProductImageUpload     = "product.image_upload"
 	ActionKYCDecision            = "kyc.decision"
 	ActionReviewDecision         = "review.decision"
@@ -61,6 +63,10 @@ const (
 	ActionChatbotCreate          = "chatbot.create"
 	ActionChatbotUpdate          = "chatbot.update"
 	ActionChatbotDelete          = "chatbot.delete"
+	ActionComplaintReply         = "complaint.reply"
+	ActionComplaintNote          = "complaint.note"
+	ActionComplaintStatus        = "complaint.status"
+	ActionComplaintAssign        = "complaint.assign"
 	ActionSettingsUpdate         = "settings.update"
 	ActionCodeExpire             = "code.expire"
 	ActionCodeResend             = "order.resend_code"
@@ -81,6 +87,9 @@ const (
 	ActionCategoryCreate = "category.create"
 	ActionCategoryUpdate = "category.update"
 	ActionCategoryDelete = "category.delete"
+	// ActionCategoryProductReorder records an admin arranging the products of
+	// one category node (target = the node; summary = the full new order).
+	ActionCategoryProductReorder = "category.product_reorder"
 
 	ActionBridgeDeviceCreate  = "bridge.device_create"
 	ActionBridgeDeviceUpdate  = "bridge.device_update"

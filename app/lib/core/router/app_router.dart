@@ -17,6 +17,9 @@ import '../../features/catalog/presentation/screens/product_detail_screen.dart';
 import '../../features/checkout/domain/entities/order.dart';
 import '../../features/checkout/presentation/screens/checkout_screen.dart';
 import '../../features/checkout/presentation/screens/order_success_screen.dart';
+import '../../features/complaints/presentation/screens/complaint_detail_screen.dart';
+import '../../features/complaints/presentation/screens/complaints_list_screen.dart';
+import '../../features/complaints/presentation/screens/new_complaint_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/kyc/presentation/screens/kyc_form_screen.dart';
 import '../../features/kyc/presentation/screens/kyc_status_screen.dart';
@@ -137,6 +140,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsScreen(),
+      ),
+      // Customer complaints: list, new (pre-filled from an order's "Report a
+      // problem" via ?orderId=&category=), and one thread (also the target of a
+      // complaint notification tap).
+      GoRoute(
+        path: '/complaints',
+        builder: (context, state) => const ComplaintsListScreen(),
+      ),
+      GoRoute(
+        path: '/complaints/new',
+        builder: (context, state) => NewComplaintScreen(
+          orderId: state.uri.queryParameters['orderId'],
+          category: state.uri.queryParameters['category'],
+        ),
+      ),
+      GoRoute(
+        path: '/complaints/:id',
+        builder: (context, state) =>
+            ComplaintDetailScreen(id: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/kyc',

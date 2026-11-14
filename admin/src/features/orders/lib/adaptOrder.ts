@@ -7,7 +7,11 @@ export interface OrderView {
   id: string
   customer: string
   email: string
+  /** "First title +N more" — the plain-text product label. */
   product: string
+  /** The parts of `product`, so a row can link the first title alone. */
+  productTitle: string
+  productMore: string
   qty: number
   art: string
   ff: FfKey
@@ -82,6 +86,21 @@ export function codeLines(items: AdminOrderItem[], deliveredCode?: string): Code
   return [{ title: codeItem?.title.en ?? '', codes: [deliveredCode] }]
 }
 
+const ZERO_ID = '000000000000000000000000'
+
+/** The admin product-editor path for an order line's product, or null when the
+ *  name should render as plain text: the viewer can't open Products, the line
+ *  has no product id, or the API reports the product deleted since. */
+export function productEditPath(
+  o: Pick<AdminOrder, 'missingProductIds'>,
+  productId: string | undefined,
+  canViewProducts: boolean,
+): string | null {
+  if (!canViewProducts || !productId || productId === ZERO_ID) return null
+  if (o.missingProductIds?.includes(productId)) return null
+  return `/products/${productId}/edit`
+}
+
 /** PayChip keys are wallet/visa/usdt; the API stores card → map it to visa. */
 function payKey(method: string): string {
   return method === 'card' ? 'visa' : method
@@ -91,16 +110,17 @@ function payKey(method: string): string {
 export function adaptOrder(o: AdminOrder): OrderView {
   const first = o.items[0]
   const extra = o.items.length - 1
-  const product = first
-    ? first.title.en + (extra > 0 ? ` +${extra} more` : '')
-    : '—'
+  const productTitle = first ? first.title.en : '—'
+  const productMore = extra > 0 ? ` +${extra} more` : ''
   const qty = o.items.reduce((sum, it) => sum + it.qty, 0)
 
   return {
     id: o.id,
     customer: customerName(o.customer),
     email: o.customer?.email ?? '',
-    product,
+    product: productTitle + productMore,
+    productTitle,
+    productMore,
     qty,
     art: first ? artForCategory(first.category) : 'soft',
     ff: first ? ffKey(first.fulfillmentType) : 'code',

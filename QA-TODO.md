@@ -308,3 +308,61 @@ check:
 4. **The Android emulator can mimic iOS:** `flutter run --dart-define=FORCE_IOS_SCOPE=true`
    (debug only) shows the iOS scope.
 
+## Customer complaints (feat/complaints)
+
+Verified locally 2026-11-14 (Chrome web + admin, Android emulator): submit with photo, internal note hidden
+from the customer, reply, resolve then reopen by customer reply, inbox row tap opens the thread.
+Still to check:
+
+1. **Push tray tap on a real device** (needs DEVOPS-TODO §24 fixed first): an admin reply should show a tray
+   notification "Reply to your complaint C-xxxx"; tapping it with the app in the background, and again with
+   the app killed, opens that complaint. With the app in the foreground, an open thread refreshes itself.
+2. **Arabic copy**: the complaint screens, inbox rows and status badges on the app and web in AR (RTL bubbles).
+3. **Order entry point**: Orders → an order → "Report a problem" pre-selects category Order and that order.
+4. **Caps**: a sixth open complaint → "You already have several open complaints"; the 11th create from one IP
+   within an hour → 429 (`RATE_LIMIT_COMPLAINT_MAX`, default 10/hour).
+
+## Back buttons (feat/back-buttons, KICKOFF-2026-11-14 §6)
+
+Verified locally 2026-11-14 in Chrome (admin): every page shows "‹ Back" except the Dashboard; Orders →
+filter → order → Back keeps the filter; an order opened in a new tab → Back → Orders → Back → Dashboard (never
+leaves the site); load-error state has Back; Arabic shows "رجوع" with a mirrored chevron; Enter on the focused
+button works. Also verified locally 2026-11-14:
+- Android emulator (debug build of this branch): checkout → order success → "View order" → back → Orders now
+  has a back arrow → back → Menu tab. Menu → Wallet / Orders / Complaints → back pops to Menu. Arabic: the
+  arrow sits on the right and points right.
+- Chrome, a custom role (orders + users view, no Dashboard): `/users` opened directly → Back → To-do list
+  (its first permitted page), and Back is hidden there.
+- Chrome: a product opened from Categories → Save → back on Categories → Back → Dashboard (the editor
+  does not reopen).
+
+Still to check:
+
+1. **USDT deposit → Wallet back arrow** on a device: needs a real confirmed on-chain deposit. It uses the
+   same `AppBackButton` as Orders, which was verified on the emulator.
+2. **The same flows on prod admin** after merge, once with a super admin and once with a custom role.
+
+## Product soft delete / trash (PR #142, live 2026-11-14)
+
+Verified locally 2026-11-14 (curl + Chrome on the admin):
+- trash one product, and "Select all 27 matching" → Move to trash
+- the trash view and its bulk bar (purge hidden for "all matching")
+- the in-trash banner → Restore (a draft came back as a draft)
+- the public list returns `[]`, a direct link to a trashed product returns 404, offers are hidden
+- an order for a trashed product → `PRODUCT_UNAVAILABLE`
+- purge rules and the audit entries
+
+Still to check:
+
+1. **Prod admin click-through** with one test product: Move to trash → Deleted (trash) view → Restore.
+   Confirm the product returns to its prior status and that `/audit` shows `product.soft_delete` /
+   `product.restore`.
+2. **Custom-role admin** (non-super, with `products.manage`): sees no "Delete permanently" in the trash view.
+   A direct `DELETE /api/admin/products/{id}/permanent` and a bulk `purge` both return 403.
+3. **Flutter app (EN + AR)** while a product the customer has open is trashed:
+   - the product disappears from Home, category lists, search and offers after a refresh
+   - an already-open product page → Buy → "This product is no longer available"
+   - with the whole catalog trashed, the catalog shows its empty state and doesn't crash
+4. **Web storefront**: the same as step 3 (lists, direct link 404, checkout message).
+5. **Category arrange**: a trashed product is absent from Categories → Arrange order. After restore it
+   reappears unarranged (A to Z, after the ranked products).

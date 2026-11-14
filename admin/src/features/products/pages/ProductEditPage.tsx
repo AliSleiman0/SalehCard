@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, Toggle, StatusBadge, LoadingSpinner, ErrorState, ffKey, type FfKey } from '@/components'
+import { useGoBack } from '@/lib/goBack'
 import { useProductCategories } from '../hooks/useCategories'
 import { categoryLabel } from '../api/categories'
 import { useCategoryTree } from '@/features/categories/hooks/useCategories'
@@ -12,6 +13,7 @@ import {
   useUpdateProduct,
   useUploadProductImage,
   useFulfillmentProviders,
+  useRestoreProduct,
 } from '../hooks/useProducts'
 import { reconcileBridgePhoneField } from '../lib/bridgeFields'
 import { toRows, fromRows, rowIssues, type InputFieldRow } from '../lib/fieldRows'
@@ -32,6 +34,7 @@ import {
   type UnitRowsStash,
 } from '../lib/unitPricing'
 import { useCan } from '@/stores/auth'
+import { toast } from '@/stores/toast'
 import type { FulfillmentType, Locale, InputFieldType } from '@/types'
 
 const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
@@ -73,6 +76,7 @@ const KNOWN_GAME_SLUGS = ['pubgm-global', 'dfm-garena', 'free-fire']
 export default function ProductEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const goBack = useGoBack('/products')
   const can = useCan()
   const canManage = can('products.manage')
   const { id } = useParams<{ id: string }>()
@@ -81,6 +85,10 @@ export default function ProductEditPage() {
   const create = useCreateProduct()
   const update = useUpdateProduct(id ?? '')
   const uploadImage = useUploadProductImage()
+  const restore = useRestoreProduct()
+  // A trashed product stays fully editable (so it can be organised into the right
+  // category before it goes back on sale) — the banner just makes its state clear.
+  const trashed = !isNew && !!data?.data?.deletedAt
 
   const { data: catsRes } = useProductCategories()
   const cats = useMemo(() => catsRes?.data ?? [], [catsRes])
@@ -505,7 +513,7 @@ export default function ProductEditPage() {
     setMtError(mtErr)
     if (mtErr) return
     const input = buildInput()
-    const onSuccess = () => navigate('/products')
+    const onSuccess = () => goBack()
     if (isNew) create.mutate(input, { onSuccess })
     else update.mutate(input, { onSuccess })
   }
@@ -523,6 +531,7 @@ export default function ProductEditPage() {
   if (!isNew && isError)
     return (
       <div className="page">
+        <PageHead back="/products" title={t('nav_products')} />
         <ErrorState message="Could not load product" onRetry={() => refetch()} />
       </div>
     )
@@ -530,19 +539,54 @@ export default function ProductEditPage() {
   return (
     <div className="page">
       <PageHead
+        back="/products"
         crumbs={[t('nav_products'), isNew ? t('new_product') : headTitle]}
         title={isNew ? t('new_product') : 'Edit product'}
         sub={isNew ? 'Create a new product listing' : id}
       >
-        <button className="abtn" onClick={() => navigate('/products')}>
-          <Icon name="chevleft" size={15} /> {t('back')}
-        </button>
         {canManage && (
           <button className="abtn primary" onClick={onSave} disabled={pending}>
             <Icon name="check" size={15} /> {pending ? 'Saving…' : t('save')}
           </button>
         )}
       </PageHead>
+
+      {trashed && (
+        <div
+          role="status"
+          style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            borderRadius: 'var(--ar-sm)',
+            background: 'rgba(255,77,109,.12)',
+            color: 'var(--danger)',
+            fontSize: 13,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <Icon name="trash" size={15} />
+          <span style={{ flex: 1 }}>
+            In trash: customers can&apos;t see or buy this product. You can still edit it; restore it to put it back.
+          </span>
+          {canManage && (
+            <button
+              className="abtn xs ok"
+              disabled={restore.isPending}
+              onClick={() =>
+                restore.mutate(id!, {
+                  onSuccess: () => toast.success('Product restored.'),
+                  onError: () => toast.error('Could not restore the product.'),
+                })
+              }
+            >
+              <Icon name="refresh" size={13} /> Restore
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div

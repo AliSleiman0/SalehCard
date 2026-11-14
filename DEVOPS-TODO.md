@@ -553,3 +553,16 @@ started **no** build. Build #5 had to be started by hand (Applications → Saleh
 - Until it's fixed, start iOS builds by hand after merging app changes. Build number = `4 + Codemagic
   index`.
 
+## 24. Customer complaints — after deploy (feat/complaints)
+
+- **Grant `complaints.view` / `complaints.manage`** to any custom support role in admin → Roles. Super admins
+  already see it. A custom role without it gets 403 and no "Complaints" nav item.
+- **Android push is off in the app itself, not just blocked by the API-key restriction (§19).** On a debug
+  build, `initFirebase()` logs `[core/duplicate-app] A Firebase App named "[DEFAULT]" already exists` and
+  disables push. The `apiKey` in `app/lib/firebase_options.dart` does not match the `current_key` that
+  `app/android/app/google-services.json` holds for `com.flashcashglobal.app` (appId, sender id and bucket do
+  match). The Google Services plugin starts the default app natively with the JSON options, then the Dart
+  `initializeApp(options:)` conflicts. Pick the one key that is correct and unrestricted for this package
+  (regenerate `firebase_options.dart` with `flutterfire configure`, or initialize with no options on
+  Android), then re-test §19. Until then no device registers a token, so complaint replies reach customers
+  only as inbox rows.

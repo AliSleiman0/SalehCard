@@ -447,7 +447,8 @@ type productDoc struct {
 // backfill-tolerant: it matches products explicitly keyed to inventory mode, and
 // (for products that predate fulfillmentMode) falls back to the legacy
 // fulfillmentType=="code" — so the admin inventory view is never blank before
-// `go run ./cmd/seed` backfills the mode.
+// `go run ./cmd/seed` backfills the mode. Soft-deleted (trashed) products are
+// excluded so they raise no low-stock alerts; their codes are untouched.
 func (r *MongoRepository) CodeProducts(ctx context.Context) ([]ProductMeta, error) {
 	cur, err := r.products.Find(ctx, bson.D{{Key: "$or", Value: bson.A{
 		bson.D{{Key: "fulfillmentMode", Value: "inventory"}},
@@ -460,7 +461,7 @@ func (r *MongoRepository) CodeProducts(ctx context.Context) ([]ProductMeta, erro
 		// unique to bridge products (Bridge is nil otherwise; disabling it clears the
 		// method), so this branch never pulls in transfer_credit or non-bridge products.
 		bson.D{{Key: "bridge.method", Value: "recharge_line"}},
-	}}})
+	}}, {Key: "deletedAt", Value: nil}}) // trashed products leave the inventory + low-stock views (codes kept; back on restore)
 	if err != nil {
 		return nil, err
 	}

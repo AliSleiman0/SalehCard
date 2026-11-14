@@ -231,18 +231,18 @@
 
 /* ---------- Help bot (predefined Q&A) ---------- */
 .chatfab { position: fixed; bottom: 22px; inset-inline-end: 22px; z-index: 80; width: 56px; height: 56px; border-radius: 999px; border: 0; background: var(--grad); color: #fff; display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow); }
-.chatpanel { position: fixed; bottom: 90px; inset-inline-end: 22px; z-index: 80; width: min(380px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 130px)); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }
+.chatpanel { position: fixed; bottom: 90px; inset-inline-end: 22px; z-index: 80; width: min(440px, calc(100vw - 32px)); height: min(640px, calc(100vh - 130px)); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }
 .chathead { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .chatlist { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-height: 80px; }
 .chatmsg { max-width: 85%; padding: 9px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
 .chatmsg.bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); }
 .chatmsg.user { align-self: flex-end; background: var(--grad); color: #fff; }
-.chatchips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px; border-top: 1px solid var(--border); max-height: 150px; overflow-y: auto; }
+.chatchips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px; border-top: 1px solid var(--border); max-height: 45%; overflow-y: auto; flex-shrink: 0; }
 .chatchip { background: var(--grad-soft); border: 1px solid var(--border-strong); color: var(--text); border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 700; cursor: pointer; text-align: start; }
 .chatchip.ghost { background: transparent; color: var(--text-dim); }
 .chatfoot { padding: 10px 14px 12px; border-top: 1px solid var(--border); }
 @media (max-width: 720px) {
   /* Clear the sticky mobile bottom nav. */
   .chatfab { bottom: 84px; inset-inline-end: 16px; width: 52px; height: 52px; }
-  .chatpanel { bottom: 146px; inset-inline-end: 16px; max-height: calc(100vh - 200px); }
+  .chatpanel { bottom: 146px; inset-inline-end: 16px; height: min(640px, calc(100vh - 200px)); }
 }

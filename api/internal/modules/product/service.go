@@ -19,7 +19,13 @@ type Service interface {
 	FindByID(ctx context.Context, id string) (*Product, error)
 	Create(ctx context.Context, in CreateProductInput) (*Product, error)
 	Update(ctx context.Context, id string, in UpdateProductInput) (*Product, error)
+	// Delete soft-deletes (moves to trash) — it never erases data. See Purge.
 	Delete(ctx context.Context, id string) error
+	// Restore takes a product back out of the trash.
+	Restore(ctx context.Context, id string) error
+	// Purge permanently erases a product that is already in the trash
+	// (ErrConflict otherwise). Callers must gate it to super admins.
+	Purge(ctx context.Context, id string) error
 	Bulk(ctx context.Context, in BulkInput) (int64, error)
 }
 
@@ -137,9 +143,17 @@ func (s *ProductService) FindAll(ctx context.Context, f ListFilter, p pagination
 		}
 		f.CategoryIDs = ids
 	}
+	// Admin-arranged ranks apply only to a single-node listing: directOnly, a
+	// leaf node (its expansion is itself), or an unexpanded raw node id.
+	f.manualOrder = f.Sort == SortByName && f.CategoryID != "" && len(f.CategoryIDs) <= 1
 	products, total, err := s.repo.FindAll(ctx, f, p)
 	if err != nil {
 		return nil, 0, err
+	}
+	if products == nil {
+		// An empty page must marshal as [] — never null. With the whole catalog
+		// in the trash the customer list is empty, and clients iterate data.
+		products = []Product{}
 	}
 	ptrs := make([]*Product, len(products))
 	for i := range products {
@@ -560,29 +574,92 @@ func validateFaceValues(variants []Variant) error {
 	return nil
 }
 
-// Delete removes the product identified by id.
+// Delete soft-deletes (moves to the trash) the product identified by id. The
+// product keeps its data, codes, orders and available flag; Restore undoes it.
 func (s *ProductService) Delete(ctx context.Context, id string) error {
-	// TODO: check whether any open orders reference this product before deleting.
-	return s.repo.Delete(ctx, id)
+	return s.repo.SoftDelete(ctx, id)
 }
 
-// Bulk applies a bulk action (activate / deactivate / delete) to the given IDs,
-// returning the number of affected products.
+// Restore takes the product identified by id back out of the trash.
+func (s *ProductService) Restore(ctx context.Context, id string) error {
+	return s.repo.Restore(ctx, id)
+}
+
+// Purge permanently erases a trashed product (ErrConflict if it is not in the
+// trash). Orders keep their snapshot of the product; its codes are orphaned.
+func (s *ProductService) Purge(ctx context.Context, id string) error {
+	return s.repo.Purge(ctx, id)
+}
+
+// bulkSelector resolves a BulkInput to the products it targets: every product
+// matching Filter (with a categoryId expanded to the node's subtree, exactly
+// as the admin list does) or the explicit IDs. ok is false when it targets
+// nothing (no ids, or an unknown/empty category node).
+func (s *ProductService) bulkSelector(ctx context.Context, in BulkInput) (Selector, bool, error) {
+	if in.Filter == nil {
+		return Selector{IDs: in.IDs}, len(in.IDs) > 0, nil
+	}
+	f := ListFilter{
+		Category:        in.Filter.Category,
+		CategoryID:      in.Filter.CategoryID,
+		FulfillmentType: FulfillmentType(in.Filter.FulfillmentType),
+		Status:          in.Filter.Status,
+		Search:          in.Filter.Search,
+	}
+	if f.CategoryID != "" && s.categories != nil {
+		ids, err := s.categories.DescendantIDs(ctx, f.CategoryID)
+		if err != nil {
+			return Selector{}, false, err
+		}
+		if len(ids) == 0 {
+			return Selector{}, false, nil
+		}
+		f.CategoryIDs = ids
+	}
+	return Selector{Filter: &f}, true, nil
+}
+
+// Bulk applies a bulk action to the given IDs — or, when in.Filter is set, to
+// every product matching it — returning the number of affected products.
+// "delete" soft-deletes; "purge" (permanent) accepts explicit IDs only.
 func (s *ProductService) Bulk(ctx context.Context, in BulkInput) (int64, error) {
-	if len(in.IDs) == 0 {
+	if in.Action == BulkPurge {
+		if in.Filter != nil {
+			return 0, badRequest("permanent delete needs explicit product ids")
+		}
+		if len(in.IDs) == 0 {
+			return 0, apperrors.ErrBadRequest
+		}
+		return s.repo.BulkPurge(ctx, in.IDs)
+	}
+	if in.Filter == nil && len(in.IDs) == 0 {
 		return 0, apperrors.ErrBadRequest
 	}
 	switch in.Action {
+	case BulkActivate, BulkDeactivate, BulkDelete, BulkRestore, BulkAssignCategory:
+	default:
+		return 0, apperrors.ErrBadRequest
+	}
+	sel, ok, err := s.bulkSelector(ctx, in)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	switch in.Action {
 	case BulkActivate:
-		return s.repo.BulkSetAvailable(ctx, in.IDs, true)
+		return s.repo.BulkSetAvailable(ctx, sel, true)
 	case BulkDeactivate:
-		return s.repo.BulkSetAvailable(ctx, in.IDs, false)
+		return s.repo.BulkSetAvailable(ctx, sel, false)
 	case BulkDelete:
-		return s.repo.BulkDelete(ctx, in.IDs)
+		return s.repo.BulkSoftDelete(ctx, sel)
+	case BulkRestore:
+		return s.repo.BulkRestore(ctx, sel)
 	case BulkAssignCategory:
 		// Empty categoryId → unassign (clear categoryId/category/rootDomain).
 		if in.CategoryID == "" {
-			return s.repo.BulkSetCategory(ctx, in.IDs, "", "", "")
+			return s.repo.BulkSetCategory(ctx, sel, "", "", "")
 		}
 		// Resolve the node to its denormalized slug + rootDomain, exactly as
 		// create/update do, so the flat filters keep finding these products.
@@ -593,8 +670,7 @@ func (s *ProductService) Bulk(ctx context.Context, in BulkInput) (int64, error) 
 		if rerr != nil {
 			return 0, badRequest("category not found")
 		}
-		return s.repo.BulkSetCategory(ctx, in.IDs, in.CategoryID, slug, root)
-	default:
-		return 0, apperrors.ErrBadRequest
+		return s.repo.BulkSetCategory(ctx, sel, in.CategoryID, slug, root)
 	}
+	return 0, apperrors.ErrBadRequest
 }

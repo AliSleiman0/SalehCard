@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Icon,
   PageHead,
@@ -18,12 +18,13 @@ import {
 } from '@/components'
 import type { FfKey } from '@/components'
 import { useBulk } from '@/hooks/useBulk'
+import { useKeyedPage } from '@/hooks/useKeyedPage'
 import { money, downloadCsv, downloadPdf } from '@/lib/utils'
 import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import { useOrders } from '../hooks/useOrders'
 import { useRefundBulk } from '../hooks/useOrderMutations'
-import { adaptOrder } from '../lib/adaptOrder'
+import { adaptOrder, productEditPath } from '../lib/adaptOrder'
 import { listOrders, type OrderStatus, type PaymentMethod, type AdminOrder } from '../api/orders'
 import type { FulfillmentType } from '@/types'
 
@@ -40,11 +41,23 @@ const FF_API: Record<FfKey, FulfillmentType> = {
   transfer: 'transfer',
 }
 
-// Statuses accepted from the ?status= URL param (e.g. dashboard KPI deep-links).
-// Anything else falls back to 'all'.
+// The list's main filters live in the URL so dashboard KPI tiles can deep-link
+// to them and a filtered view is shareable and survives a refresh:
+//   ?status=pending|processing|completed|failed|refunded
+//   ?type=code|credit|transfer      (fulfillment type)
+//   ?date=today                     (current business day, server-side window)
+//   ?stuck=1                        (supplier-stuck processing orders)
+//   ?pay=wallet|card|usdt           (payment method)
+// Anything unrecognised falls back to "no filter".
 const ORDER_STATUSES: readonly OrderStatus[] = ['pending', 'processing', 'completed', 'failed', 'refunded']
 function statusFromParam(raw: string | null): OrderStatus | 'all' {
   return ORDER_STATUSES.includes(raw as OrderStatus) ? (raw as OrderStatus) : 'all'
+}
+function ffFromParam(raw: string | null): FfKey | 'all' {
+  return raw === 'code' || raw === 'credit' || raw === 'transfer' ? raw : 'all'
+}
+function payFromParam(raw: string | null): PaymentMethod | 'all' {
+  return raw === 'wallet' || raw === 'card' || raw === 'usdt' ? raw : 'all'
 }
 
 export default function OrderListPage() {
@@ -52,35 +65,49 @@ export default function OrderListPage() {
   const navigate = useNavigate()
   const can = useCan()
   const canManage = can('orders.manage')
-  const [searchParams] = useSearchParams()
+  // The product editor route is guarded by the products domain (view).
+  const canViewProducts = can('products.view')
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const [status, setStatus] = useState<OrderStatus | 'all'>(() => statusFromParam(searchParams.get('status')))
-  const [ff, setFf] = useState<'all' | FfKey>('all')
-  const [pay, setPay] = useState<PaymentMethod | 'all'>('all')
+  const status = statusFromParam(searchParams.get('status'))
+  const ff = ffFromParam(searchParams.get('type'))
+  const today = searchParams.get('date') === 'today'
+  const stuck = searchParams.get('stuck') === '1'
+  const pay = payFromParam(searchParams.get('pay'))
+  // Write (or clear) URL filter params in one history-replacing update.
+  const setParams = (patch: Record<string, string | null>) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [k, v] of Object.entries(patch)) {
+          if (v) next.set(k, v)
+          else next.delete(k)
+        }
+        return next
+      },
+      { replace: true },
+    )
+  // Picking a status leaves the stuck view (stuck orders are always processing).
+  const setStatus = (v: OrderStatus | 'all') => setParams({ status: v === 'all' ? null : v, stuck: null })
+  const setFf = (v: FfKey | 'all') => setParams({ type: v === 'all' ? null : v })
+  const setPay = (v: PaymentMethod | 'all') => setParams({ pay: v === 'all' ? null : v })
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
-  const [page, setPage] = useState(1)
   const [exporting, setExporting] = useState(false)
 
   // Adopt the URL's ?q= (e.g. the top-bar global search navigates to /orders?q=…).
+  // Keyed on the value, not the params object, so a filter's URL write doesn't
+  // wipe a search typed into the box.
+  const qParam = searchParams.get('q') ?? ''
   useEffect(() => {
-    const q = searchParams.get('q') ?? ''
-    setSearch(q)
-  }, [searchParams])
-
-  // Adopt the URL's ?status= (e.g. the dashboard KPI tiles deep-link to
-  // /orders?status=failed). Garbage/absent → 'all'.
-  useEffect(() => {
-    setStatus(statusFromParam(searchParams.get('status')))
-    setPage(1)
-  }, [searchParams])
+    setSearch(qParam)
+  }, [qParam])
 
   // Debounce the search term so we issue one request per pause, not per keystroke
   // (each non-hex term also drives a user-email lookup server-side).
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search)
-      setPage(1)
     }, 300)
     return () => clearTimeout(timer)
   }, [search])
@@ -91,7 +118,12 @@ export default function OrderListPage() {
     fulfillmentType: ff === 'all' ? ('' as const) : FF_API[ff],
     paymentMethod: pay === 'all' ? ('' as const) : pay,
     q: debouncedSearch.trim(),
+    date: today ? ('today' as const) : ('' as const),
+    supplierStuck: stuck,
   }
+  // Any filter change (in-page, a dashboard deep link, or a new search) starts
+  // at page 1 — in the same render, so no request goes out for a stale page.
+  const [page, setPage] = useKeyedPage(JSON.stringify(filters))
 
   const { data, isLoading, isError, refetch } = useOrders({ page, ...filters })
 
@@ -118,12 +150,6 @@ export default function OrderListPage() {
         },
       },
     )
-  }
-
-  // Reset to page 1 whenever a filter changes (search resets via its debounce).
-  const onFilter = <T,>(setter: (v: T) => void) => (v: T) => {
-    setter(v)
-    setPage(1)
   }
 
   // Export orders matching the current filters (all pages — the backend caps
@@ -160,6 +186,7 @@ export default function OrderListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_orders')]}
         title={t('nav_orders')}
         sub={meta ? `${meta.total.toLocaleString()} orders` : ''}
@@ -185,7 +212,14 @@ export default function OrderListPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select className="select" value={status} onChange={(e) => onFilter(setStatus)(e.target.value as OrderStatus | 'all')}>
+          <select
+            className="select"
+            value={stuck ? 'stuck' : status}
+            onChange={(e) => setStatus(e.target.value as OrderStatus | 'all')}
+          >
+            {/* Shown only in the stuck view, so picking plain "Processing" is a
+                real change that leaves it. */}
+            {stuck && <option value="stuck">Processing · supplier stuck</option>}
             <option value="all">All statuses</option>
             <option value="completed">Completed</option>
             <option value="processing">Processing</option>
@@ -193,7 +227,15 @@ export default function OrderListPage() {
             <option value="refunded">Refunded</option>
             <option value="failed">Failed</option>
           </select>
-          <select className="select" value={pay} onChange={(e) => onFilter(setPay)(e.target.value as PaymentMethod | 'all')}>
+          <select
+            className="select"
+            value={today ? 'today' : 'any'}
+            onChange={(e) => setParams({ date: e.target.value === 'today' ? 'today' : null })}
+          >
+            <option value="any">Any date</option>
+            <option value="today">Today</option>
+          </select>
+          <select className="select" value={pay} onChange={(e) => setPay(e.target.value as PaymentMethod | 'all')}>
             <option value="all">All payment</option>
             <option value="wallet">Wallet</option>
             <option value="card">Card</option>
@@ -211,12 +253,15 @@ export default function OrderListPage() {
               <Chip
                 key={k}
                 on={ff === k}
-                onClick={() => onFilter(setFf)(k as 'all' | FfKey)}
+                onClick={() => setFf(k as 'all' | FfKey)}
                 dotColor={k !== 'all' ? FF_DOT[k as FfKey] : undefined}
               >
                 {l}
               </Chip>
             ))}
+            <Chip on={stuck} onClick={() => setParams({ stuck: stuck ? null : '1', status: null })} dotColor="var(--danger)">
+              Supplier stuck
+            </Chip>
           </div>
         </div>
 
@@ -266,54 +311,76 @@ export default function OrderListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((o) => (
-                    <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <Checkbox on={bulk.sel.includes(o.id)} onClick={() => bulk.toggle(o.id)} />
-                      </td>
-                      <td>
-                        <span className="mono strong">{o.id.slice(-8)}</span>
-                      </td>
-                      <td>
-                        <div className="cellprod">
-                          <Avatar name={o.customer} />
-                          <div className="pn">
-                            <b>{o.customer}</b>
-                            <span>{o.email}</span>
+                  {rows.map((o) => {
+                    // Only the first line's name is shown in a row; it links to that product.
+                    const first = o.raw.items[0]
+                    const productHref = first ? productEditPath(o.raw, first.productId, canViewProducts) : null
+                    return (
+                      <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <Checkbox on={bulk.sel.includes(o.id)} onClick={() => bulk.toggle(o.id)} />
+                        </td>
+                        <td>
+                          <span className="mono strong">{o.id.slice(-8)}</span>
+                        </td>
+                        <td>
+                          <div className="cellprod">
+                            <Avatar name={o.customer} />
+                            <div className="pn">
+                              <b>{o.customer}</b>
+                              <span>{o.email}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="cellprod">
-                          <Art art={o.art} size={28} radius={6} />
-                          <div className="pn">
-                            <b style={{ fontSize: 12.5 }}>{o.product}</b>
-                            <span>×{o.qty}</span>
+                        </td>
+                        <td>
+                          <div className="cellprod">
+                            <Art art={o.art} size={28} radius={6} />
+                            <div className="pn">
+                              <b style={{ fontSize: 12.5 }}>
+                                {productHref ? (
+                                  <>
+                                    {/* stopPropagation: open the product, not the row's order. */}
+                                    <Link
+                                      to={productHref}
+                                      className="prodlink"
+                                      title="Open product"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {o.productTitle}
+                                    </Link>
+                                    {o.productMore}
+                                  </>
+                                ) : (
+                                  o.product
+                                )}
+                              </b>
+                              <span>×{o.qty}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <FfBadge ff={o.ff} />
-                      </td>
-                      <td className="num strong">{money(o.amount, o.cur)}</td>
-                      <td>
-                        <PayChip p={o.pay} />
-                      </td>
-                      <td>
-                        <StatusBadge s={o.status} />
-                      </td>
-                      <td className="muted" style={{ fontSize: 12 }}>
-                        {o.date}
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className="row-actions">
-                          <span className="iact">
-                            <Icon name="chevright" size={16} />
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td>
+                          <FfBadge ff={o.ff} />
+                        </td>
+                        <td className="num strong">{money(o.amount, o.cur)}</td>
+                        <td>
+                          <PayChip p={o.pay} />
+                        </td>
+                        <td>
+                          <StatusBadge s={o.status} />
+                        </td>
+                        <td className="muted" style={{ fontSize: 12 }}>
+                          {o.date}
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className="row-actions">
+                            <span className="iact">
+                              <Icon name="chevright" size={16} />
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

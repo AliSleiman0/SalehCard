@@ -5,7 +5,7 @@ export default function NotFoundPage() {
   const navigate = useNavigate()
   return (
     <div className="page">
-      <PageHead title="Page not found" sub="The screen you're looking for doesn't exist." />
+      <PageHead back="/" title="Page not found" sub="The screen you're looking for doesn't exist." />
       <div className="acard pad">
         <EmptyState icon="search" title="404 — Not found" sub="Head back to the dashboard." />
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>

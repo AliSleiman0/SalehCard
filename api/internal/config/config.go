@@ -120,6 +120,10 @@ type Config struct {
 	// accepted upload writes billed blob storage.
 	RateLimitKycUploadMax    int
 	RateLimitKycUploadWindow time.Duration
+	// Rate limiting on customer complaint creation (per-IP fixed window): a
+	// spam guard on top of the per-user open-complaint cap.
+	RateLimitComplaintMax    int
+	RateLimitComplaintWindow time.Duration
 
 	// Storage (product image uploads). StorageProvider selects the active blob
 	// adapter: "azure" or "local" (default — dev works with zero Azure config).
@@ -352,6 +356,8 @@ func Load() *Config {
 
 		RateLimitKycUploadMax:    getInt("RATE_LIMIT_KYC_UPLOAD_MAX", 10),
 		RateLimitKycUploadWindow: getDuration("RATE_LIMIT_KYC_UPLOAD_WINDOW", time.Minute),
+		RateLimitComplaintMax:    getInt("RATE_LIMIT_COMPLAINT_MAX", 10),
+		RateLimitComplaintWindow: getDuration("RATE_LIMIT_COMPLAINT_WINDOW", time.Hour),
 
 		StorageProvider:              getEnv("STORAGE_PROVIDER", "local"),
 		AzureStorageConnectionString: os.Getenv("AZURE_STORAGE_CONNECTION_STRING"),

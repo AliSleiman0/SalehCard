@@ -253,7 +253,7 @@ type Product struct {
 	// CategoryName is the assigned node's display name, filled on catalog reads
 	// (response-only, never persisted). Nil when unassigned or the node is unnamed.
 	CategoryName *I18nString `bson:"-" json:"categoryName,omitempty"`
-	Images     []string       `bson:"images"   json:"images"`
+	Images       []string    `bson:"images"   json:"images"`
 	// Thumbnail is the 256px compressed preview URL (see platform/imaging);
 	// lists/chips prefer it, falling back to Images[0]. Images[0] stays the
 	// 1024px display URL for backward compatibility (Flutter reads images.first).
@@ -292,12 +292,26 @@ type Product struct {
 	Stock       int          `bson:"stock"     json:"stock"`
 	Available   bool         `bson:"available" json:"available"`
 	// Migration: status fidelity + ordering + review markers.
-	Status    string         `bson:"status,omitempty"    json:"status,omitempty"`
-	SortOrder int            `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
+	Status    string `bson:"status,omitempty"    json:"status,omitempty"`
+	SortOrder int    `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
+	// Position is the admin-arranged rank (1-based) of the product among the
+	// products assigned directly to its own category node (categoryId) — set
+	// only by the reorder endpoint (catalog_order.go). 0/absent = not arranged:
+	// those list after the arranged ones, A to Z. It is per node because a
+	// product belongs to exactly one node; moving the product to another node
+	// clears it. Deliberately NOT the legacy SortOrder above, which still holds
+	// the old site's migration-era values and would reshuffle the live catalog.
+	Position  int            `bson:"position,omitempty" json:"position,omitempty"`
 	Flags     []string       `bson:"flags,omitempty"     json:"flags,omitempty"`
 	Ratings   RatingsSummary `bson:"ratings"   json:"ratings"`
 	CreatedAt time.Time      `bson:"createdAt" json:"createdAt"`
 	UpdatedAt time.Time      `bson:"updatedAt" json:"updatedAt"`
+	// DeletedAt marks a soft-deleted ("in trash") product: hidden from customers
+	// and from the admin's normal lists, refused at checkout, and restorable. It
+	// is independent of Available — soft delete never touches the visibility
+	// flag, so Restore returns each product exactly to its prior live/draft
+	// state. Nil = not deleted. Only an already-trashed product can be purged.
+	DeletedAt *time.Time `bson:"deletedAt,omitempty" json:"deletedAt,omitempty"`
 	// Offer is the live sale on this product, if any. Transient (never persisted);
 	// set only on catalog reads by the product service's offer enrichment.
 	Offer *OfferInfo `bson:"-" json:"offer,omitempty"`
@@ -333,6 +347,14 @@ type UpsertProductInput struct {
 	SortOrder              int
 	Flags                  []string
 }
+
+// Deleted reports whether the product is soft-deleted (in the trash).
+func (p *Product) Deleted() bool { return p.DeletedAt != nil }
+
+// Purchasable reports whether customers may see and buy the product: it is
+// published (Available) and not in the trash. Customer-facing single-product
+// reads and the checkout gate all go through this one rule.
+func (p *Product) Purchasable() bool { return p.Available && !p.Deleted() }
 
 // normalize repairs invariants JSON consumers rely on: Images is always an
 // array. Legacy-import documents can store images as null/absent, which decodes
@@ -442,10 +464,18 @@ type ListFilter struct {
 	Available       *bool
 	FulfillmentType FulfillmentType
 	FulfillmentMode FulfillmentMode
-	Status          string // "active" | "draft" | "out"
-	Search          string
-	// Sort: SortByName for a natural A to Z listing; empty = newest first.
+	// Status: "active" | "draft" | "out" | "deleted". Every value except
+	// "deleted" (and the empty default) excludes soft-deleted products;
+	// "deleted" lists only the trash.
+	Status string
+	Search string
+	// Sort: SortByName for the catalog order (natural A to Z, with admin-
+	// arranged products first when the listing is one node); empty = newest.
 	Sort string
+	// manualOrder is set by the service when a SortByName listing covers
+	// exactly one taxonomy node — the only scope a Position means anything in
+	// (it is a per-node rank). Cross-node listings stay plain A to Z.
+	manualOrder bool
 }
 
 // BulkAction is a bulk operation applied to a set of product IDs.
@@ -454,9 +484,33 @@ type BulkAction string
 const (
 	BulkActivate       BulkAction = "activate"
 	BulkDeactivate     BulkAction = "deactivate"
-	BulkDelete         BulkAction = "delete"
 	BulkAssignCategory BulkAction = "assign-category"
+	// BulkDelete soft-deletes (moves to trash); it never erases data.
+	BulkDelete BulkAction = "delete"
+	// BulkRestore takes products back out of the trash.
+	BulkRestore BulkAction = "restore"
+	// BulkPurge permanently erases already-trashed products. Super admin only
+	// (enforced in the handler) and by explicit ids only — never by filter.
+	BulkPurge BulkAction = "purge"
 )
+
+// BulkFilter selects every product matching the admin list filters, so a bulk
+// action can cover all pages ("select all N matching") rather than only the
+// ids loaded on screen. Same fields and meaning as GET /api/admin/products.
+type BulkFilter struct {
+	Category        string `bson:"category,omitempty" json:"category,omitempty"`
+	CategoryID      string `bson:"categoryId,omitempty" json:"categoryId,omitempty"`
+	FulfillmentType string `bson:"fulfillmentType,omitempty" json:"fulfillmentType,omitempty"`
+	Status          string `bson:"status,omitempty" json:"status,omitempty"`
+	Search          string `bson:"search,omitempty" json:"search,omitempty"`
+}
+
+// Selector picks the products a bulk repository write applies to: explicit IDs,
+// or (when Filter is non-nil) every product matching that list filter.
+type Selector struct {
+	IDs    []string
+	Filter *ListFilter
+}
 
 // BulkInput is the request body for POST /api/admin/products/bulk.
 type BulkInput struct {
@@ -465,4 +519,7 @@ type BulkInput struct {
 	// CategoryID is the taxonomy node to assign for the "assign-category"
 	// action; empty clears the assignment (unassign). Ignored otherwise.
 	CategoryID string `json:"categoryId"`
+	// Filter, when set, applies the action to every product matching it and
+	// IDs is ignored. Not allowed for "purge".
+	Filter *BulkFilter `json:"filter,omitempty"`
 }

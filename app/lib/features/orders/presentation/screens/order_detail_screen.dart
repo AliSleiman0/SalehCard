@@ -8,6 +8,7 @@ import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/money_row.dart';
 import '../../../../core/widgets/product_chip.dart';
@@ -40,11 +41,7 @@ class OrderDetailScreen extends ConsumerWidget {
         // orders list — pops cleanly) and via go (from order-success — an empty
         // stack, nothing to pop), so fall back to the orders list when we can't
         // pop, otherwise the user is stranded here.
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go('/orders'),
-        ),
+        leading: const AppBackButton(fallback: '/orders'),
         title: orderAsync.maybeWhen(
           data: (o) => Text('${l10n.orderLabel} #${o.reference}'),
           orElse: () => Text(l10n.orderLabel),
@@ -295,6 +292,16 @@ class _Body extends StatelessWidget {
             labelOf: _statusLabel,
           ),
         ],
+        const SizedBox(height: 20),
+        Center(
+          child: TextButton.icon(
+            onPressed: () => context.push(
+              '/complaints/new?category=order&orderId=${order.id}',
+            ),
+            icon: const Icon(Icons.report_gmailerrorred_rounded, size: 18),
+            label: Text(l10n.reportProblem),
+          ),
+        ),
       ],
     );
   }

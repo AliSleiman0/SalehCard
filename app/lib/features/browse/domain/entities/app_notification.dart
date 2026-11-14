@@ -8,6 +8,8 @@ enum AppNotificationType {
   walletTopUpRejected,
   kycApproved,
   kycRejected,
+  complaintReply,
+  complaintStatus,
   promo,
   general,
 }

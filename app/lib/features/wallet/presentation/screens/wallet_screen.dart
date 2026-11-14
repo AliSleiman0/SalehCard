@@ -8,6 +8,7 @@ import '../../../../core/format/money.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/ledger_row.dart';
@@ -94,6 +95,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.topbar,
+        // Normally pushed (Home card / Menu), but a confirmed USDT deposit
+        // lands here via go('/wallet') as the stack root.
+        leading: const AppBackButton(fallback: '/home'),
         title: Text(l10n.walletTitle),
       ),
       body: walletAsync.when(

@@ -14,6 +14,7 @@ import { parseCodesFile, listCodes, type UploadItem } from '../api/codes'
 import { CodesModal } from '../components/CodesModal'
 import { formatDateTime, downloadCsv, money } from '@/lib/utils'
 import { useCan } from '@/stores/auth'
+import { useKeyedPage } from '@/hooks/useKeyedPage'
 import type { InventoryStats, Code } from '@/types'
 
 type Tab = 'stock' | 'upload' | 'config' | 'audit'
@@ -30,13 +31,21 @@ export default function InventoryPage() {
   // navigates there and the picker follows.
   const [uploadProduct, setUploadProduct] = useState<string | undefined>(uploadFor)
   const openUpload = (productId?: string) => {
-    if (productId) {
-      // Write the URL param; the effect below reacts to it (switch tab + select).
-      setSearchParams({ upload: productId })
-    } else {
-      setSearchParams({})
-      setTab('upload')
-    }
+    // Set/clear only ?upload=, keeping the stock view (?view=) so going back to
+    // the Code stock tab still shows the list the admin came from.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (productId) next.set('upload', productId)
+        else next.delete('upload')
+        return next
+      },
+      { replace: !productId },
+    )
+    // Switch directly too: the effect below only fires when ?upload= changes,
+    // so re-clicking the same row after visiting another tab would do nothing.
+    if (productId) setUploadProduct(productId)
+    setTab('upload')
   }
   // React to ?upload= changes (deep link, or a row click that set the param
   // while already mounted — useState alone only reads the first value).
@@ -57,6 +66,7 @@ export default function InventoryPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_catalog'), t('nav_inventory')]}
         title="Inventory & code management"
         sub="Mission-critical — if codes run out, purchases fail."
@@ -105,26 +115,32 @@ export default function InventoryPage() {
 
 const PAGE_SIZE = 20
 
+type StockView = 'all' | 'below' | 'low'
+
 function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
   const { t } = useTranslation()
   const canManage = useCan()('inventory.manage')
-  const [lowOnly, setLowOnly] = useState(false)
-  const [page, setPage] = useState(1)
+  // The stock view lives in the URL so the dashboard's Low-stock tile can
+  // deep-link to it and a refresh keeps it:
+  //   ?view=below  every product under its threshold (the tile's own count)
+  //   ?view=low    only the most depleted ("lo" level — the KPI card below)
+  const [params, setSearchParams] = useSearchParams()
+  const view: StockView = params.get('view') === 'below' ? 'below' : params.get('view') === 'low' ? 'low' : 'all'
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  // Debounce the search box and reset to the first page on each new query.
+  // Debounce the search box.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search)
-      setPage(1)
-    }, 300)
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(timer)
   }, [search])
+  // A view change or new search starts at page 1, in the same render.
+  const [page, setPage] = useKeyedPage(`${view}|${debouncedSearch.trim()}`)
   // Backend-paginated: one page of rows + global KPI totals in meta.totals.
   const { data, isLoading, isError, refetch } = useInventoryPage({
     page,
     limit: PAGE_SIZE,
-    low: lowOnly,
+    low: view === 'low',
+    below: view === 'below',
     q: debouncedSearch.trim(),
   })
   const rows = data?.data ?? []
@@ -134,10 +150,19 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
   // Which product's codes popup is open (null = closed).
   const [codesFor, setCodesFor] = useState<InventoryStats | null>(null)
 
-  // Switch the low-only view and jump back to the first page.
-  const setView = (low: boolean) => {
-    setLowOnly(low)
-    setPage(1)
+  // Switch the stock view (page resets via useKeyedPage). Drops any stale
+  // ?upload= left over from a row click.
+  const setView = (v: StockView) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (v === 'all') next.delete('view')
+        else next.set('view', v)
+        next.delete('upload')
+        return next
+      },
+      { replace: true },
+    )
   }
 
   // Export a single product's code list (all statuses, across all pages — the
@@ -175,7 +200,7 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
 
   if (isLoading) return <LoadingSpinner />
   if (isError) return <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
-  if (!lowOnly && !debouncedSearch.trim() && (meta?.total ?? 0) === 0)
+  if (view === 'all' && !debouncedSearch.trim() && (meta?.total ?? 0) === 0)
     return <EmptyState icon="layers" title="No code inventory yet" sub="Code-type products will appear here once created." />
 
   return (
@@ -228,10 +253,13 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
               />
             </div>
             <div className="aseg">
-              <button className={!lowOnly ? 'on' : ''} onClick={() => setView(false)}>
+              <button className={view === 'all' ? 'on' : ''} onClick={() => setView('all')}>
                 {t('all')}
               </button>
-              <button className={lowOnly ? 'on' : ''} onClick={() => setView(true)}>
+              <button className={view === 'below' ? 'on' : ''} onClick={() => setView('below')}>
+                Below threshold
+              </button>
+              <button className={view === 'low' ? 'on' : ''} onClick={() => setView('low')}>
                 Low only
               </button>
             </div>

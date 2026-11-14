@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { adaptOrder, codeLines, creditLines, customerName, itemQtyLabel } from './adaptOrder'
+import { adaptOrder, codeLines, creditLines, customerName, itemQtyLabel, productEditPath } from './adaptOrder'
 import type { AdminOrder } from '../api/orders'
 
 function makeOrder(overrides: Partial<AdminOrder> = {}): AdminOrder {
@@ -177,5 +177,31 @@ describe('codeLines', () => {
 
   it('is empty for a pure credit order', () => {
     expect(codeLines([{ ...credit, playerId: 'P1' }])).toEqual([])
+  })
+})
+
+describe('productEditPath', () => {
+  const pid = '6a3fcf7d6f3ba8189640f001'
+
+  it('links a live product to its admin editor', () => {
+    expect(productEditPath(makeOrder(), pid, true)).toBe(`/products/${pid}/edit`)
+  })
+
+  it('renders plain text for a product deleted since the order', () => {
+    expect(productEditPath(makeOrder({ missingProductIds: [pid] }), pid, true)).toBeNull()
+  })
+
+  it('still links the other lines of an order with one deleted product', () => {
+    const other = '6a3fcf7d6f3ba8189640f002'
+    expect(productEditPath(makeOrder({ missingProductIds: [other] }), pid, true)).toBe(`/products/${pid}/edit`)
+  })
+
+  it('renders plain text when the viewer cannot open Products', () => {
+    expect(productEditPath(makeOrder(), pid, false)).toBeNull()
+  })
+
+  it('renders plain text for a line with no product id', () => {
+    expect(productEditPath(makeOrder(), '', true)).toBeNull()
+    expect(productEditPath(makeOrder(), '000000000000000000000000', true)).toBeNull()
   })
 })

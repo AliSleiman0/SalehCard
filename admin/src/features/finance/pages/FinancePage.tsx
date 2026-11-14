@@ -90,6 +90,7 @@ export default function FinancePage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_finance'), t('nav_wallet')]}
         title="Wallet & financial management"
         sub="Money movement across the platform wallet ledger"

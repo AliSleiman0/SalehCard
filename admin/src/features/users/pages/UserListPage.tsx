@@ -127,6 +127,7 @@ export default function UserListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_users')]}
         title={t('nav_users')}
         sub={meta ? `${meta.total.toLocaleString()} registered users` : ''}

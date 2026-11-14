@@ -25,6 +25,10 @@ const (
 	KindPaymentConfirmed = "payment_confirmed"
 	KindPaymentUnderpaid = "payment_underpaid"
 	KindPaymentExpired   = "payment_expired"
+	// Customer complaint desk (complaint module): a staff reply, and a move
+	// to resolved / closed. Data carries complaintId + number.
+	KindComplaintReply  = "complaint_reply"
+	KindComplaintStatus = "complaint_status"
 )
 
 // Notification is one inbox row. Title/Body are the English fallback copy (also

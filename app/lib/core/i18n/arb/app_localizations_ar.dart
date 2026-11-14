@@ -1027,4 +1027,145 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get uploadFailed => 'فشل الرفع. يرجى تجربة صورة أخرى.';
+
+  @override
+  String get complaintsTitle => 'الشكاوى';
+
+  @override
+  String get complaintsEmptyTitle => 'لا توجد شكاوى بعد';
+
+  @override
+  String get complaintsEmptySub =>
+      'إذا حدثت مشكلة في طلب أو شحن رصيد أو في حسابك، أخبرنا وسنتابع معك.';
+
+  @override
+  String get complaintsLoadFailed => 'تعذر تحميل شكاواك.';
+
+  @override
+  String get complaintSubmit => 'تقديم شكوى';
+
+  @override
+  String get reportProblem => 'الإبلاغ عن مشكلة';
+
+  @override
+  String get complaintNewTitle => 'تقديم شكوى';
+
+  @override
+  String get complaintNewSub => 'سيرد فريق الدعم هنا وسنرسل لك إشعارًا.';
+
+  @override
+  String get complaintCategory => 'الفئة';
+
+  @override
+  String get complaintCatOrder => 'طلب';
+
+  @override
+  String get complaintCatTopup => 'شحن المحفظة';
+
+  @override
+  String get complaintCatAccount => 'حسابي';
+
+  @override
+  String get complaintCatOther => 'أمر آخر';
+
+  @override
+  String get complaintOrderOptional => 'أي طلب؟ (اختياري)';
+
+  @override
+  String get complaintNoOrder => 'لا تتعلق بطلب محدد';
+
+  @override
+  String get complaintSubject => 'الموضوع';
+
+  @override
+  String get complaintSubjectHint => 'ملخص قصير للمشكلة';
+
+  @override
+  String get complaintMessage => 'صف المشكلة';
+
+  @override
+  String get complaintMessageHint =>
+      'ماذا حدث؟ أضف أي تفاصيل تساعدنا في المتابعة.';
+
+  @override
+  String get complaintPhotoOptional => 'صورة (اختياري)';
+
+  @override
+  String get complaintAttachPhoto => 'أرفق لقطة شاشة أو صورة';
+
+  @override
+  String get complaintRemovePhoto => 'إزالة الصورة';
+
+  @override
+  String get complaintStatusOpen => 'مفتوحة';
+
+  @override
+  String get complaintStatusInProgress => 'قيد المعالجة';
+
+  @override
+  String get complaintStatusResolved => 'تم الحل';
+
+  @override
+  String get complaintStatusClosed => 'مغلقة';
+
+  @override
+  String get complaintLastActivity => 'آخر نشاط';
+
+  @override
+  String get complaintLinkedOrder => 'الطلب';
+
+  @override
+  String get complaintYou => 'أنت';
+
+  @override
+  String get complaintSupport => 'الدعم';
+
+  @override
+  String get complaintReplyHint => 'اكتب ردًا…';
+
+  @override
+  String get complaintSend => 'إرسال';
+
+  @override
+  String get complaintSendFailed => 'تعذر الإرسال. حاول مرة أخرى.';
+
+  @override
+  String get complaintResolvedHint =>
+      'وضع فريق الدعم هذه الشكوى على أنها محلولة. رد إذا كانت المشكلة ما زالت قائمة وسيُعاد فتحها.';
+
+  @override
+  String get complaintClosedHint =>
+      'هذه الشكوى مغلقة. قدّم شكوى جديدة إذا احتجت إلى مساعدة إضافية.';
+
+  @override
+  String get complaintErrSubject => 'يرجى إدخال الموضوع.';
+
+  @override
+  String get complaintErrMessage => 'يرجى وصف المشكلة.';
+
+  @override
+  String get complaintTooManyOpen =>
+      'لديك عدة شكاوى مفتوحة بالفعل. يرجى الانتظار حتى يتم حل إحداها.';
+
+  @override
+  String notifComplaintReplyTitle(String ref) {
+    return 'رد على شكواك $ref';
+  }
+
+  @override
+  String notifComplaintResolvedTitle(String ref) {
+    return 'تم حل شكواك $ref';
+  }
+
+  @override
+  String notifComplaintClosedTitle(String ref) {
+    return 'تم إغلاق شكواك $ref';
+  }
+
+  @override
+  String get notifComplaintResolvedBody =>
+      'إذا كانت المشكلة ما زالت قائمة، رد لإعادة فتحها.';
+
+  @override
+  String get notifComplaintClosedBody => 'شكرًا لتواصلك مع الدعم.';
 }

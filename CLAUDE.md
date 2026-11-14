@@ -185,11 +185,36 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   `local` on Azure misconfig; audited as `product.image_upload`. Prod needs an Azure Storage account +
   public `product-images` container (see DEVOPS-TODO.md §13). Old blobs are **not deleted on replace**
   in v1 (orphans are pennies).
+- **Product soft delete / trash** (`internal/modules/product`, live since 2026-11-14, PR #142):
+  `Product.deletedAt` marks a trashed product. It is **independent of `available`**, so Restore returns each
+  product exactly to its prior active/draft state. Every listing excludes the trash (`buildFilter` adds
+  `{deletedAt: null}`, which also matches legacy docs without the field) unless `status=deleted`, the admin's
+  trash view. That covers customer lists/search, category counts, offers, category facets, inventory/low-stock
+  and the dashboard product count. Customer gating goes through **`Product.Purchasable()`** (`available &&
+  !deleted`): `GetByIDPublic` and verify-account 404 otherwise, and **`PlaceOrder` refuses hidden or trashed
+  products** (`400 PRODUCT_UNAVAILABLE`). Admin API: `DELETE /api/admin/products/{id}` **soft-deletes**,
+  `POST …/{id}/restore`, and `DELETE …/{id}/permanent` is super-admin only and trashed-only (`409
+  PRODUCT_NOT_DELETED` otherwise). Bulk actions take `delete` (trash), `restore`, or `purge` (super admin,
+  explicit ids only), plus an optional `filter` (the admin list filters) so one action covers **every
+  matching product** ("Select all N matching" in the admin bulk bar; a categoryId filter is subtree-expanded,
+  and an unknown node matches nothing). Trashing also clears `position`, and `directFilter`/`SetPositions`
+  exclude trashed products, so they can't be arranged. A trashed product still exists for order links; only a
+  purge makes it a `missingProductIds` entry. Writes are idempotent and use `$and`-guarded filters. Real-Mongo
+  test: `TestSoftDelete_Mongo` (`MONGO_TEST_URI`).
 - **iOS store scope** (`app/lib/core/config/regulated_finance.dart`): iOS builds show **only the `telecom`
   root domain** (App Review 3.1.1: no game currency / gift cards without IAP) and hide crypto, money
   transfer, player IDs and Whish/crypto top-up methods. It's a build-time platform check (never a remote flag,
   per 2.3.1); catalog queries are pinned server-side to `rootDomain=telecom`. Android is unaffected. Debug:
   `--dart-define=FORCE_IOS_SCOPE=true`. Never mention crypto/money transfer/Whish in Apple-facing text.
+- **Customer complaints** (`internal/modules/complaint`, RBAC domain `complaints`): customers file a
+  complaint (category, optional own order, subject, message, optional photo under `complaints/`) from the
+  app/web at `/api/v1/complaints`; staff answer at `/api/admin/complaints` (public replies, **internal notes
+  stripped server-side from every customer response**, status, assignee). One document per complaint with an
+  embedded, capped thread (200), so each write is one guarded `FindOneAndUpdate`; numbers (`C-1001`…) come
+  from the `counters` doc. A foreign complaint is a 404, never 403. Caps: 5 open per user (`409
+  TOO_MANY_OPEN`), per-IP create limit `RATE_LIMIT_COMPLAINT_*`. Staff replies and resolve/close notify the
+  customer (`complaint_reply` / `complaint_status`, inbox + push, never SMS); the push data carries `kind`
+  so the app's tray tap opens the thread. Web has no push and polls every 30s.
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout
@@ -207,7 +232,8 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   admins approve (atomic pending-claim → credit → **mandatory** ledger row, with
   compensation) or reject at `/api/admin/wallet/topups`. There is NO instant top-up.
 - **Admin audit log** (`audit` module, `admin_audit_log`): role/status changes, wallet &
-  reseller adjustments, product deletes, order refunds/completions, KYC/review/top-up
+  reseller adjustments, product trash/restore/permanent delete (`product.soft_delete` / `product.restore` /
+  `product.delete`, one entry per bulk call), order refunds/completions, KYC/review/top-up
   decisions, bulk-SMS broadcasts are recorded (actor from JWT) and browsable at `/audit` + `GET
   /api/admin/audit-log`. Guardrails: last-admin demote/suspend → `409 LAST_ADMIN`;
   admin money adjustments reverse the balance if the ledger insert fails.
