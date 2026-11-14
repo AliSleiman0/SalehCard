@@ -1880,16 +1880,34 @@ abstract class AppLocalizations {
   /// **'Help'**
   String get helpTitle;
 
+  /// No description provided for @helpCenterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Help Center'**
+  String get helpCenterTitle;
+
+  /// No description provided for @helpSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Get quick answers to common questions'**
+  String get helpSubtitle;
+
+  /// No description provided for @helpGreetingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hi! 👋 I\'m here to help.'**
+  String get helpGreetingTitle;
+
   /// No description provided for @helpGreeting.
   ///
   /// In en, this message translates to:
-  /// **'Hi! Pick a question below, or type to search.'**
+  /// **'Choose a question below to get an instant answer.'**
   String get helpGreeting;
 
   /// No description provided for @helpSearchHint.
   ///
   /// In en, this message translates to:
-  /// **'Type to search questions…'**
+  /// **'Type your question...'**
   String get helpSearchHint;
 
   /// No description provided for @helpAllQuestions.
@@ -1904,11 +1922,35 @@ abstract class AppLocalizations {
   /// **'No matching questions'**
   String get helpNoMatch;
 
-  /// No description provided for @helpNeedHelp.
+  /// No description provided for @helpNoAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Still need help?'**
-  String get helpNeedHelp;
+  /// **'Sorry, I couldn\'t find an answer to that. Try one of the questions above, or contact us below.'**
+  String get helpNoAnswer;
+
+  /// No description provided for @helpOtherWays.
+  ///
+  /// In en, this message translates to:
+  /// **'Other ways to get help'**
+  String get helpOtherWays;
+
+  /// No description provided for @helpWhatsappSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat with us'**
+  String get helpWhatsappSub;
+
+  /// No description provided for @helpReportIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Report an issue'**
+  String get helpReportIssue;
+
+  /// No description provided for @helpSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get helpSend;
 
   /// No description provided for @uploadPhoto.
   ///

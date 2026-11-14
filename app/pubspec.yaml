@@ -109,6 +109,9 @@ flutter:
   # splash screen, and the source for the generated launcher icon / native splash.
   assets:
     - assets/branding/
+    # Help Center bot avatar (Microsoft Fluent Emoji "Robot", MIT — see
+    # assets/help/LICENSE-fluentui-emoji.txt, registered in main.dart).
+    - assets/help/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
