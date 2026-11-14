@@ -13,6 +13,7 @@ import {
   useUpdateProduct,
   useUploadProductImage,
   useFulfillmentProviders,
+  useRestoreProduct,
 } from '../hooks/useProducts'
 import { reconcileBridgePhoneField } from '../lib/bridgeFields'
 import { toRows, fromRows, rowIssues, type InputFieldRow } from '../lib/fieldRows'
@@ -33,6 +34,7 @@ import {
   type UnitRowsStash,
 } from '../lib/unitPricing'
 import { useCan } from '@/stores/auth'
+import { toast } from '@/stores/toast'
 import type { FulfillmentType, Locale, InputFieldType } from '@/types'
 
 const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
@@ -83,6 +85,10 @@ export default function ProductEditPage() {
   const create = useCreateProduct()
   const update = useUpdateProduct(id ?? '')
   const uploadImage = useUploadProductImage()
+  const restore = useRestoreProduct()
+  // A trashed product stays fully editable (so it can be organised into the right
+  // category before it goes back on sale) — the banner just makes its state clear.
+  const trashed = !isNew && !!data?.data?.deletedAt
 
   const { data: catsRes } = useProductCategories()
   const cats = useMemo(() => catsRes?.data ?? [], [catsRes])
@@ -544,6 +550,43 @@ export default function ProductEditPage() {
           </button>
         )}
       </PageHead>
+
+      {trashed && (
+        <div
+          role="status"
+          style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            borderRadius: 'var(--ar-sm)',
+            background: 'rgba(255,77,109,.12)',
+            color: 'var(--danger)',
+            fontSize: 13,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <Icon name="trash" size={15} />
+          <span style={{ flex: 1 }}>
+            In trash: customers can&apos;t see or buy this product. You can still edit it; restore it to put it back.
+          </span>
+          {canManage && (
+            <button
+              className="abtn xs ok"
+              disabled={restore.isPending}
+              onClick={() =>
+                restore.mutate(id!, {
+                  onSuccess: () => toast.success('Product restored.'),
+                  onError: () => toast.error('Could not restore the product.'),
+                })
+              }
+            >
+              <Icon name="refresh" size={13} /> Restore
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div

@@ -341,3 +341,28 @@ Still to check:
 1. **USDT deposit → Wallet back arrow** on a device: needs a real confirmed on-chain deposit. It uses the
    same `AppBackButton` as Orders, which was verified on the emulator.
 2. **The same flows on prod admin** after merge, once with a super admin and once with a custom role.
+
+## Product soft delete / trash (PR #142, live 2026-11-14)
+
+Verified locally 2026-11-14 (curl + Chrome on the admin):
+- trash one product, and "Select all 27 matching" → Move to trash
+- the trash view and its bulk bar (purge hidden for "all matching")
+- the in-trash banner → Restore (a draft came back as a draft)
+- the public list returns `[]`, a direct link to a trashed product returns 404, offers are hidden
+- an order for a trashed product → `PRODUCT_UNAVAILABLE`
+- purge rules and the audit entries
+
+Still to check:
+
+1. **Prod admin click-through** with one test product: Move to trash → Deleted (trash) view → Restore.
+   Confirm the product returns to its prior status and that `/audit` shows `product.soft_delete` /
+   `product.restore`.
+2. **Custom-role admin** (non-super, with `products.manage`): sees no "Delete permanently" in the trash view.
+   A direct `DELETE /api/admin/products/{id}/permanent` and a bulk `purge` both return 403.
+3. **Flutter app (EN + AR)** while a product the customer has open is trashed:
+   - the product disappears from Home, category lists, search and offers after a refresh
+   - an already-open product page → Buy → "This product is no longer available"
+   - with the whole catalog trashed, the catalog shows its empty state and doesn't crash
+4. **Web storefront**: the same as step 3 (lists, direct link 404, checkout message).
+5. **Category arrange**: a trashed product is absent from Categories → Arrange order. After restore it
+   reappears unarranged (A to Z, after the ranked products).

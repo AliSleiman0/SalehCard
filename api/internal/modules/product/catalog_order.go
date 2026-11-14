@@ -167,10 +167,11 @@ func (o *orderService) Reorder(ctx context.Context, in ReorderInput) (int64, err
 // --- persistence (MongoRepository) -----------------------------------------
 
 // directFilter is THE definition of "the node's arrangeable products", shared
-// by the arrange list and the save guard so the two can never disagree (a
-// future exclusion — e.g. soft-deleted products — goes here, once).
+// by the arrange list and the save guard so the two can never disagree.
+// Soft-deleted (trashed) products are not arrangeable: they are hidden from
+// every listing the order applies to.
 func directFilter(categoryID bson.ObjectID) bson.D {
-	return bson.D{{Key: "categoryId", Value: categoryID}}
+	return bson.D{{Key: "categoryId", Value: categoryID}, notDeleted}
 }
 
 // DirectProducts loads the products assigned directly to a node (any status —
@@ -214,8 +215,9 @@ func (r *MongoRepository) DirectProductIDs(ctx context.Context, categoryID bson.
 }
 
 // SetPositions stamps ids[i] with Position i+1 in one unordered bulk write.
-// Each row's filter also requires categoryId == node, so a product that left
-// the node concurrently is skipped (counted out of matched). updatedAt is not
+// Each row's filter also requires categoryId == node (and not trashed), so a
+// product that left the node — or was trashed — concurrently is skipped
+// (counted out of matched). updatedAt is not
 // bumped: arranging is not a content edit.
 func (r *MongoRepository) SetPositions(ctx context.Context, categoryID bson.ObjectID, ids []bson.ObjectID) (int64, int64, error) {
 	defer invalidateNameCache() // catalog-order listings must not show the old order
@@ -225,7 +227,7 @@ func (r *MongoRepository) SetPositions(ctx context.Context, categoryID bson.Obje
 	models := make([]mongo.WriteModel, len(ids))
 	for i, id := range ids {
 		models[i] = mongo.NewUpdateOneModel().
-			SetFilter(bson.D{{Key: "_id", Value: id}, {Key: "categoryId", Value: categoryID}}).
+			SetFilter(bson.D{{Key: "_id", Value: id}, {Key: "categoryId", Value: categoryID}, notDeleted}).
 			SetUpdate(bson.D{{Key: "$set", Value: bson.D{{Key: "position", Value: i + 1}}}})
 	}
 	res, err := r.col.BulkWrite(ctx, models, options.BulkWrite().SetOrdered(false))

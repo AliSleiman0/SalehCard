@@ -40,14 +40,18 @@ func (f *fakeRepo) FindByLegacyID(context.Context, int) (*product.Product, error
 func (f *fakeRepo) Upsert(context.Context, product.UpsertProductInput) (*product.Product, error) {
 	return nil, nil
 }
-func (f *fakeRepo) Delete(context.Context, string) error { return nil }
-func (f *fakeRepo) BulkSetAvailable(context.Context, []string, bool) (int64, error) {
+func (f *fakeRepo) SoftDelete(context.Context, string) error { return nil }
+func (f *fakeRepo) Restore(context.Context, string) error    { return nil }
+func (f *fakeRepo) Purge(context.Context, string) error      { return nil }
+func (f *fakeRepo) BulkSetAvailable(context.Context, product.Selector, bool) (int64, error) {
 	return 0, nil
 }
-func (f *fakeRepo) BulkSetCategory(context.Context, []string, string, string, string) (int64, error) {
+func (f *fakeRepo) BulkSetCategory(context.Context, product.Selector, string, string, string) (int64, error) {
 	return 0, nil
 }
-func (f *fakeRepo) BulkDelete(context.Context, []string) (int64, error) { return 0, nil }
+func (f *fakeRepo) BulkSoftDelete(context.Context, product.Selector) (int64, error) { return 0, nil }
+func (f *fakeRepo) BulkRestore(context.Context, product.Selector) (int64, error)    { return 0, nil }
+func (f *fakeRepo) BulkPurge(context.Context, []string) (int64, error)              { return 0, nil }
 
 func ptr(f float64) *float64 { return &f }
 

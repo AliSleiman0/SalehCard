@@ -103,7 +103,7 @@ func TestCatalogOrder_Mongo(t *testing.T) {
 	// loses its rank, and both are counted once.
 	_, _, err = repo.SetPositions(ctx, nodeB, []bson.ObjectID{other})
 	require.NoError(t, err)
-	n, err := repo.BulkSetCategory(ctx, []string{charlie.Hex(), other.Hex()}, nodeB.Hex(), "b", "games")
+	n, err := repo.BulkSetCategory(ctx, Selector{IDs: []string{charlie.Hex(), other.Hex()}}, nodeB.Hex(), "b", "games")
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, n)
 	assert.Equal(t, 1, pos(other), "already in dest keeps its rank")
@@ -113,7 +113,7 @@ func TestCatalogOrder_Mongo(t *testing.T) {
 	assert.Equal(t, nodeB, *moved.CategoryID)
 
 	// Unassign clears it too.
-	_, err = repo.BulkSetCategory(ctx, []string{bravo.Hex()}, "", "", "")
+	_, err = repo.BulkSetCategory(ctx, Selector{IDs: []string{bravo.Hex()}}, "", "", "")
 	require.NoError(t, err)
 	assert.Zero(t, pos(bravo))
 }
