@@ -74,6 +74,7 @@ type fcmMessage struct {
 	Notification fcmNotification   `json:"notification"`
 	Data         map[string]string `json:"data,omitempty"`
 	Android      fcmAndroid        `json:"android"`
+	APNS         fcmAPNS           `json:"apns"`
 }
 
 type fcmNotification struct {
@@ -85,6 +86,22 @@ type fcmAndroid struct {
 	Priority string `json:"priority"`
 }
 
+// fcmAPNS is the iOS-specific part: deliver immediately (priority 10, the
+// value for user-visible alerts) with the default sound, so banners on iPhones
+// are not silent. Ignored for Android tokens.
+type fcmAPNS struct {
+	Headers map[string]string `json:"headers"`
+	Payload fcmAPNSPayload    `json:"payload"`
+}
+
+type fcmAPNSPayload struct {
+	Aps fcmAps `json:"aps"`
+}
+
+type fcmAps struct {
+	Sound string `json:"sound"`
+}
+
 // Send delivers msg to its device token, returning [ErrUnregistered] when FCM
 // reports the token is no longer valid so callers can prune it.
 func (f *FCMSender) Send(ctx context.Context, msg Message) error {
@@ -93,6 +110,10 @@ func (f *FCMSender) Send(ctx context.Context, msg Message) error {
 		Notification: fcmNotification{Title: msg.Title, Body: msg.Body},
 		Data:         msg.Data,
 		Android:      fcmAndroid{Priority: "HIGH"},
+		APNS: fcmAPNS{
+			Headers: map[string]string{"apns-priority": "10"},
+			Payload: fcmAPNSPayload{Aps: fcmAps{Sound: "default"}},
+		},
 	}})
 	if err != nil {
 		return fmt.Errorf("fcm marshal: %w", err)

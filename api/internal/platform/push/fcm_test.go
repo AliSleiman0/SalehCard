@@ -46,6 +46,8 @@ func TestFCMSender_Send_BuildsExpectedRequest(t *testing.T) {
 	assert.Contains(t, gotBody.Message.Notification.Body, "$25.00")
 	assert.Equal(t, "abc123", gotBody.Message.Data["orderId"])
 	assert.Equal(t, "HIGH", gotBody.Message.Android.Priority)
+	assert.Equal(t, "10", gotBody.Message.APNS.Headers["apns-priority"])
+	assert.Equal(t, "default", gotBody.Message.APNS.Payload.Aps.Sound)
 }
 
 func TestFCMSender_Send_UnregisteredToken(t *testing.T) {
