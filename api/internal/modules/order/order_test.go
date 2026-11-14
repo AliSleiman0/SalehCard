@@ -247,24 +247,36 @@ func (f *fakeOrderRepo) ClaimSupplierReroute(_ context.Context, c RerouteClaim) 
 	if c.Archived != nil {
 		o.Fulfillment.SupplierAttempts = append(o.Fulfillment.SupplierAttempts, *c.Archived)
 	}
+	o.Fulfillment.RejectedProviderRef = ""
 	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, c.Event)
 	return o, nil
 }
 
-func (f *fakeOrderRepo) CompleteUnlessAtSupplier(ctx context.Context, id bson.ObjectID, event TimelineEvent, extraSet bson.D) (*Order, error) {
-	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing && orderAtSupplier(o) {
+func (f *fakeOrderRepo) TransitionUnlessAtSupplier(ctx context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error) {
+	if o, ok := f.byID[id]; ok && orderAtSupplier(o) {
 		return nil, apperrors.ErrConflict
 	}
-	return f.TransitionStatus(ctx, id, []OrderStatus{OrderStatusProcessing}, OrderStatusCompleted, event, extraSet)
+	return f.TransitionStatus(ctx, id, from, to, event, extraSet)
 }
 
-func (f *fakeOrderRepo) MarkSupplierRejected(_ context.Context, id bson.ObjectID, attempt int, event TimelineEvent) (bool, error) {
+func (f *fakeOrderRepo) MarkSupplierRejected(_ context.Context, id bson.ObjectID, attempt int, ref string, event TimelineEvent) (bool, error) {
 	o, ok := f.byID[id]
 	if !ok || o.Status != OrderStatusProcessing || o.Fulfillment.SupplierAttempt != attempt {
 		return false, nil
 	}
+	if ref != "" && o.Fulfillment.ProviderRef != ref {
+		return false, nil
+	}
+	if ref == "" && (o.Fulfillment.ProviderRef != "" || o.Fulfillment.SupplierNextRetryAt == nil) {
+		return false, nil
+	}
 	now := time.Now().UTC()
-	o.Fulfillment.SupplierStuckAt = &now
+	if o.Fulfillment.SupplierStuckAt == nil {
+		o.Fulfillment.SupplierStuckAt = &now
+	}
+	if ref != "" {
+		o.Fulfillment.RejectedProviderRef = ref
+	}
 	o.Fulfillment.ProviderRef = ""
 	o.Fulfillment.SupplierRetryCount = 0
 	o.Fulfillment.SupplierNextRetryAt = nil

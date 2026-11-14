@@ -15,12 +15,16 @@ function useInvalidateOrders() {
 export function useRefundOrder() {
   const invalidate = useInvalidateOrders()
   return useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason?: string }) => refundOrder(id, reason ?? ''),
+    mutationFn: ({ id, reason, acknowledgeSupplier }: { id: string; reason?: string; acknowledgeSupplier?: boolean }) =>
+      refundOrder(id, reason ?? '', acknowledgeSupplier ?? false),
     onSuccess: (_, { id }) => {
       invalidate(id)
       toast.success('Order refunded')
     },
-    onError: () => toast.error('Refund failed'),
+    // ORDER_AT_SUPPLIER is a confirm step the dialog handles, not a failure.
+    onError: (e) => {
+      if (!(e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER')) toast.error('Refund failed')
+    },
   })
 }
 

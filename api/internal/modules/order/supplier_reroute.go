@@ -65,15 +65,23 @@ func rerouteEligible(o *Order) (itemIndex int, fromManual bool, err error) {
 	return -1, false, rerouteErr("REROUTE_NOT_SUPPLIER_ORDER", "only supplier orders and single-item account-credit orders can be sent to a supplier", apperrors.ErrBadRequest)
 }
 
-// orderAtSupplier reports whether a supplier may still be working on o: it has
-// an api-mode line that is not flagged stuck and either carries an upstream
-// ref (accepted, being polled) or a retry clock (a dispatch the settler will
-// re-send). A manual completion then risks double delivery, so the admin must
-// acknowledge it. Parks with neither (an unwired-supplier stub park) and stuck
-// orders are safe to complete by hand.
+// orderAtSupplier reports whether a supplier may still deliver o: a processing
+// order with an api-mode line that either carries an upstream ref (accepted,
+// still polled — EVEN when flagged stuck for slowness, since the supplier can
+// still deliver late) or a live retry clock (a dispatch the settler will
+// re-send; a stuck flag stops those). A manual completion or refund then risks
+// double delivery, so the admin must acknowledge it. A stub park (neither), a
+// rejected attempt (ref dropped) and a ref-less stuck order are safe.
+//
+// notAtSupplierFilter is the SAME rule as a Mongo filter (its negation); keep
+// the two in step — TestAtSupplierRule_Mongo checks them against shared fixtures.
 func orderAtSupplier(o *Order) bool {
+	if o.Status != OrderStatusProcessing {
+		return false
+	}
 	f := o.Fulfillment
-	if f.SupplierStuckAt != nil || (f.ProviderRef == "" && f.SupplierNextRetryAt == nil) {
+	live := f.ProviderRef != "" || (f.SupplierNextRetryAt != nil && f.SupplierStuckAt == nil)
+	if !live {
 		return false
 	}
 	for _, it := range o.Items {
@@ -82,6 +90,21 @@ func orderAtSupplier(o *Order) bool {
 		}
 	}
 	return false
+}
+
+// notAtSupplierFilter matches exactly the orders orderAtSupplier rejects.
+func notAtSupplierFilter() bson.E {
+	return bson.E{Key: "$or", Value: bson.A{
+		bson.D{{Key: "status", Value: bson.D{{Key: "$ne", Value: OrderStatusProcessing}}}},
+		bson.D{{Key: "items.fulfillmentMode", Value: bson.D{{Key: "$ne", Value: "api"}}}},
+		bson.D{
+			{Key: "fulfillment.providerRef", Value: bson.D{{Key: "$in", Value: bson.A{"", nil}}}},
+			{Key: "$or", Value: bson.A{
+				bson.D{{Key: "fulfillment.supplierNextRetryAt", Value: nil}},
+				bson.D{{Key: "fulfillment.supplierStuckAt", Value: bson.D{{Key: "$ne", Value: nil}}}},
+			}},
+		},
+	}}
 }
 
 // manualSupplierEligible is the manual half of rerouteEligible: a single
@@ -156,10 +179,15 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 		// Never sent upstream before: no attempt to archive.
 		claim.Event.Note = fmt.Sprintf("sent to supplier (#%d) by admin", in.ProviderID)
 	} else {
+		archivedRef := ref
+		if archivedRef == "" {
+			// A rejected attempt's ref was moved aside so it isn't polled.
+			archivedRef = o.Fulfillment.RejectedProviderRef
+		}
 		claim.Archived = &SupplierAttempt{
 			Provider:          old.FulfillmentProvider,
 			UpstreamProductID: old.UpstreamProductID,
-			ProviderRef:       ref,
+			ProviderRef:       archivedRef,
 			OrderUUID:         supplierOrderUUID(o),
 			StuckAt:           o.Fulfillment.SupplierStuckAt,
 			ReroutedAt:        now,
@@ -225,13 +253,9 @@ func (s *SupplierSettler) dispatchRerouted(ctx context.Context, o *Order) error 
 		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, 1, time.Now().UTC().Add(backoffDelay(1)))
 	default:
 		// A definitive rejection by the NEW supplier: no automatic refund — the
-		// admin just chose this route, so flag it stuck again and let them try
-		// another supplier or refund. The upstream error goes to the audit log
-		// only (the timeline is customer-visible).
-		s.record(ctx, audit.ActionOrderSupplierSettle, o.ID, map[string]any{
-			"outcome": "rejected_after_reroute", "error": err.Error(), "attempt": o.Fulfillment.SupplierAttempt,
-		})
-		return s.flagStuck(ctx, o, "rejected by the new supplier")
+		// admin just chose this route (rejectAdminRoute, shared with the
+		// settler's later rejections).
+		return s.rejectAdminRoute(ctx, o, "", "rejected by the new supplier", err.Error())
 	}
 }
 

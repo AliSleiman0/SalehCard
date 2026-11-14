@@ -48,8 +48,12 @@ export function pickWarnings(ctx: PickContext): string[] {
     out.push(`This order sends quantity ${fmtN(ctx.qty)}, but the supplier accepts ${hint.replace(/^qty /, '')}.`)
   }
   if (ctx.sends) {
-    const have = new Set(ctx.sends.map((k) => k.toLowerCase()))
-    const missing = (p.params ?? []).filter((k) => !have.has(k.toLowerCase()))
+    // Imported products store a param's key slugified ("Player ID" → player_id)
+    // and the adapter adds playerId: compare on letters+digits only. A prompt
+    // with no ASCII letters/digits (e.g. Arabic) is stored as fieldN — it can't
+    // be matched by name, so it is never flagged.
+    const have = new Set(ctx.sends.map(paramName))
+    const missing = (p.params ?? []).filter((k) => paramName(k) !== '' && !have.has(paramName(k)))
     if (missing.length > 0) {
       out.push(
         `The supplier asks for ${missing.map((k) => `"${k}"`).join(', ')}, which this order doesn't carry by that name — check the supplier won't refuse it.`,
@@ -66,6 +70,13 @@ export function pickWarnings(ctx: PickContext): string[] {
     }
   }
   return out
+}
+
+/** paramName normalizes a supplier param / field key for comparison:
+ *  lowercase ASCII letters and digits only ("Player ID", "player_id" and
+ *  "playerId" all become "playerid"). */
+export function paramName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
 /** Supplier cost estimate for `qty` units at the catalog price (null when unknown). */

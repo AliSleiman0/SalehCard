@@ -142,9 +142,17 @@ export default function OrderListPage() {
       {
         onSuccess: (res) => {
           const r = res.data
-          const skipped = r ? r.results.filter((x) => x.status !== 'refunded').length : 0
-          const msg = `Refunded ${r?.refunded ?? 0} of ${r?.total ?? 0}.${skipped ? ` ${skipped} skipped (not refundable).` : ''}`
-          if (skipped) toast.info(msg)
+          const results = r?.results ?? []
+          const atSupplier = results.filter((x) => x.status === 'at_supplier').length
+          const skipped = results.filter((x) => x.status !== 'refunded' && x.status !== 'at_supplier').length
+          const msg =
+            `Refunded ${r?.refunded ?? 0} of ${r?.total ?? 0}.` +
+            (skipped ? ` ${skipped} skipped (not refundable).` : '') +
+            (atSupplier
+              ? ` ${atSupplier} skipped because a supplier may still deliver them — refund those from their own page.`
+              : '')
+          const skippedAll = skipped + atSupplier
+          if (skippedAll) toast.info(msg)
           else toast.success(msg)
           bulk.clear()
         },

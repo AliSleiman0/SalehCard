@@ -127,6 +127,11 @@ type Fulfillment struct {
 	SupplierRetryCount  int        `bson:"supplierRetryCount,omitempty"  json:"-"`
 	SupplierNextRetryAt *time.Time `bson:"supplierNextRetryAt,omitempty" json:"-"`
 	SupplierStuckAt     *time.Time `bson:"supplierStuckAt,omitempty"     json:"supplierStuckAt,omitempty"`
+	// RejectedProviderRef keeps the supplier's order id of an attempt the
+	// supplier definitively rejected (its ProviderRef is cleared so it is no
+	// longer polled) — archived into SupplierAttempts on the next reroute so
+	// the attempt stays reconcilable against the supplier's panel/billing.
+	RejectedProviderRef string `bson:"rejectedProviderRef,omitempty" json:"rejectedProviderRef,omitempty"`
 	// Reroute bookkeeping (admin "send to another supplier"). SupplierAttempt
 	// counts reroutes; SupplierOrderUUID is the upstream idempotency key of the
 	// CURRENT attempt (empty = the original attempt, keyed by the order id);

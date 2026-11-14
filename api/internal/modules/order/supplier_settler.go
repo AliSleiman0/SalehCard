@@ -210,7 +210,7 @@ func (s *SupplierSettler) pollOne(ctx context.Context, o *Order) error {
 		return s.settleAccept(ctx, o, o.Fulfillment.ProviderRef, st.Codes, "completed by supplier check")
 	case "reject":
 		if o.Fulfillment.SupplierAttempt > 0 {
-			return s.rejectAdminRoute(ctx, o, "rejected by the supplier")
+			return s.rejectAdminRoute(ctx, o, o.Fulfillment.ProviderRef, "rejected by the supplier", "rejected on status check")
 		}
 		return s.settleReject(ctx, o, "rejected upstream — refunded")
 	default: // "wait" or anything unrecognized: leave parked.
@@ -367,7 +367,7 @@ func (s *SupplierSettler) redispatchOne(ctx context.Context, o *Order) error {
 		// plain error here is a definitive order-level rejection; upstream
 		// idempotency rules out "the original landed and this is a dup error".
 		if o.Fulfillment.SupplierAttempt > 0 {
-			return s.rejectAdminRoute(ctx, o, "rejected by the supplier on retry: "+err.Error())
+			return s.rejectAdminRoute(ctx, o, "", "rejected by the supplier", "rejected on retry: "+err.Error())
 		}
 		return s.settleReject(ctx, o, "rejected upstream on re-dispatch — refunded")
 	}
@@ -384,14 +384,17 @@ func (s *SupplierSettler) maybeFlagStuck(ctx context.Context, o *Order, why stri
 // rejectAdminRoute handles a definitive rejection of an attempt an admin chose
 // (SupplierAttempt > 0: a reroute, or a manual order sent to a supplier). It
 // never auto-refunds — the admin picked this route, so they decide next: try
-// another supplier, complete by hand, or refund. The order is flagged stuck
-// and the dead ref dropped (MarkSupplierRejected), so it stops being polled.
-// The upstream detail goes to the audit log only (the timeline is
-// customer-visible). Placement-time orders (attempt 0) keep the auto-refund.
-func (s *SupplierSettler) rejectAdminRoute(ctx context.Context, o *Order, detail string) error {
-	applied, err := s.svc.repo.MarkSupplierRejected(ctx, o.ID, o.Fulfillment.SupplierAttempt, TimelineEvent{
+// another supplier, complete by hand, or refund. MarkSupplierRejected flags it
+// stuck and moves the dead ref aside (kept for reconciliation, no longer
+// polled), pinned to the ref the caller saw (ref) — or, for a ref-less
+// dispatch, to the live retry clock — so concurrent ticks/replicas record the
+// rejection once. why goes to the customer-visible timeline; the upstream
+// detail goes to the audit log only. Placement-time orders (attempt 0) keep
+// the auto-refund.
+func (s *SupplierSettler) rejectAdminRoute(ctx context.Context, o *Order, ref, why, detail string) error {
+	applied, err := s.svc.repo.MarkSupplierRejected(ctx, o.ID, o.Fulfillment.SupplierAttempt, ref, TimelineEvent{
 		Status: "stuck_upstream",
-		Note:   "stuck upstream — needs attention: rejected by the supplier",
+		Note:   "stuck upstream — needs attention: " + why,
 		At:     time.Now().UTC(),
 	})
 	if err != nil || !applied {
@@ -399,7 +402,8 @@ func (s *SupplierSettler) rejectAdminRoute(ctx context.Context, o *Order, detail
 	}
 	slog.Warn("supplier settler: admin-chosen supplier rejected the order", "order", o.ID.Hex())
 	s.record(ctx, audit.ActionOrderSupplierSettle, o.ID, map[string]any{
-		"outcome": "rejected_after_reroute", "error": detail, "attempt": o.Fulfillment.SupplierAttempt,
+		"outcome": "rejected_after_reroute", "error": detail, "providerRef": ref,
+		"attempt": o.Fulfillment.SupplierAttempt,
 	})
 	return nil
 }

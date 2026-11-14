@@ -60,6 +60,11 @@ describe('pickWarnings', () => {
     expect(pickWarnings({ value: '2', catalog, qty: 1000, sends: ['id', 'amount'] })[0]).toMatch(/"playerId"/)
     expect(pickWarnings({ value: '2', catalog, qty: 1000, sends: ['id', 'playerid'] })).toEqual([])
   })
+  it('matches imported (slugified) keys and skips unmatchable Arabic prompts', () => {
+    const imported = [row({ params: ['Player ID', 'Zone ID', 'رقم الهاتف'] })]
+    expect(pickWarnings({ value: '2', catalog: imported, qty: 1000, sends: ['player_id', 'zone_id', 'field3'] })).toEqual([])
+    expect(pickWarnings({ value: '2', catalog: imported, qty: 1000, sends: ['player_id'] })[0]).toMatch(/"Zone ID"/)
+  })
   it('flags an unavailable product', () => {
     expect(pickWarnings({ value: '9', catalog })[0]).toMatch(/unavailable/)
   })

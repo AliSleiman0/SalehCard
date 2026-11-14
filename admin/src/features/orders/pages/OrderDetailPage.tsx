@@ -505,14 +505,25 @@ function RefundModal({
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
   const refundM = useRefundOrder()
+  // Double-delivery guard: the API refuses (ORDER_AT_SUPPLIER) while a supplier
+  // may still deliver; the admin then confirms explicitly.
+  const [atSupplier, setAtSupplier] = useState(false)
+  const [supplierAck, setSupplierAck] = useState(false)
 
   const apply = () => {
+    if (atSupplier && !supplierAck) return
     setError('')
     refundM.mutate(
-      { id: order.id, reason: reason.trim() },
+      { id: order.id, reason: reason.trim(), acknowledgeSupplier: atSupplier && supplierAck },
       {
         onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Refund failed.'),
+        onError: (e) => {
+          if (e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER') {
+            setAtSupplier(true)
+            return
+          }
+          setError(e instanceof ApiError ? e.message : 'Refund failed.')
+        },
       },
     )
   }
@@ -556,12 +567,32 @@ function RefundModal({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
+        {atSupplier && (
+          <div
+            role="alert"
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 10,
+              border: '1px solid var(--border-strong)',
+              background: 'var(--surface-2)',
+              fontSize: 13,
+            }}
+          >
+            <b>A supplier may still deliver this order.</b> If it does after the refund, the customer keeps both the
+            money and the goods, and the supplier still charges us. Check the supplier's panel first.
+            <label style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', color: 'var(--danger)' }}>
+              <input type="checkbox" checked={supplierAck} onChange={(e) => setSupplierAck(e.target.checked)} />
+              Refund it anyway
+            </label>
+          </div>
+        )}
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
           <button className="abtn" onClick={onClose} disabled={refundM.isPending}>
             {t('cancel')}
           </button>
-          <button className="abtn danger" onClick={apply} disabled={refundM.isPending}>
+          <button className="abtn danger" onClick={apply} disabled={refundM.isPending || (atSupplier && !supplierAck)}>
             <Icon name="check" size={15} /> {refundM.isPending ? 'Refunding…' : 'Confirm refund'}
           </button>
         </div>

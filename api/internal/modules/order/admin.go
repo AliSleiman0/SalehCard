@@ -270,12 +270,21 @@ func (a *adminHandler) refund(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Reason string `json:"reason"`
+		// AcknowledgeSupplier must be true to refund an order a supplier may
+		// still deliver (orderAtSupplier): the customer could end up with both
+		// the money and the goods.
+		AcknowledgeSupplier bool `json:"acknowledgeSupplier"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&body) // reason is optional; an empty body is fine
 	}
 
-	if _, err := a.doRefund(r.Context(), id, strings.TrimSpace(body.Reason)); err != nil {
+	if _, err := a.doRefund(r.Context(), id, strings.TrimSpace(body.Reason), body.AcknowledgeSupplier); err != nil {
+		if errors.Is(err, errOrderAtSupplier) {
+			response.Error(w, http.StatusConflict, "ORDER_AT_SUPPLIER",
+				"a supplier may still deliver this order — confirm to refund it anyway")
+			return
+		}
 		if errors.Is(err, errRefundCreditFailed) {
 			response.Error(w, http.StatusInternalServerError, "REFUND_CREDIT_FAILED",
 				"the wallet credit failed; the order was left unrefunded — retry")
@@ -296,6 +305,9 @@ func (a *adminHandler) refundBulk(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		IDs    []string `json:"ids"`
 		Reason string   `json:"reason"`
+		// AcknowledgeSupplier applies the single-refund confirmation to every
+		// id; without it orders a supplier may still deliver are skipped.
+		AcknowledgeSupplier bool `json:"acknowledgeSupplier"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.BadRequest(w, "invalid request body")
@@ -309,7 +321,7 @@ func (a *adminHandler) refundBulk(w http.ResponseWriter, r *http.Request) {
 
 	type outcome struct {
 		ID      string `json:"id"`
-		Status  string `json:"status"` // refunded | conflict | error
+		Status  string `json:"status"` // refunded | conflict | at_supplier | error
 		Message string `json:"message,omitempty"`
 	}
 	results := make([]outcome, 0, len(body.IDs))
@@ -320,10 +332,12 @@ func (a *adminHandler) refundBulk(w http.ResponseWriter, r *http.Request) {
 			results = append(results, outcome{ID: raw, Status: "error", Message: "invalid id"})
 			continue
 		}
-		switch _, err := a.doRefund(r.Context(), id, reason); {
+		switch _, err := a.doRefund(r.Context(), id, reason, body.AcknowledgeSupplier); {
 		case err == nil:
 			results = append(results, outcome{ID: raw, Status: "refunded"})
 			refunded++
+		case errors.Is(err, errOrderAtSupplier):
+			results = append(results, outcome{ID: raw, Status: "at_supplier", Message: "a supplier may still deliver it — refund it on its own page to confirm"})
 		case errors.Is(err, apperrors.ErrConflict):
 			results = append(results, outcome{ID: raw, Status: "conflict", Message: "not refundable (already refunded, failed, or still pending)"})
 		case errors.Is(err, apperrors.ErrNotFound):
@@ -337,18 +351,40 @@ func (a *adminHandler) refundBulk(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, map[string]any{"refunded": refunded, "total": len(body.IDs), "results": results})
 }
 
+// errOrderAtSupplier: a refund was refused because a supplier may still
+// deliver the order and the admin didn't acknowledge it.
+var errOrderAtSupplier = errors.New("order: a supplier may still deliver this order")
+
+// atSupplierConflict reports whether a guarded transition lost because the
+// order is (still) at a supplier, as opposed to being in the wrong status.
+func (a *adminHandler) atSupplierConflict(ctx context.Context, id bson.ObjectID, err error) bool {
+	if !errors.Is(err, apperrors.ErrConflict) {
+		return false
+	}
+	cur, ferr := a.repo.FindByID(ctx, id)
+	return ferr == nil && orderAtSupplier(cur)
+}
+
 // doRefund performs the guarded refund transition + wallet credit + audit +
 // customer notification for one order, returning the pre-refund order on success.
-// It is the shared body of the single and bulk refund endpoints. Errors:
-// apperrors.ErrNotFound (missing), apperrors.ErrConflict (not refundable), or
+// It is the shared body of the single and bulk refund endpoints. Unless
+// ackSupplier, an order a supplier may still deliver is refused (double-
+// delivery guard, atomic with the transition). Errors: apperrors.ErrNotFound
+// (missing), apperrors.ErrConflict (not refundable), errOrderAtSupplier, or
 // errRefundCreditFailed (money couldn't be returned; order left compensated).
-func (a *adminHandler) doRefund(ctx context.Context, id bson.ObjectID, reason string) (*Order, error) {
-	before, err := a.repo.TransitionStatus(ctx, id,
-		[]OrderStatus{OrderStatusProcessing, OrderStatusCompleted},
-		OrderStatusRefunded,
-		TimelineEvent{Status: "refunded", Note: reason, At: time.Now().UTC()},
-		nil,
-	)
+func (a *adminHandler) doRefund(ctx context.Context, id bson.ObjectID, reason string, ackSupplier bool) (*Order, error) {
+	from := []OrderStatus{OrderStatusProcessing, OrderStatusCompleted}
+	event := TimelineEvent{Status: "refunded", Note: reason, At: time.Now().UTC()}
+	var before *Order
+	var err error
+	if ackSupplier {
+		before, err = a.repo.TransitionStatus(ctx, id, from, OrderStatusRefunded, event, nil)
+	} else {
+		before, err = a.repo.TransitionUnlessAtSupplier(ctx, id, from, OrderStatusRefunded, event, nil)
+		if a.atSupplierConflict(ctx, id, err) {
+			return nil, errOrderAtSupplier
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -389,6 +425,7 @@ func (a *adminHandler) doRefund(ctx context.Context, id bson.ObjectID, reason st
 		Summary: map[string]any{
 			"amount": before.Total, "paymentMethod": string(before.PaymentMethod),
 			"fromStatus": string(before.Status), "reason": reason,
+			"acknowledgedSupplier": ackSupplier && orderAtSupplier(before),
 		},
 	})
 	data := map[string]string{
@@ -447,13 +484,11 @@ func (a *adminHandler) updateStatus(w http.ResponseWriter, r *http.Request) {
 	if body.AcknowledgeSupplier {
 		before, err = a.repo.TransitionStatus(r.Context(), id, []OrderStatus{OrderStatusProcessing}, OrderStatusCompleted, event, extra)
 	} else {
-		before, err = a.repo.CompleteUnlessAtSupplier(r.Context(), id, event, extra)
-		if errors.Is(err, apperrors.ErrConflict) {
-			if cur, ferr := a.repo.FindByID(r.Context(), id); ferr == nil && cur.Status == OrderStatusProcessing && orderAtSupplier(cur) {
-				response.Error(w, http.StatusConflict, "ORDER_AT_SUPPLIER",
-					"a supplier may still deliver this order — confirm to complete it anyway")
-				return
-			}
+		before, err = a.repo.TransitionUnlessAtSupplier(r.Context(), id, []OrderStatus{OrderStatusProcessing}, OrderStatusCompleted, event, extra)
+		if a.atSupplierConflict(r.Context(), id, err) {
+			response.Error(w, http.StatusConflict, "ORDER_AT_SUPPLIER",
+				"a supplier may still deliver this order — confirm to complete it anyway")
+			return
 		}
 	}
 	if err != nil {

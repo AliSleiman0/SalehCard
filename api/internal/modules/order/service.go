@@ -696,9 +696,12 @@ func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, ord
 	provID, in, ok := supplierFulfillInput(order)
 	if !ok {
 		// Unsendable line (e.g. a corrupt per-unit amount): never dispatch a
-		// wrong quantity — park for an admin (no retry clock).
-		slog.Warn("order: supplier line not sendable, parking", "order", order.ID.Hex())
-		return s.park(ctx, order, "needs attention: the supplier quantity could not be determined")
+		// wrong quantity. Flag it stuck (no retry clock) so it shows in the
+		// stuck-orders list and dashboard count for an admin to resolve.
+		slog.Warn("order: supplier line not sendable, flagged stuck", "order", order.ID.Hex())
+		now := time.Now().UTC()
+		order.Fulfillment.SupplierStuckAt = &now
+		return s.park(ctx, order, "stuck upstream — needs attention")
 	}
 
 	res, err := s.providers.Resolve(provID).Fulfill(ctx, in)

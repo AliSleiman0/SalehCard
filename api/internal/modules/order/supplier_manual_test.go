@@ -210,10 +210,15 @@ func TestOrderAtSupplier(t *testing.T) {
 	assert.False(t, orderAtSupplier(settlerOrder(repo, nil)), "stub park: no ref, no retry clock")
 	assert.True(t, orderAtSupplier(settlerOrder(repo, func(o *Order) { o.Fulfillment.ProviderRef = "R" })), "accepted, polled")
 	assert.True(t, orderAtSupplier(settlerOrder(repo, func(o *Order) { o.Fulfillment.SupplierNextRetryAt = &now })), "retry pending")
-	assert.False(t, orderAtSupplier(settlerOrder(repo, func(o *Order) {
+	assert.True(t, orderAtSupplier(settlerOrder(repo, func(o *Order) {
 		o.Fulfillment.ProviderRef = "R"
 		o.Fulfillment.SupplierStuckAt = &now
-	})), "stuck")
+	})), "stuck for slowness with a live ref: the supplier can still deliver")
+	assert.False(t, orderAtSupplier(settlerOrder(repo, stuckAt)), "stuck, ref-less: nothing in flight")
+	assert.False(t, orderAtSupplier(settlerOrder(repo, func(o *Order) {
+		o.Fulfillment.ProviderRef = "R"
+		o.Status = OrderStatusCompleted
+	})), "a finished order is never at the supplier")
 }
 
 // Completing by hand an order a supplier may still deliver needs an explicit
@@ -238,4 +243,102 @@ func TestAdminCompleteAtSupplierNeedsAcknowledgement(t *testing.T) {
 	assert.Equal(t, OrderStatusCompleted, repo.byID[o.ID].Status)
 	require.Len(t, rec.entries, 1)
 	assert.Equal(t, true, rec.entries[0].Summary["acknowledgedSupplier"])
+}
+
+// Refunding an order a supplier may still deliver needs the same explicit
+// acknowledgement (the customer could keep both the money and the goods);
+// bulk refunds skip such orders instead of refunding them.
+func TestAdminRefundAtSupplierNeedsAcknowledgement(t *testing.T) {
+	pid := 7
+	atSupplier := func() *Order {
+		return &Order{ID: bson.NewObjectID(), UserID: bson.NewObjectID(), Total: 5, PaymentMethod: PaymentMethodWallet,
+			Status:      OrderStatusProcessing,
+			Items:       []OrderItem{{FulfillmentMode: "api", FulfillmentProvider: &pid, Qty: 1}},
+			Fulfillment: Fulfillment{ProviderRef: "UP_7"},
+		}
+	}
+	o := atSupplier()
+	a, repo, wal, _ := newActionFixture(o)
+	route := func(r chi.Router) { r.Post("/orders/{id}/refund", a.refund) }
+
+	rr := doAdmin(t, http.MethodPost, "/orders/"+o.ID.Hex()+"/refund", `{}`, route)
+	require.Equal(t, http.StatusConflict, rr.Code)
+	assert.Contains(t, rr.Body.String(), "ORDER_AT_SUPPLIER")
+	assert.Empty(t, wal.refunded)
+
+	rr = doAdmin(t, http.MethodPost, "/orders/"+o.ID.Hex()+"/refund", `{"acknowledgeSupplier":true}`, route)
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	assert.Equal(t, OrderStatusRefunded, repo.byID[o.ID].Status)
+	assert.Equal(t, []float64{5}, wal.refunded)
+
+	// A completed supplier order (ref kept) refunds without any confirmation.
+	done := atSupplier()
+	done.Status = OrderStatusCompleted
+	b, _, _, _ := newActionFixture(done)
+	rr = doAdmin(t, http.MethodPost, "/orders/"+done.ID.Hex()+"/refund", `{}`,
+		func(r chi.Router) { r.Post("/orders/{id}/refund", b.refund) })
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+	// Bulk: the at-supplier order is skipped, the plain one refunded.
+	busy, plain := atSupplier(), &Order{ID: bson.NewObjectID(), UserID: bson.NewObjectID(), Total: 3,
+		PaymentMethod: PaymentMethodWallet, Status: OrderStatusProcessing}
+	c, crepo, _, _ := newActionFixture(busy, plain)
+	rr = doAdmin(t, http.MethodPost, "/orders/refund-bulk",
+		`{"ids":["`+busy.ID.Hex()+`","`+plain.ID.Hex()+`"]}`,
+		func(r chi.Router) { r.Post("/orders/refund-bulk", c.refundBulk) })
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"status":"at_supplier"`)
+	assert.Equal(t, OrderStatusProcessing, crepo.byID[busy.ID].Status)
+	assert.Equal(t, OrderStatusRefunded, crepo.byID[plain.ID].Status)
+}
+
+// A rejection of an admin-chosen route is recorded once even when two ticks
+// see it, and the rejected attempt's supplier ref survives into the history.
+func TestRejectAdminRoute_OnceAndRefKept(t *testing.T) {
+	fake := &fakeProvider{id: 7, checkRes: provider.Status{State: "reject"}}
+	st, repo, _, _, rec, _ := newSettlerSUT(fake, 24*time.Hour)
+	o := settlerOrder(repo, func(o *Order) {
+		o.Fulfillment.ProviderRef = "UP_9"
+		o.Fulfillment.SupplierAttempt = 1
+	})
+	stale := *o // a second replica's snapshot, read before the first write
+
+	st.Tick(context.Background())
+	require.NoError(t, st.pollOne(context.Background(), &stale))
+
+	settles := 0
+	for _, e := range rec.entries {
+		if e.Summary["outcome"] == "rejected_after_reroute" {
+			settles++
+			assert.Equal(t, "UP_9", e.Summary["providerRef"])
+		}
+	}
+	assert.Equal(t, 1, settles, "recorded once")
+	assert.Equal(t, 1, countTimelineNote(o, "stuck upstream — needs attention: rejected by the supplier"))
+	assert.Equal(t, "UP_9", o.Fulfillment.RejectedProviderRef)
+
+	// The next reroute archives the rejected ref, not an empty one.
+	newP := &fakeProvider{id: 9, res: provider.Result{Reference: "OK"}}
+	st2, repo2, _, _ := newRerouteSUT(&fakeProvider{id: 7}, newP)
+	repo2.byID[o.ID] = o
+	got, err := st2.Reroute(context.Background(), o.ID, RerouteInput{ProviderID: 9, UpstreamProductID: "U"}, "a")
+	require.NoError(t, err)
+	require.Len(t, got.Fulfillment.SupplierAttempts, 1)
+	assert.Equal(t, "UP_9", got.Fulfillment.SupplierAttempts[0].ProviderRef)
+	assert.Empty(t, got.Fulfillment.RejectedProviderRef)
+}
+
+// An order whose quantity can't be sent is flagged stuck at placement (so it
+// shows in the stuck list/dashboard), never dispatched.
+func TestFulfillAPI_UnsendableQuantityFlagsStuck(t *testing.T) {
+	fake := &fakeProvider{id: 7, res: provider.Result{Reference: "X"}}
+	st, repo, _, _, _, _ := newSettlerSUT(fake, 24*time.Hour)
+	o := settlerOrder(repo, func(o *Order) { o.Items[0].Amount = f64p(0.5) })
+
+	got, err := st.svc.fulfillAPI(context.Background(), o.UserID, o, true)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fake.calls)
+	assert.Equal(t, OrderStatusProcessing, got.Status)
+	assert.NotNil(t, got.Fulfillment.SupplierStuckAt)
+	assert.Nil(t, got.Fulfillment.SupplierNextRetryAt)
 }

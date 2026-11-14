@@ -17,8 +17,6 @@ interface Props {
   amountRange?: PickContext['amountRange']
   /** Parameter names the order sends — flags supplier params it lacks. */
   sends?: string[]
-  /** False when this supplier has no browsable catalog (e.g. the dev mock). */
-  browsable?: boolean
 }
 
 /** SupplierProductPicker chooses a supplier's own product id from its live
@@ -26,9 +24,11 @@ interface Props {
  *  name like "soulchill" was refused upstream as Product Not Found
  *  (2026-11-13). Falls back to typing the id when the admin lacks
  *  suppliers.view or the catalog can't be loaded. */
-export function SupplierProductPicker({ providerId, value, onChange, qty, amountRange, sends, browsable = true }: Props) {
+export function SupplierProductPicker({ providerId, value, onChange, qty, amountRange, sends }: Props) {
   const can = useCan()
-  const canBrowse = can('suppliers.view') && browsable && providerId > 0
+  // A supplier without a catalog (e.g. the dev mock) shows the error state and
+  // the admin types the id.
+  const canBrowse = can('suppliers.view') && providerId > 0
   const catalog = useSupplierCatalog(providerId > 0 ? providerId : null, {
     enabled: canBrowse,
     staleTime: 5 * 60 * 1000,
