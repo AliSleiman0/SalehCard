@@ -322,6 +322,26 @@ Still to check:
 4. **Caps**: a sixth open complaint → "You already have several open complaints"; the 11th create from one IP
    within an hour → 429 (`RATE_LIMIT_COMPLAINT_MAX`, default 10/hour).
 
+## Back buttons (feat/back-buttons, KICKOFF-2026-11-14 §6)
+
+Verified locally 2026-11-14 in Chrome (admin): every page shows "‹ Back" except the Dashboard; Orders →
+filter → order → Back keeps the filter; an order opened in a new tab → Back → Orders → Back → Dashboard (never
+leaves the site); load-error state has Back; Arabic shows "رجوع" with a mirrored chevron; Enter on the focused
+button works. Also verified locally 2026-11-14:
+- Android emulator (debug build of this branch): checkout → order success → "View order" → back → Orders now
+  has a back arrow → back → Menu tab. Menu → Wallet / Orders / Complaints → back pops to Menu. Arabic: the
+  arrow sits on the right and points right.
+- Chrome, a custom role (orders + users view, no Dashboard): `/users` opened directly → Back → To-do list
+  (its first permitted page), and Back is hidden there.
+- Chrome: a product opened from Categories → Save → back on Categories → Back → Dashboard (the editor
+  does not reopen).
+
+Still to check:
+
+1. **USDT deposit → Wallet back arrow** on a device: needs a real confirmed on-chain deposit. It uses the
+   same `AppBackButton` as Orders, which was verified on the emulator.
+2. **The same flows on prod admin** after merge, once with a super admin and once with a custom role.
+
 ## Product soft delete / trash (PR #142, live 2026-11-14)
 
 Verified locally 2026-11-14 (curl + Chrome on the admin):

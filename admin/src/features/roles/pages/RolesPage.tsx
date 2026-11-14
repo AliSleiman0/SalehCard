@@ -36,6 +36,7 @@ export default function RolesPage() {
   return (
     <div className="page">
       <PageHead
+        back="/"
         crumbs={[t('grp_system'), t('nav_roles')]}
         title={t('nav_roles')}
         sub="Custom admin roles and what each one can see and do"

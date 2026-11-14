@@ -267,6 +267,7 @@ export default function ProductListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_catalog'), t('nav_products')]}
         title={t('nav_products')}
         sub={`${(meta?.total ?? 0).toLocaleString()} ${trashView ? 'products in the trash' : 'products'}${

@@ -84,6 +84,7 @@ export default function BridgePage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_bridge')]}
         title={t('nav_bridge')}
         sub={`${devices.length} device${devices.length === 1 ? '' : 's'}`}

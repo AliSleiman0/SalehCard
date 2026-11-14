@@ -1,13 +1,17 @@
 import { Fragment } from 'react'
+import { BackButton } from './BackButton'
 
 interface PageHeadProps {
   crumbs?: React.ReactNode[]
   title: React.ReactNode
   sub?: React.ReactNode
+  /** Logical parent route for the "‹ Back" button (where it goes when there is
+   *  no in-app history to return to). Omit only on the Dashboard landing page. */
+  back?: string
   children?: React.ReactNode
 }
 
-export function PageHead({ crumbs, title, sub, children }: PageHeadProps) {
+export function PageHead({ crumbs, title, sub, back, children }: PageHeadProps) {
   return (
     <div className="pagehead">
       <div className="ph-l">
@@ -24,7 +28,12 @@ export function PageHead({ crumbs, title, sub, children }: PageHeadProps) {
         <h1 className="page-title">{title}</h1>
         {sub && <div className="page-sub">{sub}</div>}
       </div>
-      {children && <div className="ph-r">{children}</div>}
+      {(back || children) && (
+        <div className="ph-r">
+          {back && <BackButton fallback={back} />}
+          {children}
+        </div>
+      )}
     </div>
   )
 }

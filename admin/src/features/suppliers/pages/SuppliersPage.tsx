@@ -62,6 +62,7 @@ export default function SuppliersPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_suppliers')]}
         title={t('nav_suppliers')}
         sub="Upstream fulfillment suppliers — balance, health, mapped products, and catalog import."

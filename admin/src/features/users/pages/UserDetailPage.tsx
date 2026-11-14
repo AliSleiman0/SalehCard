@@ -17,6 +17,7 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
+import { useGoBack } from '@/lib/goBack'
 import { money, formatDateTime } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
 import { useCan, useIsSuperAdmin } from '@/stores/auth'
@@ -33,7 +34,6 @@ type Tab = 'overview' | 'orders' | 'wallet' | 'ids' | 'role'
 
 export default function UserDetailPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const { data, isLoading, isError, refetch } = useUser(id)
   const [tab, setTab] = useState<Tab>('overview')
@@ -53,6 +53,7 @@ export default function UserDetailPage() {
   if (isError || !detail || !view) {
     return (
       <div className="page">
+        <PageHead back="/users" title={t('nav_users')} />
         <ErrorState message="Couldn't load this user." onRetry={() => refetch()} />
       </div>
     )
@@ -65,10 +66,7 @@ export default function UserDetailPage() {
 
   return (
     <div className="page">
-      <PageHead crumbs={[t('nav_users'), view.name]} title={view.name} sub={view.email || view.phone}>
-        <button className="abtn" onClick={() => navigate('/users')}>
-          <Icon name="chevleft" size={15} /> {t('back')}
-        </button>
+      <PageHead back="/users" crumbs={[t('nav_users'), view.name]} title={view.name} sub={view.email || view.phone}>
         {view.status === 'suspended' ? (
           <button className="abtn ok" onClick={toggleStatus} disabled={updateStatus.isPending}>
             <Icon name="check" size={15} /> Reactivate
@@ -369,7 +367,7 @@ function RoleTab({
   suspending: boolean
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const goBack = useGoBack('/users')
   const isSuperAdmin = useIsSuperAdmin()
   const [pending, setPending] = useState<UserRole>(role)
   // '' = built-in Super Admin (no custom role assigned).
@@ -392,7 +390,7 @@ function RoleTab({
       )
     )
       return
-    del.mutate(undefined, { onSuccess: () => navigate('/users') })
+    del.mutate(undefined, { onSuccess: goBack })
   }
 
   // Non-super admins can't grant/revoke admin access, so they don't see the

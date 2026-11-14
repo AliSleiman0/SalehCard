@@ -133,6 +133,7 @@ export default function CategoriesPage() {
   return (
     <div className="page">
       <PageHead
+        back="/"
         crumbs={[t('grp_catalog'), t('nav_categories')]}
         title={t('nav_categories')}
         sub="Collections, categories and subcategories the app browses"

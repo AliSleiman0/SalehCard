@@ -186,6 +186,7 @@ export default function OrderListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_orders')]}
         title={t('nav_orders')}
         sub={meta ? `${meta.total.toLocaleString()} orders` : ''}

@@ -42,6 +42,7 @@ export default function OffersListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_catalog'), t('nav_offers')]}
         title="Offers"
         sub={meta ? `${meta.total.toLocaleString()} deals` : ''}

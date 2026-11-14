@@ -110,6 +110,7 @@ export default function ExpensesListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_finance'), t('nav_expenses')]}
         title={t('nav_expenses')}
         sub={meta ? `${meta.total.toLocaleString()} ${t('exp_records')}` : ''}

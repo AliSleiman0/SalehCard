@@ -7,6 +7,7 @@ import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/product_chip.dart';
@@ -62,6 +63,10 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.topbar,
+        // Normally pushed from the Menu tab, but order detail's fallback reaches
+        // it via go (order-success → "View order" → back) as the stack root,
+        // which would leave no back arrow at all.
+        leading: const AppBackButton(fallback: '/account'),
         title: Text(l10n.ordersTitle),
       ),
       body: ordersAsync.when(

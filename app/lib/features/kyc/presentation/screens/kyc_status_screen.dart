@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/entities/kyc.dart';
@@ -31,10 +32,7 @@ class KycStatusScreen extends ConsumerWidget {
         // otherwise fall back to Home. Without this, landing on /kyc as the
         // stack root (e.g. via a reset navigation) leaves no back button and no
         // bottom nav — a dead end.
-        leading: BackButton(
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go('/home'),
-        ),
+        leading: const AppBackButton(fallback: '/home'),
         title: Text(l10n.kycTitle),
       ),
       body: profileAsync.when(
