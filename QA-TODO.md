@@ -366,3 +366,16 @@ Still to check:
 4. **Web storefront**: the same as step 3 (lists, direct link 404, checkout message).
 5. **Category arrange**: a trashed product is absent from Categories → Arrange order. After restore it
    reappears unarranged (A to Z, after the ranked products).
+
+## Help bot starter content (PR #139, seeded on prod 2026-11-14)
+
+The 16 starter Q&A and the support WhatsApp number are live on prod. Not yet checked:
+
+1. **Client review of the wording**: the owner skipped it. Have the client read every answer in admin → Help
+   bot (EN and AR) and correct anything that doesn't match how they actually work (top-up times, KYC wait,
+   refund rules). Edits there are safe; a re-run of `chatbotseed` never overwrites them.
+2. **WhatsApp link**: web help panel → Contact support → WhatsApp opens a chat with +961 71 363 772.
+3. **Arabic on the web panel**: switch to AR, open the panel, and check the bubbles and chips read right to
+   left.
+4. **App help sheet on a device**: home and account → help → the same questions, follow-ups and footer. The
+   web panel was resized in PR #140; the app sheet wasn't changed.
