@@ -568,21 +568,18 @@ Still open:
   `role.update` by "dbtool (ops CLI)"):
   `powershell -ExecutionPolicy Bypass -File deploy\grant-role-permission.ps1` (`-DryRun`, `-Level view`,
   `-RoleId <id>`, `-Domain <area>` for other areas).
-- **Android push is off in the app itself, not just blocked by the API-key restriction (§19). This affects
-  prod:** every Android build since commit `7eb3eba` (2026-08-07, package re-registered as
-  `com.flashcashglobal.app`) has it, including the Play builds 1.0.4+ (Codemagic builds from the repo files
-  as-is). That commit brought a new `google-services.json` with a new API key but left `firebase_options.dart`
-  on the old key; before it the two matched. iOS config is consistent, but `ios/Runner` has no
-  `.entitlements` with `aps-environment`, so iOS push needs that capability (plus an APNs key in Firebase)
-  as a separate fix. On a debug
-  build, `initFirebase()` logs `[core/duplicate-app] A Firebase App named "[DEFAULT]" already exists` and
-  disables push. The `apiKey` in `app/lib/firebase_options.dart` does not match the `current_key` that
-  `app/android/app/google-services.json` holds for `com.flashcashglobal.app` (appId, sender id and bucket do
-  match). The Google Services plugin starts the default app natively with the JSON options, then the Dart
-  `initializeApp(options:)` conflicts. Pick the one key that is correct and unrestricted for this package
-  (regenerate `firebase_options.dart` with `flutterfire configure`, or initialize with no options on
-  Android), then re-test §19. Until then no device registers a token, so complaint replies reach customers
-  only as inbox rows.
+- **Push notifications: FIXED in code by PR #150 (2026-11-14), not yet in any store build.** Root cause: since
+  `7eb3eba` (2026-08-07) `firebase_options.dart` held the old API key (app-restricted to
+  `com.salehcard.salehcard_app`) while `google-services.json` held the `com.flashcashglobal.app` key, so Firebase
+  threw `[core/duplicate-app]` and Android push was off on every build. #150 uses the JSON key (verified on the
+  emulator: token registers, real FCM pushes arrive, tap opens the complaint from background and killed) and
+  wires iOS (entitlements, APNs-token wait, real platform, `apns` payload block). Remaining:
+  1. Merge #150, then build + roll out a new Android AAB (users get push only after updating).
+  2. **Apple setup BEFORE the next iOS build** (or Codemagic signing fails): enable Push Notifications on the
+     `com.flashcashglobal.app` App ID; create an APNs auth key (.p8); upload it with Key ID + Team ID in Firebase
+     → `salehcard-app` → Project settings → Cloud Messaging → the iOS app. Then build iOS and check on a TestFlight
+     iPhone (admin Users → Push should arrive).
+  Until then, notifications reach customers only as in-app inbox rows.
 - **Ship a new app build** (Android AAB via Codemagic; iOS too) so complaint screens, the "Report a problem"
   button and notification tap-to-open reach customers. Builds already in the stores show complaint
   notifications as plain inbox rows only.
