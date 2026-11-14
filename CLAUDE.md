@@ -215,6 +215,17 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   TOO_MANY_OPEN`), per-IP create limit `RATE_LIMIT_COMPLAINT_*`. Staff replies and resolve/close notify the
   customer (`complaint_reply` / `complaint_status`, inbox + push, never SMS); the push data carries `kind`
   so the app's tray tap opens the thread. Web has no push and polls every 30s.
+- **Help bot** (`internal/modules/chatbot`, RBAC domain `chatbot`, collection `chatbot_entries`): predefined
+  Q&A only, no AI. An entry has `question`/`answer` as `{en, ar}`, `keywords`, `sortOrder`, `enabled`, and an
+  optional `parentId` (follow-ups are **one level deep**); cap 500 entries. Public `GET /api/v1/chatbot`
+  returns enabled entries plus `support{email, phone, whatsapp}` from `app_settings` (`supportWhatsapp` is
+  free-typed; clients keep only the digits for the `wa.me` link). Admins edit it in admin → Help bot
+  (`/api/admin/chatbot`, audited `chatbot.create/update/delete`). Clients: web `ChatWidget` (floating button,
+  panel 440×640, hidden while there are no entries) and the app's help sheet (home + account). **Starter
+  content**: `chatbot.StarterContent` (6 questions + 10 follow-ups, EN + AR, iOS-safe wording enforced by a
+  test), loaded with `go run ./cmd/chatbotseed` (dry run by default; `--apply`, `--confirm-prod` for prod,
+  optional `--whatsapp "<number>"`). It only adds: a question already present at the same level is skipped,
+  never overwritten. **Prod was seeded 2026-11-14** (16 entries, WhatsApp `+961 71 363 772`).
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout
