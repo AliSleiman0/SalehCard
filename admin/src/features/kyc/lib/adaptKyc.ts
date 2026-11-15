@@ -1,10 +1,6 @@
-import type { AdminKyc, KycDocumentType } from '../api/kyc'
-
-const DOC_LABEL: Record<KycDocumentType, string> = {
-  passport: 'Passport',
-  id_card: 'ID card',
-  license: "Driver's license",
-}
+import i18n from '@/i18n/config'
+import { formatDate } from '@/lib/utils'
+import type { AdminKyc } from '../api/kyc'
 
 /** The flat shape the KYC list renders. */
 export interface KycView {
@@ -27,12 +23,12 @@ export interface KycView {
 /** Short "Mon D, YYYY" label for an ISO date, or the raw value when unparseable. */
 function dateLabel(iso?: string): string {
   if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (Number.isNaN(new Date(iso).getTime())) return iso
+  return formatDate(iso)
 }
 
-/** Map an admin KYC submission to the flat view the list renders. */
+/** Map an admin KYC submission to the flat view the list renders. Labels and
+ *  dates are in the admin's language at the time of the call. */
 export function adaptKyc(k: AdminKyc): KycView {
   return {
     id: k.id,
@@ -41,7 +37,7 @@ export function adaptKyc(k: AdminKyc): KycView {
     dateOfBirth: dateLabel(k.dateOfBirth),
     placeOfBirth: k.placeOfBirth,
     placeOfResidence: k.placeOfResidence,
-    documentLabel: DOC_LABEL[k.documentType] ?? k.documentType,
+    documentLabel: i18n.t(`kyc_doc_${k.documentType}`, { defaultValue: k.documentType }),
     documentNumber: k.documentNumber,
     documentFrontUrl: k.documentFrontUrl ?? '',
     documentBackUrl: k.documentBackUrl ?? '',

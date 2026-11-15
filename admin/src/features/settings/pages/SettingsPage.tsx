@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { ChangePasswordCard } from '../components/ChangePasswordCard'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Icon, PageHead, Avatar, StatusBadge, Toggle } from '@/components'
 import { useUsers } from '@/features/users/hooks/useUsers'
 import { adaptUser } from '@/features/users/lib/adaptUser'
 import { useRoles } from '@/features/roles/hooks/useRoles'
 import { lastActive } from '@/lib/utils'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 import type { ExchangeRate } from '../api/settings'
@@ -89,7 +89,7 @@ export default function SettingsPage() {
       {
         onError: (e) => {
           setTwoFAEnabled(!next)
-          setTwoFAError(e instanceof ApiError ? e.message : 'Could not update the two-factor setting.')
+          setTwoFAError(apiErrorText(e, 'set_err_2fa'))
         },
       },
     )
@@ -106,7 +106,7 @@ export default function SettingsPage() {
       {
         onError: (e) => {
           setAiEnabled(!next)
-          setAiError(e instanceof ApiError ? e.message : 'Could not update the AI assistant setting.')
+          setAiError(apiErrorText(e, 'set_err_ai'))
         },
       },
     )
@@ -124,7 +124,7 @@ export default function SettingsPage() {
       {
         onSuccess: () => setSupportSaved(true),
         onError: (e) =>
-          setSupportError(e instanceof ApiError ? e.message : 'Could not save the support contact.'),
+          setSupportError(apiErrorText(e, 'set_err_support')),
       },
     )
   }
@@ -134,7 +134,7 @@ export default function SettingsPage() {
     setLoyaltySaved(false)
     const rate = Number(earnRate)
     if (!Number.isFinite(rate) || rate <= 0) {
-      setLoyaltyError('Earn rate must be greater than zero.')
+      setLoyaltyError(t('set_err_earn_rate'))
       return
     }
     update.mutate(
@@ -142,7 +142,7 @@ export default function SettingsPage() {
       {
         onSuccess: () => setLoyaltySaved(true),
         onError: (e) =>
-          setLoyaltyError(e instanceof ApiError ? e.message : 'Could not save loyalty settings.'),
+          setLoyaltyError(apiErrorText(e, 'set_err_loyalty')),
       },
     )
   }
@@ -155,7 +155,7 @@ export default function SettingsPage() {
     const trimmed = rates.map((r) => ({ label: r.label.trim(), value: r.value.trim() }))
     const cleaned = trimmed.filter((r) => r.label !== '' || r.value !== '')
     if (cleaned.some((r) => r.label === '' || r.value === '')) {
-      setRatesError('Each rate needs both a currency and a value.')
+      setRatesError(t('set_err_rates_row'))
       return
     }
     update.mutate(
@@ -166,7 +166,7 @@ export default function SettingsPage() {
           setRatesSaved(true)
         },
         onError: (e) =>
-          setRatesError(e instanceof ApiError ? e.message : 'Could not save exchange rates.'),
+          setRatesError(apiErrorText(e, 'set_err_rates')),
       },
     )
   }
@@ -177,7 +177,7 @@ export default function SettingsPage() {
         back="/"
         crumbs={[t('grp_system'), t('nav_settings')]}
         title={t('nav_settings')}
-        sub="Store contact, loyalty program and admin accounts"
+        sub={t('set_sub')}
       />
 
       <ChangePasswordCard />
@@ -185,12 +185,12 @@ export default function SettingsPage() {
       <div className="acard" style={{ marginBottom: 18 }}>
         <div className="panelhead">
           <Icon name="bag" size={17} />
-          <h3>Store & support</h3>
+          <h3>{t('set_store_support')}</h3>
         </div>
         <div className="pad">
           <div className="g2">
             <div>
-              <label className="alabel">Support email</label>
+              <label className="alabel">{t('set_support_email')}</label>
               <input
                 className="afield"
                 type="email"
@@ -199,11 +199,11 @@ export default function SettingsPage() {
                 onChange={(e) => setSupportEmail(e.target.value)}
               />
               <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
-                Shown on the public privacy-policy and account-deletion pages.
+                {t('set_support_email_hint')}
               </div>
             </div>
             <div>
-              <label className="alabel">Support phone</label>
+              <label className="alabel">{t('set_support_phone')}</label>
               <input
                 className="afield"
                 type="tel"
@@ -214,7 +214,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="alabel">Support WhatsApp</label>
+              <label className="alabel">{t('set_support_whatsapp')}</label>
               <input
                 className="afield"
                 type="tel"
@@ -224,7 +224,7 @@ export default function SettingsPage() {
                 onChange={(e) => setSupportWhatsapp(e.target.value)}
               />
               <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
-                Linked from the storefront help bot ("Still need help?"). Leave empty to hide.
+                {t('set_whatsapp_hint')}
               </div>
             </div>
           </div>
@@ -238,7 +238,7 @@ export default function SettingsPage() {
               <Icon name="check" size={15} /> {t('save')}
             </button>
             {supportSaved && !update.isPending && (
-              <span className="muted" style={{ fontSize: 12.5 }}>Saved.</span>
+              <span className="muted" style={{ fontSize: 12.5 }}>{t('set_saved')}</span>
             )}
           </div>
         </div>
@@ -247,7 +247,7 @@ export default function SettingsPage() {
       <div className="acard" style={{ marginBottom: 18 }}>
         <div className="panelhead">
           <Icon name="star" size={17} />
-          <h3>Loyalty program</h3>
+          <h3>{t('set_loyalty')}</h3>
         </div>
         <div className="pad">
           <div
@@ -268,7 +268,7 @@ export default function SettingsPage() {
                 fontSize: 13,
               }}
             >
-              <Icon name="alert" size={15} /> How points work
+              <Icon name="alert" size={15} /> {t('set_how_points')}
             </div>
             <ul
               style={{
@@ -280,46 +280,45 @@ export default function SettingsPage() {
               }}
             >
               <li>
-                Customers earn <b>1 point per ${earnRate || '…'}</b> spent — points ={' '}
-                <b>order total ÷ rate, rounded down</b>
+                <Trans i18nKey="set_pts_earn" values={{ rate: earnRate || '…' }} components={{ b: <b /> }} />
                 {exampleRate > 0 && (
                   <>
                     {' '}
-                    (e.g. a $50 order earns <b>{Math.floor(50 / exampleRate)}</b> points)
+                    <Trans
+                      i18nKey="set_pts_example"
+                      values={{ n: Math.floor(50 / exampleRate) }}
+                      components={{ b: <b /> }}
+                    />
                   </>
                 )}
                 .
               </li>
               <li>
-                Points are granted only when an order <b>completes</b> — instantly for code /
-                inventory deliveries, and when you <b>manually complete</b> a top-up or transfer
-                order. Pending, failed, or refunded orders earn nothing.
+                <Trans i18nKey="set_pts_complete" components={{ b: <b /> }} />
               </li>
               <li>
-                Rate changes apply to <b>future orders only</b>; past orders keep the points they
-                already earned.
+                <Trans i18nKey="set_pts_future" components={{ b: <b /> }} />
               </li>
               <li>
-                Turning the program <b>off</b> stops new earning — customers keep the points they
-                already have.
+                <Trans i18nKey="set_pts_off" components={{ b: <b /> }} />
               </li>
             </ul>
           </div>
           <div className="g2">
             <div>
-              <label className="alabel">Status</label>
+              <label className="alabel">{t('status')}</label>
               <select
                 className="select"
                 style={{ width: '100%' }}
                 value={loyaltyEnabled ? 'on' : 'off'}
                 onChange={(e) => setLoyaltyEnabled(e.target.value === 'on')}
               >
-                <option value="on">Enabled — orders earn points</option>
-                <option value="off">Disabled — no points earned</option>
+                <option value="on">{t('set_loyalty_on')}</option>
+                <option value="off">{t('set_loyalty_off')}</option>
               </select>
             </div>
             <div>
-              <label className="alabel">Earn rate — $ spent per point</label>
+              <label className="alabel">{t('set_earn_rate')}</label>
               <input
                 className="afield"
                 type="number"
@@ -340,7 +339,7 @@ export default function SettingsPage() {
               <Icon name="check" size={15} /> {t('save')}
             </button>
             {loyaltySaved && !update.isPending && (
-              <span className="muted" style={{ fontSize: 12.5 }}>Saved.</span>
+              <span className="muted" style={{ fontSize: 12.5 }}>{t('set_saved')}</span>
             )}
           </div>
         </div>
@@ -349,13 +348,11 @@ export default function SettingsPage() {
       <div className="acard" style={{ marginBottom: 18 }}>
         <div className="panelhead">
           <Icon name="coins" size={17} />
-          <h3>Exchange rates</h3>
+          <h3>{t('set_rates')}</h3>
         </div>
         <div className="pad">
           <div className="muted" style={{ fontSize: 12.5, marginBottom: 14, lineHeight: 1.6, maxWidth: 560 }}>
-            Currency rates shown to customers on the top-up screen (e.g. Syrian pound, Egyptian
-            pound). Both fields are free text and displayed exactly as typed. Leave the list empty
-            to hide it.
+            {t('set_rates_hint')}
           </div>
           {rates.map((r, i) => (
             <div
@@ -365,7 +362,7 @@ export default function SettingsPage() {
               <input
                 className="afield"
                 style={{ flex: '0 0 200px' }}
-                placeholder="Currency (e.g. SYP)"
+                placeholder={t('set_rate_currency_ph')}
                 maxLength={40}
                 value={r.label}
                 onChange={(e) =>
@@ -375,7 +372,7 @@ export default function SettingsPage() {
               <input
                 className="afield"
                 style={{ flex: 1 }}
-                placeholder="Rate (e.g. 89,500 per $1)"
+                placeholder={t('set_rate_value_ph')}
                 maxLength={40}
                 value={r.value}
                 onChange={(e) =>
@@ -384,7 +381,8 @@ export default function SettingsPage() {
               />
               <button
                 className="abtn ghost"
-                title="Remove"
+                title={t('set_remove')}
+                aria-label={t('set_remove')}
                 onClick={() => setRates((rs) => rs.filter((_, idx) => idx !== i))}
                 disabled={!canManage}
               >
@@ -398,7 +396,7 @@ export default function SettingsPage() {
             onClick={() => setRates((rs) => [...rs, { label: '', value: '' }])}
             disabled={!canManage || rates.length >= 20}
           >
-            <Icon name="plus" size={15} /> Add rate
+            <Icon name="plus" size={15} /> {t('set_add_rate')}
           </button>
           {ratesError && (
             <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 14 }}>
@@ -410,7 +408,7 @@ export default function SettingsPage() {
               <Icon name="check" size={15} /> {t('save')}
             </button>
             {ratesSaved && !update.isPending && (
-              <span className="muted" style={{ fontSize: 12.5 }}>Saved.</span>
+              <span className="muted" style={{ fontSize: 12.5 }}>{t('set_saved')}</span>
             )}
           </div>
         </div>
@@ -419,20 +417,18 @@ export default function SettingsPage() {
       <div className="acard" style={{ marginBottom: 18 }}>
         <div className="panelhead">
           <Icon name="send" size={17} />
-          <h3>AI help assistant</h3>
+          <h3>{t('set_ai')}</h3>
         </div>
         <div className="pad">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>Answer typed questions with AI</div>
+              <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>{t('set_ai_toggle')}</div>
               <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, maxWidth: 520 }}>
-                When on, customers can type questions in the Help Center and the AI answers them, using only the
-                text in Help bot → AI knowledge. Each question is a small paid call, capped per customer and per
-                day. When off, the Help Center shows only the support contacts.
+                {t('set_ai_body')}
               </div>
               {settingsRes?.data?.integrations?.ai && !settingsRes.data.integrations.ai.configured && (
                 <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginTop: 8 }}>
-                  No AI provider is configured on the server, so the assistant stays off for customers.
+                  {t('set_ai_not_configured')}
                 </div>
               )}
             </div>
@@ -447,7 +443,7 @@ export default function SettingsPage() {
       <div className="acard" style={{ marginBottom: 18 }}>
         <div className="panelhead">
           <Icon name="shield" size={17} />
-          <h3>Security</h3>
+          <h3>{t('set_security')}</h3>
         </div>
         <div className="pad">
           <div
@@ -460,12 +456,10 @@ export default function SettingsPage() {
           >
             <div>
               <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>
-                Admin two-factor authentication (SMS)
+                {t('set_2fa_title')}
               </div>
               <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, maxWidth: 520 }}>
-                When on, every admin login requires a one-time code sent by SMS after the password.
-                Requires a phone number on your own admin account, and an admin without a phone will
-                be blocked from signing in — set phones before enabling.
+                {t('set_2fa_body')}
               </div>
             </div>
             <Toggle on={twoFAEnabled} onClick={() => canManage && toggle2FA()} />
@@ -482,23 +476,23 @@ export default function SettingsPage() {
       <div className="acard">
         <div className="panelhead">
           <Icon name="shield" size={17} />
-          <h3>Admin accounts</h3>
+          <h3>{t('set_admins')}</h3>
         </div>
         <div className="tablewrap">
           <table className="tbl">
             <thead>
               <tr>
-                <th>Admin</th>
-                <th>Role</th>
-                <th>Last active</th>
-                <th>Status</th>
+                <th>{t('set_col_admin')}</th>
+                <th>{t('usr_col_role')}</th>
+                <th>{t('set_col_last_active')}</th>
+                <th>{t('status')}</th>
               </tr>
             </thead>
             <tbody>
               {adminRows.length === 0 && (
                 <tr>
                   <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                    {adminsLoading ? 'Loading…' : 'No admin accounts found.'}
+                    {adminsLoading ? t('loading') : t('set_no_admins')}
                   </td>
                 </tr>
               )}
@@ -523,8 +517,8 @@ export default function SettingsPage() {
                       }}
                     >
                       {a.raw.adminRoleId
-                        ? roleNameById.get(a.raw.adminRoleId) ?? 'Custom role'
-                        : 'Super Admin'}
+                        ? roleNameById.get(a.raw.adminRoleId) ?? t('set_custom_role')
+                        : t('role_super_admin')}
                     </span>
                   </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
@@ -549,8 +543,7 @@ export default function SettingsPage() {
             fontSize: 12.5,
           }}
         >
-          <Icon name="alert" size={15} /> Grant or revoke admin access from a user's profile
-          (Users → role). Demoting or suspending the last remaining admin is blocked.
+          <Icon name="alert" size={15} /> {t('set_admins_footer')}
         </div>
       </div>
       )}

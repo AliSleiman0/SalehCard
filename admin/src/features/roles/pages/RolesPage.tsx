@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Icon, PageHead, Modal, Checkbox, LoadingSpinner, ErrorState } from '@/components'
-import { ApiError } from '@/lib/api-client'
+import type { TFunction } from 'i18next'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useRoles, usePermissionCatalog, useCreateRole, useUpdateRole, useDeleteRole } from '../hooks/useRoles'
 import type { AdminRole, PermissionDomain } from '../api/roles'
+
+/** A permission area's name in the admin's language; the server's English
+ *  label is the fallback for an area added on the server later. */
+function domainLabel(d: PermissionDomain, t: TFunction): string {
+  return t(`role_domain_${d.key}`, { defaultValue: d.label })
+}
 
 // Super-admin-only page (guarded by the /roles route): create/edit/delete the
 // custom RBAC roles that limited admin accounts are assigned. Permissions are a
@@ -28,8 +35,7 @@ export default function RolesPage() {
     setDeleteError(null)
     del.mutate(role.id, {
       onSuccess: () => setConfirmDelete(null),
-      onError: (e) =>
-        setDeleteError(e instanceof ApiError ? e.message : 'Could not delete the role.'),
+      onError: (e) => setDeleteError(apiErrorText(e, 'role_err_delete')),
     })
   }
 
@@ -39,44 +45,43 @@ export default function RolesPage() {
         back="/"
         crumbs={[t('grp_system'), t('nav_roles')]}
         title={t('nav_roles')}
-        sub="Custom admin roles and what each one can see and do"
+        sub={t('role_sub')}
       >
         <button className="abtn primary" onClick={() => setEditing('new')}>
-          <Icon name="plus" size={15} /> New role
+          <Icon name="plus" size={15} /> {t('role_new')}
         </button>
       </PageHead>
 
       <div className="acard">
         <div className="panelhead">
           <Icon name="shield" size={17} />
-          <h3>Roles</h3>
+          <h3>{t('nav_roles')}</h3>
         </div>
         {isLoading && <LoadingSpinner />}
-        {isError && <ErrorState message="Couldn't load roles." onRetry={() => void refetch()} />}
+        {isError && <ErrorState message={t('role_load_error')} onRetry={() => void refetch()} />}
         {!isLoading && !isError && (
           <div className="tablewrap">
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Role</th>
-                  <th>Permissions</th>
+                  <th>{t('usr_col_role')}</th>
+                  <th>{t('role_col_permissions')}</th>
                   <th style={{ width: 160 }}></th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>
-                    <b>Super Admin</b>
+                    <b>{t('role_super_admin')}</b>
                     <div className="muted" style={{ fontSize: 12 }}>
-                      Built-in — full access, manages roles and admin accounts. Assigned by
-                      clearing an admin's role.
+                      {t('role_super_desc')}
                     </div>
                   </td>
                   <td>
-                    <span className="bdg">All permissions</span>
+                    <span className="bdg">{t('role_all_perms')}</span>
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>
-                    Not editable
+                    {t('role_not_editable')}
                   </td>
                 </tr>
                 {roles.map((r) => (
@@ -111,7 +116,7 @@ export default function RolesPage() {
                 {roles.length === 0 && (
                   <tr>
                     <td colSpan={3} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                      No custom roles yet — every admin is currently a Super Admin.
+                      {t('role_none')}
                     </td>
                   </tr>
                 )}
@@ -130,9 +135,7 @@ export default function RolesPage() {
             fontSize: 12.5,
           }}
         >
-          <Icon name="alert" size={15} /> Assign a role from a user's profile (Users → Role &
-          access). Permission changes apply when the admin's session next refreshes (or on their
-          next sign-in).
+          <Icon name="alert" size={15} /> {t('role_footer')}
         </div>
       </div>
 
@@ -147,10 +150,9 @@ export default function RolesPage() {
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)}>
           <div className="pad">
-            <h3 style={{ marginTop: 0 }}>Delete “{confirmDelete.name}”?</h3>
+            <h3 style={{ marginTop: 0 }}>{t('role_delete_title', { name: confirmDelete.name })}</h3>
             <p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
-              A role that is still assigned to an admin cannot be deleted — reassign those
-              accounts first.
+              {t('role_delete_body')}
             </p>
             {deleteError && (
               <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
@@ -178,17 +180,18 @@ export default function RolesPage() {
 
 /** Compact chips summarizing a role's domains: "Orders", "KYC ✎" (✎ = manage). */
 function PermissionSummary({ role, domains }: { role: AdminRole; domains: PermissionDomain[] }) {
+  const { t } = useTranslation()
   const parts = domains
     .filter((d) => role.permissions.includes(d.key + '.view'))
     .map((d) => ({
-      label: d.label,
+      label: domainLabel(d, t),
       manage: role.permissions.includes(d.key + '.manage'),
     }))
   if (parts.length === 0) return <span className="muted">—</span>
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       {parts.map((p) => (
-        <span key={p.label} className="bdg" title={p.manage ? 'View + manage' : 'View only'}>
+        <span key={p.label} className="bdg" title={p.manage ? t('role_view_manage') : t('role_view_only')}>
           {p.label}
           {p.manage ? '' : ' 👁'}
         </span>
@@ -238,18 +241,17 @@ function RoleEditorModal({
     setError(null)
     const trimmed = name.trim()
     if (!trimmed) {
-      setError('A role name is required.')
+      setError(t('role_err_name'))
       return
     }
     if (perms.size === 0) {
-      setError('Select at least one permission.')
+      setError(t('role_err_perm'))
       return
     }
     const input = { name: trimmed, description: description.trim(), permissions: [...perms] }
     const opts = {
       onSuccess: onClose,
-      onError: (e: Error) =>
-        setError(e instanceof ApiError ? e.message : 'Could not save the role.'),
+      onError: (e: Error) => setError(apiErrorText(e, 'role_err_save')),
     }
     if (role) update.mutate({ id: role.id, input }, opts)
     else create.mutate(input, opts)
@@ -258,43 +260,43 @@ function RoleEditorModal({
   return (
     <Modal onClose={onClose} maxWidth={560}>
       <div className="pad">
-        <h3 style={{ marginTop: 0 }}>{role ? `Edit “${role.name}”` : 'New role'}</h3>
+        <h3 style={{ marginTop: 0 }}>{role ? t('role_edit_title', { name: role.name }) : t('role_new')}</h3>
         <div className="g2" style={{ marginBottom: 14 }}>
           <div>
-            <label className="alabel">Name</label>
+            <label className="alabel">{t('res_name')}</label>
             <input
               className="afield"
               value={name}
               maxLength={60}
-              placeholder="e.g. Support"
+              placeholder={t('role_name_ph')}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div>
-            <label className="alabel">Description (optional)</label>
+            <label className="alabel">{t('role_desc_label')}</label>
             <input
               className="afield"
               value={description}
-              placeholder="What this role is for"
+              placeholder={t('role_desc_ph')}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
         </div>
 
-        <label className="alabel">Permissions — view lets the role see an area, manage lets it act</label>
+        <label className="alabel">{t('role_perms_label')}</label>
         <div className="tablewrap" style={{ border: '1px solid var(--border)', borderRadius: 10, maxHeight: 320, overflowY: 'auto' }}>
           <table className="tbl">
             <thead>
               <tr>
-                <th>Area</th>
-                <th style={{ width: 80, textAlign: 'center' }}>View</th>
-                <th style={{ width: 80, textAlign: 'center' }}>Manage</th>
+                <th>{t('role_col_area')}</th>
+                <th style={{ width: 80, textAlign: 'center' }}>{t('role_view')}</th>
+                <th style={{ width: 80, textAlign: 'center' }}>{t('role_manage')}</th>
               </tr>
             </thead>
             <tbody>
               {domains.map((d) => (
                 <tr key={d.key}>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{d.label}</td>
+                  <td style={{ fontWeight: 600, fontSize: 13 }}>{domainLabel(d, t)}</td>
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'inline-flex' }}>
                       <Checkbox on={perms.has(d.key + '.view')} onClick={() => toggle(d.key + '.view')} />

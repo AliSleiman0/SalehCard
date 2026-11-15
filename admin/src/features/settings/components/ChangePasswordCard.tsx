@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Icon } from '@/components'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { toast } from '@/stores/toast'
 import { changeOwnPassword } from '@/features/users/api/users'
 
@@ -9,6 +10,7 @@ const MIN_PASSWORD = 8
 
 /** The signed-in admin changes their own password (client feedback #41/#96). */
 export function ChangePasswordCard() {
+  const { t } = useTranslation()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -19,45 +21,45 @@ export function ChangePasswordCard() {
       setCurrent('')
       setNext('')
       setConfirm('')
-      toast.success('Your password was changed')
+      toast.success(t('set_pw_changed'))
     },
-    onError: (e) => setErr(e instanceof ApiError ? e.message : "Couldn't change the password"),
+    onError: (e) => setErr(apiErrorText(e, 'set_pw_change_failed')),
   })
   const submit = () => {
     setErr(null)
-    if (next.length < MIN_PASSWORD) return setErr(`New password must be at least ${MIN_PASSWORD} characters.`)
-    if (next !== confirm) return setErr('The new passwords do not match.')
-    if (next === current) return setErr('Choose a password different from the current one.')
+    if (next.length < MIN_PASSWORD) return setErr(t('set_pw_min', { n: MIN_PASSWORD }))
+    if (next !== confirm) return setErr(t('set_pw_mismatch'))
+    if (next === current) return setErr(t('set_pw_same'))
     change.mutate()
   }
   return (
     <div className="acard" style={{ marginBottom: 18 }}>
       <div className="panelhead">
         <Icon name="id" size={17} />
-        <h3>My account</h3>
+        <h3>{t('set_my_account')}</h3>
       </div>
       <div className="pad">
         <div className="g3">
           <div>
-            <label className="alabel">Current password</label>
+            <label className="alabel">{t('set_current_pw')}</label>
             <input className="afield" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
           </div>
           <div>
-            <label className="alabel">New password</label>
-            <input className="afield" type="password" autoComplete="new-password" placeholder="At least 8 characters" maxLength={72} value={next} onChange={(e) => setNext(e.target.value)} />
+            <label className="alabel">{t('usr_new_pw')}</label>
+            <input className="afield" type="password" autoComplete="new-password" placeholder={t('usr_pw_ph', { n: MIN_PASSWORD })} maxLength={72} value={next} onChange={(e) => setNext(e.target.value)} />
           </div>
           <div>
-            <label className="alabel">Confirm new password</label>
+            <label className="alabel">{t('set_confirm_pw')}</label>
             <input className="afield" type="password" autoComplete="new-password" maxLength={72} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </div>
         </div>
         {err && <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 12 }}>{err}</div>}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>
           <button className="abtn primary" onClick={submit} disabled={change.isPending || !current || !next}>
-            <Icon name="shield" size={15} /> Change password
+            <Icon name="shield" size={15} /> {t('set_change_pw')}
           </button>
           <span className="muted" style={{ fontSize: 12.5 }}>
-            For a second factor, turn on SMS two-factor under Security below.
+            {t('set_pw_2fa_hint')}
           </span>
         </div>
       </div>

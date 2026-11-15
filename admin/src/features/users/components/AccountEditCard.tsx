@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Icon } from '@/components'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { toast } from '@/stores/toast'
 import { setUserPassword, updateUserProfile } from '../api/users'
 
@@ -13,6 +14,7 @@ const MIN_PASSWORD = 8
  * everywhere. Client feedback 2026-11-12 #59.
  */
 export function AccountEditCard({ id, name }: { id: string; name: string }) {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const [nameDraft, setNameDraft] = useState(name)
   const [pw, setPw] = useState('')
@@ -27,24 +29,24 @@ export function AccountEditCard({ id, name }: { id: string; name: string }) {
     mutationFn: () => updateUserProfile(id, nameDraft.trim()),
     onSuccess: () => {
       refresh()
-      toast.success('Name updated')
+      toast.success(t('usr_name_updated'))
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Couldn't update the name"),
+    onError: (e) => toast.error(apiErrorText(e, 'usr_name_update_failed')),
   })
   const savePw = useMutation({
     mutationFn: () => setUserPassword(id, pw),
     onSuccess: () => {
       setPw('')
-      toast.success('Password set — the user was signed out of all devices')
+      toast.success(t('usr_pw_set'))
     },
-    onError: (e) => setPwErr(e instanceof ApiError ? e.message : "Couldn't set the password"),
+    onError: (e) => setPwErr(apiErrorText(e, 'usr_pw_set_failed')),
   })
 
   const nameChanged = nameDraft.trim() !== name.trim() && nameDraft.trim().length > 0
   const onSetPw = () => {
     setPwErr(null)
     if (pw.length < MIN_PASSWORD) {
-      setPwErr(`Password must be at least ${MIN_PASSWORD} characters.`)
+      setPwErr(t('usr_pw_min', { n: MIN_PASSWORD }))
       return
     }
     savePw.mutate()
@@ -52,40 +54,40 @@ export function AccountEditCard({ id, name }: { id: string; name: string }) {
 
   return (
     <div className="acard pad">
-      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Edit account</h3>
-      <label className="alabel">Display name</label>
+      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{t('usr_edit_account')}</h3>
+      <label className="alabel">{t('rd_display_name')}</label>
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           className="afield"
-          aria-label="Display name"
+          aria-label={t('rd_display_name')}
           value={nameDraft}
           maxLength={80}
           onChange={(e) => setNameDraft(e.target.value)}
         />
         <button className="abtn" disabled={!nameChanged || saveName.isPending} onClick={() => saveName.mutate()}>
-          <Icon name="check" size={14} /> Save
+          <Icon name="check" size={14} /> {t('sup_save')}
         </button>
       </div>
       <label className="alabel" style={{ marginTop: 14 }}>
-        Set a new password
+        {t('usr_set_new_pw')}
       </label>
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           className="afield"
           type="password"
           autoComplete="new-password"
-          aria-label="New password"
-          placeholder="At least 8 characters"
+          aria-label={t('usr_new_pw')}
+          placeholder={t('usr_pw_ph', { n: MIN_PASSWORD })}
           maxLength={72}
           value={pw}
           onChange={(e) => setPw(e.target.value)}
         />
         <button className="abtn" disabled={!pw || savePw.isPending} onClick={onSetPw}>
-          <Icon name="shield" size={14} /> Set
+          <Icon name="shield" size={14} /> {t('usr_set')}
         </button>
       </div>
       <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-        The user is signed out of every device and must use the new password.
+        {t('usr_pw_hint')}
       </div>
       {pwErr && <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 8 }}>{pwErr}</div>}
     </div>
