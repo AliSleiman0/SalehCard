@@ -2,13 +2,21 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Chip, EmptyState, ErrorState, LoadingSpinner } from '@/components'
-import { listLogs, type ChatOutcome, type LogFilter } from '../api/chatbot'
+import { listLogs, type ChatIntent, type ChatOutcome, type LogFilter } from '../api/chatbot'
 
 const OUTCOME: Record<ChatOutcome, { label: string; cls: string }> = {
   answered: { label: 'Answered', cls: 'st-ok' },
   unanswered: { label: 'Not covered', cls: 'st-warn' },
+  off_topic: { label: 'Off-topic', cls: 'st-mute' },
   filtered: { label: 'Blocked', cls: 'st-danger' },
   error: { label: 'Error', cls: 'st-danger' },
+}
+
+/** The finer kind of reply, shown under the result where it adds something. */
+const INTENT_NOTE: Partial<Record<ChatIntent, string>> = {
+  handoff: 'Sent to support',
+  clarify: 'Asked to clarify',
+  smalltalk: 'Small talk',
 }
 
 /** The AI conversations (kept 30 days): what customers asked and what the
@@ -90,6 +98,11 @@ export function ConversationsTab() {
                     </td>
                     <td>
                       <span className={`bdg ${o.cls}`}>{o.label}</span>
+                      {l.intent && INTENT_NOTE[l.intent] && (
+                        <div className="faint" style={{ fontSize: 11.5, marginTop: 4 }}>
+                          {INTENT_NOTE[l.intent]}
+                        </div>
+                      )}
                       {l.flagged && (
                         <span className="bdg st-danger" style={{ marginInlineStart: 6 }}>
                           Reported

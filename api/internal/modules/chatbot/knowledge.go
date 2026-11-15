@@ -77,7 +77,7 @@ func sectionsFor(k *Knowledge, platform string) []section {
 		return nil
 	}
 	texts := []string{k.General}
-	if platform == "android" || platform == "web" {
+	if fullCatalog(platform) {
 		texts = append(texts, k.AndroidOnly)
 	}
 	var out []section

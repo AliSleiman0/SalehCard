@@ -17,9 +17,10 @@ const chatLogTTL = 30 * 24 * time.Hour
 
 // Outcomes recorded per AI question.
 const (
-	outcomeAnswered     = "answered"
-	outcomeUnanswered   = "unanswered" // model said not covered / failed enforcement
-	outcomeFiltered     = "filtered"   // provider content-safety block
+	outcomeAnswered     = "answered"   // grounded answer, clarifying question or small talk
+	outcomeUnanswered   = "unanswered" // about the app but not covered (handoff) or unusable output — the gaps
+	outcomeOffTopic     = "off_topic"  // not about the app (politely declined)
+	outcomeFiltered     = "filtered"   // provider content-safety block, or the iOS output guard
 	outcomeError        = "error"      // provider/transport failure
 	logFilterFlagged    = "flagged"
 	logFilterUnanswered = "unanswered"
@@ -34,6 +35,7 @@ type ChatLog struct {
 	Question     string        `bson:"question"              json:"question"`
 	Answer       string        `bson:"answer,omitempty"      json:"answer,omitempty"`
 	Outcome      string        `bson:"outcome"               json:"outcome"`
+	Intent       string        `bson:"intent,omitempty"      json:"intent,omitempty"`  // the model's classification
 	Sources      []string      `bson:"sources,omitempty"     json:"sources,omitempty"` // start of each cited knowledge paragraph
 	InputTokens  int           `bson:"inputTokens"           json:"inputTokens"`
 	CachedTokens int           `bson:"cachedTokens"          json:"cachedTokens"`

@@ -86,8 +86,9 @@ type AskInput struct {
 	History  []Turn `json:"history"`
 }
 
-// AskResult is the response. Answered=false means Answer is the fallback text
-// and the client should surface the support contact.
+// AskResult is the response. Answered=true means Answer was written by the AI
+// (clients show the AI note + Report); false means it is a fixed text (off-topic
+// or fallback). ShowSupport asks the client to surface the support contacts.
 type AskResult struct {
 	LogID       string `json:"logId,omitempty"`
 	Answer      string `json:"answer"`
@@ -188,7 +189,7 @@ func (a *Assistant) Ask(ctx context.Context, userID, ip string, raw AskInput) (A
 	}
 	secs := sectionsFor(k, in.Platform)
 
-	fallback := AskResult{Answer: fallbackText(in.Lang, st.StoreName), ShowSupport: true}
+	fallback := AskResult{Answer: fallbackText(in.Lang), ShowSupport: true}
 	entry := ChatLog{ID: bson.NewObjectID(), UserID: userID, Lang: in.Lang, Question: in.Question, CreatedAt: a.now().UTC()}
 
 	var res AskResult
@@ -230,14 +231,11 @@ func (a *Assistant) Ask(ctx context.Context, userID, ip string, raw AskInput) (A
 			slog.Warn("chatbot: AI provider call failed", "error", err) // no question text
 			return AskResult{}, "", ErrAIUnavailable
 		default:
-			if answer, cited, ok := enforce(out.Content, secs); ok {
-				entry.Outcome, entry.Answer = outcomeAnswered, answer
-				res = AskResult{Answer: answer, Answered: true}
-				for _, s := range cited {
-					entry.Sources = append(entry.Sources, snippet(s.Text))
-				}
-			} else {
-				entry.Outcome = outcomeUnanswered
+			res = respond(&entry, out.Content, secs, fallback, in.Lang, st.StoreName)
+			if res.Answered && !fullCatalog(in.Platform) && restrictedHit(res.Answer) != "" {
+				// iOS output guard (see restrictedTerms): never show it; the
+				// draft stays in the log for the admin.
+				entry.Outcome, entry.Sources = outcomeFiltered, nil
 				res = fallback
 			}
 		}
@@ -246,6 +244,31 @@ func (a *Assistant) Ask(ctx context.Context, userID, ip string, raw AskInput) (A
 		res.LogID = entry.ID.Hex()
 	}
 	return res, "", nil
+}
+
+// respond turns the model's structured output into what the customer sees,
+// recording the outcome on the log entry. See enforce for the hard rules.
+func respond(entry *ChatLog, raw string, secs []section, fallback AskResult, lang, storeName string) AskResult {
+	v, ok := enforce(raw, secs)
+	entry.Intent = v.Intent
+	switch {
+	case !ok:
+		entry.Outcome = outcomeUnanswered
+		return fallback
+	case v.Intent == intentOutOfScope:
+		entry.Outcome = outcomeOffTopic
+		return AskResult{Answer: offTopicText(lang, storeName)}
+	case v.Intent == intentHandoff:
+		// About the app but not in the knowledge: a gap for the admin.
+		entry.Outcome, entry.Answer = outcomeUnanswered, v.Answer
+		return AskResult{Answer: v.Answer, Answered: true, ShowSupport: true}
+	default: // answer, clarify, smalltalk
+		entry.Outcome, entry.Answer = outcomeAnswered, v.Answer
+		for _, s := range v.Cited {
+			entry.Sources = append(entry.Sources, snippet(s.Text))
+		}
+		return AskResult{Answer: v.Answer, Answered: true}
+	}
 }
 
 // insertLog is best-effort: a logging failure never fails the answer.

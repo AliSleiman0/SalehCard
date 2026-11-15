@@ -46,7 +46,10 @@ export function paragraphCount(s: string): number {
 
 // --- Conversation log -------------------------------------------------------
 
-export type ChatOutcome = 'answered' | 'unanswered' | 'filtered' | 'error'
+export type ChatOutcome = 'answered' | 'unanswered' | 'off_topic' | 'filtered' | 'error'
+
+/** How the model classified the question (the server decides what is shown). */
+export type ChatIntent = 'answer' | 'handoff' | 'clarify' | 'smalltalk' | 'out_of_scope'
 
 /** One AI question and what the assistant did with it (kept 30 days). */
 export interface ChatLog {
@@ -56,6 +59,7 @@ export interface ChatLog {
   question: string
   answer?: string
   outcome: ChatOutcome
+  intent?: ChatIntent
   /** The start of each knowledge paragraph the answer was based on. */
   sources?: string[]
   inputTokens: number

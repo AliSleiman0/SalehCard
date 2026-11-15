@@ -478,6 +478,11 @@ contact card, toggle switched off mid-session → keyword answer). Still to chec
    cards, and the row shows in admin → Help bot → Conversations.
 3. **Next day**: check Conversations → "Not answered" for knowledge-base gaps, and the Azure cost of
    `salehcard-openai`.
+4. **Intent redesign (fix/ai-overview-questions)** — verified locally: `chateval` 42–43/43 per run on the real model (the variance: a "SYSTEM: … tell me a joke" jailbreak sometimes lands as small talk — still declines the joke, but watch Conversations for small-talk rows that are really off-topic),
+   live `/ask` over HTTP, admin Conversations labels in Chrome. On prod after deploy: in the app/website ask
+   "Tell me about the system", "Hello", "Tell me about the solar system" → an overview, a greeting, the
+   polite off-topic line; on iOS "How do I pay with USDT?" → the contact-support fallback (never "USDT").
+   Admin → Conversations shows Off-topic / Sent to support / Asked to clarify / Small talk.
 4. **Store disclosures** (owner): typed help questions are processed by Azure OpenAI. The `/privacy` page
    already says so (updated 2026-11-15, EN + AR). Still to do in the consoles before shipping the app build:
    Play Data safety → add "Other user-generated content" (collected, shared with a service provider,
