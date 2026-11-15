@@ -51,6 +51,13 @@ class AccountMenuScreen extends ConsumerWidget {
           ),
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.lock_outline_rounded),
+            title: Text(l10n.changePasswordTitle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/change-password'),
+          ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.verified_user_outlined),
             title: Text(l10n.kycMenuLabel),
             trailing: const Icon(Icons.chevron_right_rounded),

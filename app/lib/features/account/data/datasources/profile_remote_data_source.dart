@@ -49,4 +49,19 @@ class ProfileRemoteDataSource {
       data: force ? const {'force': true} : null,
     );
   }
+
+  /// POST /users/me/password → replaces the signed-in user's own password.
+  /// Every refusal is a 400 with a code (WRONG_PASSWORD, WEAK_PASSWORD,
+  /// PASSWORD_TOO_LONG, NO_PASSWORD_SET) — never a 401, so the session
+  /// survives. Other sessions stay signed in.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      '/users/me/password',
+      data: {'currentPassword': currentPassword, 'newPassword': newPassword},
+    );
+    unwrap(response);
+  }
 }

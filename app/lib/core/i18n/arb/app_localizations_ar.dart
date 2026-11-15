@@ -1190,4 +1190,69 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get notifComplaintClosedBody => 'شكرًا لتواصلك مع الدعم.';
+
+  @override
+  String get changePasswordTitle => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordIntro =>
+      'اختر كلمة مرور جديدة لتسجيل الدخول. تبقى أجهزتك الأخرى مسجّلة الدخول.';
+
+  @override
+  String get changePasswordCurrent => 'كلمة المرور الحالية';
+
+  @override
+  String get changePasswordNew => 'كلمة المرور الجديدة';
+
+  @override
+  String get changePasswordConfirm => 'تأكيد كلمة المرور الجديدة';
+
+  @override
+  String get changePasswordRules => '8 أحرف على الأقل.';
+
+  @override
+  String get changePasswordShow => 'إظهار كلمة المرور';
+
+  @override
+  String get changePasswordHide => 'إخفاء كلمة المرور';
+
+  @override
+  String get changePasswordSubmit => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordDone => 'تم تغيير كلمة المرور';
+
+  @override
+  String get changePasswordErrCurrentRequired => 'أدخل كلمة المرور الحالية.';
+
+  @override
+  String get changePasswordErrShort =>
+      'يجب أن تتكون كلمة المرور الجديدة من 8 أحرف على الأقل.';
+
+  @override
+  String get changePasswordErrLong =>
+      'كلمة المرور الجديدة طويلة جدًا. استخدم كلمة أقصر (الأحرف العربية تُحسب مضاعفة).';
+
+  @override
+  String get changePasswordErrMismatch =>
+      'كلمتا المرور الجديدتان غير متطابقتين.';
+
+  @override
+  String get changePasswordErrWrong => 'كلمة المرور الحالية غير صحيحة.';
+
+  @override
+  String get changePasswordErrNoPassword =>
+      'لا توجد كلمة مرور لهذا الحساب بعد.';
+
+  @override
+  String get changePasswordNoPasswordHint =>
+      'عيّن كلمة مرور عبر تسجيل الدخول برمز SMS: سجّل الخروج، واضغط \"إنشاء حساب\"، وأدخل رقم الهاتف نفسه، واختر كلمة مرور، ثم أدخل رمز SMS.';
+
+  @override
+  String get changePasswordErrRateLimited =>
+      'محاولات كثيرة جدًا. يرجى الانتظار دقيقة ثم المحاولة مجددًا.';
+
+  @override
+  String get changePasswordErrGeneric =>
+      'تعذّر تغيير كلمة المرور. يرجى المحاولة مرة أخرى.';
 }

@@ -27,6 +27,7 @@ export function AccountMenu({ onClose }: { onClose: () => void }) {
     { path: '/orders', icon: 'shield', label: t('order_history') },
     { path: '/saved-ids', icon: 'user', label: t('saved_players') },
     { path: '/complaints', icon: 'chat', label: t('complaints') },
+    { path: '/security', icon: 'lock', label: t('security') },
   ]
 
   return (
