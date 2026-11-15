@@ -10,6 +10,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
+import '../../../../core/widgets/live_refresh.dart';
 import '../../../../core/widgets/money_row.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../../core/widgets/status_badge.dart';
@@ -33,47 +34,50 @@ class OrderDetailScreen extends ConsumerWidget {
     final orderAsync = ref.watch(orderDetailProvider(id));
     final localeCode = ref.watch(localeControllerProvider).languageCode;
 
-    return Scaffold(
-      backgroundColor: colors.bg,
-      appBar: AppBar(
-        backgroundColor: colors.topbar,
-        // Explicit back affordance: this route is reached both via push (from the
-        // orders list — pops cleanly) and via go (from order-success — an empty
-        // stack, nothing to pop), so fall back to the orders list when we can't
-        // pop, otherwise the user is stranded here.
-        leading: const AppBackButton(fallback: '/orders'),
-        title: orderAsync.maybeWhen(
-          data: (o) => Text('${l10n.orderLabel} #${o.reference}'),
-          orElse: () => Text(l10n.orderLabel),
-        ),
-      ),
-      body: orderAsync.when(
-        loading: () => const LoadingView(),
-        error: (_, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(l10n.loadFailed, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => ref.invalidate(orderDetailProvider(id)),
-                  child: Text(l10n.retry),
-                ),
-              ],
-            ),
+    return LiveRefresh(
+      onRefresh: () => ref.invalidate(orderDetailProvider(id)),
+      child: Scaffold(
+        backgroundColor: colors.bg,
+        appBar: AppBar(
+          backgroundColor: colors.topbar,
+          // Explicit back affordance: this route is reached both via push (from the
+          // orders list — pops cleanly) and via go (from order-success — an empty
+          // stack, nothing to pop), so fall back to the orders list when we can't
+          // pop, otherwise the user is stranded here.
+          leading: const AppBackButton(fallback: '/orders'),
+          title: orderAsync.maybeWhen(
+            data: (o) => Text('${l10n.orderLabel} #${o.reference}'),
+            orElse: () => Text(l10n.orderLabel),
           ),
         ),
-        data: (order) => RefreshIndicator(
-          // The user watches this screen while an order sits in `processing`
-          // waiting for a code drop / manual completion — let them pull to
-          // check without leaving.
-          onRefresh: () async {
-            ref.invalidate(orderDetailProvider(id));
-            await ref.read(orderDetailProvider(id).future);
-          },
-          child: _Body(order: order, localeCode: localeCode, l10n: l10n),
+        body: orderAsync.when(
+          loading: () => const LoadingView(),
+          error: (_, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(l10n.loadFailed, textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => ref.invalidate(orderDetailProvider(id)),
+                    child: Text(l10n.retry),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          data: (order) => RefreshIndicator(
+            // The user watches this screen while an order sits in `processing`
+            // waiting for a code drop / manual completion — let them pull to
+            // check without leaving.
+            onRefresh: () async {
+              ref.invalidate(orderDetailProvider(id));
+              await ref.read(orderDetailProvider(id).future);
+            },
+            child: _Body(order: order, localeCode: localeCode, l10n: l10n),
+          ),
         ),
       ),
     );

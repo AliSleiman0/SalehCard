@@ -10,7 +10,7 @@ import { adaptOrder } from '../lib/adaptOrder'
 export default function OrdersPage() {
   const { t } = useTranslation()
   const locale = useLocaleStore((s) => s.locale)
-  const query = useOrders()
+  const query = useOrders(true)
   const orders = useMemo(
     () => (query.data ?? []).map((o) => adaptOrder(o, locale)),
     [query.data, locale],
