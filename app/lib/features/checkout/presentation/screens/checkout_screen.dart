@@ -320,23 +320,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           for (final field in fields)
             field.key: _valueFor('${item.key}|${field.key}', field).trim(),
         };
+        // Structured per-field capture: send every filled field (key+value) so
+        // the operator sees labeled inputs (Account ID, Zone ID, Email…) and
+        // photos (QR / barcode) as images — transfer lines included.
+        fieldList = [
+          for (final field in fields)
+            if ((values[field.key] ?? '').isNotEmpty)
+              PlaceOrderField(key: field.key, value: values[field.key]!),
+        ];
+        final fileKeys = {
+          for (final field in fields)
+            if (field.type == 'file') field.key,
+        };
         if (product.fulfillmentType == 'transfer') {
-          recipient = _buildRecipient(values);
+          // The recipient summary is text only: a photo URL never goes into it.
+          recipient = _buildRecipient({
+            for (final e in values.entries)
+              if (!fileKeys.contains(e.key)) e.key: e.value,
+          });
         } else {
-          // Structured per-field capture: send every filled field (key+value) so
-          // the operator sees labeled inputs (Account ID, Zone ID, Email…), and
-          // set playerId = the first field (the account/player id) so the
-          // server's CreditedToID / api-mode fulfillment stays clean.
-          fieldList = [
-            for (final field in fields)
-              if ((values[field.key] ?? '').isNotEmpty)
-                PlaceOrderField(key: field.key, value: values[field.key]!),
-          ];
-          // A photo field (QR / barcode URL) is never the player id.
-          final fileKeys = {
-            for (final field in fields)
-              if (field.type == 'file') field.key,
-          };
+          // playerId = the first typed field (the account/player id) so the
+          // server's CreditedToID / api-mode fulfillment stays clean; a photo
+          // field (QR / barcode URL) is never the player id.
           final idFields =
               fieldList.where((f) => !fileKeys.contains(f.key)).toList();
           playerId = idFields.isNotEmpty ? idFields.first.value : null;

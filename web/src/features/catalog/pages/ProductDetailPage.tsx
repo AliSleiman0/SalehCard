@@ -60,6 +60,9 @@ export default function ProductDetailPage() {
   // ("sold by amount") products.
   const [amountRaw, setAmountRaw] = useState('')
   const [pid, setPid] = useState('')
+  // Values of the product's other delivery boxes (every field except the id box).
+  const [extra, setExtra] = useState<Record<string, string>>({})
+  const [showFieldErrors, setShowFieldErrors] = useState(false)
   const [pickId, setPickId] = useState(false)
   const [rName, setRName] = useState('')
   const [country, setCountry] = useState('Türkiye')
@@ -148,12 +151,14 @@ export default function ProductDetailPage() {
   const catDomain = p.rootDomain || p.cat
   const catLabel = rootMeta(p.rootDomain).label || p.cat
 
-  // Whether checkout collects fields via the schema (first field lives on this
-  // page; the rest, if any, on the checkout page).
-  // The PDP id box is the first TYPED field; photo fields (QR / barcode) are
-  // collected at checkout and never become the player id.
-  const idField = p.inputFields.find((f) => f.type !== 'file')
-  const hasFields = !!idField && fulfill !== 'code'
+  // Every delivery box shows on this page (checkout repeats them, prefilled).
+  // The id box is the first TYPED field (saved IDs + game-ID verification hang
+  // off it); photo fields (QR / barcode) never become the player id.
+  const hasFields = p.inputFields.length > 0 && fulfill !== 'code'
+  const idField = hasFields ? p.inputFields.find((f) => f.type !== 'file') : undefined
+  const otherFields = hasFields ? p.inputFields.filter((f) => f !== idField) : []
+  const fieldError = (value: string) =>
+    showFieldErrors && !value.trim() ? t('field_required') : undefined
   const verifyActive = p.verifyEnabled && isAuthenticated
   const verifyGuestBlock = p.verifyEnabled && !isAuthenticated
   const buyDisabled =
@@ -171,7 +176,11 @@ export default function ProductDetailPage() {
       toast(t('id_ph'), 'user')
       return
     }
-    if (hasFields && !pid.trim()) {
+    if (
+      hasFields &&
+      ((idField && !pid.trim()) || otherFields.some((f) => !(extra[f.key] ?? '').trim()))
+    ) {
+      setShowFieldErrors(true)
       toast(t('field_required'), 'user')
       return
     }
@@ -190,6 +199,9 @@ export default function ProductDetailPage() {
       qtyMax: up ? undefined : p.qty.max,
       amount: up ? amount : undefined,
       pid,
+      fields: hasFields
+        ? { ...extra, ...(idField ? { [idField.key]: pid } : {}) }
+        : undefined,
       fulfill,
       // transfer-with-schema builds its recipient at checkout from the fields;
       // only the legacy no-schema transfer carries a recipient on the cart line.
@@ -364,7 +376,7 @@ export default function ProductDetailPage() {
           {/* fulfillment input — schema-driven first field, legacy fallbacks */}
           {hasFields ? (
             <div className="col" style={{ gap: 10 }}>
-              {isAuthenticated && savedIds.length > 0 && (
+              {idField && isAuthenticated && savedIds.length > 0 && (
                 <div className="row" style={{ justifyContent: 'flex-end' }}>
                   <a
                     className="tiny clickable"
@@ -375,7 +387,14 @@ export default function ProductDetailPage() {
                   </a>
                 </div>
               )}
-              <DynamicField field={idField!} value={pid} onChange={setPlayerId} />
+              {idField && (
+                <DynamicField
+                  field={idField}
+                  value={pid}
+                  onChange={setPlayerId}
+                  error={fieldError(pid)}
+                />
+              )}
               {pickId && (
                 <div className="panel card-pad" style={{ padding: 10 }}>
                   {savedIds.map((sv) => (
@@ -400,6 +419,15 @@ export default function ProductDetailPage() {
               )}
               {verifyActive && <VerifyLine status={verify.status} username={verify.username} />}
               {verifyGuestBlock && <p className="tiny faint">{t('verify_signin_hint')}</p>}
+              {otherFields.map((f) => (
+                <DynamicField
+                  key={f.key}
+                  field={f}
+                  value={extra[f.key] ?? ''}
+                  onChange={(val) => setExtra((prev) => ({ ...prev, [f.key]: val }))}
+                  error={fieldError(extra[f.key] ?? '')}
+                />
+              ))}
             </div>
           ) : fulfill === 'transfer' ? (
             <div className="col" style={{ gap: 12 }}>
