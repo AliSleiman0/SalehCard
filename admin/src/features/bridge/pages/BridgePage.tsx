@@ -24,6 +24,7 @@ import {
 } from '../hooks/useBridge'
 import { useCan } from '@/stores/auth'
 import type { BridgeCommandStatus, BridgeDevice } from '../api/bridge'
+import { orderNumber } from '@/lib/orderNumber'
 
 const STATUS_FILTERS: [BridgeCommandStatus | '', string][] = [
   ['', 'All'],
@@ -246,7 +247,7 @@ export default function BridgePage() {
                   <div className="faint" style={{ fontSize: 12.5, marginTop: 8, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                     <span>attempt {c.attempts}</span>
                     {c.statusCode != null && <span>· code {c.statusCode}</span>}
-                    {c.orderId && <span>· order …{c.orderId.slice(-6)}</span>}
+                    {c.orderId && <span>· order {orderNumber(c.orderId)}</span>}
                     {c.failReason && <span style={{ color: 'var(--danger)' }}>· {c.failReason}</span>}
                     {c.rawReply && <span title={c.rawReply}>· reply: {c.rawReply.slice(0, 48)}</span>}
                     <span>· {new Date(c.createdAt).toLocaleString()}</span>

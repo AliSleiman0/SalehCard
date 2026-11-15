@@ -148,7 +148,10 @@ func (a *adminHandler) list(w http.ResponseWriter, r *http.Request) {
 		f.CreatedFrom, f.CreatedTo = &from, &to
 	}
 	if search := strings.TrimSpace(q.Get("q")); search != "" {
-		if id, err := bson.ObjectIDFromHex(search); err == nil {
+		// "#8D03458D" is how every screen shows an order number; the # is
+		// dropped only for the id checks (a Clash of Clans player tag also
+		// starts with #, so field-value matches keep the raw term).
+		if id, err := bson.ObjectIDFromHex(strings.TrimPrefix(search, "#")); err == nil {
 			f.OrderID = &id
 		} else {
 			users, err := a.users.FindByContactLike(r.Context(), search)

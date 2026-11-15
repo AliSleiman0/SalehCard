@@ -11,6 +11,7 @@ import {
   type ComplaintCategory,
 } from '../api/complaints'
 import { useCreateComplaint } from '../hooks/useComplaints'
+import { orderNumber } from '@/lib/orderNumber'
 
 export default function NewComplaintPage() {
   const { t } = useTranslation()
@@ -104,11 +105,11 @@ export default function NewComplaintPage() {
             <select className="field" value={orderId} onChange={(e) => setOrderId(e.target.value)}>
               <option value="">{t('complaint_no_order')}</option>
               {presetOrder && !recent.some((o) => o.id === presetOrder) && (
-                <option value={presetOrder}>#{presetOrder.slice(-8)}</option>
+                <option value={presetOrder}>{orderNumber(presetOrder)}</option>
               )}
               {recent.map((o) => (
                 <option key={o.id} value={o.id}>
-                  #{o.id.slice(-8)} · {o.items[0]?.title?.[locale] || o.items[0]?.title?.en || ''} ·{' '}
+                  {orderNumber(o.id)} · {o.items[0]?.title?.[locale] || o.items[0]?.title?.en || ''} ·{' '}
                   {new Date(o.createdAt).toLocaleDateString()}
                 </option>
               ))}

@@ -185,8 +185,8 @@ func (f OrderFilter) build() bson.D {
 			bson.D{{Key: "items.playerId", Value: f.SearchRaw}},
 			bson.D{{Key: "items.fields.value", Value: f.SearchRaw}},
 		}
-		if isShortRef(f.SearchRaw) {
-			or = append(or, bson.D{{Key: "ref", Value: bson.D{{Key: "$regex", Value: strings.ToLower(f.SearchRaw)}}}})
+		if ref := strings.TrimPrefix(f.SearchRaw, "#"); isShortRef(ref) {
+			or = append(or, bson.D{{Key: "ref", Value: bson.D{{Key: "$regex", Value: strings.ToLower(ref)}}}})
 		}
 		if len(f.UserIDs) > 0 {
 			or = append(or, bson.D{{Key: "userId", Value: bson.D{{Key: "$in", Value: f.UserIDs}}}})

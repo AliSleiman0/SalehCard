@@ -3,6 +3,7 @@ import { Icon, ImageArt, Price, Button } from '@/components'
 import { useCurrencyStore } from '@/stores/currency'
 import { BalanceLine, OrderStatusBadge } from '@/features/orders/components/OrderParts'
 import type { OrderView } from '@/features/orders/types'
+import { orderNumber } from '@/lib/orderNumber'
 
 export function OrderRow({ o }: { o: OrderView }) {
   const navigate = useNavigate()
@@ -20,7 +21,7 @@ export function OrderRow({ o }: { o: OrderView }) {
       <div className="col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
         <span style={{ fontWeight: 700, fontSize: 14 }}>{o.product}</span>
         <span className="tiny faint num">
-          {o.id} · {o.date}
+          {orderNumber(o.id)} · {o.date}
         </span>
         <BalanceLine o={o} />
       </div>

@@ -11,6 +11,7 @@ import { useBridgeDevices } from '@/features/bridge/hooks/useBridge'
 import { useSuppliersList } from '@/features/suppliers/hooks/useSuppliers'
 import { useCan } from '@/stores/auth'
 import { itemAllowed } from '@/app/nav'
+import { orderNumber } from '@/lib/orderNumber'
 
 type Range = 'daily' | 'weekly' | 'monthly'
 
@@ -450,7 +451,7 @@ export default function DashboardPage() {
                 {recent.map((o) => (
                   <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
                     <td>
-                      <span className="mono strong">{o.id.slice(-8)}</span>
+                      <span className="mono strong">{orderNumber(o.id)}</span>
                       <div className="faint" style={{ fontSize: 11 }}>
                         {o.date}
                       </div>
