@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../data/chatbot_repository.dart';
 
 int _bySort(ChatEntry a, ChatEntry b) => a.sortOrder.compareTo(b.sortOrder);
@@ -76,4 +78,36 @@ String helpSubtitle(String answer) {
     return firstLine.substring(0, end.start + 1);
   }
   return firstLine;
+}
+
+/// Why an AI question got no AI answer.
+enum AskFailure {
+  /// The customer hit their AI question limit (HTTP 429): say so.
+  limited,
+
+  /// The assistant is off, unavailable, or the network failed: fall back to
+  /// the keyword match so the customer still gets the quick answers.
+  unavailable,
+}
+
+/// Maps an error from [ChatbotRepository.ask] to an [AskFailure].
+AskFailure askFailure(Object error) {
+  if (error is DioException && error.response?.statusCode == 429) {
+    return AskFailure.limited;
+  }
+  return AskFailure.unavailable;
+}
+
+/// The last [maxTurns] conversation turns to send as context, oldest first.
+/// [turns] are (fromUser, text) pairs in display order; pending placeholders
+/// must already be excluded.
+List<AskTurn> askHistory(
+  List<({bool fromUser, String text})> turns, {
+  int maxTurns = 6,
+}) {
+  final start = turns.length > maxTurns ? turns.length - maxTurns : 0;
+  return [
+    for (final t in turns.sublist(start))
+      AskTurn(t.fromUser ? 'user' : 'assistant', t.text),
+  ];
 }

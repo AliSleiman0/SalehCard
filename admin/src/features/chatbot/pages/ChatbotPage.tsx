@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { EmptyState, ErrorState, Icon, LoadingSpinner, Modal, PageHead, Toggle } from '@/components'
+import {
+  EmptyState,
+  ErrorState,
+  Icon,
+  LoadingSpinner,
+  Modal,
+  PageHead,
+  Tabs,
+  Toggle,
+} from '@/components'
 import { ApiError } from '@/lib/api-client'
 import { toast } from '@/stores/toast'
 import { useCan } from '@/stores/auth'
@@ -14,19 +23,29 @@ import {
   type ChatEntry,
   type ChatEntryInput,
 } from '../api/chatbot'
+import { KnowledgeBaseTab } from '../components/KnowledgeBaseTab'
+import { ConversationsTab } from '../components/ConversationsTab'
 
 const KEY = ['admin', 'chatbot']
 
-/** Help-bot Q&A manager (client feedback 2026-11-12 #74). Predefined questions
- *  and answers only (no AI): customers tap a question on the storefront and get
- *  its answer, then its follow-up questions. */
+type Tab = 'qa' | 'kb' | 'logs'
+
+/** Help-bot manager. "Quick questions" are the predefined questions and
+ *  answers customers tap (client feedback 2026-11-12 #74, no AI). "Knowledge
+ *  base" holds the articles the AI assistant answers typed questions from, and
+ *  "Conversations" shows what it was asked (gaps + customer reports). */
 export default function ChatbotPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const can = useCan()
   const canManage = can('chatbot.manage')
   const [editing, setEditing] = useState<{ entry?: ChatEntry; parentId?: string } | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<{ entry: ChatEntry; followUps: number } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{
+    entry: ChatEntry
+    followUps: number
+  } | null>(null)
+  const [tab, setTab] = useState<Tab>('qa')
+  const [creatingDoc, setCreatingDoc] = useState(false)
 
   const q = useQuery({
     queryKey: KEY,
@@ -37,7 +56,8 @@ export default function ChatbotPage() {
     },
   })
   const refresh = () => void qc.invalidateQueries({ queryKey: KEY })
-  const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : 'Something went wrong')
+  const onErr = (e: unknown) =>
+    toast.error(e instanceof ApiError ? e.message : 'Something went wrong')
 
   const toggle = useMutation({
     mutationFn: (e: ChatEntry) =>
@@ -105,14 +125,21 @@ export default function ChatbotPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Toggle on={e.enabled} onClick={() => toggle.mutate(e)} />
           {!followUp && (
-            <button className="abtn xs" onClick={() => setEditing({ parentId: e.id })} title="Add a follow-up">
+            <button
+              className="abtn xs"
+              onClick={() => setEditing({ parentId: e.id })}
+              title="Add a follow-up"
+            >
               <Icon name="plus" size={13} /> Follow-up
             </button>
           )}
           <button className="abtn xs" onClick={() => setEditing({ entry: e })}>
             <Icon name="edit" size={13} /> Edit
           </button>
-          <button className="abtn xs danger" onClick={() => setConfirmDelete({ entry: e, followUps })}>
+          <button
+            className="abtn xs danger"
+            onClick={() => setConfirmDelete({ entry: e, followUps })}
+          >
             <Icon name="trash" size={13} />
           </button>
         </div>
@@ -125,34 +152,58 @@ export default function ChatbotPage() {
       <PageHead
         back="/"
         title={t('nav_chatbot')}
-        sub="Predefined questions and answers for the storefront help bot (web + app). Customers tap a question to see its answer and follow-ups."
+        sub="The storefront help bot: quick questions customers tap, and the knowledge base the AI assistant answers typed questions from."
       >
-        {canManage && (
+        {canManage && tab === 'qa' && (
           <button className="abtn primary" onClick={() => setEditing({})}>
             <Icon name="plus" size={15} /> New question
           </button>
         )}
-      </PageHead>
-      <div className="acard" style={{ padding: 0 }}>
-        {q.isLoading ? (
-          <LoadingSpinner />
-        ) : q.isError ? (
-          <ErrorState message="Could not load the questions." onRetry={() => q.refetch()} />
-        ) : groups.length === 0 ? (
-          <EmptyState
-            icon="send"
-            title="No questions yet"
-            sub="Add the questions customers ask most (top-ups, delivery times, KYC…). The help button stays hidden until there is at least one."
-          />
-        ) : (
-          groups.map((g) => (
-            <div key={g.top.id}>
-              {row(g.top, !!g.top.parentId, g.children.length)}
-              {g.children.map((c) => row(c, true))}
-            </div>
-          ))
+        {canManage && tab === 'kb' && (
+          <button className="abtn primary" onClick={() => setCreatingDoc(true)}>
+            <Icon name="plus" size={15} /> New article
+          </button>
         )}
-      </div>
+      </PageHead>
+      <Tabs<Tab>
+        value={tab}
+        onChange={setTab}
+        items={[
+          { k: 'qa', label: 'Quick questions' },
+          { k: 'kb', label: 'Knowledge base (AI)' },
+          { k: 'logs', label: 'Conversations' },
+        ]}
+      />
+      {tab === 'kb' && (
+        <KnowledgeBaseTab
+          canManage={canManage}
+          creating={creatingDoc}
+          onCreated={() => setCreatingDoc(false)}
+        />
+      )}
+      {tab === 'logs' && <ConversationsTab />}
+      {tab === 'qa' && (
+        <div className="acard" style={{ padding: 0 }}>
+          {q.isLoading ? (
+            <LoadingSpinner />
+          ) : q.isError ? (
+            <ErrorState message="Could not load the questions." onRetry={() => q.refetch()} />
+          ) : groups.length === 0 ? (
+            <EmptyState
+              icon="send"
+              title="No questions yet"
+              sub="Add the questions customers ask most (top-ups, delivery times, KYC…). The help button stays hidden until there is at least one."
+            />
+          ) : (
+            groups.map((g) => (
+              <div key={g.top.id}>
+                {row(g.top, !!g.top.parentId, g.children.length)}
+                {g.children.map((c) => row(c, true))}
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {editing && (
         <EntryEditor
@@ -170,7 +221,9 @@ export default function ChatbotPage() {
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)}>
           <div style={{ padding: 22 }}>
-            <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10 }}>Delete this question?</h3>
+            <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10 }}>
+              Delete this question?
+            </h3>
             <p className="muted" style={{ fontSize: 13.5 }}>
               “{confirmDelete.entry.question.en || confirmDelete.entry.question.ar}”
               {confirmDelete.followUps > 0 &&
@@ -220,7 +273,8 @@ function EntryEditor({
   const [error, setError] = useState('')
 
   const save = useMutation({
-    mutationFn: (input: ChatEntryInput) => (entry ? updateEntry(entry.id, input) : createEntry(input)),
+    mutationFn: (input: ChatEntryInput) =>
+      entry ? updateEntry(entry.id, input) : createEntry(input),
     onSuccess: onSaved,
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not save the question.'),
   })
@@ -266,15 +320,31 @@ function EntryEditor({
           </div>
           <div>
             <label className="alabel">Question (Arabic)</label>
-            <input className="afield" dir="rtl" value={qAr} onChange={(e) => setQAr(e.target.value)} />
+            <input
+              className="afield"
+              dir="rtl"
+              value={qAr}
+              onChange={(e) => setQAr(e.target.value)}
+            />
           </div>
           <div>
             <label className="alabel">Answer (English)</label>
-            <textarea className="afield" rows={5} value={aEn} onChange={(e) => setAEn(e.target.value)} />
+            <textarea
+              className="afield"
+              rows={5}
+              value={aEn}
+              onChange={(e) => setAEn(e.target.value)}
+            />
           </div>
           <div>
             <label className="alabel">Answer (Arabic)</label>
-            <textarea className="afield" rows={5} dir="rtl" value={aAr} onChange={(e) => setAAr(e.target.value)} />
+            <textarea
+              className="afield"
+              rows={5}
+              dir="rtl"
+              value={aAr}
+              onChange={(e) => setAAr(e.target.value)}
+            />
           </div>
         </div>
 
@@ -308,7 +378,9 @@ function EntryEditor({
         </div>
 
         {error && (
-          <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 14 }}>{error}</div>
+          <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 14 }}>
+            {error}
+          </div>
         )}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
           <button className="abtn" onClick={onClose}>

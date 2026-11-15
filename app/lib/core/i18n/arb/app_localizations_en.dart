@@ -1060,6 +1060,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpSend => 'Send';
 
   @override
+  String get helpGreetingAi =>
+      'Choose a question below, or type your own and I\'ll answer it.';
+
+  @override
+  String get helpThinking => 'Thinking…';
+
+  @override
+  String get helpAiNote => 'AI answer · may contain mistakes';
+
+  @override
+  String get helpAiReport => 'Report';
+
+  @override
+  String get helpAiReported => 'Thanks — we\'ll review this answer.';
+
+  @override
+  String get helpAiLimit =>
+      'You\'ve reached the limit for AI answers for now. Try the questions above, or contact us below.';
+
+  @override
   String get uploadPhoto => 'Upload a photo (QR code / barcode)';
 
   @override

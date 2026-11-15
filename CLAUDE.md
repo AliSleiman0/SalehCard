@@ -198,6 +198,23 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   **Fail-open**: a positively-bad ID blocks, but a timeout/outage returns `unavailable` so a
   third-party hiccup never halts the sale; the playerId is never logged. Only single-ID games verify —
   multi-param games (Mobile Legends id+zone, Genshin id+server) are collect-only.
+- **AI help assistant** (`internal/modules/chatbot` + `internal/platform/llm`, ports & adapters like `sms`): typed
+  help-bot questions are answered by an LLM **only from admin-maintained knowledge-base docs** (`kb_docs`, admin
+  → Help bot → Knowledge base; EN+AR; ≤24k chars total, the whole KB is the system prompt, a stable prefix the
+  provider caches). `llm.Completer` port with `azureopenai` (v1 chat-completions, `api-key`, strict JSON schema,
+  `reasoning_effort: minimal`) + `stub` adapters, selected by **`LLM_PROVIDER`** (default `stub` → assistant
+  reports off outside dev). Prod: Azure OpenAI `salehcard-openai` / deployment `chat` = gpt-5-mini (DEVOPS-TODO
+  §25). **The hard rule is enforced in code, not the prompt**: the model must return `{answerable, answer,
+  sourceIds}` and the server shows the answer only when it cites ≥1 real enabled doc — anything else (off-topic,
+  invented source, content-filter block) becomes a localized "can't help, contact support" fallback.
+  `POST /api/v1/chatbot/ask` (AuthRequired) + `/ask/{id}/report` (Play AI-content policy); public
+  `GET /api/v1/chatbot` carries `ai` so the app picks AI vs keyword match. Gated by the **`chatbotAiEnabled`**
+  setting (off by default — the kill switch). Billed → per-user / per-IP / global caps (`CHATBOT_AI_*`) that
+  **fail CLOSED** and always use the Mongo limiter. Docs tagged `android-only` never reach iOS (`platform`
+  field, App Review). `chat_logs` keep Q&A + token usage for 30 days (TTL; admin → Conversations), never slog.
+  Starter docs without that tag must not mention games / player IDs / gift cards (the iOS build is
+  telecom-only; `TestStarterKB` enforces it). `cmd/chatbotseed --kb-only` seeds the starter KB;
+  `cmd/chateval` runs a 35-question live test set. Cost alert: Azure budget `salehcard-openai-monthly` ($10).
 - **Product reviews** (`internal/modules/review`): a logged-in customer posts one editable 1–5★
   rating + text per product — `POST /api/v1/reviews`, `GET /api/v1/reviews/mine`, public list at
   `GET /api/v1/products/{id}/reviews`; the app has a star-input + write-review sheet. Admins moderate

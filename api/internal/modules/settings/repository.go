@@ -82,6 +82,9 @@ func (r *MongoRepository) Update(ctx context.Context, in UpdateInput, actor stri
 	if in.AdminSmsTwoFactorEnabled != nil {
 		cur.AdminSmsTwoFactorEnabled = *in.AdminSmsTwoFactorEnabled
 	}
+	if in.ChatbotAIEnabled != nil {
+		cur.ChatbotAIEnabled = *in.ChatbotAIEnabled
+	}
 	if in.ExchangeRates != nil {
 		cur.ExchangeRates = *in.ExchangeRates
 	}

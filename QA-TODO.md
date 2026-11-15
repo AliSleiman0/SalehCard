@@ -453,7 +453,7 @@ Verified locally in Chrome against fake suppliers: loss → pause + switch to th
 recovery without switching back, re-show, admin save keeps the sync data, alerts + acknowledge, dashboard
 tile. Still to check:
 
-1. **Prod dry run** (DEVOPS-TODO §25): after a day, read every alert against the supplier panels. Are the
+1. **Prod dry run** (DEVOPS-TODO §26): after a day, read every alert against the supplier panels. Are the
    costs per block right, and are there no false "hidden" alerts while a supplier is down?
 2. **Settings → USD per 1 LBP** on umanage: the field shows only for non-USD suppliers (none locally). Check
    it saves and the "Rate missing" alert closes on the next pass.
@@ -461,3 +461,30 @@ tile. Still to check:
    with a working "Open order" link.
 4. **Two API instances**: `sync-status` "last run" is per instance. If prod scales out, each instance runs
    the job (writes are guarded, alerts dedupe), but "last run" may show a different instance's pass.
+## AI help assistant (feat/ai-chatbot, 2026-11-15)
+
+Verified before the PR: Go unit + Mongo integration tests, `cmd/chateval` against the real deployment (33
+questions in EN, AR and Arabizi: all in-scope ones answered from the right article; off-topic, jailbreak,
+data-bait and iOS-crypto ones refused), live HTTP checks (gating, 401/429/503, report scoping, budget,
+audit), the admin Help bot tabs + Settings toggle in Chrome, Flutter widget tests, and the Android emulator
+against a local API (EN + AR/RTL answers with the AI note, Report → thank-you, off-topic refusal with the
+contact card, toggle switched off mid-session → keyword answer). Still to check:
+
+1. **Client review of the knowledge base** (admin → Help bot → Knowledge base, EN and AR) before switching the
+   assistant on in prod: the articles are drafted from how the app works today; the client must correct
+   anything that doesn't match how they actually operate (top-up approval, refunds, wrong player IDs).
+2. **Real phone, prod**: with the toggle on, type questions on Android and iOS (TestFlight) — answers appear
+   with "AI answer · Report", Report flips to the thank-you, off-topic gets the polite refusal and the contact
+   cards, and the row shows in admin → Help bot → Conversations.
+3. **Next day**: check Conversations → "Not answered" for knowledge-base gaps, and the Azure cost of
+   `salehcard-openai`.
+4. **Store disclosures** (owner): typed help questions are processed by Azure OpenAI. The `/privacy` page
+   already says so (updated 2026-11-15, EN + AR). Still to do in the consoles before shipping the app build:
+   Play Data safety → add "Other user-generated content" (collected, shared with a service provider,
+   optional (only when the user types a question), purpose: app functionality + customer support, deleted
+   after 30 days), and
+   App Store privacy → "Other User Content" (App Functionality + Customer Support, linked to the user, not
+   used for tracking).
+5. **iOS gets no game content**: on a TestFlight build ask about player IDs / gift cards — the answer must not
+   come from the `android-only` "Game top-ups, player IDs and gift card codes" article.
+
