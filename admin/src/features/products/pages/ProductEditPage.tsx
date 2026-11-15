@@ -131,6 +131,8 @@ export default function ProductEditPage() {
   const [linkRows, setLinkRows] = useState<LinkRow[]>([])
   const [linksRev, setLinksRev] = useState(0)
   const [linksDirty, setLinksDirty] = useState(false)
+  // Automatic fallback to the next supplier link (on by default).
+  const [fallbackOn, setFallbackOn] = useState(true)
   const { data: provRes } = useFulfillmentProviders()
   const providerOptions = provRes?.data ?? []
   // Input-field specs: key, type, labels, and constraints (min/max, select
@@ -192,6 +194,7 @@ export default function ProductEditPage() {
     setLinkRows(toLinkRows(p.supplierLinks, p.activeSupplierLinkId))
     setLinksRev(p.supplierLinksRev ?? 0)
     setLinksDirty(false)
+    setFallbackOn(p.supplierFallback ?? true)
     setInputFields(toRows(p.inputFields ?? []))
     setVerifyEnabled(!!p.verification)
     setVerifyApp(p.verification?.app ?? '')
@@ -317,6 +320,19 @@ export default function ProductEditPage() {
             amountRange={supplierAmountRange}
             searchHint={title.en}
           />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginTop: 12 }}>
+            <input
+              type="checkbox"
+              checked={fallbackOn}
+              onChange={(e) => setFallbackOn(e.target.checked)}
+            />
+            <b style={{ fontSize: 13.5 }}>Automatic fallback to next supplier</b>
+          </label>
+          <div className="ahint" style={{ margin: '6px 0 0' }}>
+            When the active supplier refuses an order for sure (no balance, product withdrawn, throttled,
+            maintenance…), the order goes to the next switched-on supplier in this list by itself. It never
+            moves an order a supplier may still deliver, or one an admin sent by hand.
+          </div>
         </div>
       )}
       {apiOn && ff === 'credit' && !perUnit && ignoredAmounts.length > 0 && (
@@ -432,6 +448,8 @@ export default function ProductEditPage() {
       // The supplier links table is kept when supplier delivery is turned off
       // (orders then just don't go to a supplier); sent only when edited.
       ...(linksDirty ? { supplierLinks: toLinksInput(linkRows, linksRev) } : {}),
+      // Sent only when changed (absent = on for a new product).
+      ...(fallbackOn !== (data?.data?.supplierFallback ?? true) ? { supplierFallback: fallbackOn } : {}),
       stock,
       // Unit cost: send only when filled so a blank preserves the stored value.
       ...(cost.trim() !== '' ? { cost: Math.max(0, parseFloat(cost) || 0) } : {}),

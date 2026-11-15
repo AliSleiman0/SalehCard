@@ -58,6 +58,9 @@ export interface ProductInput {
   // server derives fulfillmentProvider/upstreamProductId from the active row
   // and refuses a stale rev (409 SUPPLIER_LINKS_CHANGED).
   supplierLinks?: SupplierLinksInput
+  // Automatic fallback to the next supplier link on a definite refusal.
+  // Omitted = unchanged (on for a new product).
+  supplierFallback?: boolean
   // Bridge recharge config. A non-empty `provider` sets it; `{provider:'',...}`
   // clears it. Omitted = leave unchanged.
   bridge?: BridgeSpec | { provider: ''; method: '' }

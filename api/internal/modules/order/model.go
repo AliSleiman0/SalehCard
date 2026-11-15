@@ -106,6 +106,11 @@ type SupplierAttempt struct {
 	StuckAt           *time.Time `bson:"stuckAt,omitempty"           json:"stuckAt,omitempty"`
 	ReroutedAt        time.Time  `bson:"reroutedAt"                  json:"reroutedAt"`
 	ReroutedBy        string     `bson:"reroutedBy,omitempty"        json:"reroutedBy,omitempty"`
+	// Auto marks an attempt the system moved on from by itself (the supplier
+	// definitely refused, so the order fell back to the product's next
+	// supplier link); Reason is why, for the admin's attempts table.
+	Auto   bool   `bson:"auto,omitempty"   json:"auto,omitempty"`
+	Reason string `bson:"reason,omitempty" json:"reason,omitempty"`
 }
 
 // Fulfillment carries delivery details for an order.
@@ -141,7 +146,16 @@ type Fulfillment struct {
 	SupplierOrderUUID string            `bson:"supplierOrderUUID,omitempty" json:"-"`
 	SupplierAttemptAt *time.Time        `bson:"supplierAttemptAt,omitempty" json:"supplierAttemptAt,omitempty"`
 	SupplierAttempts  []SupplierAttempt `bson:"supplierAttempts,omitempty"  json:"supplierAttempts,omitempty"`
-	StatusTimeline    []TimelineEvent   `bson:"statusTimeline"                json:"statusTimeline"`
+	// SupplierAttemptAuto marks the CURRENT attempt as created by the automatic
+	// fallback (not an admin): its definite rejection refunds like a placement
+	// attempt instead of waiting for the admin (see adminRouted).
+	SupplierAttemptAuto bool `bson:"supplierAttemptAuto,omitempty" json:"supplierAttemptAuto,omitempty"`
+	// SupplierAmbiguous is set when a dispatch of the CURRENT attempt failed
+	// without a definite refusal (transport/decode/unknown reply): the supplier
+	// may have taken the order, so the automatic fallback is blocked for this
+	// attempt (an admin can still re-send with the acknowledgement).
+	SupplierAmbiguous bool            `bson:"supplierAmbiguous,omitempty" json:"supplierAmbiguous,omitempty"`
+	StatusTimeline    []TimelineEvent `bson:"statusTimeline"                json:"statusTimeline"`
 }
 
 // Order is the root aggregate for a customer purchase.

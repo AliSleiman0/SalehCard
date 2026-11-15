@@ -110,7 +110,8 @@ export function SupplierPanel({ order, canManage }: { order: AdminOrder; canMana
           <div>
             <div className="faint" style={{ fontSize: 12 }}>Attempt</div>
             <b>
-              #{f.supplierAttempt + 1} · since {fmt(f.supplierAttemptAt)}
+              #{f.supplierAttempt + 1}
+              {f.supplierAttemptAuto ? ' · automatic fallback' : ` · since ${fmt(f.supplierAttemptAt)}`}
             </b>
           </div>
         )}
@@ -137,7 +138,21 @@ export function SupplierPanel({ order, canManage }: { order: AdminOrder; canMana
                   <td className="mono">{a.providerRef || '—'}</td>
                   <td>
                     {fmt(a.reroutedAt)}
-                    {a.reroutedBy ? ` · ${a.reroutedBy}` : ''}
+                    {a.auto ? (
+                      <>
+                        {' '}
+                        <span className="bdg" title={a.reason}>
+                          auto
+                        </span>
+                        {a.reason && (
+                          <div className="faint" style={{ fontSize: 12, overflowWrap: 'anywhere' }}>
+                            {a.reason}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      a.reroutedBy ? ` · ${a.reroutedBy}` : ''
+                    )}
                   </td>
                 </tr>
               ))}

@@ -120,7 +120,8 @@ func (p *Panel) Fulfill(ctx context.Context, in FulfillInput) (Result, error) {
 	if in.UpstreamID == "" {
 		// Product mapped to this supplier without an upstream id: a config
 		// problem, not an order problem — park, admin fixes the mapping.
-		return Result{}, fmt.Errorf("panel %s: product %s has no upstream product id: %w", p.name, in.ProductID, ErrUnavailable)
+		// Nothing was sent, so this is a definite refusal (fallback-safe).
+		return Result{}, refusedf("panel %s: product %s has no upstream product id", p.name, in.ProductID)
 	}
 
 	q := url.Values{}
@@ -142,7 +143,7 @@ func (p *Panel) Fulfill(ctx context.Context, in FulfillInput) (Result, error) {
 		return Result{}, err
 	}
 	if !strings.EqualFold(env.Status, "OK") {
-		return Result{}, p.classify(env)
+		return Result{}, p.classify(env, true)
 	}
 
 	var ord panelOrder
@@ -173,7 +174,8 @@ func (p *Panel) CheckStatus(ctx context.Context, ref string) (Status, error) {
 		return Status{}, err
 	}
 	if !strings.EqualFold(env.Status, "OK") {
-		return Status{}, p.classify(env)
+		// Never a refusal here: the order already exists upstream.
+		return Status{}, p.classify(env, false)
 	}
 	var orders []panelOrder
 	if err := json.Unmarshal(env.Data, &orders); err != nil || len(orders) == 0 {
@@ -391,13 +393,27 @@ func (p *Panel) get(ctx context.Context, endpoint string) (panelEnvelope, error)
 	return env, nil
 }
 
+// panelRefusalCodes are the newOrder error codes that certainly created no
+// order upstream: 100 balance, 108 2FA required, 109/110 product not found /
+// withdrawn, 111 throttled, 120-122 auth, 123 IP not allowed, 130 maintenance.
+var panelRefusalCodes = map[int]bool{
+	100: true, 108: true, 109: true, 110: true, 111: true,
+	120: true, 121: true, 122: true, 123: true, 130: true,
+}
+
 // classify maps a panel error reply onto the port's error contract.
 // Order-specific codes hard-fail (the engine compensates); everything else —
 // balance, throttle, auth/IP, maintenance, product withdrawn, unknown — parks.
-func (p *Panel) classify(env panelEnvelope) error {
+// placing marks a newOrder reply: only there can a known code be a definite
+// refusal (ErrRefused, fallback-safe); an unknown code stays plain
+// ErrUnavailable because we can't tell whether an order was created.
+func (p *Panel) classify(env panelEnvelope, placing bool) error {
 	msg := env.Message
 	if msg == "" {
 		msg = env.Msg
+	}
+	if placing && panelRefusalCodes[env.Code] {
+		return refusedf("panel %s: refused (code %d): %s", p.name, env.Code, msg)
 	}
 	switch env.Code {
 	case 105, 106, 112, 113:

@@ -196,10 +196,13 @@ func (f *fakeOrderRepo) ListSupplierRetryable(_ context.Context, now time.Time, 
 	return out, nil
 }
 
-func (f *fakeOrderRepo) BumpSupplierRetry(_ context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time) error {
+func (f *fakeOrderRepo) BumpSupplierRetry(_ context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time, ambiguous bool) error {
 	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing && o.Fulfillment.SupplierAttempt == attempt {
 		o.Fulfillment.SupplierRetryCount = retryCount
 		o.Fulfillment.SupplierNextRetryAt = &nextRetryAt
+		if ambiguous {
+			o.Fulfillment.SupplierAmbiguous = true
+		}
 	}
 	return nil
 }
@@ -219,7 +222,11 @@ func (f *fakeOrderRepo) ClaimSupplierReroute(_ context.Context, c RerouteClaim) 
 	if !ok {
 		return nil, apperrors.ErrNotFound
 	}
-	if o.Status != OrderStatusProcessing || o.Fulfillment.SupplierAttempt != c.ExpectedAttempt || o.Fulfillment.ProviderRef != c.ExpectedRef {
+	statusOK := o.Status == OrderStatusProcessing || (c.AllowPending && o.Status == OrderStatusPending)
+	if !statusOK || o.Fulfillment.SupplierAttempt != c.ExpectedAttempt || o.Fulfillment.ProviderRef != c.ExpectedRef {
+		return nil, apperrors.ErrConflict
+	}
+	if c.Auto && o.Fulfillment.SupplierAmbiguous {
 		return nil, apperrors.ErrConflict
 	}
 	if c.ItemIndex < 0 || c.ItemIndex >= len(o.Items) {
@@ -238,7 +245,11 @@ func (f *fakeOrderRepo) ClaimSupplierReroute(_ context.Context, c RerouteClaim) 
 	o.Items[c.ItemIndex].UpstreamProductID = c.NewUpstreamID
 	o.Fulfillment.SupplierAttempt = c.ExpectedAttempt + 1
 	o.Fulfillment.SupplierOrderUUID = c.NewOrderUUID
-	o.Fulfillment.SupplierAttemptAt = &now
+	if !c.KeepClock {
+		o.Fulfillment.SupplierAttemptAt = &now
+	}
+	o.Fulfillment.SupplierAttemptAuto = c.Auto
+	o.Fulfillment.SupplierAmbiguous = false
 	o.Fulfillment.ProviderRef = ""
 	o.Fulfillment.SupplierRetryCount = 0
 	fallback := now.Add(rerouteFallbackRetry)
