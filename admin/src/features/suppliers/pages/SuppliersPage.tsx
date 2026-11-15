@@ -18,7 +18,13 @@ import {
   useAckSupplierAlert,
   useAckAllSupplierAlerts,
 } from '../hooks/useSuppliers'
-import type { SupplierView, SupplierHealth, CatalogProductView, SupplierAlertKind } from '../api/suppliers'
+import type {
+  SupplierView,
+  SupplierHealth,
+  CatalogProductView,
+  SupplierAlert,
+  SupplierAlertKind,
+} from '../api/suppliers'
 import { orderNumber } from '@/lib/orderNumber'
 import { relativeTime, relativeTimeInline } from '@/lib/utils'
 
@@ -153,7 +159,7 @@ export default function SuppliersPage() {
                     title="Check every product linked to this supplier now: record its costs, pause links that sell at a loss, hide / re-show products with its stock. Never changes a selling price."
                     onClick={() => runSync(s)}
                   >
-                    <Icon name="refresh" size={14} /> Sync now
+                    <Icon name="refresh" size={14} /> Check now
                   </button>
                 )}
                 <button className="abtn sm" onClick={() => setOrders(s)}>
@@ -189,24 +195,29 @@ function SyncStatusStrip() {
     <div className="acard pad" style={{ marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
       <Icon name="refresh" size={15} />
       {st.enabled ? (
-        <span>
-          <b>Automatic supplier sync is on</b> — every {mins} min{st.dryRun ? '' : '.'}
-          {st.dryRun && (
-            <>
-              {' '}
-              in <span className="st st-warn">dry run</span>: it only raises alerts, nothing is changed.
-            </>
-          )}
-        </span>
+        st.dryRun ? (
+          <span>
+            <b>Automatic supplier check is on</b> (every {mins} min) and{' '}
+            <span className="st st-warn">only warns you</span> under Alerts — it doesn&apos;t change any product yet.
+            Pausing a supplier that sells at a loss, switching to the next supplier, and taking out-of-stock products
+            off sale are not turned on yet.
+          </span>
+        ) : (
+          <span>
+            <b>Automatic supplier check is on</b> (every {mins} min). It pauses a supplier that would sell at a loss,
+            sends orders to the next supplier, and takes a product off sale when no supplier has it (and back on when
+            one does). It never changes your prices.
+          </span>
+        )
       ) : (
         <span>
-          <b>Automatic supplier sync is off.</b> &ldquo;Sync now&rdquo; checks one supplier&apos;s products on demand
-          {st.dryRun ? ' (dry run: alerts only)' : ''}.
+          <b>Automatic supplier check is off.</b> &ldquo;Check now&rdquo; on a supplier checks its products once
+          {st.dryRun ? ' (warnings only)' : ''}.
         </span>
       )}
       {last && (
         <span className="faint">
-          Last run {relativeTimeInline(last.finishedAt)}: {syncSummary(last)}
+          Last check {relativeTimeInline(last.finishedAt)}: {syncSummary(last)}
         </span>
       )}
       {st.running && <span className="st st-mute">running…</span>}
@@ -220,10 +231,23 @@ const ALERT_LABEL: Record<SupplierAlertKind, { label: string; cls: string }> = {
   cost_changed: { label: 'Cost changed', cls: 'st-warn' },
   loss_paused: { label: 'Selling at a loss', cls: 'st-danger' },
   loss_recovered: { label: 'Profitable again', cls: 'st-ok' },
-  product_hidden: { label: 'Hidden', cls: 'st-danger' },
+  product_hidden: { label: 'Taken off sale', cls: 'st-danger' },
   product_shown: { label: 'Back on sale', cls: 'st-ok' },
   fx_missing: { label: 'Rate missing', cls: 'st-warn' },
   fallback_exhausted: { label: 'No supplier left', cls: 'st-danger' },
+}
+
+// Warning-only mode: nothing was done, so name what WOULD happen.
+const ALERT_LABEL_WOULD: Partial<Record<SupplierAlertKind, string>> = {
+  product_hidden: 'Would go off sale',
+  product_shown: 'Would go back on sale',
+  loss_recovered: 'Would be profitable again',
+}
+
+function alertLabel(a: SupplierAlert): { label: string; cls: string } {
+  const k = ALERT_LABEL[a.kind] ?? { label: a.kind, cls: 'st-mute' }
+  const would = a.dryRun ? ALERT_LABEL_WOULD[a.kind] : undefined
+  return would ? { ...k, label: would } : k
 }
 
 function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: SupplierView[] }) {
@@ -259,8 +283,8 @@ function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: 
         <ErrorState message="Could not load alerts." onRetry={() => refetch()} />
       ) : alerts.length === 0 ? (
         <EmptyState
-          title={show === 'open' ? 'No open alerts' : 'No alerts yet'}
-          sub="Cost changes, links paused for selling at a loss, products hidden or re-shown by the supplier sync, and orders with no supplier left show up here."
+          title={show === 'open' ? 'Nothing needs your attention' : 'No alerts yet'}
+          sub="You don't add alerts here — they appear by themselves when a supplier changes its price, a product would sell at a loss, a product runs out at every supplier, or an order can't be sent to any supplier."
         />
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -275,7 +299,7 @@ function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: 
             </thead>
             <tbody>
               {alerts.map((a) => {
-                const k = ALERT_LABEL[a.kind] ?? { label: a.kind, cls: 'st-mute' }
+                const k = alertLabel(a)
                 return (
                   <tr key={a.id} style={{ opacity: a.open ? 1 : 0.6 }}>
                     <td style={{ whiteSpace: 'nowrap' }}>
@@ -284,8 +308,12 @@ function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: 
                       </span>
                       {a.dryRun && (
                         <div>
-                          <span className="bdg" style={{ marginTop: 4 }}>
-                            dry run
+                          <span
+                            className="bdg"
+                            style={{ marginTop: 4 }}
+                            title="Nothing was changed: automatic changes are not turned on yet."
+                          >
+                            warning only
                           </span>
                         </div>
                       )}
@@ -620,7 +648,8 @@ function SettingsModal({ supplier, onClose }: { supplier: SupplierView; onClose:
               placeholder="e.g. 0.0000112 (1 / 89,500)"
             />
             <div className="ahint" style={{ margin: '4px 0 0' }}>
-              The supplier sync converts this supplier&apos;s prices with it to check for selling at a loss.
+              The automatic supplier check uses this rate to compare this supplier&apos;s prices with yours (to spot
+              selling at a loss).
               Empty = no loss check for {supplier.name}.
             </div>
           </div>

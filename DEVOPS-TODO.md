@@ -609,19 +609,23 @@ Still open:
 
 The job ships **off**. Each step needs the owner's OK.
 
-1. In Azure (`salehcard-api` app settings) set `SUPPLIER_SYNC_ENABLED=true` and `SUPPLIER_SYNC_DRYRUN=true`.
-   Optional: `SUPPLIER_SYNC_INTERVAL` (default `10m`).
-2. Leave it a day. Read **Suppliers → Alerts** (each one is marked "dry run"). Nothing customer-facing
-   changes in a dry run. Only each link's "last checked" cost snapshot is stored.
+1. ✅ **DONE 2026-11-15** (owner OK): in Azure (`salehcard-api` app settings) set `SUPPLIER_SYNC_ENABLED=true` and
+   `SUPPLIER_SYNC_DRYRUN=true`. Optional: `SUPPLIER_SYNC_INTERVAL` (default `10m`). NOTE: until the
+   `fix/supplier-sync-prod` fix shipped, every prod pass checked **0 products** (Cosmos vCore matched nothing
+   for the old query) — the day of reading alerts starts once that fix is deployed.
+2. Leave it a day. Read **Suppliers → Alerts**. In this mode the admin sees "only warns you" on the page and
+   each alert is tagged "warning only" and worded as what *would* happen. Nothing customer-facing changes;
+   only each link's "last checked" cost snapshot is stored.
 3. If the alerts look right, set `SUPPLIER_SYNC_DRYRUN=false`. From then on the job pauses links that sell at a
    loss, switches the active supplier to the next profitable one, and hides / re-shows products with the
    suppliers' stock.
 4. umanage (LBP): set **Suppliers → umanage → Settings → USD per 1 LBP**. Without it the loss check is skipped
    for umanage links and one "Rate missing" alert stays open.
 
-Note: the "Sync now" button on each supplier card works whether or not the schedule is on, and it follows
+Note: the "Check now" button on each supplier card works whether or not the schedule is on, and it follows
 `SUPPLIER_SYNC_DRYRUN`. It replaces the old "Sync catalog" (which hid products directly and never re-showed
 them).
+
 ## 25. AI help assistant — Azure OpenAI (2026-11-15)
 
 Created with `az` (no Terraform yet): Azure OpenAI account **`salehcard-openai`** (rg `salehcard-prod`, West

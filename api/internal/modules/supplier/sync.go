@@ -164,9 +164,17 @@ func (j *SyncJob) Pass(ctx context.Context, only int) (SyncReport, error) {
 			bson.D{{Key: "fulfillmentProvider", Value: only}},
 		}})
 	} else {
+		// Plain $in on the configured supplier ids (the same shape as the
+		// supplier cards' mapped count). Prod's Cosmos vCore matched nothing
+		// for the earlier "supplierLinks.0 $exists / fulfillmentProvider $ne
+		// null" form, so every pass checked 0 products.
+		ids := bson.A{}
+		for _, sc := range j.svc.suppliers {
+			ids = append(ids, sc.ID)
+		}
 		filter = append(filter, bson.E{Key: "$or", Value: bson.A{
-			bson.D{{Key: "supplierLinks.0", Value: bson.D{{Key: "$exists", Value: true}}}},
-			bson.D{{Key: "fulfillmentProvider", Value: bson.D{{Key: "$ne", Value: nil}}}},
+			bson.D{{Key: "supplierLinks.provider", Value: bson.D{{Key: "$in", Value: ids}}}},
+			bson.D{{Key: "fulfillmentProvider", Value: bson.D{{Key: "$in", Value: ids}}}},
 		}})
 	}
 	cur, err := j.svc.productc.Find(ctx, filter)
@@ -225,7 +233,7 @@ func (j *SyncJob) setInFlight(v bool) {
 // loadEnv loads every configured supplier's catalog (refreshing only when
 // only is 0 or that supplier) and the exchange rates.
 func (j *SyncJob) loadEnv(ctx context.Context, only int, rep *SyncReport) (syncEnv, error) {
-	env := syncEnv{Catalogs: map[int]catalogView{}, Names: map[int]string{}, Now: j.now()}
+	env := syncEnv{Catalogs: map[int]catalogView{}, Names: map[int]string{}, Now: j.now(), Preview: j.cfg.DryRun}
 	settings, err := j.svc.settings.All(ctx)
 	if err != nil {
 		return env, err
@@ -442,10 +450,9 @@ func (j *SyncJob) raise(ctx context.Context, a supplieralert.Alert, rep *SyncRep
 	if j.alerts == nil {
 		return
 	}
-	if j.cfg.DryRun {
-		a.DryRun = true
-		a.Message = "Dry run (nothing was changed): " + a.Message
-	}
+	// Warning-only mode: the message is already worded as "would …"
+	// (syncEnv.Preview); the flag drives the "Warning only" badge.
+	a.DryRun = j.cfg.DryRun
 	if err := j.alerts.Raise(ctx, a); err != nil {
 		slog.Warn("supplier sync: raise alert", "key", a.Key, "error", err)
 		return
