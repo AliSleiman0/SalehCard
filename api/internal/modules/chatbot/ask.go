@@ -49,9 +49,9 @@ type settingsReader interface {
 	Get(ctx context.Context) (*settings.Settings, error)
 }
 
-// Assistant answers free-typed help questions from the knowledge base.
+// Assistant answers free-typed help questions from the admin's knowledge text.
 type Assistant struct {
-	kb       KBRepository
+	kb       KnowledgeRepository
 	logs     LogRepository
 	settings settingsReader
 	model    llm.Completer
@@ -64,7 +64,7 @@ type Assistant struct {
 }
 
 // NewAssistant wires the assistant.
-func NewAssistant(kb KBRepository, logs LogRepository, st settingsReader, model llm.Completer,
+func NewAssistant(kb KnowledgeRepository, logs LogRepository, st settingsReader, model llm.Completer,
 	limiter ratelimit.Limiter, limits Limits, live bool) *Assistant {
 	return &Assistant{kb: kb, logs: logs, settings: st, model: model, limiter: limiter,
 		limits: limits, live: live, now: time.Now}
@@ -80,26 +80,19 @@ type Turn struct {
 type AskInput struct {
 	Question string `json:"question"`
 	Lang     string `json:"lang"`
-	// Platform is the client OS ("ios" | "android"). iOS never receives
-	// android-only docs (App Review), so the model cannot answer from them.
+	// Platform is the client OS ("ios" | "android"). iOS never receives the
+	// android-only knowledge (App Review), so the model cannot answer from it.
 	Platform string `json:"platform"`
 	History  []Turn `json:"history"`
-}
-
-// Source is a knowledge-base doc an answer relied on.
-type Source struct {
-	ID    string `json:"id"`
-	Title Text   `json:"title"`
 }
 
 // AskResult is the response. Answered=false means Answer is the fallback text
 // and the client should surface the support contact.
 type AskResult struct {
-	LogID       string   `json:"logId,omitempty"`
-	Answer      string   `json:"answer"`
-	Answered    bool     `json:"answered"`
-	Sources     []Source `json:"sources"`
-	ShowSupport bool     `json:"showSupport"`
+	LogID       string `json:"logId,omitempty"`
+	Answer      string `json:"answer"`
+	Answered    bool   `json:"answered"`
+	ShowSupport bool   `json:"showSupport"`
 }
 
 // Enabled reports whether the assistant is on (Settings toggle + a live
@@ -189,31 +182,35 @@ func (a *Assistant) Ask(ctx context.Context, userID, ip string, raw AskInput) (A
 	if err := a.allow(ctx, userID, ip); err != nil {
 		return AskResult{}, "", err
 	}
-	all, err := a.kb.List(ctx, true)
+	k, err := a.kb.Get(ctx)
 	if err != nil {
 		return AskResult{}, "", ErrAIUnavailable
 	}
-	docs := docsForPlatform(all, in.Platform)
+	secs := sectionsFor(k, in.Platform)
 
-	fallback := AskResult{Answer: fallbackText(in.Lang, st.StoreName), ShowSupport: true, Sources: []Source{}}
+	fallback := AskResult{Answer: fallbackText(in.Lang, st.StoreName), ShowSupport: true}
 	entry := ChatLog{ID: bson.NewObjectID(), UserID: userID, Lang: in.Lang, Question: in.Question, CreatedAt: a.now().UTC()}
 
 	var res AskResult
-	if len(docs) == 0 {
+	if len(secs) == 0 {
 		// Nothing to ground on: don't pay for a call that must refuse.
 		entry.Outcome = outcomeUnanswered
 		res = fallback
 	} else {
-		msgs := make([]llm.Message, 0, len(in.History)+1)
+		msgs := make([]llm.Message, 0, len(in.History)+2)
 		for _, t := range in.History {
 			msgs = append(msgs, llm.Message{Role: t.Role, Content: t.Content})
 		}
-		msgs = append(msgs, llm.Message{Role: "user", Content: in.Question})
+		// The app-language note goes last, after the question, so the system
+		// prompt stays a byte-identical (cached) prefix across languages.
+		msgs = append(msgs,
+			llm.Message{Role: "user", Content: in.Question},
+			llm.Message{Role: "system", Content: appLanguageNote(in.Lang)})
 
 		mctx, cancel := context.WithTimeout(ctx, askModelDeadline)
 		start := a.now()
 		out, err := a.model.Complete(mctx, llm.Request{
-			System:          buildSystemPrompt(st.StoreName, docs),
+			System:          buildSystemPrompt(st.StoreName, secs),
 			Messages:        msgs,
 			MaxOutputTokens: maxOutputTokens,
 			SchemaName:      "help_answer",
@@ -233,12 +230,11 @@ func (a *Assistant) Ask(ctx context.Context, userID, ip string, raw AskInput) (A
 			slog.Warn("chatbot: AI provider call failed", "error", err) // no question text
 			return AskResult{}, "", ErrAIUnavailable
 		default:
-			if answer, cited, ok := enforce(out.Content, docs); ok {
+			if answer, cited, ok := enforce(out.Content, secs); ok {
 				entry.Outcome, entry.Answer = outcomeAnswered, answer
-				res = AskResult{Answer: answer, Answered: true, Sources: make([]Source, 0, len(cited))}
-				for _, d := range cited {
-					entry.SourceIDs = append(entry.SourceIDs, d.ID.Hex())
-					res.Sources = append(res.Sources, Source{ID: d.ID.Hex(), Title: d.Title})
+				res = AskResult{Answer: answer, Answered: true}
+				for _, s := range cited {
+					entry.Sources = append(entry.Sources, snippet(s.Text))
 				}
 			} else {
 				entry.Outcome = outcomeUnanswered
@@ -250,28 +246,6 @@ func (a *Assistant) Ask(ctx context.Context, userID, ip string, raw AskInput) (A
 		res.LogID = entry.ID.Hex()
 	}
 	return res, "", nil
-}
-
-// docsForPlatform drops android-only docs for iOS clients. An unknown
-// platform is treated as iOS (the conservative side for App Review).
-func docsForPlatform(docs []KBDoc, platform string) []KBDoc {
-	if platform == "android" {
-		return docs
-	}
-	out := make([]KBDoc, 0, len(docs))
-	for _, d := range docs {
-		androidOnly := false
-		for _, t := range d.Tags {
-			if t == TagAndroidOnly {
-				androidOnly = true
-				break
-			}
-		}
-		if !androidOnly {
-			out = append(out, d)
-		}
-	}
-	return out
 }
 
 // insertLog is best-effort: a logging failure never fails the answer.

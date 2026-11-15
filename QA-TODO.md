@@ -431,20 +431,10 @@ Still to check (needs prod / the real suppliers — they only answer the prod NA
 4. **Bulk refund** of a selection that includes an order still at a supplier: that one is skipped as
    "a supplier may still deliver it", and the rest are refunded.
 5. **Imported products whose param prompts have spaces / Arabic**: no false "missing parameter" warning.
-## Help bot starter content (PR #139, seeded on prod 2026-11-14)
+## Help bot starter content (PR #139) — SUPERSEDED 2026-11-15
 
-The 16 starter Q&A and the support WhatsApp number are live on prod. Not yet checked:
-
-1. **Client review of the wording**: the owner skipped it. Have the client read every answer in admin → Help
-   bot (EN and AR) and correct anything that doesn't match how they actually work (top-up times, KYC wait,
-   refund rules). Edits there are safe; a re-run of `chatbotseed` never overwrites them.
-2. **WhatsApp link**: web help panel → Contact support → WhatsApp opens a chat with +961 71 363 772.
-3. **Arabic on the web panel**: switch to AR, open the panel, and check the bubbles and chips read right to
-   left.
-4. **App help sheet on a device**: home and account → help → the same questions, follow-ups and footer. The
-   web panel was resized in PR #140; the app sheet wasn't changed.
-
-
+The predefined quick questions were retired in favour of the AI knowledge text (see "AI help assistant"
+below); only old app builds and the legacy web panel still show them. Nothing to check here any more.
 
 
 ## Supplier sync job (PR5 `feat/supplier-sync`)
@@ -474,9 +464,11 @@ audit), the admin Help bot tabs + Settings toggle in Chrome, Flutter widget test
 against a local API (EN + AR/RTL answers with the AI note, Report → thank-you, off-topic refusal with the
 contact card, toggle switched off mid-session → keyword answer). Still to check:
 
-1. **Client review of the knowledge base** (admin → Help bot → Knowledge base, EN and AR) before switching the
-   assistant on in prod: the articles are drafted from how the app works today; the client must correct
-   anything that doesn't match how they actually operate (top-up approval, refunds, wrong player IDs).
+1. **Client review of the knowledge** (admin → Help bot → AI knowledge — two plain-text boxes since
+   2026-11-15, written in English; the assistant answers Arabic questions in Arabic): the starter text is
+   drafted from how the app works today; the client must correct anything that doesn't match how they
+   actually operate (top-up approval, refunds, wrong player IDs). After the simplification PR deploys, the
+   knowledge must be re-seeded (DEVOPS-TODO §25.2) or the assistant only says "contact support".
 2. **Real phone, prod**: with the toggle on, type questions on Android and iOS (TestFlight) — answers appear
    with "AI answer · Report", Report flips to the thank-you, off-topic gets the polite refusal and the contact
    cards, and the row shows in admin → Help bot → Conversations.

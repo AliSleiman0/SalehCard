@@ -11,6 +11,7 @@ import '../../../../core/theme/theme_controller.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../help/data/chatbot_repository.dart';
 import '../../../help/presentation/help_sheet.dart';
+import '../../../help/domain/chat_logic.dart';
 import '../widgets/delete_account_sheet.dart';
 
 /// Menu / settings tab — foundation version: language + theme toggles and
@@ -29,7 +30,9 @@ class AccountMenuScreen extends ConsumerWidget {
     final email = user?.email ?? '';
     // Prefer the name; fall back to phone for phone-OTP accounts without email.
     final identity = name.isNotEmpty ? name : email;
-    final subtitle = name.isNotEmpty ? (email.isNotEmpty ? email : (user?.phone ?? '')) : '';
+    final subtitle = name.isNotEmpty
+        ? (email.isNotEmpty ? email : (user?.phone ?? ''))
+        : '';
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -85,8 +88,10 @@ class AccountMenuScreen extends ConsumerWidget {
             onTap: () => context.push('/complaints'),
           ),
           const Divider(height: 1),
-          // Help bot (predefined Q&A) — only when the admin has added questions.
-          if (ref.watch(chatbotProvider).value?.entries.isNotEmpty ?? false) ...[
+          // Help Center — only when it has something to offer (AI assistant
+          // on, or a WhatsApp contact).
+          if (ref.watch(chatbotProvider).value case final d?
+              when showHelpCenter(d)) ...[
             ListTile(
               leading: const Icon(Icons.chat_bubble_outline_rounded),
               title: Text(l10n.helpTitle),
@@ -108,8 +113,7 @@ class AccountMenuScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.translate_rounded),
             title: Text(l10n.languageToggle),
-            onTap: () =>
-                ref.read(localeControllerProvider.notifier).toggle(),
+            onTap: () => ref.read(localeControllerProvider.notifier).toggle(),
             trailing: Text(isAr ? 'عربي' : 'EN'),
           ),
           SwitchListTile(
@@ -122,16 +126,22 @@ class AccountMenuScreen extends ConsumerWidget {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.logout_rounded, color: Color(0xFFFF4D6D)),
-            title: Text(l10n.logout,
-                style: const TextStyle(color: Color(0xFFFF4D6D))),
+            title: Text(
+              l10n.logout,
+              style: const TextStyle(color: Color(0xFFFF4D6D)),
+            ),
             onTap: () => ref.read(authControllerProvider.notifier).logout(),
           ),
           const Divider(height: 1),
           ListTile(
-            leading: const Icon(Icons.delete_forever_outlined,
-                color: Color(0xFFFF4D6D)),
-            title: Text(l10n.deleteAccountMenuLabel,
-                style: const TextStyle(color: Color(0xFFFF4D6D))),
+            leading: const Icon(
+              Icons.delete_forever_outlined,
+              color: Color(0xFFFF4D6D),
+            ),
+            title: Text(
+              l10n.deleteAccountMenuLabel,
+              style: const TextStyle(color: Color(0xFFFF4D6D)),
+            ),
             onTap: () => showDeleteAccountSheet(context),
           ),
         ],

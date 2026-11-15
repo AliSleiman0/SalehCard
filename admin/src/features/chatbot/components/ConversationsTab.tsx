@@ -12,7 +12,7 @@ const OUTCOME: Record<ChatOutcome, { label: string; cls: string }> = {
 }
 
 /** The AI conversations (kept 30 days): what customers asked and what the
- *  assistant did. "Not covered" questions are the gaps to write articles for. */
+ *  assistant did. "Not covered" questions are the gaps to add to the knowledge. */
 export function ConversationsTab() {
   const [filter, setFilter] = useState<LogFilter>('unanswered')
   const [page, setPage] = useState(1)
@@ -82,6 +82,11 @@ export function ConversationsTab() {
                       dir="auto"
                     >
                       {l.answer || '—'}
+                      {l.sources && l.sources.length > 0 && (
+                        <div className="faint" dir="auto" style={{ fontSize: 11.5, marginTop: 6 }}>
+                          From: {l.sources.map((s) => `“${s}”`).join(' · ')}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span className={`bdg ${o.cls}`}>{o.label}</span>

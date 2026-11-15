@@ -639,9 +639,12 @@ Remaining:
    `AZURE_OPENAI_ENDPOINT=https://salehcard-openai.openai.azure.com`, `AZURE_OPENAI_DEPLOYMENT=chat`,
    `AZURE_OPENAI_API_KEY=<az cognitiveservices account keys list -g salehcard-prod -n salehcard-openai --query key1 -o tsv>`.
    Optional caps (defaults): `CHATBOT_AI_USER_MAX=20`/24h, `CHATBOT_AI_IP_MAX=40`/1h, `CHATBOT_AI_GLOBAL_MAX=500`/24h.
-2. **Seed the knowledge base on prod** (insert-only, by slug; `--kb-only` so starter quick questions the client
-   deleted are not re-created): `go run ./cmd/chatbotseed --kb-only` (dry run) → `--apply --confirm-prod`, via
-   the direct-DB firewall recipe.
+2. **Seed the AI knowledge on prod after the knowledge-simplification PR deploys** (2026-11-15: the 11
+   per-article `kb_docs` were replaced by one `chatbot_knowledge` text, so until seeded the assistant falls
+   back to "contact support"; insert-only, never overwrites an admin's text): `go run ./cmd/chatbotseed`
+   (dry run) → `--apply --confirm-prod`, via the direct-DB firewall recipe. Then the client rewrites it in
+   admin → Help bot → AI knowledge. Later, once no app build older than the AI one is in use: drop the
+   retired `chatbot_entries` and `kb_docs` collections.
 3. ~~**Budget alert**~~ — DONE 2026-11-15: subscription budget **`salehcard-openai-monthly`**, $10/month,
    filtered to the `salehcard-openai` resource, alerts at 50% + 100% actual and 100% forecast to the
    subscription **Owner** role (no hard-coded email; add `contactEmails` in portal → Cost Management →

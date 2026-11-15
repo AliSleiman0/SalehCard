@@ -198,23 +198,31 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   **Fail-open**: a positively-bad ID blocks, but a timeout/outage returns `unavailable` so a
   third-party hiccup never halts the sale; the playerId is never logged. Only single-ID games verify —
   multi-param games (Mobile Legends id+zone, Genshin id+server) are collect-only.
-- **AI help assistant** (`internal/modules/chatbot` + `internal/platform/llm`, ports & adapters like `sms`): typed
-  help-bot questions are answered by an LLM **only from admin-maintained knowledge-base docs** (`kb_docs`, admin
-  → Help bot → Knowledge base; EN+AR; ≤24k chars total, the whole KB is the system prompt, a stable prefix the
-  provider caches). `llm.Completer` port with `azureopenai` (v1 chat-completions, `api-key`, strict JSON schema,
-  `reasoning_effort: minimal`) + `stub` adapters, selected by **`LLM_PROVIDER`** (default `stub` → assistant
-  reports off outside dev). Prod: Azure OpenAI `salehcard-openai` / deployment `chat` = gpt-5-mini (DEVOPS-TODO
-  §25). **The hard rule is enforced in code, not the prompt**: the model must return `{answerable, answer,
-  sourceIds}` and the server shows the answer only when it cites ≥1 real enabled doc — anything else (off-topic,
-  invented source, content-filter block) becomes a localized "can't help, contact support" fallback.
-  `POST /api/v1/chatbot/ask` (AuthRequired) + `/ask/{id}/report` (Play AI-content policy); public
-  `GET /api/v1/chatbot` carries `ai` so the app picks AI vs keyword match. Gated by the **`chatbotAiEnabled`**
-  setting (off by default — the kill switch). Billed → per-user / per-IP / global caps (`CHATBOT_AI_*`) that
-  **fail CLOSED** and always use the Mongo limiter. Docs tagged `android-only` never reach iOS (`platform`
-  field, App Review). `chat_logs` keep Q&A + token usage for 30 days (TTL; admin → Conversations), never slog.
-  Starter docs without that tag must not mention games / player IDs / gift cards (the iOS build is
-  telecom-only; `TestStarterKB` enforces it). `cmd/chatbotseed --kb-only` seeds the starter KB;
-  `cmd/chateval` runs a 35-question live test set. Cost alert: Azure budget `salehcard-openai-monthly` ($10).
+- **AI help assistant** (`internal/modules/chatbot` + `internal/platform/llm`, ports & adapters like `sms`,
+  RBAC domain `chatbot`): the app's Help Center is an AI chat that answers **only from one admin-written
+  knowledge text** (collection `chatbot_knowledge`, single doc: `general` + `androidOnly`; admin → Help bot →
+  AI knowledge — two plain-text boxes in any language, ≤24k chars total, audited `chatbot.knowledge_update`).
+  The text is split into paragraphs on blank lines (`s1`, `s2`… — the citable units); all of it plus the rules
+  is the system prompt, a stable prefix the provider caches (the app-language note is a trailing system
+  message so the prefix stays byte-identical). The model answers in the customer's language (EN / Arabic /
+  Arabizi → MSA) whatever language the knowledge is in; the app's English→Arabic screen names are fixed in
+  code (`appScreenNames`), not admin-maintained. `llm.Completer` port with `azureopenai` (v1 chat-completions,
+  `api-key`, strict JSON schema, `reasoning_effort: minimal`) + `stub` adapters, selected by
+  **`LLM_PROVIDER`** (default `stub` → assistant reports off outside dev). Prod: Azure OpenAI
+  `salehcard-openai` / deployment `chat` = gpt-5-mini (DEVOPS-TODO §25). **The hard rule is enforced in code,
+  not the prompt**: the model must return `{answerable, answer, sourceIds}` and the server shows the answer
+  only when it cites ≥1 real paragraph — anything else (off-topic, invented source, content-filter block)
+  becomes a localized "can't help, contact support" fallback. `POST /api/v1/chatbot/ask` (AuthRequired) +
+  `/ask/{id}/report` (Play AI-content policy); public `GET /api/v1/chatbot` carries `ai` + `support`. Gated by
+  the **`chatbotAiEnabled`** setting (off by default — the kill switch; off → the Help Center shows only the
+  support contacts). Billed → per-user / per-IP / global caps (`CHATBOT_AI_*`) that **fail CLOSED** and always
+  use the Mongo limiter. `androidOnly` never reaches iOS (`platform` field; unknown = iOS; App Review: the
+  iOS build is telecom-only, so `general` must not mention games / player IDs / gift cards / crypto /
+  transfers — `TestStarterKnowledge` enforces it for the starter text). `chat_logs` keep Q&A, the cited
+  paragraphs' opening words (`sources`) and token usage for 30 days (TTL; admin → Conversations), never slog.
+  `cmd/chatbotseed` seeds the starter knowledge (insert-only; dry run → `--apply`, `--confirm-prod`;
+  `--whatsapp`); `cmd/chateval` runs a 35-question live test set. Cost alert: Azure budget
+  `salehcard-openai-monthly` ($10).
 - **Product reviews** (`internal/modules/review`): a logged-in customer posts one editable 1–5★
   rating + text per product — `POST /api/v1/reviews`, `GET /api/v1/reviews/mine`, public list at
   `GET /api/v1/products/{id}/reviews`; the app has a star-input + write-review sheet. Admins moderate
@@ -276,17 +284,12 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   TOO_MANY_OPEN`), per-IP create limit `RATE_LIMIT_COMPLAINT_*`. Staff replies and resolve/close notify the
   customer (`complaint_reply` / `complaint_status`, inbox + push, never SMS); the push data carries `kind`
   so the app's tray tap opens the thread. Web has no push and polls every 30s.
-- **Help bot** (`internal/modules/chatbot`, RBAC domain `chatbot`, collection `chatbot_entries`): predefined
-  Q&A only, no AI. An entry has `question`/`answer` as `{en, ar}`, `keywords`, `sortOrder`, `enabled`, and an
-  optional `parentId` (follow-ups are **one level deep**); cap 500 entries. Public `GET /api/v1/chatbot`
-  returns enabled entries plus `support{email, phone, whatsapp}` from `app_settings` (`supportWhatsapp` is
-  free-typed; clients keep only the digits for the `wa.me` link). Admins edit it in admin → Help bot
-  (`/api/admin/chatbot`, audited `chatbot.create/update/delete`). Clients: web `ChatWidget` (floating button,
-  panel 440×640, hidden while there are no entries) and the app's help sheet (home + account). **Starter
-  content**: `chatbot.StarterContent` (6 questions + 10 follow-ups, EN + AR, iOS-safe wording enforced by a
-  test), loaded with `go run ./cmd/chatbotseed` (dry run by default; `--apply`, `--confirm-prod` for prod,
-  optional `--whatsapp "<number>"`). It only adds: a question already present at the same level is skipped,
-  never overwritten. **Prod was seeded 2026-11-14** (16 entries, WhatsApp `+961 71 363 772`).
+- **Help bot quick questions — RETIRED 2026-11-15** (replaced by the AI knowledge above: one box is simpler
+  for admins). The old `chatbot_entries` (predefined EN+AR Q&A with follow-ups) are no longer editable or
+  seeded; `GET /api/v1/chatbot` still serves them read-only as `entries` **only for old app builds** and the
+  legacy `/web` `ChatWidget`. The new app ignores them. Drop the collection (and the unused `kb_docs` from
+  the first AI version) once old builds are gone (DEVOPS-TODO §25). Support WhatsApp comes from
+  `app_settings.supportWhatsapp` (free-typed; clients keep only the digits for the `wa.me` link).
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout

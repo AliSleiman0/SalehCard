@@ -1,38 +1,33 @@
-// Package chatbot is the storefront help bot (client feedback 2026-11-12 #74):
-// PREDEFINED questions and answers that admins maintain in the console. There
-// is no AI and no free-text understanding: customers tap a question, get its
-// answer, then its follow-up questions (one level deep). Admin CRUD sits behind
-// the "chatbot" RBAC domain and every edit is audited.
+// Package chatbot is the Help Center's AI assistant: customers type a question
+// and Azure OpenAI answers it ONLY from the knowledge text admins write in the
+// console (admin → Help bot), never from general knowledge (see enforce). It is
+// off unless the admin Settings toggle is on and a real LLM provider is
+// configured.
+//
+// The predefined quick questions (collection chatbot_entries) were retired on
+// 2026-11-15: admins no longer edit them, and the current apps never show them.
+// GET /api/v1/chatbot still returns the existing ones read-only so app builds
+// released before the AI assistant keep their help bot — drop them (and the
+// collection) once those builds are gone.
 package chatbot
 
 import (
 	"errors"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-const (
-	maxQuestionLen = 200
-	maxAnswerLen   = 2000
-	maxKeywords    = 20
-	maxKeywordLen  = 40
-	maxEntries     = 500
-)
+var errInvalid = errors.New("invalid")
 
-// Text is a bilingual string (the storefront speaks English and Arabic).
+// Text is a bilingual string (legacy quick questions).
 type Text struct {
 	En string `bson:"en" json:"en"`
 	Ar string `bson:"ar" json:"ar"`
 }
 
-func (t Text) trimmed() Text { return Text{En: strings.TrimSpace(t.En), Ar: strings.TrimSpace(t.Ar)} }
-func (t Text) empty() bool   { return t.En == "" && t.Ar == "" }
-
-// Entry is one question and its answer. A nil ParentID is a top-level
-// question; otherwise it is a follow-up shown after its parent's answer.
+// Entry is one legacy quick question and its answer (read-only). A nil
+// ParentID is a top-level question; otherwise a follow-up.
 type Entry struct {
 	ID        bson.ObjectID  `bson:"_id,omitempty"       json:"id"`
 	ParentID  *bson.ObjectID `bson:"parentId,omitempty"  json:"parentId,omitempty"`
@@ -44,63 +39,4 @@ type Entry struct {
 	CreatedBy string         `bson:"createdBy,omitempty" json:"createdBy,omitempty"`
 	CreatedAt time.Time      `bson:"createdAt"           json:"createdAt"`
 	UpdatedAt time.Time      `bson:"updatedAt"           json:"updatedAt"`
-}
-
-// Input is the admin create/update payload (a full replace on update).
-type Input struct {
-	ParentID  string   `json:"parentId"`
-	Question  Text     `json:"question"`
-	Answer    Text     `json:"answer"`
-	Keywords  []string `json:"keywords"`
-	SortOrder int      `json:"sortOrder"`
-	Enabled   bool     `json:"enabled"`
-}
-
-var errInvalid = errors.New("invalid")
-
-// normalize trims and validates the input, returning a user-facing message on
-// failure. It does not check that the parent exists (the handler does).
-func (in Input) normalize() (Input, *bson.ObjectID, string, error) {
-	out := in
-	out.Question = in.Question.trimmed()
-	out.Answer = in.Answer.trimmed()
-	if out.Question.empty() {
-		return out, nil, "a question is required (English or Arabic)", errInvalid
-	}
-	if out.Answer.empty() {
-		return out, nil, "an answer is required (English or Arabic)", errInvalid
-	}
-	if utf8.RuneCountInString(out.Question.En) > maxQuestionLen || utf8.RuneCountInString(out.Question.Ar) > maxQuestionLen {
-		return out, nil, "the question is too long", errInvalid
-	}
-	if utf8.RuneCountInString(out.Answer.En) > maxAnswerLen || utf8.RuneCountInString(out.Answer.Ar) > maxAnswerLen {
-		return out, nil, "the answer is too long", errInvalid
-	}
-	kws := make([]string, 0, len(in.Keywords))
-	seen := map[string]bool{}
-	for _, k := range in.Keywords {
-		k = strings.ToLower(strings.TrimSpace(k))
-		if k == "" || seen[k] {
-			continue
-		}
-		if utf8.RuneCountInString(k) > maxKeywordLen {
-			return out, nil, "a keyword is too long", errInvalid
-		}
-		seen[k] = true
-		kws = append(kws, k)
-	}
-	if len(kws) > maxKeywords {
-		return out, nil, "too many keywords", errInvalid
-	}
-	out.Keywords = kws
-
-	var parent *bson.ObjectID
-	if p := strings.TrimSpace(in.ParentID); p != "" {
-		oid, err := bson.ObjectIDFromHex(p)
-		if err != nil {
-			return out, nil, "invalid parent question", errInvalid
-		}
-		parent = &oid
-	}
-	return out, parent, "", nil
 }

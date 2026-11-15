@@ -12,7 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// TestRepos_Mongo exercises the kb_docs slug upsert, the owner-scoped report
+// TestRepos_Mongo exercises the single knowledge document, the owner-scoped report
 // flag and the log filters against a real Mongo.
 //
 // Needs MONGO_TEST_URI (e.g. mongodb://localhost:27017/?directConnection=true).
@@ -31,39 +31,32 @@ func TestRepos_Mongo(t *testing.T) {
 	defer func() { _ = client.Disconnect(ctx) }()
 	db := client.Database("salehcard_test_chatbot_" + bson.NewObjectID().Hex())
 	defer func() { _ = db.Drop(ctx) }()
-	if err := EnsureKBIndexes(ctx, db); err != nil {
-		t.Fatal(err)
-	}
 	if err := EnsureLogIndexes(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 
-	// Seed is insert-only: a second run with different text never overwrites.
-	kb := NewMongoKBRepository(db)
-	first := &KBDoc{ID: bson.NewObjectID(), Slug: "wallet", Title: Text{En: "Original"}, Body: Text{En: "b"}, Enabled: true}
-	if ins, err := kb.InsertIfSlugMissing(ctx, first); err != nil || !ins {
+	// Knowledge: absent → nil; seed is insert-only; Save upserts the one doc.
+	kn := NewMongoKnowledgeRepository(db)
+	if k, err := kn.Get(ctx); err != nil || k != nil {
+		t.Fatalf("no knowledge yet must be nil: %+v %v", k, err)
+	}
+	if ins, err := kn.InsertIfMissing(ctx, &Knowledge{General: "Original"}); err != nil || !ins {
 		t.Fatalf("first seed should insert: %v %v", ins, err)
 	}
-	again := &KBDoc{ID: bson.NewObjectID(), Slug: "wallet", Title: Text{En: "Changed"}, Body: Text{En: "b"}, Enabled: true}
-	if ins, err := kb.InsertIfSlugMissing(ctx, again); err != nil || ins {
+	if ins, err := kn.InsertIfMissing(ctx, &Knowledge{General: "Changed"}); err != nil || ins {
 		t.Fatalf("second seed must not insert: %v %v", ins, err)
 	}
-	got, err := kb.Get(ctx, first.ID)
-	if err != nil || got.Title.En != "Original" {
-		t.Fatalf("seeded doc must be untouched: %+v %v", got, err)
+	if k, _ := kn.Get(ctx); k == nil || k.General != "Original" {
+		t.Fatalf("seeded knowledge must be untouched: %+v", k)
 	}
-	dup := &KBDoc{ID: bson.NewObjectID(), Slug: "wallet", Title: Text{En: "x"}, Body: Text{En: "b"}}
-	if err := kb.Create(ctx, dup); !errors.Is(err, errDuplicateSlug) {
-		t.Fatalf("duplicate slug must be rejected, got %v", err)
+	if err := kn.Save(ctx, &Knowledge{General: "Edited", AndroidOnly: "A"}); err != nil {
+		t.Fatal(err)
 	}
-	noSlug := []*KBDoc{
-		{ID: bson.NewObjectID(), Title: Text{En: "a"}, Body: Text{En: "b"}},
-		{ID: bson.NewObjectID(), Title: Text{En: "c"}, Body: Text{En: "d"}},
+	if k, _ := kn.Get(ctx); k == nil || k.General != "Edited" || k.AndroidOnly != "A" {
+		t.Fatalf("save must replace: %+v", k)
 	}
-	for _, d := range noSlug {
-		if err := kb.Create(ctx, d); err != nil {
-			t.Fatalf("slugless docs must coexist (sparse index): %v", err)
-		}
+	if n, _ := db.Collection("chatbot_knowledge").CountDocuments(ctx, bson.D{}); n != 1 {
+		t.Fatalf("knowledge is a single document, got %d", n)
 	}
 
 	logs := NewMongoLogRepository(db)

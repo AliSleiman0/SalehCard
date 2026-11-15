@@ -1025,27 +1025,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpCenterTitle => 'Help Center';
 
   @override
-  String get helpSubtitle => 'Get quick answers to common questions';
+  String get helpSubtitle => 'Ask anything about using the app';
+
+  @override
+  String get helpSubtitleSupport => 'We\'re here to help';
 
   @override
   String get helpGreetingTitle => 'Hi! 👋 I\'m here to help.';
 
   @override
   String get helpGreeting =>
-      'Choose a question below to get an instant answer.';
+      'Our support team is here to help — reach us below.';
 
   @override
   String get helpSearchHint => 'Type your question...';
-
-  @override
-  String get helpAllQuestions => 'All questions';
-
-  @override
-  String get helpNoMatch => 'No matching questions';
-
-  @override
-  String get helpNoAnswer =>
-      'Sorry, I couldn\'t find an answer to that. Try one of the questions above, or contact us below.';
 
   @override
   String get helpOtherWays => 'Other ways to get help';
@@ -1061,7 +1054,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get helpGreetingAi =>
-      'Choose a question below, or type your own and I\'ll answer it.';
+      'Type your question about the app and I\'ll answer it.';
 
   @override
   String get helpThinking => 'Thinking…';
@@ -1077,7 +1070,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get helpAiLimit =>
-      'You\'ve reached the limit for AI answers for now. Try the questions above, or contact us below.';
+      'You\'ve reached the limit for AI answers for now. Please contact us below.';
+
+  @override
+  String get helpAiUnavailable =>
+      'The assistant isn\'t available right now. Please contact our support team below.';
 
   @override
   String get uploadPhoto => 'Upload a photo (QR code / barcode)';
