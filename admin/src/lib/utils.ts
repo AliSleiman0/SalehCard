@@ -17,13 +17,33 @@ export function money(v: number, cur: 'USD' | 'TRY' = 'USD'): string {
   return cur === 'TRY' ? `${sign}₺${s}` : `${sign}$${s}`
 }
 
+/** The locale dates are written in for the admin's language. Arabic keeps
+ *  Western digits so dates match the amounts and order numbers beside them. */
+export function dateLocale(): string {
+  const lang = i18next.language || 'en'
+  if (lang.startsWith('ar')) return 'ar-u-nu-latn'
+  if (lang.startsWith('tr')) return 'tr-TR'
+  return 'en-US'
+}
+
+/** A date in the admin's language, e.g. 'Nov 12, 2026' (options default to that shape). */
+export function formatDate(
+  value: string | number | Date,
+  opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' },
+): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(dateLocale(), opts)
+}
+
 /** Absolute date + time, e.g. 'Nov 12, 2026 · 3:05 PM' (client feedback: admins
  *  need the exact time on orders and wallet rows, not '6h ago'). */
-export function formatDateTime(iso: string): string {
+export function formatDateTime(iso: string | number | Date): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const loc = dateLocale()
+  const date = d.toLocaleDateString(loc, { month: 'short', day: 'numeric', year: 'numeric' })
+  const time = d.toLocaleTimeString(loc, { hour: 'numeric', minute: '2-digit' })
   return `${date} · ${time}`
 }
 
@@ -34,7 +54,7 @@ export function relativeTime(iso: string): string {
   const diff = Math.max(0, Date.now() - then)
   const m = Math.floor(diff / 60_000)
   const lang = i18next.language || 'en'
-  if (!lang.startsWith('en')) return relativeTimeIntl(lang, iso, m)
+  if (!lang.startsWith('en')) return relativeTimeIntl(iso, m)
   if (m < 1) return 'Just now'
   if (m < 60) return `${m}m ago`
   const h = Math.floor(m / 60)
@@ -46,15 +66,16 @@ export function relativeTime(iso: string): string {
 }
 
 /** relativeTime in a non-English admin language ("منذ 5 دقائق", "أمس"). */
-function relativeTimeIntl(lang: string, iso: string, m: number): string {
-  const f = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' })
+function relativeTimeIntl(iso: string, m: number): string {
+  const loc = dateLocale()
+  const f = new Intl.RelativeTimeFormat(loc, { numeric: 'auto' })
   if (m < 1) return f.format(0, 'second')
   if (m < 60) return f.format(-m, 'minute')
   const h = Math.floor(m / 60)
   if (h < 24) return f.format(-h, 'hour')
   const d = Math.floor(h / 24)
   if (d < 7) return f.format(-d, 'day')
-  return new Date(iso).toLocaleDateString(lang, { month: 'short', day: 'numeric' })
+  return new Date(iso).toLocaleDateString(loc, { month: 'short', day: 'numeric' })
 }
 
 /** relativeTime for the middle of a sentence ("checked just now"). */
@@ -65,7 +86,7 @@ export function relativeTimeInline(iso: string): string {
 
 /** Long human date, e.g. "June 28, 2026". */
 export function formatLongDate(d: Date = new Date()): string {
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  return d.toLocaleDateString(dateLocale(), { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 /** Trigger a client-side PDF download of a titled table. jspdf is dynamically
