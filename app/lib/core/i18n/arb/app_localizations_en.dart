@@ -467,6 +467,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your purchases will show up here once you place an order.';
 
   @override
+  String get ordersSearchHint => 'Search by order number, player ID or product';
+
+  @override
+  String get ordersSearchClear => 'Clear search';
+
+  @override
+  String ordersSearchNoneTitle(String query) {
+    return 'No orders match “$query”';
+  }
+
+  @override
+  String get ordersSearchNoneSub =>
+      'Check the order number or ID, or clear the search to see all your orders.';
+
+  @override
   String get orderRefundedNote =>
       'This order was refunded. The amount was returned to your wallet.';
 

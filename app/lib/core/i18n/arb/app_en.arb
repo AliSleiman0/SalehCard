@@ -194,6 +194,15 @@
   "filterAll": "All",
   "ordersEmptyTitle": "No orders yet",
   "ordersEmptySub": "Your purchases will show up here once you place an order.",
+  "ordersSearchHint": "Search by order number, player ID or product",
+  "ordersSearchClear": "Clear search",
+  "ordersSearchNoneTitle": "No orders match “{query}”",
+  "@ordersSearchNoneTitle": {
+    "placeholders": {
+      "query": { "type": "String" }
+    }
+  },
+  "ordersSearchNoneSub": "Check the order number or ID, or clear the search to see all your orders.",
   "orderRefundedNote": "This order was refunded. The amount was returned to your wallet.",
   "orderTimelineLabel": "Timeline",
 

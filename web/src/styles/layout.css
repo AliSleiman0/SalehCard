@@ -22,6 +22,12 @@
 }
 .searchbar:focus-within { border-color: var(--brand-1); box-shadow: 0 0 0 4px rgba(59,91,255,.14); }
 .searchbar input { flex: 1; border: 0; background: transparent; color: var(--text); font-size: 15px; outline: none; font-family: inherit; }
+.searchbar input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.searchbar-clear { flex: none; width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; border: 0; background: var(--surface-3); color: var(--text-dim); cursor: pointer; transition: .15s; }
+.searchbar-clear:hover { color: var(--text); background: var(--border-strong); }
+.searchbar-clear:focus-visible { outline: 2px solid var(--brand-1); outline-offset: 2px; }
+/* customer order-history search (Orders page) */
+.order-search { max-width: none; margin: 14px 0 10px; }
 .icon-btn { width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); cursor: pointer; position: relative; transition: .15s; flex: none; }
 .icon-btn:hover { border-color: var(--border-strong); background: var(--surface-3); }
 .cart-count { position: absolute; top: -5px; inset-inline-end: -5px; background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 800; min-width: 18px; height: 18px; border-radius: 999px; display: grid; place-items: center; padding: 0 4px; }

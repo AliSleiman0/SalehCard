@@ -35,6 +35,20 @@ class OrderRecipient {
   final String detail;
 }
 
+/// One labeled checkout input on a placed order line (Account ID, Zone ID,
+/// Email…). A photo field (QR / barcode) carries its stored image URL.
+class OrderLineField {
+  const OrderLineField({
+    required this.key,
+    required this.label,
+    required this.value,
+  });
+
+  final String key;
+  final I18nString label;
+  final String value;
+}
+
 /// A status transition recorded on a fulfillment.
 class TimelineEvent {
   const TimelineEvent({required this.status, required this.note, this.at});
@@ -73,6 +87,7 @@ class OrderItem {
     required this.fulfillmentType,
     this.playerId,
     this.recipient,
+    this.fields = const [],
     this.amount,
     this.codes = const [],
   });
@@ -91,6 +106,9 @@ class OrderItem {
   final String fulfillmentType;
   final String? playerId;
   final OrderRecipient? recipient;
+
+  /// The customer's labeled checkout inputs for this line; empty when none.
+  final List<OrderLineField> fields;
 
   /// Codes delivered for this line — one per unit on inventory/code lines;
   /// empty for manual (account_credit / transfer) lines and for responses from

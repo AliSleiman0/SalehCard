@@ -926,6 +926,30 @@ abstract class AppLocalizations {
   /// **'Your purchases will show up here once you place an order.'**
   String get ordersEmptySub;
 
+  /// No description provided for @ordersSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by order number, player ID or product'**
+  String get ordersSearchHint;
+
+  /// No description provided for @ordersSearchClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get ordersSearchClear;
+
+  /// No description provided for @ordersSearchNoneTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders match “{query}”'**
+  String ordersSearchNoneTitle(String query);
+
+  /// No description provided for @ordersSearchNoneSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the order number or ID, or clear the search to see all your orders.'**
+  String get ordersSearchNoneSub;
+
   /// No description provided for @orderRefundedNote.
   ///
   /// In en, this message translates to:
