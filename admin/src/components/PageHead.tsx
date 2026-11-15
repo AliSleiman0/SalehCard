@@ -20,7 +20,7 @@ export function PageHead({ crumbs, title, sub, back, children }: PageHeadProps) 
             {crumbs.map((c, i) => (
               <Fragment key={i}>
                 {i > 0 && <span className="sep">/</span>}
-                <span>{c}</span>
+                <bdi>{c}</bdi>
               </Fragment>
             ))}
           </div>

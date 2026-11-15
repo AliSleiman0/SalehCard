@@ -555,3 +555,8 @@ textarea.afield { resize: vertical; min-height: 84px; line-height: 1.5; }
 
 /* Arabic letters join, so spacing them apart breaks the words (codes keep theirs). */
 :lang(ar) :not(.avault, .vault, .mono, code, kbd) { letter-spacing: normal !important; }
+
+/* Codes, ids and order numbers read left to right inside Arabic text, so a
+   leading "#" or "−" stays in front of the value. */
+[dir="rtl"] :is(span, b, a, small, i, em, strong).mono { direction: ltr; unicode-bidi: isolate; }
+[dir="rtl"] :is(td, div, p).mono { unicode-bidi: plaintext; text-align: right; }
