@@ -1976,6 +1976,42 @@ abstract class AppLocalizations {
   /// **'Send'**
   String get helpSend;
 
+  /// No description provided for @helpGreetingAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a question below, or type your own and I\'ll answer it.'**
+  String get helpGreetingAi;
+
+  /// No description provided for @helpThinking.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking…'**
+  String get helpThinking;
+
+  /// No description provided for @helpAiNote.
+  ///
+  /// In en, this message translates to:
+  /// **'AI answer · may contain mistakes'**
+  String get helpAiNote;
+
+  /// No description provided for @helpAiReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get helpAiReport;
+
+  /// No description provided for @helpAiReported.
+  ///
+  /// In en, this message translates to:
+  /// **'Thanks — we\'ll review this answer.'**
+  String get helpAiReported;
+
+  /// No description provided for @helpAiLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve reached the limit for AI answers for now. Try the questions above, or contact us below.'**
+  String get helpAiLimit;
+
   /// No description provided for @uploadPhoto.
   ///
   /// In en, this message translates to:

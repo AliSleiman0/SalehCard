@@ -1057,6 +1057,25 @@ class AppLocalizationsAr extends AppLocalizations {
   String get helpSend => 'إرسال';
 
   @override
+  String get helpGreetingAi => 'اختر سؤالاً من الأسفل، أو اكتب سؤالك وسأجيبك.';
+
+  @override
+  String get helpThinking => 'جارٍ التفكير…';
+
+  @override
+  String get helpAiNote => 'إجابة بالذكاء الاصطناعي · قد تحتوي على أخطاء';
+
+  @override
+  String get helpAiReport => 'إبلاغ';
+
+  @override
+  String get helpAiReported => 'شكرًا، سنراجع هذه الإجابة.';
+
+  @override
+  String get helpAiLimit =>
+      'وصلت إلى الحد المسموح لإجابات الذكاء الاصطناعي حالياً. جرّب الأسئلة أعلاه أو تواصل معنا أدناه.';
+
+  @override
   String get uploadPhoto => 'ارفع صورة (رمز QR / باركود)';
 
   @override
