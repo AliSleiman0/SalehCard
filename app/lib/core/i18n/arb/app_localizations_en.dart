@@ -467,6 +467,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your purchases will show up here once you place an order.';
 
   @override
+  String get ordersSearchHint => 'Search by order number, player ID or product';
+
+  @override
+  String get ordersSearchClear => 'Clear search';
+
+  @override
+  String ordersSearchNoneTitle(String query) {
+    return 'No orders match “$query”';
+  }
+
+  @override
+  String get ordersSearchNoneSub =>
+      'Check the order number or ID, or clear the search to see all your orders.';
+
+  @override
   String get orderRefundedNote =>
       'This order was refunded. The amount was returned to your wallet.';
 
@@ -1007,10 +1022,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpTitle => 'Help';
 
   @override
-  String get helpGreeting => 'Hi! Pick a question below, or type to search.';
+  String get helpCenterTitle => 'Help Center';
 
   @override
-  String get helpSearchHint => 'Type to search questions…';
+  String get helpSubtitle => 'Get quick answers to common questions';
+
+  @override
+  String get helpGreetingTitle => 'Hi! 👋 I\'m here to help.';
+
+  @override
+  String get helpGreeting =>
+      'Choose a question below to get an instant answer.';
+
+  @override
+  String get helpSearchHint => 'Type your question...';
 
   @override
   String get helpAllQuestions => 'All questions';
@@ -1019,7 +1044,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpNoMatch => 'No matching questions';
 
   @override
-  String get helpNeedHelp => 'Still need help?';
+  String get helpNoAnswer =>
+      'Sorry, I couldn\'t find an answer to that. Try one of the questions above, or contact us below.';
+
+  @override
+  String get helpOtherWays => 'Other ways to get help';
+
+  @override
+  String get helpWhatsappSub => 'Chat with us';
+
+  @override
+  String get helpReportIssue => 'Report an issue';
+
+  @override
+  String get helpSend => 'Send';
 
   @override
   String get uploadPhoto => 'Upload a photo (QR code / barcode)';
@@ -1171,4 +1209,68 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notifComplaintClosedBody => 'Thank you for contacting support.';
+
+  @override
+  String get changePasswordTitle => 'Change password';
+
+  @override
+  String get changePasswordIntro =>
+      'Choose a new password for signing in. Your other signed-in devices stay signed in.';
+
+  @override
+  String get changePasswordCurrent => 'Current password';
+
+  @override
+  String get changePasswordNew => 'New password';
+
+  @override
+  String get changePasswordConfirm => 'Confirm new password';
+
+  @override
+  String get changePasswordRules => 'At least 8 characters.';
+
+  @override
+  String get changePasswordShow => 'Show password';
+
+  @override
+  String get changePasswordHide => 'Hide password';
+
+  @override
+  String get changePasswordSubmit => 'Change password';
+
+  @override
+  String get changePasswordDone => 'Password changed';
+
+  @override
+  String get changePasswordErrCurrentRequired => 'Enter your current password.';
+
+  @override
+  String get changePasswordErrShort =>
+      'The new password must be at least 8 characters.';
+
+  @override
+  String get changePasswordErrLong =>
+      'The new password is too long. Use a shorter one (Arabic letters count double).';
+
+  @override
+  String get changePasswordErrMismatch => 'The two new passwords don\'t match.';
+
+  @override
+  String get changePasswordErrWrong => 'Your current password is incorrect.';
+
+  @override
+  String get changePasswordErrNoPassword =>
+      'This account doesn\'t have a password yet.';
+
+  @override
+  String get changePasswordNoPasswordHint =>
+      'Set a password by signing in with an SMS code: sign out, tap \"Sign up\", enter this same phone number, choose a password, then enter the SMS code.';
+
+  @override
+  String get changePasswordErrRateLimited =>
+      'Too many attempts. Please wait a minute and try again.';
+
+  @override
+  String get changePasswordErrGeneric =>
+      'Could not change your password. Please try again.';
 }

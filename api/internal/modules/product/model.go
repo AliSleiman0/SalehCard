@@ -253,7 +253,7 @@ type Product struct {
 	// CategoryName is the assigned node's display name, filled on catalog reads
 	// (response-only, never persisted). Nil when unassigned or the node is unnamed.
 	CategoryName *I18nString `bson:"-" json:"categoryName,omitempty"`
-	Images     []string       `bson:"images"   json:"images"`
+	Images       []string    `bson:"images"   json:"images"`
 	// Thumbnail is the 256px compressed preview URL (see platform/imaging);
 	// lists/chips prefer it, falling back to Images[0]. Images[0] stays the
 	// 1024px display URL for backward compatibility (Flutter reads images.first).
@@ -272,7 +272,22 @@ type Product struct {
 	// UpstreamProductID is the supplier's own product id (e.g. a panel's "364")
 	// for api-mode products — the path segment of the panel newOrder call.
 	// Meaningful only when FulfillmentMode == api; empty otherwise.
-	UpstreamProductID      string     `bson:"upstreamProductId,omitempty"      json:"upstreamProductId,omitempty"`
+	UpstreamProductID string `bson:"upstreamProductId,omitempty"      json:"upstreamProductId,omitempty"`
+	// SupplierLinks are every supplier product this product can be fulfilled
+	// by, in the admin's priority order (supplier_links.go). The active one
+	// (ActiveSupplierLinkID) is mirrored into FulfillmentProvider /
+	// UpstreamProductID in the same write. Admin-only: never in public JSON
+	// (the admin read goes through AdminProductView).
+	SupplierLinks        []SupplierLink `bson:"supplierLinks,omitempty"        json:"-"`
+	ActiveSupplierLinkID string         `bson:"activeSupplierLinkId,omitempty" json:"-"`
+	// SupplierLinksRev increments on every links write; an editor save must
+	// carry the rev it loaded (optimistic concurrency).
+	SupplierLinksRev int `bson:"supplierLinksRev,omitempty"       json:"-"`
+	// SupplierFallbackOff switches OFF the automatic fallback to the next
+	// supplier link when the active one definitely refuses an order (stored
+	// inverted so every existing product defaults to fallback ON). Admin-only;
+	// the admin read exposes it as supplierFallback.
+	SupplierFallbackOff    bool       `bson:"supplierFallbackOff,omitempty" json:"-"`
 	FulfillmentConfidence  Confidence `bson:"fulfillmentConfidence,omitempty"  json:"fulfillmentConfidence,omitempty"`
 	FulfillmentCancellable *bool      `bson:"fulfillmentCancellable,omitempty" json:"fulfillmentCancellable,omitempty"`
 	// Migration: rich economics + checkout schema (spec §3/§4).
@@ -292,8 +307,8 @@ type Product struct {
 	Stock       int          `bson:"stock"     json:"stock"`
 	Available   bool         `bson:"available" json:"available"`
 	// Migration: status fidelity + ordering + review markers.
-	Status    string         `bson:"status,omitempty"    json:"status,omitempty"`
-	SortOrder int            `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
+	Status    string `bson:"status,omitempty"    json:"status,omitempty"`
+	SortOrder int    `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
 	// Position is the admin-arranged rank (1-based) of the product among the
 	// products assigned directly to its own category node (categoryId) — set
 	// only by the reorder endpoint (catalog_order.go). 0/absent = not arranged:
@@ -301,11 +316,17 @@ type Product struct {
 	// product belongs to exactly one node; moving the product to another node
 	// clears it. Deliberately NOT the legacy SortOrder above, which still holds
 	// the old site's migration-era values and would reshuffle the live catalog.
-	Position int `bson:"position,omitempty" json:"position,omitempty"`
+	Position  int            `bson:"position,omitempty" json:"position,omitempty"`
 	Flags     []string       `bson:"flags,omitempty"     json:"flags,omitempty"`
 	Ratings   RatingsSummary `bson:"ratings"   json:"ratings"`
 	CreatedAt time.Time      `bson:"createdAt" json:"createdAt"`
 	UpdatedAt time.Time      `bson:"updatedAt" json:"updatedAt"`
+	// DeletedAt marks a soft-deleted ("in trash") product: hidden from customers
+	// and from the admin's normal lists, refused at checkout, and restorable. It
+	// is independent of Available — soft delete never touches the visibility
+	// flag, so Restore returns each product exactly to its prior live/draft
+	// state. Nil = not deleted. Only an already-trashed product can be purged.
+	DeletedAt *time.Time `bson:"deletedAt,omitempty" json:"deletedAt,omitempty"`
 	// Offer is the live sale on this product, if any. Transient (never persisted);
 	// set only on catalog reads by the product service's offer enrichment.
 	Offer *OfferInfo `bson:"-" json:"offer,omitempty"`
@@ -342,6 +363,14 @@ type UpsertProductInput struct {
 	Flags                  []string
 }
 
+// Deleted reports whether the product is soft-deleted (in the trash).
+func (p *Product) Deleted() bool { return p.DeletedAt != nil }
+
+// Purchasable reports whether customers may see and buy the product: it is
+// published (Available) and not in the trash. Customer-facing single-product
+// reads and the checkout gate all go through this one rule.
+func (p *Product) Purchasable() bool { return p.Available && !p.Deleted() }
+
 // normalize repairs invariants JSON consumers rely on: Images is always an
 // array. Legacy-import documents can store images as null/absent, which decodes
 // to a nil slice and would marshal as JSON null — crashing clients that index
@@ -374,8 +403,16 @@ type CreateProductInput struct {
 	// UpstreamProductID maps an api-mode product onto the supplier's catalog
 	// (DESIGN-SUPPLIERS.md). Deliberately unvalidated: a provider-less or
 	// id-less api product parks safely at order time (stub / ErrUnavailable).
-	UpstreamProductID string      `json:"upstreamProductId,omitempty"`
-	Bridge            *BridgeSpec `json:"bridge,omitempty"`
+	UpstreamProductID string `json:"upstreamProductId,omitempty"`
+	// SupplierLinks sets the supplier links table (supplier_links.go); when
+	// set, FulfillmentProvider/UpstreamProductID are derived from its active
+	// link. When nil, a legacy provider+upstream pair becomes one active link.
+	SupplierLinks *SupplierLinksInput `json:"supplierLinks,omitempty"`
+	// SupplierFallback sets the automatic next-supplier fallback (nil = on).
+	SupplierFallback *bool `json:"supplierFallback,omitempty"`
+	// linksPlan is the service-resolved links table the repository stores.
+	linksPlan *linksPlan
+	Bridge    *BridgeSpec `json:"bridge,omitempty"`
 	// MoneyTransfer sets the buy/sell rate board; only valid on a transfer product.
 	MoneyTransfer *MoneyTransfer `json:"moneyTransfer,omitempty"`
 	// UnitPricing switches on per-unit pricing (see UnitPricing).
@@ -409,11 +446,21 @@ type UpdateProductInput struct {
 	// clear-sentinel convention).
 	FulfillmentProvider *int `json:"fulfillmentProvider,omitempty"`
 	// UpstreamProductID: nil = unchanged; non-nil "" clears.
-	UpstreamProductID *string         `json:"upstreamProductId,omitempty"`
-	Stock             *int            `json:"stock,omitempty"`
-	Available         *bool           `json:"available,omitempty"`
-	Ratings           *RatingsSummary `json:"ratings,omitempty"`
-	InputFields       []InputField    `json:"inputFields,omitempty"`
+	UpstreamProductID *string `json:"upstreamProductId,omitempty"`
+	// SupplierLinks replaces the supplier links table (nil = unchanged). The
+	// service derives FulfillmentProvider/UpstreamProductID from its active
+	// link and guards the write on SupplierLinks.Rev.
+	SupplierLinks *SupplierLinksInput `json:"supplierLinks,omitempty"`
+	// SupplierFallback switches the automatic next-supplier fallback on/off
+	// (nil = unchanged).
+	SupplierFallback *bool `json:"supplierFallback,omitempty"`
+	// linksPlan is the service-resolved links table + mirror the repository
+	// stores, guarded on the rev the editor loaded.
+	linksPlan   *linksPlan
+	Stock       *int            `json:"stock,omitempty"`
+	Available   *bool           `json:"available,omitempty"`
+	Ratings     *RatingsSummary `json:"ratings,omitempty"`
+	InputFields []InputField    `json:"inputFields,omitempty"`
 	// Verification configures the check_name ID-verification hook. A non-nil value
 	// with a non-empty App sets it; a non-nil value with an empty App clears it
 	// (disables verification). Nil leaves it unchanged.
@@ -450,8 +497,11 @@ type ListFilter struct {
 	Available       *bool
 	FulfillmentType FulfillmentType
 	FulfillmentMode FulfillmentMode
-	Status          string // "active" | "draft" | "out"
-	Search          string
+	// Status: "active" | "draft" | "out" | "deleted". Every value except
+	// "deleted" (and the empty default) excludes soft-deleted products;
+	// "deleted" lists only the trash.
+	Status string
+	Search string
 	// Sort: SortByName for the catalog order (natural A to Z, with admin-
 	// arranged products first when the listing is one node); empty = newest.
 	Sort string
@@ -467,9 +517,33 @@ type BulkAction string
 const (
 	BulkActivate       BulkAction = "activate"
 	BulkDeactivate     BulkAction = "deactivate"
-	BulkDelete         BulkAction = "delete"
 	BulkAssignCategory BulkAction = "assign-category"
+	// BulkDelete soft-deletes (moves to trash); it never erases data.
+	BulkDelete BulkAction = "delete"
+	// BulkRestore takes products back out of the trash.
+	BulkRestore BulkAction = "restore"
+	// BulkPurge permanently erases already-trashed products. Super admin only
+	// (enforced in the handler) and by explicit ids only — never by filter.
+	BulkPurge BulkAction = "purge"
 )
+
+// BulkFilter selects every product matching the admin list filters, so a bulk
+// action can cover all pages ("select all N matching") rather than only the
+// ids loaded on screen. Same fields and meaning as GET /api/admin/products.
+type BulkFilter struct {
+	Category        string `bson:"category,omitempty" json:"category,omitempty"`
+	CategoryID      string `bson:"categoryId,omitempty" json:"categoryId,omitempty"`
+	FulfillmentType string `bson:"fulfillmentType,omitempty" json:"fulfillmentType,omitempty"`
+	Status          string `bson:"status,omitempty" json:"status,omitempty"`
+	Search          string `bson:"search,omitempty" json:"search,omitempty"`
+}
+
+// Selector picks the products a bulk repository write applies to: explicit IDs,
+// or (when Filter is non-nil) every product matching that list filter.
+type Selector struct {
+	IDs    []string
+	Filter *ListFilter
+}
 
 // BulkInput is the request body for POST /api/admin/products/bulk.
 type BulkInput struct {
@@ -478,4 +552,7 @@ type BulkInput struct {
 	// CategoryID is the taxonomy node to assign for the "assign-category"
 	// action; empty clears the assignment (unassign). Ignored otherwise.
 	CategoryID string `json:"categoryId"`
+	// Filter, when set, applies the action to every product matching it and
+	// IDs is ignored. Not allowed for "purge".
+	Filter *BulkFilter `json:"filter,omitempty"`
 }

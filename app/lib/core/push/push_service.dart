@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/browse/presentation/providers.dart';
 import '../../features/complaints/data/complaint_repository.dart';
@@ -32,9 +33,13 @@ Future<void> initFirebase() async {
     FirebaseMessaging.onBackgroundMessage(_onBackgroundMessage);
     _firebaseReady = true;
   } catch (error) {
+    _firebaseInitError = error is FirebaseException ? error.code : 'unknown';
     debugPrint('push: Firebase init failed — push disabled ($error)');
   }
 }
+
+/// Short reason Firebase failed to initialize (reported via push diagnostics).
+String? _firebaseInitError;
 
 @pragma('vm:entry-point')
 Future<void> _onBackgroundMessage(RemoteMessage message) async {
@@ -55,18 +60,76 @@ class PushService {
   /// on cold start of an authenticated session) and starts listening for token
   /// rotation and foreground messages.
   Future<void> register() async {
-    if (!_firebaseReady) return;
+    if (!_firebaseReady) {
+      _diag('firebase-init-${_firebaseInitError ?? 'skipped'}');
+      return;
+    }
     try {
       final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission(); // Android 13+ POST_NOTIFICATIONS
+      // Android 13+ POST_NOTIFICATIONS / iOS alert prompt.
+      final settings = await messaging.requestPermission();
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        _diag('permission-${settings.authorizationStatus.name}');
+        // The iOS plugin asks APNs for a device token from its launch hook
+        // (UIApplicationDidFinishLaunching / scene connect). With Flutter's
+        // UIScene lifecycle the plugin is registered after that hook fired, so
+        // registerForRemoteNotifications was never called and no APNs token
+        // ever arrived. setAutoInitEnabled(true) makes the plugin call it now
+        // (and is a no-op change: auto-init is already the default).
+        await messaging.setAutoInitEnabled(true);
+        // FCM can only mint a token once APNs has handed the app its device
+        // token; getToken() throws apns-token-not-set before that.
+        if (!await _waitForApnsToken(messaging)) {
+          _diag('no-apns-token');
+          debugPrint(
+            'push: no APNs token (push capability / APNs key missing?) — skipping registration',
+          );
+          _listen(); // a later onTokenRefresh still registers the device
+          return;
+        }
+        _diag('apns-ok');
+      }
       final token = await messaging.getToken();
-      if (token != null && token.isNotEmpty) {
-        await _ref.read(notificationRepositoryProvider).registerDevice(token);
+      if (token == null || token.isEmpty) {
+        _diag('no-fcm-token');
+      } else {
+        final result = await _ref
+            .read(notificationRepositoryProvider)
+            .registerDevice(token);
+        result.fold((failure) {
+          _diag('register-failed');
+          debugPrint('push: device registration rejected ($failure)');
+        }, (_) => _diag('registered'));
       }
       _listen();
     } catch (error) {
+      _diag(
+        'error-${error is FirebaseException ? error.code : error.runtimeType}',
+      );
       debugPrint('push: device registration failed ($error)');
     }
+  }
+
+  /// Polls for the APNs device token for up to ~30s (the first launch waits
+  /// on the permission prompt and the APNs round-trip). False when it never
+  /// arrives (simulator, notifications denied, or the build lacks the push
+  /// entitlement).
+  Future<bool> _waitForApnsToken(FirebaseMessaging messaging) async {
+    for (var i = 0; i < 60; i++) {
+      final apns = await messaging.getAPNSToken();
+      if (apns != null && apns.isNotEmpty) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    return false;
+  }
+
+  /// iOS-only registration breadcrumb in the API access log (Android push is
+  /// verified working and stays quiet). Best-effort, never awaited.
+  void _diag(String stage) {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    unawaited(
+      _ref.read(notificationRepositoryProvider).reportPushDiagnostic(stage),
+    );
   }
 
   /// Removes this device's token from the API and deletes it locally so the
@@ -113,24 +176,34 @@ class PushService {
     // runs once the session is authenticated, so the router guard lets it through.
     unawaited(
       FirebaseMessaging.instance.getInitialMessage().then((message) {
-        if (message != null) _open(message, coldStart: true);
+        debugPrint('push: initial message ${message?.data['kind']}');
+        if (message != null) unawaited(_open(message, coldStart: true));
       }),
     );
   }
 
   /// Routes a tapped notification to its screen. Only complaint notifications
   /// deep-link today; every other kind just opens the app as before.
-  void _open(RemoteMessage message, {required bool coldStart}) {
+  Future<void> _open(RemoteMessage message, {required bool coldStart}) async {
     final route = pushRouteFor(message.data);
     if (route == null) return;
     _ref.invalidate(complaintDetailProvider);
     final router = _ref.read(routerProvider);
     if (coldStart) {
-      // Land on home first so back from the complaint has somewhere to go.
-      router.go('/home');
+      // On a cold start the router is still on /splash while the session
+      // restores; a push issued now is computed against that stale stack and
+      // then lost when the auth redirect lands on /home. Wait until the
+      // redirect has run, then push on top of home (so back returns there).
+      for (var i = 0; i < 50 && _onSplash(router); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
     }
+    debugPrint('push: opening $route (coldStart=$coldStart)');
     router.push(route);
   }
+
+  static bool _onSplash(GoRouter router) =>
+      router.routerDelegate.currentConfiguration.uri.path == '/splash';
 }
 
 /// The in-app route for a push payload, or null when it should just open the

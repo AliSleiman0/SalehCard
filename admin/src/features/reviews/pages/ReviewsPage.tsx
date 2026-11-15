@@ -74,6 +74,7 @@ export default function ReviewsPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_content'), t('nav_reviews')]}
         title="Review moderation"
         sub={meta ? `${meta.total.toLocaleString()} reviews` : ''}

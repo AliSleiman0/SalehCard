@@ -17,4 +17,8 @@ abstract interface class NotificationRepository {
 
   /// Removes this device's FCM token (called on logout).
   Future<Either<Failure, void>> unregisterDevice(String token);
+
+  /// Best-effort breadcrumb for push-registration debugging (see the data
+  /// source). Never fails the caller.
+  Future<void> reportPushDiagnostic(String stage);
 }

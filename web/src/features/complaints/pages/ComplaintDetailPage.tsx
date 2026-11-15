@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Button, Card, ErrorState, Icon, LoadingSpinner } from '@/components'
 import { statusBadgeClass, type ComplaintMessage } from '../api/complaints'
 import { useComplaint, useReplyComplaint } from '../hooks/useComplaints'
+import { orderNumber } from '@/lib/orderNumber'
 
 export default function ComplaintDetailPage() {
   const { t } = useTranslation()
@@ -64,7 +65,7 @@ export default function ComplaintDetailPage() {
           </h1>
           {c.orderId && (
             <a className="small clickable" onClick={() => navigate(`/orders/${c.orderId}`)}>
-              {t('complaint_linked_order')}: #{c.orderId.slice(-8)}
+              {t('complaint_linked_order')}: {orderNumber(c.orderId)}
             </a>
           )}
         </div>

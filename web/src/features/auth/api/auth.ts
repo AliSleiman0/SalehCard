@@ -87,3 +87,14 @@ export interface UpdateProfileInput {
 export async function updateProfile(input: UpdateProfileInput): Promise<ApiResponse<User>> {
   return apiClient.patch<User>('/api/v1/users/me', input)
 }
+
+// changePassword replaces the signed-in user's password (current one required).
+// Every failure is a 400 with a code (WRONG_PASSWORD, WEAK_PASSWORD,
+// PASSWORD_TOO_LONG, NO_PASSWORD_SET) — never a 401, so the session survives.
+// Other sessions stay signed in.
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ApiResponse<{ changed: boolean }>> {
+  return apiClient.post<{ changed: boolean }>('/api/v1/users/me/password', { currentPassword, newPassword })
+}

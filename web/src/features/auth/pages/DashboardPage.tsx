@@ -21,8 +21,8 @@ export default function DashboardPage() {
   const locale = useLocaleStore((s) => s.locale)
   const user = useAuthStore((s) => s.user)
   const ids = user?.savedPlayerIds ?? []
-  const balance = useWallet().data?.balance ?? 0
-  const ordersQuery = useOrders()
+  const balance = useWallet(true, true).data?.balance ?? 0
+  const ordersQuery = useOrders(true)
   const recentOrders = useMemo(
     () => (ordersQuery.data ?? []).slice(0, 3).map((o) => adaptOrder(o, locale)),
     [ordersQuery.data, locale],

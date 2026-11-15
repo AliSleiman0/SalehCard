@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -27,11 +28,13 @@ func (s stubService) FindByID(context.Context, string) (*Product, error) { retur
 func (stubService) FindAll(context.Context, ListFilter, pagination.Params) ([]Product, int64, error) {
 	return nil, 0, nil
 }
-func (stubService) Create(context.Context, CreateProductInput) (*Product, error)      { return nil, nil }
+func (stubService) Create(context.Context, CreateProductInput) (*Product, error) { return nil, nil }
 func (stubService) Update(context.Context, string, UpdateProductInput) (*Product, error) {
 	return nil, nil
 }
-func (stubService) Delete(context.Context, string) error       { return nil }
+func (stubService) Delete(context.Context, string) error           { return nil }
+func (stubService) Restore(context.Context, string) error          { return nil }
+func (stubService) Purge(context.Context, string) error            { return nil }
 func (stubService) Bulk(context.Context, BulkInput) (int64, error) { return 0, nil }
 
 // fakeVerifier returns a canned account/error.
@@ -68,7 +71,7 @@ func decodeVerify(t *testing.T, rec *httptest.ResponseRecorder) verifyAccountRes
 }
 
 func verifiableProduct() *Product {
-	return &Product{Verification: &Verification{Provider: 1, App: "pubgm-global"}}
+	return &Product{Available: true, Verification: &Verification{Provider: 1, App: "pubgm-global"}}
 }
 
 func TestVerifyAccount_Found(t *testing.T) {
@@ -115,7 +118,7 @@ func TestVerifyAccount_UpstreamErrorFailsOpen(t *testing.T) {
 }
 
 func TestVerifyAccount_NoVerificationConfig(t *testing.T) {
-	h := NewHandler(stubService{prod: &Product{}}) // Verification == nil
+	h := NewHandler(stubService{prod: &Product{Available: true}}) // Verification == nil
 	h.verifier = fakeVerifier{}
 	rec := callVerify(h, `{"playerId":"123"}`)
 	if rec.Code != http.StatusConflict {
@@ -139,4 +142,31 @@ func TestVerifyAccount_ProductNotFound(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
+}
+
+// A hidden or trashed product reads as not found and never reaches the billed
+// upstream verifier.
+func TestVerifyAccount_UnpurchasableProductIsNotFound(t *testing.T) {
+	now := time.Now()
+	hidden := verifiableProduct()
+	hidden.Available = false
+	trashed := verifiableProduct()
+	trashed.DeletedAt = &now
+	for name, p := range map[string]*Product{"hidden": hidden, "trashed": trashed} {
+		t.Run(name, func(t *testing.T) {
+			h := NewHandler(stubService{prod: p})
+			h.verifier = panicVerifier{}
+			rec := callVerify(h, `{"playerId":"123"}`)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404", rec.Code)
+			}
+		})
+	}
+}
+
+// panicVerifier fails the test if the upstream lookup is ever reached.
+type panicVerifier struct{}
+
+func (panicVerifier) Verify(context.Context, string, string) (idcheck.Account, error) {
+	panic("verifier must not be called for an unpurchasable product")
 }

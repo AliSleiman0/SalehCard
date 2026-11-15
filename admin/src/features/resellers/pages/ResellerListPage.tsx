@@ -106,6 +106,7 @@ export default function ResellerListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_resellers')]}
         title="Reseller & agent management"
         sub={meta ? `${meta.total.toLocaleString()} resellers across ${tiers.length} tiers` : ''}

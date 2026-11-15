@@ -553,16 +553,37 @@ started **no** build. Build #5 had to be started by hand (Applications → Saleh
 - Until it's fixed, start iOS builds by hand after merging app changes. Build number = `4 + Codemagic
   index`.
 
-## 24. Customer complaints — after deploy (feat/complaints)
+## 24. Customer complaints — after deploy (PR #141)
+
+**Shipped 2026-11-14.** PR #141 merged as `78cf44e`. Its own deploy was replaced by #138's run, which
+deployed API + admin; web came with the manual full redeploy of `8287849` (all three jobs green). Prod check:
+`/api/v1/complaints` and `/api/admin/complaints/counts` answer 401 without a token (404 before the deploy).
+
+Still open:
 
 - **Grant `complaints.view` / `complaints.manage`** to any custom support role in admin → Roles. Super admins
-  already see it. A custom role without it gets 403 and no "Complaints" nav item.
-- **Android push is off in the app itself, not just blocked by the API-key restriction (§19).** On a debug
-  build, `initFirebase()` logs `[core/duplicate-app] A Firebase App named "[DEFAULT]" already exists` and
-  disables push. The `apiKey` in `app/lib/firebase_options.dart` does not match the `current_key` that
-  `app/android/app/google-services.json` holds for `com.flashcashglobal.app` (appId, sender id and bucket do
-  match). The Google Services plugin starts the default app natively with the JSON options, then the Dart
-  `initializeApp(options:)` conflicts. Pick the one key that is correct and unrestricted for this package
-  (regenerate `firebase_options.dart` with `flutterfire configure`, or initialize with no options on
-  Android), then re-test §19. Until then no device registers a token, so complaint replies reach customers
-  only as inbox rows.
+  already see it. A custom role without it gets 403 and no "Complaints" nav item. Script (no admin password:
+  uses your `az login` to read MONGO_URI from the App Service, opens a temporary Cosmos firewall rule for your
+  IP, previews with `dbtool role-grant`, applies after you type `yes`, always removes the rule; audited as
+  `role.update` by "dbtool (ops CLI)"):
+  `powershell -ExecutionPolicy Bypass -File deploy\grant-role-permission.ps1` (`-DryRun`, `-Level view`,
+  `-RoleId <id>`, `-Domain <area>` for other areas).
+- **Push notifications: FIXED in code by PR #150 (2026-11-14), not yet in any store build.** Root cause: since
+  `7eb3eba` (2026-08-07) `firebase_options.dart` held the old API key (app-restricted to
+  `com.salehcard.salehcard_app`) while `google-services.json` held the `com.flashcashglobal.app` key, so Firebase
+  threw `[core/duplicate-app]` and Android push was off on every build. #150 uses the JSON key (verified on the
+  emulator: token registers, real FCM pushes arrive, tap opens the complaint from background and killed) and
+  wires iOS (entitlements, APNs-token wait, real platform, `apns` payload block). Remaining:
+  1. Merge #150, then build + roll out a new Android AAB (users get push only after updating).
+  2. **Apple setup BEFORE the next iOS build** (or Codemagic signing fails): enable Push Notifications on the
+     `com.flashcashglobal.app` App ID; create an APNs auth key (.p8); upload it with Key ID + Team ID in Firebase
+     → `salehcard-app` → Project settings → Cloud Messaging → the iOS app. Then build iOS and check on a TestFlight
+     iPhone (admin Users → Push should arrive).
+  Until then, notifications reach customers only as in-app inbox rows.
+- **Ship a new app build** (Android AAB via Codemagic; iOS too) so complaint screens, the "Report a problem"
+  button and notification tap-to-open reach customers. Builds already in the stores show complaint
+  notifications as plain inbox rows only.
+- **Deploy gotcha seen here:** when two PRs merge seconds apart, GitHub keeps only the newest pending run in
+  the `deploy-prod` concurrency group. The replacement run's path filter sees only its own push, so an
+  earlier merge's components can be skipped. After back-to-back merges, check each component deployed, or
+  run **Deploy (prod)** manually (`workflow_dispatch` deploys everything).

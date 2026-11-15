@@ -13,6 +13,7 @@ import {
   useUpdateSupplierSettings,
 } from '../hooks/useSuppliers'
 import type { SupplierView, SupplierHealth, CatalogProductView } from '../api/suppliers'
+import { orderNumber } from '@/lib/orderNumber'
 
 const HEALTH_CLASS: Record<SupplierHealth, string> = {
   ok: 'st-ok',
@@ -62,6 +63,7 @@ export default function SuppliersPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_suppliers')]}
         title={t('nav_suppliers')}
         sub="Upstream fulfillment suppliers — balance, health, mapped products, and catalog import."
@@ -354,7 +356,7 @@ function OrdersModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
                 {orders.map((o) => (
                   <tr key={o.id}>
                     <td className="mono">
-                      <a href={`/orders/${o.id}`}>{o.id.slice(-8)}</a>
+                      <a href={`/orders/${o.id}`}>{orderNumber(o.id)}</a>
                     </td>
                     <td>
                       <span className={`st ${o.stuckAt ? 'st-danger' : o.status === 'completed' ? 'st-ok' : o.status === 'refunded' || o.status === 'failed' ? 'st-warn' : 'st-mute'}`}>

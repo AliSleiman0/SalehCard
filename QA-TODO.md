@@ -308,11 +308,15 @@ check:
 4. **The Android emulator can mimic iOS:** `flutter run --dart-define=FORCE_IOS_SCOPE=true`
    (debug only) shows the iOS scope.
 
-## Customer complaints (feat/complaints)
+## Customer complaints (PR #141, in prod 2026-11-14)
 
 Verified locally 2026-11-14 (Chrome web + admin, Android emulator): submit with photo, internal note hidden
 from the customer, reply, resolve then reopen by customer reply, inbox row tap opens the thread.
-Still to check:
+Not yet exercised in prod. Still to check:
+
+0. **Prod smoke (web + admin):** file a complaint on the prod website with a test customer, answer it from
+   the prod admin console (a note, then a reply), and confirm the customer sees the reply but not the note.
+   Close it afterwards. Test complaints stay in the queue; there is no delete.
 
 1. **Push tray tap on a real device** (needs DEVOPS-TODO §24 fixed first): an admin reply should show a tray
    notification "Reply to your complaint C-xxxx"; tapping it with the app in the background, and again with
@@ -338,3 +342,61 @@ Still to check:
    plain-text names, with no links.
 3. **Ctrl/cmd-click** on a product name (detail and list row) opens the editor in a new tab and does not
    open the order.
+## Back buttons (feat/back-buttons, KICKOFF-2026-11-14 §6)
+
+Verified locally 2026-11-14 in Chrome (admin): every page shows "‹ Back" except the Dashboard; Orders →
+filter → order → Back keeps the filter; an order opened in a new tab → Back → Orders → Back → Dashboard (never
+leaves the site); load-error state has Back; Arabic shows "رجوع" with a mirrored chevron; Enter on the focused
+button works. Also verified locally 2026-11-14:
+- Android emulator (debug build of this branch): checkout → order success → "View order" → back → Orders now
+  has a back arrow → back → Menu tab. Menu → Wallet / Orders / Complaints → back pops to Menu. Arabic: the
+  arrow sits on the right and points right.
+- Chrome, a custom role (orders + users view, no Dashboard): `/users` opened directly → Back → To-do list
+  (its first permitted page), and Back is hidden there.
+- Chrome: a product opened from Categories → Save → back on Categories → Back → Dashboard (the editor
+  does not reopen).
+
+Still to check:
+
+1. **USDT deposit → Wallet back arrow** on a device: needs a real confirmed on-chain deposit. It uses the
+   same `AppBackButton` as Orders, which was verified on the emulator.
+2. **The same flows on prod admin** after merge, once with a super admin and once with a custom role.
+
+## Product soft delete / trash (PR #142, live 2026-11-14)
+
+Verified locally 2026-11-14 (curl + Chrome on the admin):
+- trash one product, and "Select all 27 matching" → Move to trash
+- the trash view and its bulk bar (purge hidden for "all matching")
+- the in-trash banner → Restore (a draft came back as a draft)
+- the public list returns `[]`, a direct link to a trashed product returns 404, offers are hidden
+- an order for a trashed product → `PRODUCT_UNAVAILABLE`
+- purge rules and the audit entries
+
+Still to check:
+
+1. **Prod admin click-through** with one test product: Move to trash → Deleted (trash) view → Restore.
+   Confirm the product returns to its prior status and that `/audit` shows `product.soft_delete` /
+   `product.restore`.
+2. **Custom-role admin** (non-super, with `products.manage`): sees no "Delete permanently" in the trash view.
+   A direct `DELETE /api/admin/products/{id}/permanent` and a bulk `purge` both return 403.
+3. **Flutter app (EN + AR)** while a product the customer has open is trashed:
+   - the product disappears from Home, category lists, search and offers after a refresh
+   - an already-open product page → Buy → "This product is no longer available"
+   - with the whole catalog trashed, the catalog shows its empty state and doesn't crash
+4. **Web storefront**: the same as step 3 (lists, direct link 404, checkout message).
+5. **Category arrange**: a trashed product is absent from Categories → Arrange order. After restore it
+   reappears unarranged (A to Z, after the ranked products).
+
+## Help bot starter content (PR #139, seeded on prod 2026-11-14)
+
+The 16 starter Q&A and the support WhatsApp number are live on prod. Not yet checked:
+
+1. **Client review of the wording**: the owner skipped it. Have the client read every answer in admin → Help
+   bot (EN and AR) and correct anything that doesn't match how they actually work (top-up times, KYC wait,
+   refund rules). Edits there are safe; a re-run of `chatbotseed` never overwrites them.
+2. **WhatsApp link**: web help panel → Contact support → WhatsApp opens a chat with +961 71 363 772.
+3. **Arabic on the web panel**: switch to AR, open the panel, and check the bubbles and chips read right to
+   left.
+4. **App help sheet on a device**: home and account → help → the same questions, follow-ups and footer. The
+   web panel was resized in PR #140; the app sheet wasn't changed.
+

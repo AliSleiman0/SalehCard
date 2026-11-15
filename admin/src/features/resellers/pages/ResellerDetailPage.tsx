@@ -31,12 +31,12 @@ import {
   useDeleteResellerPrice,
 } from '../hooks/useResellers'
 import { adaptReseller, effectivePrice, tierColor } from '../lib/adaptReseller'
+import { orderNumber } from '@/lib/orderNumber'
 
 type Tab = 'overview' | 'balance' | 'pricing' | 'orders'
 
 export default function ResellerDetailPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const { data, isLoading, isError, refetch } = useReseller(id)
   const [tab, setTab] = useState<Tab>('overview')
@@ -48,6 +48,7 @@ export default function ResellerDetailPage() {
   if (isError || !detail || !view) {
     return (
       <div className="page">
+        <PageHead back="/resellers" title={t('nav_resellers')} />
         <ErrorState message={t('rd_load_error')} onRetry={() => refetch()} />
       </div>
     )
@@ -58,6 +59,7 @@ export default function ResellerDetailPage() {
   return (
     <div className="page">
       <PageHead
+        back="/resellers"
         crumbs={[t('nav_resellers'), view.name]}
         title={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
@@ -75,9 +77,6 @@ export default function ResellerDetailPage() {
         }
         sub={view.email || view.phone}
       >
-        <button className="abtn" onClick={() => navigate('/resellers')}>
-          <Icon name="chevleft" size={15} /> {t('back')}
-        </button>
         <button className="abtn primary" onClick={() => setTab('balance')}>
           <Icon name="coins" size={15} /> {t('rd_adjust_balance')}
         </button>
@@ -502,7 +501,7 @@ function OrdersTab({ email, total }: { email: string; total: number }) {
             <tbody>
               {rows.map((o) => (
                 <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
-                  <td className="mono strong">{o.id.slice(-8)}</td>
+                  <td className="mono strong">{orderNumber(o.id)}</td>
                   <td>
                     <div className="cellprod">
                       <Art art={o.art} size={28} radius={6} />

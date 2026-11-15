@@ -63,6 +63,7 @@ export default function PromoListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_finance'), t('nav_promos')]}
         title="Promo codes"
         sub={meta ? `${meta.total.toLocaleString()} campaigns` : ''}

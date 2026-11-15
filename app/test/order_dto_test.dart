@@ -46,7 +46,7 @@ void main() {
       expect(order.items.single.title.resolve('ar'), 'روبلوكس');
       expect(order.items.single.qty, 2);
       expect(order.total, 20.0);
-      expect(order.reference, '0000AA');
+      expect(order.reference, '000000AA');
     });
 
     test('maps a processing order with no delivered code', () {
@@ -156,5 +156,33 @@ void main() {
       expect(order.codeLines, isEmpty);
       expect(order.hasManualLines, isTrue);
     });
+  });
+
+  test('OrderItemDto maps the labeled checkout fields (order search reads them)',
+      () {
+    final item = OrderItemDto.fromJson(<String, dynamic>{
+      'productId': 'p1',
+      'title': {'en': 'Free Fire'},
+      'fulfillmentType': 'account_credit',
+      'playerId': '5123456789',
+      'fields': [
+        {
+          'key': 'id',
+          'label': {'en': 'Player ID', 'ar': 'معرّف اللاعب'},
+          'value': '5123456789',
+        },
+        {
+          'key': 'zone',
+          'label': {'en': 'Zone'},
+          'value': '2211',
+        },
+      ],
+    }).toEntity();
+    expect(item.fields.map((f) => f.value), ['5123456789', '2211']);
+    expect(item.fields.first.label.resolve('ar'), 'معرّف اللاعب');
+    expect(
+      OrderItemDto.fromJson(<String, dynamic>{}).toEntity().fields,
+      isEmpty,
+    );
   });
 }

@@ -191,3 +191,64 @@ func TestProductService_FindByID_UnitPricedOffers(t *testing.T) {
 	require.NotNil(t, got.Variants[0].OfferPrice)
 	assert.Equal(t, 8.0, *got.Variants[0].OfferPrice) // per block
 }
+
+// supplierCoinProduct is coinProduct switched to supplier (api) fulfillment.
+func supplierCoinProduct() product.Product {
+	p := coinProduct()
+	p.FulfillmentMode = product.FulfillmentModeAPI
+	return p
+}
+
+func TestProductService_Update_SupplierUnitPricingAllowed(t *testing.T) {
+	repo := &mockRepo{products: []product.Product{supplierCoinProduct()}}
+	svc := product.NewProductService(repo)
+
+	_, err := svc.Update(context.Background(), unitID, product.UpdateProductInput{
+		UnitPricing: &product.UnitPricing{FieldKey: "amount", BlockUnits: 1000},
+	})
+	require.NoError(t, err)
+}
+
+// A supplier product with an amount box and a fixed price is the SOULCHILL
+// prod misconfiguration: the supplier got qty 1 for any typed amount.
+func TestProductService_Update_RejectsSupplierAmountWithoutUnitPricing(t *testing.T) {
+	repo := &mockRepo{products: []product.Product{coinProduct()}}
+	svc := product.NewProductService(repo)
+	api := product.FulfillmentModeAPI
+
+	_, err := svc.Update(context.Background(), unitID, product.UpdateProductInput{FulfillmentMode: &api})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "per-unit pricing")
+
+	// Clearing per-unit pricing on a supplier product with an amount box is refused too.
+	p := supplierCoinProduct()
+	p.UnitPricing = &product.UnitPricing{FieldKey: "amount", BlockUnits: 1000}
+	repo = &mockRepo{products: []product.Product{p}}
+	svc = product.NewProductService(repo)
+	_, err = svc.Update(context.Background(), unitID, product.UpdateProductInput{UnitPricing: &product.UnitPricing{}})
+	require.Error(t, err)
+
+	// Unrelated edits (no type/mode/fields/pricing) never trip the check.
+	repo = &mockRepo{products: []product.Product{supplierCoinProduct()}}
+	svc = product.NewProductService(repo)
+	name := product.I18nString{En: "x"}
+	_, err = svc.Update(context.Background(), unitID, product.UpdateProductInput{Title: &name})
+	require.NoError(t, err)
+}
+
+func TestProductService_Create_SupplierAmountNeedsUnitPricing(t *testing.T) {
+	svc := product.NewProductService(&mockRepo{})
+	p := coinProduct()
+	in := product.CreateProductInput{
+		FulfillmentType: product.FulfillmentCredit,
+		FulfillmentMode: product.FulfillmentModeAPI,
+		Variants:        p.Variants,
+		InputFields:     p.InputFields,
+	}
+	_, err := svc.Create(context.Background(), in)
+	require.Error(t, err)
+
+	in.UnitPricing = &product.UnitPricing{FieldKey: "amount", BlockUnits: 1000}
+	_, err = svc.Create(context.Background(), in)
+	require.NoError(t, err)
+}

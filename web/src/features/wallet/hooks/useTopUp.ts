@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { LIVE_REFETCH_MS } from '@/lib/live'
 import { topUp, fetchTopUpRequests, fetchTopUpMethods, type TopUpInput, type TopUpRequest } from '../api/wallet'
 
 export function useTopUp() {
@@ -17,7 +18,8 @@ export function useTopUp() {
   })
 }
 
-export function useTopUpRequests() {
+/** `live`: re-check every 30s while the page is visible (wallet page). */
+export function useTopUpRequests(live = false) {
   return useQuery({
     queryKey: ['topup-requests'],
     queryFn: async () => {
@@ -25,6 +27,7 @@ export function useTopUpRequests() {
       if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Failed to load')
       return res.data
     },
+    refetchInterval: live ? LIVE_REFETCH_MS : false,
   })
 }
 

@@ -45,6 +45,7 @@ export default function TopupMethodsPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/topups"
         crumbs={['Finance', 'Payment methods']}
         title="Manual payment methods"
         sub="Customer-facing wallet top-up options. Each is informational — a customer submits the inputs you define, then you approve the request in the Top-up queue to credit their wallet."
