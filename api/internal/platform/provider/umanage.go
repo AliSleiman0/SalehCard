@@ -123,15 +123,16 @@ type umOrder struct {
 // Fulfill places one umanage order for the appropriate family.
 func (u *Umanage) Fulfill(ctx context.Context, in FulfillInput) (Result, error) {
 	if in.UpstreamID == "" {
-		return Result{}, fmt.Errorf("umanage: product %s has no upstream product id: %w", in.ProductID, ErrUnavailable)
+		// Bad ids and an unresolvable store are refusals: no order call is made.
+		return Result{}, refusedf("umanage: product %s has no upstream product id", in.ProductID)
 	}
 	family, rest, ok := strings.Cut(in.UpstreamID, ":")
 	if !ok || rest == "" {
-		return Result{}, fmt.Errorf("umanage: malformed upstream id %q (want family:id): %w", in.UpstreamID, ErrUnavailable)
+		return Result{}, refusedf("umanage: malformed upstream id %q (want family:id)", in.UpstreamID)
 	}
 	store, err := u.resolveStore(ctx)
 	if err != nil {
-		return Result{}, err
+		return Result{}, refusedf("umanage: store not resolved: %v", err)
 	}
 
 	var path string
@@ -173,7 +174,7 @@ func (u *Umanage) Fulfill(ctx context.Context, in FulfillInput) (Result, error) 
 			body["plan_id"] = plan
 		}
 	default:
-		return Result{}, fmt.Errorf("umanage: unknown product family %q: %w", family, ErrUnavailable)
+		return Result{}, refusedf("umanage: unknown product family %q", family)
 	}
 
 	raw, status, err := u.post(ctx, path, body)
@@ -555,17 +556,21 @@ func (u *Umanage) classifyProbe(e *umError) error {
 // fulfillment contract: environmental → ErrUnavailable (park + safe re-dispatch,
 // since no order was created); order-specific validation → plain error
 // (compensate). Auth/store/access errors park (config problem, never the
-// customer's fault).
+// customer's fault). Balance, throttling, SMS-service and auth/store codes are
+// definite refusals (ErrRefused, fallback-safe); INTERNAL_ERROR /
+// ORDER_FAILED / SMS_ORDER_FAILED / VALIDATION_ERROR and a detail-less reply
+// stay plain ErrUnavailable — we can't be sure nothing was created.
 func (u *Umanage) classifyOrderError(family string, e *umError) error {
 	if e == nil {
 		return fmt.Errorf("umanage: %s rejected (no detail): %w", family, ErrUnavailable)
 	}
 	switch e.Code {
 	case "INSUFFICIENT_BALANCE", "STORE_INSUFFICIENT_BALANCE", "SMS_SERVICE_UNAVAILABLE",
-		"RATE_LIMIT_EXCEEDED", "INTERNAL_ERROR", "ORDER_FAILED", "SMS_ORDER_FAILED",
-		"VALIDATION_ERROR", "API_KEY_MISSING", "INVALID_API_KEY", "AUTH_REQUIRED",
+		"RATE_LIMIT_EXCEEDED", "API_KEY_MISSING", "INVALID_API_KEY", "AUTH_REQUIRED",
 		"AUTH_ERROR", "STORE_ACCESS_DENIED", "INVALID_STORE_ID":
-		// Environmental / config — no order created, park and retry cleanly.
+		return refusedf("umanage: %s refused (%s): %s", family, e.Code, e.Message)
+	case "INTERNAL_ERROR", "ORDER_FAILED", "SMS_ORDER_FAILED", "VALIDATION_ERROR":
+		// Environmental but not provably order-free — park and retry cleanly.
 		return fmt.Errorf("umanage: %s environmental (%s): %s: %w", family, e.Code, e.Message, ErrUnavailable)
 	default:
 		// BUNDLE_OUT_OF_STOCK, BUNDLE_UNAVAILABLE, INVALID_PHONE, INVALID_CARRIER,

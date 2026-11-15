@@ -196,10 +196,13 @@ func (f *fakeOrderRepo) ListSupplierRetryable(_ context.Context, now time.Time, 
 	return out, nil
 }
 
-func (f *fakeOrderRepo) BumpSupplierRetry(_ context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time) error {
+func (f *fakeOrderRepo) BumpSupplierRetry(_ context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time, ambiguous bool) error {
 	if o, ok := f.byID[id]; ok && o.Status == OrderStatusProcessing && o.Fulfillment.SupplierAttempt == attempt {
 		o.Fulfillment.SupplierRetryCount = retryCount
 		o.Fulfillment.SupplierNextRetryAt = &nextRetryAt
+		if ambiguous {
+			o.Fulfillment.SupplierAmbiguous = true
+		}
 	}
 	return nil
 }
@@ -219,24 +222,77 @@ func (f *fakeOrderRepo) ClaimSupplierReroute(_ context.Context, c RerouteClaim) 
 	if !ok {
 		return nil, apperrors.ErrNotFound
 	}
-	if o.Status != OrderStatusProcessing || o.Fulfillment.SupplierAttempt != c.ExpectedAttempt || o.Fulfillment.ProviderRef != c.ExpectedRef {
+	statusOK := o.Status == OrderStatusProcessing || (c.AllowPending && o.Status == OrderStatusPending)
+	if !statusOK || o.Fulfillment.SupplierAttempt != c.ExpectedAttempt || o.Fulfillment.ProviderRef != c.ExpectedRef {
+		return nil, apperrors.ErrConflict
+	}
+	if c.Auto && o.Fulfillment.SupplierAmbiguous {
+		return nil, apperrors.ErrConflict
+	}
+	if c.ItemIndex < 0 || c.ItemIndex >= len(o.Items) {
+		return nil, apperrors.ErrConflict
+	}
+	mode := o.Items[c.ItemIndex].FulfillmentMode
+	if (c.FromManual && mode != "manual_operator" && mode != "") || (!c.FromManual && mode != "api") {
 		return nil, apperrors.ErrConflict
 	}
 	now := time.Now().UTC()
 	prov := c.NewProvider
+	if c.FromManual {
+		o.Items[c.ItemIndex].FulfillmentMode = "api"
+	}
 	o.Items[c.ItemIndex].FulfillmentProvider = &prov
 	o.Items[c.ItemIndex].UpstreamProductID = c.NewUpstreamID
 	o.Fulfillment.SupplierAttempt = c.ExpectedAttempt + 1
 	o.Fulfillment.SupplierOrderUUID = c.NewOrderUUID
-	o.Fulfillment.SupplierAttemptAt = &now
+	if !c.KeepClock {
+		o.Fulfillment.SupplierAttemptAt = &now
+	}
+	o.Fulfillment.SupplierAttemptAuto = c.Auto
+	o.Fulfillment.SupplierAmbiguous = false
 	o.Fulfillment.ProviderRef = ""
 	o.Fulfillment.SupplierRetryCount = 0
 	fallback := now.Add(rerouteFallbackRetry)
 	o.Fulfillment.SupplierNextRetryAt = &fallback
 	o.Fulfillment.SupplierStuckAt = nil
-	o.Fulfillment.SupplierAttempts = append(o.Fulfillment.SupplierAttempts, c.Archived)
+	if c.Archived != nil {
+		o.Fulfillment.SupplierAttempts = append(o.Fulfillment.SupplierAttempts, *c.Archived)
+	}
+	o.Fulfillment.RejectedProviderRef = ""
 	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, c.Event)
 	return o, nil
+}
+
+func (f *fakeOrderRepo) TransitionUnlessAtSupplier(ctx context.Context, id bson.ObjectID, from []OrderStatus, to OrderStatus, event TimelineEvent, extraSet bson.D) (*Order, error) {
+	if o, ok := f.byID[id]; ok && orderAtSupplier(o) {
+		return nil, apperrors.ErrConflict
+	}
+	return f.TransitionStatus(ctx, id, from, to, event, extraSet)
+}
+
+func (f *fakeOrderRepo) MarkSupplierRejected(_ context.Context, id bson.ObjectID, attempt int, ref string, event TimelineEvent) (bool, error) {
+	o, ok := f.byID[id]
+	if !ok || o.Status != OrderStatusProcessing || o.Fulfillment.SupplierAttempt != attempt {
+		return false, nil
+	}
+	if ref != "" && o.Fulfillment.ProviderRef != ref {
+		return false, nil
+	}
+	if ref == "" && (o.Fulfillment.ProviderRef != "" || o.Fulfillment.SupplierNextRetryAt == nil) {
+		return false, nil
+	}
+	now := time.Now().UTC()
+	if o.Fulfillment.SupplierStuckAt == nil {
+		o.Fulfillment.SupplierStuckAt = &now
+	}
+	if ref != "" {
+		o.Fulfillment.RejectedProviderRef = ref
+	}
+	o.Fulfillment.ProviderRef = ""
+	o.Fulfillment.SupplierRetryCount = 0
+	o.Fulfillment.SupplierNextRetryAt = nil
+	o.Fulfillment.StatusTimeline = append(o.Fulfillment.StatusTimeline, event)
+	return true, nil
 }
 
 func (f *fakeOrderRepo) MarkSupplierStuck(_ context.Context, id bson.ObjectID, attempt int, event TimelineEvent) (bool, error) {
@@ -327,6 +383,8 @@ func (f *fakeProductSvc) Update(context.Context, string, product.UpdateProductIn
 	return nil, nil
 }
 func (f *fakeProductSvc) Delete(context.Context, string) error                   { return nil }
+func (f *fakeProductSvc) Restore(context.Context, string) error                  { return nil }
+func (f *fakeProductSvc) Purge(context.Context, string) error                    { return nil }
 func (f *fakeProductSvc) Bulk(context.Context, product.BulkInput) (int64, error) { return 0, nil }
 
 // fakeCodeSvc tracks available stock and whether claims should fail.
@@ -420,6 +478,7 @@ func (f *fakeWalletSvc) ListTransactions(context.Context, bson.ObjectID) ([]*wal
 func codeProduct(price float64, resellerPrice *float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentCode,
 		FulfillmentMode: product.FulfillmentModeInventory,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "1x", Price: price, ResellerPrice: resellerPrice}},
@@ -429,6 +488,7 @@ func codeProduct(price float64, resellerPrice *float64) *product.Product {
 func creditProduct(price float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentCredit,
 		FulfillmentMode: product.FulfillmentModeManualOperator,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "1800 UC", Price: price}},
@@ -438,6 +498,7 @@ func creditProduct(price float64) *product.Product {
 func apiProduct(price float64, providerID *int) *product.Product {
 	return &product.Product{
 		ID:                  bson.NewObjectID(),
+		Available:           true,
 		FulfillmentType:     product.FulfillmentCredit,
 		FulfillmentMode:     product.FulfillmentModeAPI,
 		FulfillmentProvider: providerID,
@@ -449,6 +510,7 @@ func bridgeProduct(price float64) *product.Product {
 	face := price
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentCredit,
 		FulfillmentMode: product.FulfillmentModeBridgeDevice,
 		Bridge:          &product.BridgeSpec{Provider: product.BridgeProviderTouch, Method: product.BridgeMethodTransferCredit},
@@ -459,6 +521,7 @@ func bridgeProduct(price float64) *product.Product {
 func transferProduct(price float64) *product.Product {
 	return &product.Product{
 		ID:              bson.NewObjectID(),
+		Available:       true,
 		FulfillmentType: product.FulfillmentTransfer,
 		FulfillmentMode: product.FulfillmentModeManualOperator,
 		Variants:        []product.Variant{{ID: bson.NewObjectID(), Denomination: "Variable", Price: price}},

@@ -25,11 +25,12 @@ type AdminHandler struct {
 }
 
 // RegisterAdminRoutes wires the supplier admin routes onto r (the caller supplies
-// the AdminOnly + domain("suppliers") group). The provider registry is the one
-// built in order.RegisterRoutes (orderSvc.Providers()); products is a product
-// service (wired WithCategoryResolver so imported products can be category-assigned).
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, registry *provider.Registry, suppliers []config.SupplierConfig, products product.Service) {
-	h := &AdminHandler{svc: NewService(db, registry, suppliers, products), rec: rec}
+// the AdminOnly + domain("suppliers") group). probes is the shared catalog /
+// balance cache over the fulfillment registry built in order.RegisterRoutes
+// (orderSvc.Providers()); products is a product service (wired
+// WithCategoryResolver so imported products can be category-assigned).
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, probes *provider.Probes, suppliers []config.SupplierConfig, products product.Service) {
+	h := &AdminHandler{svc: NewService(db, probes, suppliers, products), rec: rec}
 	r.Get("/suppliers", h.list)
 	r.Get("/suppliers/{id}/catalog", h.catalog)
 	r.Post("/suppliers/{id}/sync", h.sync)

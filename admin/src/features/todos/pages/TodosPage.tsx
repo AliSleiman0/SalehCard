@@ -156,6 +156,7 @@ export default function TodosPage() {
   return (
     <div className="page">
       <PageHead
+        back="/"
         crumbs={[t('grp_overview'), t('nav_todos')]}
         title={t('nav_todos')}
         sub={`${open.length} open · shared with every admin`}

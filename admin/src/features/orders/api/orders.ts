@@ -40,6 +40,10 @@ export interface SupplierAttempt {
   stuckAt?: string
   reroutedAt: string
   reroutedBy?: string
+  /** The system moved on by itself (the supplier refused for sure). */
+  auto?: boolean
+  /** Why the automatic fallback left this supplier. */
+  reason?: string
 }
 
 export interface OrderFulfillment {
@@ -51,6 +55,8 @@ export interface OrderFulfillment {
   /** Set once the supplier settler gave up waiting — eligible for a reroute. */
   supplierStuckAt?: string
   supplierAttempt?: number
+  /** The current attempt was made by the automatic fallback, not an admin. */
+  supplierAttemptAuto?: boolean
   supplierAttemptAt?: string
   /** Abandoned attempts, archived on each "send to another supplier". */
   supplierAttempts?: SupplierAttempt[]
@@ -114,15 +120,21 @@ export function getOrder(id: string): Promise<ApiResponse<AdminOrder>> {
   return apiClient.get<AdminOrder>(`${ADMIN}/${id}`)
 }
 
-/** Refund a processing or completed order (credits a wallet charge back). */
-export function refundOrder(id: string, reason = ''): Promise<ApiResponse<AdminOrder>> {
-  return apiClient.post<AdminOrder>(`${ADMIN}/${id}/refund`, { reason })
+/** Refund a processing or completed order (credits a wallet charge back). An
+ *  order a supplier may still deliver answers 409 ORDER_AT_SUPPLIER unless
+ *  acknowledgeSupplier is set (double-delivery guard). */
+export function refundOrder(id: string, reason = '', acknowledgeSupplier = false): Promise<ApiResponse<AdminOrder>> {
+  return apiClient.post<AdminOrder>(`${ADMIN}/${id}/refund`, {
+    reason,
+    ...(acknowledgeSupplier ? { acknowledgeSupplier: true } : {}),
+  })
 }
 
 /** Per-order outcome of a bulk refund. */
 export interface BulkRefundOutcome {
   id: string
-  status: 'refunded' | 'conflict' | 'error'
+  /** at_supplier = skipped: a supplier may still deliver it (refund it from its page to confirm). */
+  status: 'refunded' | 'conflict' | 'at_supplier' | 'error'
   message?: string
 }
 
@@ -147,14 +159,18 @@ export function failOrder(id: string, reason = ''): Promise<ApiResponse<AdminOrd
 }
 
 /** Manually complete a processing order (account credit / transfer / parked). */
+/** Completes a processing order by hand. A supplier may still be delivering an
+ *  order it accepted (or will retry): the API then answers 409
+ *  ORDER_AT_SUPPLIER unless acknowledgeSupplier is set (double-delivery guard). */
 export function completeOrder(
   id: string,
-  opts: { note?: string; transferRef?: string } = {},
+  opts: { note?: string; transferRef?: string; acknowledgeSupplier?: boolean } = {},
 ): Promise<ApiResponse<AdminOrder>> {
   return apiClient.put<AdminOrder>(`${ADMIN}/${id}/status`, {
     status: 'completed',
     note: opts.note ?? '',
     transferRef: opts.transferRef ?? '',
+    ...(opts.acknowledgeSupplier ? { acknowledgeSupplier: true } : {}),
   })
 }
 
@@ -169,12 +185,100 @@ export function listRerouteProviders(): Promise<ApiResponse<RerouteProvider[]>> 
 }
 
 export interface RerouteInput {
-  providerId: number
-  upstreamProductId: string
+  /** One of the product's supplier links (preferred — nothing is typed). */
+  linkId?: string
+  /** A raw supplier + supplier product ("other supplier product…"). */
+  providerId?: number
+  upstreamProductId?: string
+  /** Re-send although the current supplier may still deliver (double-delivery risk). */
+  acknowledgeAtSupplier?: boolean
   acknowledgeAmbiguous?: boolean
+  /** Send even though the supplier's balance looks below this order's cost. */
+  acknowledgeLowBalance?: boolean
 }
 
-/** Sends a stuck supplier order to another supplier and dispatches it there now. */
+/** Sends a processing order to a supplier (another one, or the same one again)
+ *  and dispatches it there now. */
 export function rerouteOrder(id: string, input: RerouteInput): Promise<ApiResponse<AdminOrder>> {
   return apiClient.post<AdminOrder>(`/api/admin/orders/${id}/reroute`, input)
+}
+
+/** One of the order's product supplier links, priced for this order. */
+export interface SupplierOption {
+  linkId: string
+  provider: number
+  providerName?: string
+  upstreamId: string
+  name?: string
+  enabled: boolean
+  active: boolean
+  /** The order's current attempt went here. */
+  current: boolean
+  /** An earlier attempt of this order went here. */
+  tried: boolean
+  catalogStatus: 'ok' | 'unknown' | 'unavailable' | 'not_checked'
+  available: boolean
+  stale?: boolean
+  unitPrice?: number
+  currency?: string
+  /** Supplier cost of this order (unit price × the units it sends). */
+  cost?: number
+  qtyOk: boolean
+  lowBalance?: boolean
+  /** Only for admins who can see supplier accounts. */
+  balance?: number
+  balanceCurrency?: string
+  /** Why it can't take the order ("" / absent = it can). */
+  blocked?: string
+}
+
+export interface SupplierOptions {
+  canSend: boolean
+  reason?: string
+  message?: string
+  fromManual: boolean
+  /** The current supplier may still deliver: re-sending needs acknowledgeAtSupplier. */
+  needsAck: boolean
+  /** The last outcome is unknown: needs acknowledgeAmbiguous. */
+  ambiguous: boolean
+  qty: number
+  /** What the customer paid for the line (the margin base). */
+  linePrice: number
+  currency: string
+  productMissing?: boolean
+  options: SupplierOption[]
+}
+
+export function getSupplierOptions(id: string): Promise<ApiResponse<SupplierOptions>> {
+  return apiClient.get<SupplierOptions>(`/api/admin/orders/${id}/supplier-options`)
+}
+
+/** At most this many orders per bulk re-send (each one is a billed supplier order). */
+export const MAX_BULK_RESEND = 5
+
+export interface BulkRerouteInput {
+  ids: string[]
+  /** Send each order to its product's link at this supplier (else its first usable link). */
+  providerId?: number
+  acknowledgeAtSupplier?: boolean
+  acknowledgeAmbiguous?: boolean
+  acknowledgeLowBalance?: boolean
+}
+
+export interface BulkRerouteOutcome {
+  id: string
+  status: 'completed' | 'sent' | 'refused' | 'needs_ack' | 'no_link' | 'not_eligible' | 'conflict' | 'error'
+  message?: string
+  provider?: number
+  upstreamId?: string
+}
+
+export interface BulkRerouteResult {
+  sent: number
+  total: number
+  results: BulkRerouteOutcome[]
+}
+
+export function rerouteBulkOrders(input: BulkRerouteInput): Promise<ApiResponse<BulkRerouteResult>> {
+  return apiClient.post<BulkRerouteResult>('/api/admin/orders/reroute-bulk', input)
 }

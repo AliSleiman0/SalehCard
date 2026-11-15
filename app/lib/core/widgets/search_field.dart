@@ -12,6 +12,7 @@ class SearchField extends StatelessWidget {
     required this.onChanged,
     required this.onClear,
     this.autofocus = false,
+    this.clearTooltip,
   });
 
   final TextEditingController controller;
@@ -19,6 +20,9 @@ class SearchField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
   final bool autofocus;
+
+  /// Tooltip / screen-reader label for the clear button.
+  final String? clearTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,7 @@ class SearchField extends StatelessWidget {
               ? const SizedBox.shrink()
               : IconButton(
                   icon: Icon(Icons.close_rounded, color: colors.textFaint),
+                  tooltip: clearTooltip,
                   onPressed: onClear,
                 ),
         ),

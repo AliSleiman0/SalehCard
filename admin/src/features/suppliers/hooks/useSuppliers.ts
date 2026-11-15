@@ -20,12 +20,17 @@ export function useSuppliersList() {
   })
 }
 
-/** Live upstream catalog for one supplier — fetched only while the browse modal is open. */
-export function useSupplierCatalog(id: number | null) {
+/** Live upstream catalog for one supplier — fetched only while a browse modal or
+ *  picker needs it. Every fetch hits the supplier (no server cache), so pickers
+ *  pass a staleTime; `enabled` gates on access (suppliers.view). A failed fetch
+ *  isn't retried: the picker falls back to typing the id. */
+export function useSupplierCatalog(id: number | null, opts: { enabled?: boolean; staleTime?: number } = {}) {
   return useQuery({
     queryKey: ['admin', 'suppliers', 'catalog', id],
     queryFn: () => getSupplierCatalog(id as number),
-    enabled: id != null,
+    enabled: id != null && (opts.enabled ?? true),
+    staleTime: opts.staleTime,
+    retry: false,
   })
 }
 

@@ -27,6 +27,7 @@ import {
   type DepositStatus,
   type UnmatchedDeposit,
 } from '../api/payments'
+import { orderNumber } from '@/lib/orderNumber'
 
 const STATUS_FILTERS: [PaymentIntentStatus | '', string][] = [
   ['', 'All'],
@@ -84,6 +85,7 @@ export default function PaymentsPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_finance'), t('nav_payments')]}
         title={t('nav_payments')}
       />
@@ -195,7 +197,7 @@ function IntentsView() {
                       tx {short(r.txHash)} ↗
                     </a>
                   )}
-                  {r.orderId && <span>order …{r.orderId.slice(-6)}</span>}
+                  {r.orderId && <span>order {orderNumber(r.orderId)}</span>}
                   {r.receivedUsd > 0 && r.receivedUsd !== r.amountUsd && (
                     <span style={{ color: 'var(--danger)' }}>received {usdtAmount(r.receivedUsd)}</span>
                   )}

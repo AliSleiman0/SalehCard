@@ -20,10 +20,21 @@ type Repository interface {
 	Create(ctx context.Context, in CreateProductInput) (*Product, error)
 	Update(ctx context.Context, id string, in UpdateProductInput) (*Product, error)
 	Upsert(ctx context.Context, in UpsertProductInput) (*Product, error)
-	Delete(ctx context.Context, id string) error
-	BulkSetAvailable(ctx context.Context, ids []string, available bool) (int64, error)
-	BulkSetCategory(ctx context.Context, ids []string, categoryID, slug, rootDomain string) (int64, error)
-	BulkDelete(ctx context.Context, ids []string) (int64, error)
+	// SoftDelete moves a product to the trash (idempotent: an already-trashed
+	// product keeps its original deletedAt). ErrNotFound when absent.
+	SoftDelete(ctx context.Context, id string) error
+	// Restore takes a product out of the trash (idempotent). ErrNotFound when absent.
+	Restore(ctx context.Context, id string) error
+	// Purge permanently erases a trashed product: ErrConflict when the product
+	// exists but is not in the trash, ErrNotFound when absent.
+	Purge(ctx context.Context, id string) error
+	BulkSetAvailable(ctx context.Context, sel Selector, available bool) (int64, error)
+	BulkSetCategory(ctx context.Context, sel Selector, categoryID, slug, rootDomain string) (int64, error)
+	BulkSoftDelete(ctx context.Context, sel Selector) (int64, error)
+	BulkRestore(ctx context.Context, sel Selector) (int64, error)
+	// BulkPurge permanently erases the given ids that are already in the trash
+	// (live products in the list are skipped, never erased).
+	BulkPurge(ctx context.Context, ids []string) (int64, error)
 }
 
 // MongoRepository is a MongoDB-backed implementation of Repository.
@@ -64,6 +75,10 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 			Keys:    bson.D{{Key: "legacyId", Value: 1}},
 			Options: options.Index().SetUnique(true).SetSparse(true),
 		},
+		{
+			// Supplier pages: every product linked to a supplier (any link).
+			Keys: bson.D{{Key: "supplierLinks.provider", Value: 1}},
+		},
 	}
 
 	_, err := col.Indexes().CreateMany(ctx, indexes)
@@ -98,6 +113,13 @@ func buildFilter(f ListFilter) bson.D {
 	if f.FulfillmentMode != "" {
 		filter = append(filter, bson.E{Key: "fulfillmentMode", Value: f.FulfillmentMode})
 	}
+	// Soft delete: the trash is its own view. Every other listing (customer and
+	// admin alike) excludes trashed products.
+	if f.Status == StatusDeleted {
+		filter = append(filter, inTrash)
+	} else {
+		filter = append(filter, notDeleted)
+	}
 	switch f.Status {
 	case "active":
 		filter = append(filter, bson.E{Key: "available", Value: true})
@@ -123,6 +145,39 @@ func buildFilter(f ListFilter) bson.D {
 	return filter
 }
 
+// StatusDeleted is the ListFilter.Status value that lists only the trash.
+const StatusDeleted = "deleted"
+
+var (
+	// notDeleted matches products that are not soft-deleted. {deletedAt: null}
+	// matches both a missing field and an explicit null.
+	notDeleted = bson.E{Key: "deletedAt", Value: nil}
+	// inTrash matches soft-deleted products.
+	inTrash = bson.E{Key: "deletedAt", Value: bson.D{{Key: "$ne", Value: nil}}}
+)
+
+// selectorFilter turns a bulk Selector into a Mongo filter. A Filter selector
+// reuses buildFilter (so "select all matching" acts on exactly what the admin
+// list shows); an ID selector matches those ids in any state. ok is false when
+// the selector cannot match anything (no valid ids) — callers then no-op.
+func selectorFilter(sel Selector) (bson.D, bool) {
+	if sel.Filter != nil {
+		return buildFilter(*sel.Filter), true
+	}
+	oids := objectIDs(sel.IDs)
+	if len(oids) == 0 {
+		return nil, false
+	}
+	return bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}}, true
+}
+
+// andWith combines a selector filter with one extra clause via $and, so the
+// clause never collides with a same-key clause of the selector (e.g. its own
+// deletedAt view, or a categoryId filter) in one document.
+func andWith(filter bson.D, guard bson.E) bson.D {
+	return bson.D{{Key: "$and", Value: bson.A{filter, bson.D{guard}}}}
+}
+
 // objectIDs converts hex id strings to ObjectIDs, skipping any that are invalid.
 func objectIDs(ids []string) []bson.ObjectID {
 	out := make([]bson.ObjectID, 0, len(ids))
@@ -134,15 +189,15 @@ func objectIDs(ids []string) []bson.ObjectID {
 	return out
 }
 
-// BulkSetAvailable sets the availability flag on every product in ids.
-func (r *MongoRepository) BulkSetAvailable(ctx context.Context, ids []string, available bool) (int64, error) {
+// BulkSetAvailable sets the availability flag on every selected product.
+func (r *MongoRepository) BulkSetAvailable(ctx context.Context, sel Selector, available bool) (int64, error) {
 	defer invalidateNameCache() // A to Z listings must not show stale rows
-	oids := objectIDs(ids)
-	if len(oids) == 0 {
+	filter, ok := selectorFilter(sel)
+	if !ok {
 		return 0, nil
 	}
 	res, err := r.col.UpdateMany(ctx,
-		bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}},
+		filter,
 		bson.D{{Key: "$set", Value: bson.D{
 			{Key: "available", Value: available},
 			{Key: "updatedAt", Value: time.Now().UTC()},
@@ -158,14 +213,12 @@ func (r *MongoRepository) BulkSetAvailable(ctx context.Context, ids []string, av
 // the denormalized flat category slug + rootDomain alongside the categoryId.
 // An empty categoryID clears the assignment (unassigns) by unsetting all three
 // fields. The service resolves slug/rootDomain from the node before calling.
-func (r *MongoRepository) BulkSetCategory(ctx context.Context, ids []string, categoryID, slug, rootDomain string) (int64, error) {
+func (r *MongoRepository) BulkSetCategory(ctx context.Context, sel Selector, categoryID, slug, rootDomain string) (int64, error) {
 	defer invalidateNameCache() // A to Z listings must not show stale rows
-	oids := objectIDs(ids)
-	if len(oids) == 0 {
+	filter, ok := selectorFilter(sel)
+	if !ok {
 		return 0, nil
 	}
-	inIDs := bson.D{{Key: "$in", Value: oids}}
-	filter := bson.D{{Key: "_id", Value: inIDs}}
 	now := time.Now().UTC()
 
 	var update bson.D
@@ -195,13 +248,13 @@ func (r *MongoRepository) BulkSetCategory(ctx context.Context, ids []string, cat
 		// the move (they join unarranged, A to Z). Stayers go first so a mover
 		// is never matched twice.
 		stay, err := r.col.UpdateMany(ctx,
-			bson.D{{Key: "_id", Value: inIDs}, {Key: "categoryId", Value: catOID}},
+			andWith(filter, bson.E{Key: "categoryId", Value: catOID}),
 			bson.D{{Key: "$set", Value: set}})
 		if err != nil {
 			return 0, err
 		}
 		moved, err := r.col.UpdateMany(ctx,
-			bson.D{{Key: "_id", Value: inIDs}, {Key: "categoryId", Value: bson.D{{Key: "$ne", Value: catOID}}}},
+			andWith(filter, bson.E{Key: "categoryId", Value: bson.D{{Key: "$ne", Value: catOID}}}),
 			bson.D{{Key: "$set", Value: set}, {Key: "$unset", Value: bson.D{{Key: "position", Value: ""}}}})
 		if err != nil {
 			return stay.ModifiedCount, err
@@ -216,14 +269,69 @@ func (r *MongoRepository) BulkSetCategory(ctx context.Context, ids []string, cat
 	return res.ModifiedCount, nil
 }
 
-// BulkDelete removes every product in ids.
-func (r *MongoRepository) BulkDelete(ctx context.Context, ids []string) (int64, error) {
+// BulkSoftDelete moves every selected product that is not already in the
+// trash to it. Already-trashed products keep their original deletedAt, so the
+// returned count is the number actually moved. available is never touched.
+func (r *MongoRepository) BulkSoftDelete(ctx context.Context, sel Selector) (int64, error) {
 	defer invalidateNameCache() // A to Z listings must not show stale rows
-	oids := objectIDs(ids)
-	if len(oids) == 0 {
+	filter, ok := selectorFilter(sel)
+	if !ok {
 		return 0, nil
 	}
-	res, err := r.col.DeleteMany(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}})
+	now := time.Now().UTC()
+	res, err := r.col.UpdateMany(ctx, andWith(filter, notDeleted), softDeleteUpdate(now))
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+// BulkRestore takes every selected trashed product out of the trash. Each
+// product's available flag is untouched, so it returns to its prior state.
+func (r *MongoRepository) BulkRestore(ctx context.Context, sel Selector) (int64, error) {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
+	filter, ok := selectorFilter(sel)
+	if !ok {
+		return 0, nil
+	}
+	res, err := r.col.UpdateMany(ctx, andWith(filter, inTrash), restoreUpdate())
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+// softDeleteUpdate stamps deletedAt and drops the product's manual rank in its
+// category (Position): a trashed product is not arrangeable, and on restore it
+// rejoins the node unarranged (A to Z) rather than colliding with a rank the
+// admin has since given another product. available is never touched.
+func softDeleteUpdate(now time.Time) bson.D {
+	return bson.D{
+		{Key: "$set", Value: bson.D{
+			{Key: "deletedAt", Value: now},
+			{Key: "updatedAt", Value: now},
+		}},
+		{Key: "$unset", Value: bson.D{{Key: "position", Value: ""}}},
+	}
+}
+
+// restoreUpdate clears deletedAt (and only that, plus updatedAt).
+func restoreUpdate() bson.D {
+	return bson.D{
+		{Key: "$set", Value: bson.D{{Key: "updatedAt", Value: time.Now().UTC()}}},
+		{Key: "$unset", Value: bson.D{{Key: "deletedAt", Value: ""}}},
+	}
+}
+
+// BulkPurge permanently removes the given products, but only those already in
+// the trash — a live product in the list is skipped, never erased.
+func (r *MongoRepository) BulkPurge(ctx context.Context, ids []string) (int64, error) {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
+	filter, ok := selectorFilter(Selector{IDs: ids})
+	if !ok {
+		return 0, nil
+	}
+	res, err := r.col.DeleteMany(ctx, andWith(filter, inTrash))
 	if err != nil {
 		return 0, err
 	}
@@ -400,6 +508,7 @@ func (r *MongoRepository) CountByRootDomain(ctx context.Context) (map[string]int
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.D{
 			{Key: "available", Value: true},
+			notDeleted,
 			{Key: "rootDomain", Value: bson.D{{Key: "$ne", Value: ""}}},
 		}}},
 		{{Key: "$group", Value: bson.D{
@@ -434,6 +543,7 @@ func (r *MongoRepository) CountByCategory(ctx context.Context) (map[bson.ObjectI
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.D{
 			{Key: "available", Value: true},
+			notDeleted,
 			{Key: "categoryId", Value: bson.D{{Key: "$ne", Value: nil}}},
 		}}},
 		{{Key: "$group", Value: bson.D{
@@ -479,7 +589,10 @@ type CategoryFacet struct {
 // them without guessing the taxonomy's slug alignment.
 func (r *MongoRepository) CategoryFacets(ctx context.Context) ([]CategoryFacet, error) {
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.D{{Key: "category", Value: bson.D{{Key: "$nin", Value: bson.A{"", nil}}}}}}},
+		{{Key: "$match", Value: bson.D{
+			{Key: "category", Value: bson.D{{Key: "$nin", Value: bson.A{"", nil}}}},
+			notDeleted,
+		}}},
 		{{Key: "$group", Value: bson.D{
 			{Key: "_id", Value: "$category"},
 			{Key: "n", Value: bson.D{{Key: "$sum", Value: 1}}},
@@ -569,6 +682,12 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		Ratings:             in.Ratings,
 		CreatedAt:           now,
 		UpdatedAt:           now,
+	}
+	if lp := in.linksPlan; lp != nil && len(lp.Links) > 0 {
+		p.SupplierLinks, p.ActiveSupplierLinkID, p.SupplierLinksRev = lp.Links, lp.ActiveID, lp.Rev
+	}
+	if in.SupplierFallback != nil {
+		p.SupplierFallbackOff = !*in.SupplierFallback
 	}
 	p.normalize() // persist images as [] (not null) when created without any
 
@@ -664,6 +783,15 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		}}}
 	}
 	variantExpr := keepIfUnitPriced("variants", refreshed)
+	keepIfLinked := func(field string, refreshedValue any) bson.D {
+		return bson.D{{Key: "$cond", Value: bson.D{
+			{Key: "if", Value: bson.D{{Key: "$gt", Value: bson.A{
+				bson.D{{Key: "$size", Value: bson.D{{Key: "$ifNull", Value: bson.A{"$supplierLinks", bson.A{}}}}}}, 0,
+			}}}},
+			{Key: "then", Value: "$" + field},
+			{Key: "else", Value: refreshedValue},
+		}}}
+	}
 
 	ifNull := func(field string, fallback any) bson.D {
 		return bson.D{{Key: "$ifNull", Value: bson.A{"$" + field, fallback}}}
@@ -683,7 +811,9 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		{Key: "descriptionHadMarkup", Value: lit(in.DescriptionHadMarkup)},
 		{Key: "fulfillmentType", Value: keepIfUnitPriced("fulfillmentType", lit(in.FulfillmentType))},
 		{Key: "fulfillmentMode", Value: keepIfUnitPriced("fulfillmentMode", lit(mode))},
-		{Key: "fulfillmentProvider", Value: lit(in.FulfillmentProvider)},
+		// fulfillmentProvider mirrors the active supplier link once a product
+		// has a links table: a re-import must not desync the mirror.
+		{Key: "fulfillmentProvider", Value: keepIfLinked("fulfillmentProvider", lit(in.FulfillmentProvider))},
 		// upstreamProductId is deliberately ABSENT here: supplier mappings are
 		// admin-owned, and a legacy-catalog re-import must never wipe them
 		// (omitting the key leaves the stored value untouched). moneyTransfer is
@@ -791,6 +921,30 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 			set = append(set, bson.E{Key: "upstreamProductId", Value: *in.UpstreamProductID})
 		}
 	}
+	// Supplier links: the whole table + active id + rev in this same write as
+	// the mirror above, guarded on the rev the editor loaded.
+	idFilter := bson.D{{Key: "_id", Value: oid}}
+	if lp := in.linksPlan; lp != nil {
+		links := lp.Links
+		if links == nil {
+			links = []SupplierLink{}
+		}
+		set = append(set,
+			bson.E{Key: "supplierLinks", Value: links},
+			bson.E{Key: "activeSupplierLinkId", Value: lp.ActiveID},
+			bson.E{Key: "supplierLinksRev", Value: lp.Rev},
+		)
+		prev := lp.Rev - 1
+		if prev == 0 {
+			// Never-linked documents have no field: {$in:[0,null]} matches both.
+			idFilter = append(idFilter, bson.E{Key: "supplierLinksRev", Value: bson.D{{Key: "$in", Value: bson.A{0, nil}}}})
+		} else {
+			idFilter = append(idFilter, bson.E{Key: "supplierLinksRev", Value: prev})
+		}
+	}
+	if in.SupplierFallback != nil {
+		set = append(set, bson.E{Key: "supplierFallbackOff", Value: !*in.SupplierFallback})
+	}
 	if in.Stock != nil {
 		set = append(set, bson.E{Key: "stock", Value: *in.Stock})
 	}
@@ -847,8 +1001,9 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 		// The editor sends categoryId on every save, so no match here means
 		// "already in that node" (or gone) → the plain update below, which
 		// keeps the rank.
+		moveFilter := append(append(bson.D{}, idFilter...), bson.E{Key: "categoryId", Value: bson.D{{Key: "$ne", Value: *moveTo}}})
 		err = r.col.FindOneAndUpdate(ctx,
-			bson.D{{Key: "_id", Value: oid}, {Key: "categoryId", Value: bson.D{{Key: "$ne", Value: *moveTo}}}},
+			moveFilter,
 			bson.D{{Key: "$set", Value: set}, {Key: "$unset", Value: bson.D{{Key: "position", Value: ""}}}},
 			opts,
 		).Decode(&updated)
@@ -862,12 +1017,17 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	}
 	err = r.col.FindOneAndUpdate(
 		ctx,
-		bson.D{{Key: "_id", Value: oid}},
+		idFilter,
 		bson.D{{Key: "$set", Value: set}},
 		opts,
 	).Decode(&updated)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
+			if in.linksPlan != nil {
+				// The rev guard failed (another save got there first) — or
+				// the product vanished; the service loaded it a moment ago.
+				return nil, errLinksChanged()
+			}
 			return nil, apperrors.ErrNotFound
 		}
 		return nil, err
@@ -877,21 +1037,73 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	return &updated, nil
 }
 
-// Delete removes the product identified by id.
-func (r *MongoRepository) Delete(ctx context.Context, id string) error {
+// SoftDelete moves one product to the trash. Idempotent: a product already in
+// the trash is left as-is (its original deletedAt is kept) and nil is returned.
+func (r *MongoRepository) SoftDelete(ctx context.Context, id string) error {
 	defer invalidateNameCache() // A to Z listings must not show stale rows
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
 		return apperrors.ErrNotFound
 	}
+	now := time.Now().UTC()
+	res, err := r.col.UpdateOne(ctx, bson.D{{Key: "_id", Value: oid}, notDeleted}, softDeleteUpdate(now))
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return r.existsOrNotFound(ctx, oid)
+	}
+	return nil
+}
 
-	res, err := r.col.DeleteOne(ctx, bson.D{{Key: "_id", Value: oid}})
+// Restore takes one product out of the trash. Idempotent: a product that is
+// not in the trash is left as-is and nil is returned.
+func (r *MongoRepository) Restore(ctx context.Context, id string) error {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return apperrors.ErrNotFound
+	}
+	res, err := r.col.UpdateOne(ctx, bson.D{{Key: "_id", Value: oid}, inTrash}, restoreUpdate())
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return r.existsOrNotFound(ctx, oid)
+	}
+	return nil
+}
+
+// Purge permanently removes one product, which must already be in the trash:
+// ErrConflict when it exists but is not trashed, ErrNotFound when absent.
+func (r *MongoRepository) Purge(ctx context.Context, id string) error {
+	defer invalidateNameCache() // A to Z listings must not show stale rows
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return apperrors.ErrNotFound
+	}
+	res, err := r.col.DeleteOne(ctx, bson.D{{Key: "_id", Value: oid}, inTrash})
 	if err != nil {
 		return err
 	}
 	if res.DeletedCount == 0 {
+		if err := r.existsOrNotFound(ctx, oid); err != nil {
+			return err
+		}
+		return apperrors.ErrConflict
+	}
+	return nil
+}
+
+// existsOrNotFound returns nil when a product with oid exists, ErrNotFound
+// otherwise — it tells an idempotent no-op apart from a missing product.
+func (r *MongoRepository) existsOrNotFound(ctx context.Context, oid bson.ObjectID) error {
+	n, err := r.col.CountDocuments(ctx, bson.D{{Key: "_id", Value: oid}}, options.Count().SetLimit(1))
+	if err != nil {
+		return err
+	}
+	if n == 0 {
 		return apperrors.ErrNotFound
 	}
-
 	return nil
 }

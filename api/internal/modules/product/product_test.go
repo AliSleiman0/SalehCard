@@ -36,6 +36,11 @@ type mockRepo struct {
 	catSlug  string
 	catRoot  string
 	catCalls int
+	// Trash/bulk bookkeeping: the last repo operation + selector, and how many
+	// products a filter selector "matches".
+	lastOp     string
+	lastSel    product.Selector
+	filterHits int64
 }
 
 func (m *mockRepo) FindAll(_ context.Context, f product.ListFilter, _ pagination.Params) ([]product.Product, int64, error) {
@@ -78,34 +83,61 @@ func (m *mockRepo) Update(_ context.Context, _ string, in product.UpdateProductI
 	return &m.products[0], nil
 }
 
-func (m *mockRepo) Delete(_ context.Context, _ string) error {
+func (m *mockRepo) SoftDelete(_ context.Context, _ string) error {
+	m.lastOp = "soft_delete"
 	return m.err
 }
 
-func (m *mockRepo) BulkSetAvailable(_ context.Context, ids []string, _ bool) (int64, error) {
+func (m *mockRepo) Restore(_ context.Context, _ string) error {
+	m.lastOp = "restore"
+	return m.err
+}
+
+func (m *mockRepo) Purge(_ context.Context, _ string) error {
+	m.lastOp = "purge"
+	return m.err
+}
+
+// selCount is the mock's "affected" count: the ids, or filterHits for a
+// filter selector.
+func (m *mockRepo) selCount(sel product.Selector) (int64, error) {
+	m.lastSel = sel
 	if m.err != nil {
 		return 0, m.err
 	}
-	return int64(len(ids)), nil
+	if sel.Filter != nil {
+		return m.filterHits, nil
+	}
+	return int64(len(sel.IDs)), nil
 }
 
-func (m *mockRepo) BulkSetCategory(_ context.Context, ids []string, categoryID, slug, rootDomain string) (int64, error) {
+func (m *mockRepo) BulkSetAvailable(_ context.Context, sel product.Selector, _ bool) (int64, error) {
+	m.lastOp = "set_available"
+	return m.selCount(sel)
+}
+
+func (m *mockRepo) BulkSetCategory(_ context.Context, sel product.Selector, categoryID, slug, rootDomain string) (int64, error) {
 	m.catCalls++
-	m.catIDs = ids
+	m.catIDs = sel.IDs
 	m.catID = categoryID
 	m.catSlug = slug
 	m.catRoot = rootDomain
-	if m.err != nil {
-		return 0, m.err
-	}
-	return int64(len(ids)), nil
+	return m.selCount(sel)
 }
 
-func (m *mockRepo) BulkDelete(_ context.Context, ids []string) (int64, error) {
-	if m.err != nil {
-		return 0, m.err
-	}
-	return int64(len(ids)), nil
+func (m *mockRepo) BulkSoftDelete(_ context.Context, sel product.Selector) (int64, error) {
+	m.lastOp = "soft_delete"
+	return m.selCount(sel)
+}
+
+func (m *mockRepo) BulkRestore(_ context.Context, sel product.Selector) (int64, error) {
+	m.lastOp = "restore"
+	return m.selCount(sel)
+}
+
+func (m *mockRepo) BulkPurge(_ context.Context, ids []string) (int64, error) {
+	m.lastOp = "purge"
+	return m.selCount(product.Selector{IDs: ids})
 }
 
 func (m *mockRepo) FindByLegacyID(_ context.Context, _ int) (*product.Product, error) {
@@ -685,17 +717,43 @@ func TestProductService_Bulk(t *testing.T) {
 		name    string
 		in      product.BulkInput
 		wantN   int64
+		wantOp  string
 		wantErr bool
 	}{
 		{
-			name:  "activate two",
-			in:    product.BulkInput{IDs: []string{"a", "b"}, Action: product.BulkActivate},
-			wantN: 2,
+			name:   "activate two",
+			in:     product.BulkInput{IDs: []string{"a", "b"}, Action: product.BulkActivate},
+			wantN:  2,
+			wantOp: "set_available",
 		},
 		{
-			name:  "delete three",
-			in:    product.BulkInput{IDs: []string{"a", "b", "c"}, Action: product.BulkDelete},
-			wantN: 3,
+			// "delete" is a SOFT delete (trash) — never a hard erase.
+			name:   "delete three soft-deletes",
+			in:     product.BulkInput{IDs: []string{"a", "b", "c"}, Action: product.BulkDelete},
+			wantN:  3,
+			wantOp: "soft_delete",
+		},
+		{
+			name:   "restore two",
+			in:     product.BulkInput{IDs: []string{"a", "b"}, Action: product.BulkRestore},
+			wantN:  2,
+			wantOp: "restore",
+		},
+		{
+			name:   "purge by ids",
+			in:     product.BulkInput{IDs: []string{"a"}, Action: product.BulkPurge},
+			wantN:  1,
+			wantOp: "purge",
+		},
+		{
+			name:    "purge by filter is refused",
+			in:      product.BulkInput{Filter: &product.BulkFilter{Status: "deleted"}, Action: product.BulkPurge},
+			wantErr: true,
+		},
+		{
+			name:    "purge without ids is a bad request",
+			in:      product.BulkInput{Action: product.BulkPurge},
+			wantErr: true,
 		},
 		{
 			name:    "empty ids is a bad request",
@@ -711,17 +769,84 @@ func TestProductService_Bulk(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := product.NewProductService(&mockRepo{})
+			repo := &mockRepo{}
+			svc := product.NewProductService(repo)
 			n, err := svc.Bulk(context.Background(), tc.in)
 			if tc.wantErr {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, apperrors.ErrBadRequest)
+				assert.Empty(t, repo.lastOp, "a refused bulk must not reach the repository")
 				return
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantN, n)
+			assert.Equal(t, tc.wantOp, repo.lastOp)
 		})
 	}
+}
+
+// "Select all matching": a filter selector reaches the repository as a
+// ListFilter (ids ignored), with a categoryId expanded to the node's subtree
+// exactly as the admin list does.
+func TestProductService_Bulk_Filter(t *testing.T) {
+	node := bson.NewObjectID()
+	child := bson.NewObjectID()
+	repo := &mockRepo{filterHits: 120}
+	svc := product.NewProductService(repo, product.WithCategoryResolver(&recordingResolver{ids: []bson.ObjectID{node, child}}))
+
+	n, err := svc.Bulk(context.Background(), product.BulkInput{
+		Action: product.BulkDelete,
+		IDs:    []string{"ignored"},
+		Filter: &product.BulkFilter{CategoryID: node.Hex(), FulfillmentType: "code", Search: "pubg"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(120), n)
+	assert.Equal(t, "soft_delete", repo.lastOp)
+	require.NotNil(t, repo.lastSel.Filter)
+	assert.Nil(t, repo.lastSel.IDs)
+	assert.Equal(t, []bson.ObjectID{node, child}, repo.lastSel.Filter.CategoryIDs)
+	assert.Equal(t, product.FulfillmentCode, repo.lastSel.Filter.FulfillmentType)
+	assert.Equal(t, "pubg", repo.lastSel.Filter.Search)
+}
+
+// A filter on an unknown/empty category node selects nothing — it must never
+// fall through to an unfiltered (whole-catalog) write.
+func TestProductService_Bulk_FilterUnknownCategoryIsNoop(t *testing.T) {
+	repo := &mockRepo{filterHits: 999}
+	svc := product.NewProductService(repo, product.WithCategoryResolver(&recordingResolver{}))
+
+	n, err := svc.Bulk(context.Background(), product.BulkInput{
+		Action: product.BulkDelete,
+		Filter: &product.BulkFilter{CategoryID: bson.NewObjectID().Hex()},
+	})
+	require.NoError(t, err)
+	assert.Zero(t, n)
+	assert.Empty(t, repo.lastOp)
+}
+
+// An empty listing (e.g. the whole catalog trashed) must serialize as [] — the
+// customer app iterates `data` and must never receive null.
+func TestProductService_FindAll_EmptyIsNotNil(t *testing.T) {
+	svc := product.NewProductService(&mockRepo{products: nil})
+	got, total, err := svc.FindAll(context.Background(), product.ListFilter{}, pagination.Params{Page: 1, Limit: 20})
+	require.NoError(t, err)
+	assert.Zero(t, total)
+	require.NotNil(t, got)
+	b, _ := json.Marshal(got)
+	assert.Equal(t, "[]", string(b))
+}
+
+func TestProductService_TrashOps(t *testing.T) {
+	repo := &mockRepo{}
+	svc := product.NewProductService(repo)
+	ctx := context.Background()
+
+	require.NoError(t, svc.Delete(ctx, "x"))
+	assert.Equal(t, "soft_delete", repo.lastOp, "Delete must soft-delete")
+	require.NoError(t, svc.Restore(ctx, "x"))
+	assert.Equal(t, "restore", repo.lastOp)
+	require.NoError(t, svc.Purge(ctx, "x"))
+	assert.Equal(t, "purge", repo.lastOp)
 }
 
 // fakeCategoryResolver satisfies product.CategoryResolver for assign-category

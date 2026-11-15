@@ -19,7 +19,13 @@ type Service interface {
 	FindByID(ctx context.Context, id string) (*Product, error)
 	Create(ctx context.Context, in CreateProductInput) (*Product, error)
 	Update(ctx context.Context, id string, in UpdateProductInput) (*Product, error)
+	// Delete soft-deletes (moves to trash) — it never erases data. See Purge.
 	Delete(ctx context.Context, id string) error
+	// Restore takes a product back out of the trash.
+	Restore(ctx context.Context, id string) error
+	// Purge permanently erases a product that is already in the trash
+	// (ErrConflict otherwise). Callers must gate it to super admins.
+	Purge(ctx context.Context, id string) error
 	Bulk(ctx context.Context, in BulkInput) (int64, error)
 }
 
@@ -81,6 +87,7 @@ type ProductService struct {
 	resellers  ResellerPricing      // optional; nil disables reseller catalog pricing
 	categories CategoryResolver     // optional; nil disables tree-aware category filtering
 	priceClean ResellerPriceCleaner // optional; nil skips custom-price cleanup on per-unit conversion
+	catalog    SupplierCatalog      // optional; nil skips live checks on new supplier links
 }
 
 // ServiceOption configures a ProductService.
@@ -143,6 +150,11 @@ func (s *ProductService) FindAll(ctx context.Context, f ListFilter, p pagination
 	products, total, err := s.repo.FindAll(ctx, f, p)
 	if err != nil {
 		return nil, 0, err
+	}
+	if products == nil {
+		// An empty page must marshal as [] — never null. With the whole catalog
+		// in the trash the customer list is empty, and clients iterate data.
+		products = []Product{}
 	}
 	ptrs := make([]*Product, len(products))
 	for i := range products {
@@ -338,9 +350,21 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if in.Cost != nil && *in.Cost < 0 {
 		return nil, badRequest("cost must be non-negative")
 	}
-	// Supplier mapping is deliberately NOT hard-validated (an api product
-	// without provider/upstream id parks safely at order time via the stub).
+	// The legacy single mapping is deliberately NOT hard-validated (an api
+	// product without provider/upstream id parks safely at order time via the
+	// stub); a links table is (supplier_links.go). Either way the stored
+	// mapping mirrors the active link.
 	in.UpstreamProductID = strings.TrimSpace(in.UpstreamProductID)
+	if in.SupplierLinks != nil {
+		plan, err := s.planSupplierLinks(ctx, nil, in.SupplierLinks)
+		if err != nil {
+			return nil, err
+		}
+		in.linksPlan = plan
+		in.FulfillmentProvider, in.UpstreamProductID = plan.MirrorProvider, plan.MirrorUpstream
+	} else if links, active := linksFromLegacy(in.FulfillmentProvider, in.UpstreamProductID); links != nil {
+		in.linksPlan = &linksPlan{Links: links, ActiveID: active, Rev: 1, MirrorProvider: in.FulfillmentProvider, MirrorUpstream: in.UpstreamProductID}
+	}
 	fields, err := sanitizeInputFields(in.InputFields)
 	if err != nil {
 		return nil, err
@@ -350,9 +374,11 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if in.UnitPricing.isClear() {
 		in.UnitPricing = nil
 	}
-	if err := validateUnitPricing(in.UnitPricing, unitPricingTarget{
-		Type: in.FulfillmentType, Mode: mode, Variants: in.Variants, Fields: in.InputFields,
-	}); err != nil {
+	createTarget := unitPricingTarget{Type: in.FulfillmentType, Mode: mode, Variants: in.Variants, Fields: in.InputFields}
+	if err := validateUnitPricing(in.UnitPricing, createTarget); err != nil {
+		return nil, err
+	}
+	if err := validateSupplierAmount(createTarget, in.UnitPricing); err != nil {
 		return nil, err
 	}
 	if in.UnitPricing != nil {
@@ -428,9 +454,42 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 		in.InputFields = fields
 	}
 	in.UnitPricing = normalizeUnitPricing(in.UnitPricing)
-	stale, err := s.validateUnitPricingUpdate(ctx, id, in)
+	// The pricing-shape validators need the stored product; load it once, and
+	// only when the update touches something they depend on.
+	var cur *Product
+	if in.UnitPricing != nil || in.InputFields != nil || in.Variants != nil ||
+		in.FulfillmentType != nil || in.FulfillmentMode != nil ||
+		in.SupplierLinks != nil || in.FulfillmentProvider != nil || in.UpstreamProductID != nil {
+		loaded, err := s.repo.FindByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		cur = loaded
+	}
+	stale, err := validateUnitPricingUpdate(cur, in)
 	if err != nil {
 		return nil, err
+	}
+	if err := validateSupplierAmountUpdate(cur, in); err != nil {
+		return nil, err
+	}
+	if cur != nil {
+		if err := checkLegacySupplierFields(cur, in); err != nil {
+			return nil, err
+		}
+	}
+	if in.SupplierLinks != nil {
+		plan, err := s.planSupplierLinks(ctx, cur, in.SupplierLinks)
+		if err != nil {
+			return nil, err
+		}
+		in.linksPlan = plan
+		// The mirror always follows the active link (0 / "" = clear).
+		mp, mu := 0, plan.MirrorUpstream
+		if plan.MirrorProvider != nil {
+			mp = *plan.MirrorProvider
+		}
+		in.FulfillmentProvider, in.UpstreamProductID = &mp, &mu
 	}
 	// Switching to per-unit: drop the variants' flat-price reseller overrides
 	// BEFORE the write, so a cleanup failure leaves the product on fixed
@@ -453,24 +512,15 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 }
 
 // validateUnitPricingUpdate checks per-unit pricing against the product as it
-// will look after a partial update: the stored product overlaid with whichever
-// of type/mode/variants/fields/unitPricing the update carries. It only reads the
-// stored product when the result could be unit-priced and the update touches
-// something the invariants depend on. When the update switches the product
-// from fixed to per-unit pricing it returns the variant ids (stored and
-// incoming) whose per-reseller custom prices must be dropped.
-func (s *ProductService) validateUnitPricingUpdate(ctx context.Context, id string, in UpdateProductInput) ([]string, error) {
-	if in.UnitPricing.isClear() {
+// will look after a partial update: the stored product cur overlaid with
+// whichever of type/mode/variants/fields/unitPricing the update carries. cur is
+// nil when the update touches nothing the invariants depend on (Update loads
+// it only then). When the update switches the product from fixed to per-unit
+// pricing it returns the variant ids (stored and incoming) whose per-reseller
+// custom prices must be dropped.
+func validateUnitPricingUpdate(cur *Product, in UpdateProductInput) ([]string, error) {
+	if in.UnitPricing.isClear() || cur == nil {
 		return nil, nil
-	}
-	touches := in.UnitPricing != nil || in.InputFields != nil || in.Variants != nil ||
-		in.FulfillmentType != nil || in.FulfillmentMode != nil
-	if !touches {
-		return nil, nil
-	}
-	cur, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return nil, err
 	}
 	up := cur.UnitPricing
 	if in.UnitPricing != nil {
@@ -499,6 +549,30 @@ func (s *ProductService) validateUnitPricingUpdate(ctx context.Context, id strin
 		return nil, nil // already per-unit: its overrides are per-block by design
 	}
 	return append(variantIDs(cur.Variants), variantIDs(in.Variants)...), nil
+}
+
+// validateSupplierAmountUpdate applies validateSupplierAmount to the product as
+// it will look after a partial update (cur overlaid with the update; nil cur =
+// the update touches nothing it depends on).
+func validateSupplierAmountUpdate(cur *Product, in UpdateProductInput) error {
+	if cur == nil {
+		return nil
+	}
+	t := unitPricingTarget{Type: cur.FulfillmentType, Mode: cur.FulfillmentMode, Fields: cur.InputFields}
+	if in.FulfillmentType != nil {
+		t.Type = *in.FulfillmentType
+	}
+	if in.FulfillmentMode != nil {
+		t.Mode = *in.FulfillmentMode
+	}
+	if in.InputFields != nil {
+		t.Fields = in.InputFields
+	}
+	up := cur.UnitPricing
+	if in.UnitPricing != nil {
+		up = in.UnitPricing
+	}
+	return validateSupplierAmount(t, up)
 }
 
 // variantIDs returns the hex ids of the variants that have one.
@@ -563,29 +637,92 @@ func validateFaceValues(variants []Variant) error {
 	return nil
 }
 
-// Delete removes the product identified by id.
+// Delete soft-deletes (moves to the trash) the product identified by id. The
+// product keeps its data, codes, orders and available flag; Restore undoes it.
 func (s *ProductService) Delete(ctx context.Context, id string) error {
-	// TODO: check whether any open orders reference this product before deleting.
-	return s.repo.Delete(ctx, id)
+	return s.repo.SoftDelete(ctx, id)
 }
 
-// Bulk applies a bulk action (activate / deactivate / delete) to the given IDs,
-// returning the number of affected products.
+// Restore takes the product identified by id back out of the trash.
+func (s *ProductService) Restore(ctx context.Context, id string) error {
+	return s.repo.Restore(ctx, id)
+}
+
+// Purge permanently erases a trashed product (ErrConflict if it is not in the
+// trash). Orders keep their snapshot of the product; its codes are orphaned.
+func (s *ProductService) Purge(ctx context.Context, id string) error {
+	return s.repo.Purge(ctx, id)
+}
+
+// bulkSelector resolves a BulkInput to the products it targets: every product
+// matching Filter (with a categoryId expanded to the node's subtree, exactly
+// as the admin list does) or the explicit IDs. ok is false when it targets
+// nothing (no ids, or an unknown/empty category node).
+func (s *ProductService) bulkSelector(ctx context.Context, in BulkInput) (Selector, bool, error) {
+	if in.Filter == nil {
+		return Selector{IDs: in.IDs}, len(in.IDs) > 0, nil
+	}
+	f := ListFilter{
+		Category:        in.Filter.Category,
+		CategoryID:      in.Filter.CategoryID,
+		FulfillmentType: FulfillmentType(in.Filter.FulfillmentType),
+		Status:          in.Filter.Status,
+		Search:          in.Filter.Search,
+	}
+	if f.CategoryID != "" && s.categories != nil {
+		ids, err := s.categories.DescendantIDs(ctx, f.CategoryID)
+		if err != nil {
+			return Selector{}, false, err
+		}
+		if len(ids) == 0 {
+			return Selector{}, false, nil
+		}
+		f.CategoryIDs = ids
+	}
+	return Selector{Filter: &f}, true, nil
+}
+
+// Bulk applies a bulk action to the given IDs — or, when in.Filter is set, to
+// every product matching it — returning the number of affected products.
+// "delete" soft-deletes; "purge" (permanent) accepts explicit IDs only.
 func (s *ProductService) Bulk(ctx context.Context, in BulkInput) (int64, error) {
-	if len(in.IDs) == 0 {
+	if in.Action == BulkPurge {
+		if in.Filter != nil {
+			return 0, badRequest("permanent delete needs explicit product ids")
+		}
+		if len(in.IDs) == 0 {
+			return 0, apperrors.ErrBadRequest
+		}
+		return s.repo.BulkPurge(ctx, in.IDs)
+	}
+	if in.Filter == nil && len(in.IDs) == 0 {
 		return 0, apperrors.ErrBadRequest
 	}
 	switch in.Action {
+	case BulkActivate, BulkDeactivate, BulkDelete, BulkRestore, BulkAssignCategory:
+	default:
+		return 0, apperrors.ErrBadRequest
+	}
+	sel, ok, err := s.bulkSelector(ctx, in)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	switch in.Action {
 	case BulkActivate:
-		return s.repo.BulkSetAvailable(ctx, in.IDs, true)
+		return s.repo.BulkSetAvailable(ctx, sel, true)
 	case BulkDeactivate:
-		return s.repo.BulkSetAvailable(ctx, in.IDs, false)
+		return s.repo.BulkSetAvailable(ctx, sel, false)
 	case BulkDelete:
-		return s.repo.BulkDelete(ctx, in.IDs)
+		return s.repo.BulkSoftDelete(ctx, sel)
+	case BulkRestore:
+		return s.repo.BulkRestore(ctx, sel)
 	case BulkAssignCategory:
 		// Empty categoryId → unassign (clear categoryId/category/rootDomain).
 		if in.CategoryID == "" {
-			return s.repo.BulkSetCategory(ctx, in.IDs, "", "", "")
+			return s.repo.BulkSetCategory(ctx, sel, "", "", "")
 		}
 		// Resolve the node to its denormalized slug + rootDomain, exactly as
 		// create/update do, so the flat filters keep finding these products.
@@ -596,8 +733,7 @@ func (s *ProductService) Bulk(ctx context.Context, in BulkInput) (int64, error) 
 		if rerr != nil {
 			return 0, badRequest("category not found")
 		}
-		return s.repo.BulkSetCategory(ctx, in.IDs, in.CategoryID, slug, root)
-	default:
-		return 0, apperrors.ErrBadRequest
+		return s.repo.BulkSetCategory(ctx, sel, in.CategoryID, slug, root)
 	}
+	return 0, apperrors.ErrBadRequest
 }

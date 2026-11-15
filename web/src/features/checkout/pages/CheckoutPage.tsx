@@ -22,7 +22,8 @@ import { NetworkChips } from '@/features/payments/components/NetworkChips'
 import { usePlaceOrder, OrderError } from '@/features/orders/hooks/usePlaceOrder'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import { useQueryClient } from '@tanstack/react-query'
-import type { PlaceOrderInput, Product } from '@/types'
+import type { CartItem } from '@/stores/cart'
+import type { InputField, PlaceOrderInput, Product } from '@/types'
 
 export default function CheckoutPage() {
   const { t } = useTranslation()
@@ -79,11 +80,14 @@ export default function CheckoutPage() {
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  // The first field is prefilled from the cart line's pid (chosen on the PDP).
-  const valueFor = (itemKey: string, fieldKey: string, index: number, pid?: string): string => {
-    const k = `${itemKey}|${fieldKey}`
+  // Boxes are prefilled from what the customer typed on the product page (the
+  // cart line's `fields`); a line without them falls back to its pid for the
+  // first typed (non-photo) field.
+  const valueFor = (it: CartItem, field: InputField, fields: InputField[]): string => {
+    const k = `${it.key}|${field.key}`
     if (fieldValues[k] !== undefined) return fieldValues[k]
-    return index === 0 ? (pid ?? '') : ''
+    if (it.fields) return it.fields[field.key] ?? ''
+    return fields.find((f) => f.type !== 'file')?.key === field.key ? (it.pid ?? '') : ''
   }
   const setValue = (itemKey: string, fieldKey: string, v: string) =>
     setFieldValues((prev) => ({ ...prev, [`${itemKey}|${fieldKey}`]: v }))
@@ -101,8 +105,9 @@ export default function CheckoutPage() {
     const errors: Record<string, string> = {}
     for (const it of needing) {
       const p = productFor(it.id)!
-      nonQuantityFields(p).forEach((f, i) => {
-        const val = valueFor(it.key, f.key, i, it.pid).trim()
+      const fields = nonQuantityFields(p)
+      fields.forEach((f) => {
+        const val = valueFor(it, f, fields).trim()
         if (!val) errors[`${it.key}|${f.key}`] = t('field_required')
         else if (f.key === 'phone' && !isValidLebaneseMobile(val))
           errors[`${it.key}|${f.key}`] = t('invalid_phone')
@@ -118,8 +123,9 @@ export default function CheckoutPage() {
     const items = cartItems.map((it) => {
       const p = productFor(it.id)
       const itemValues: Record<string, string> = {}
-      nonQuantityFields(p).forEach((f, i) => {
-        itemValues[f.key] = valueFor(it.key, f.key, i, it.pid)
+      const fields = nonQuantityFields(p)
+      fields.forEach((f) => {
+        itemValues[f.key] = valueFor(it, f, fields)
       })
       return buildOrderLine(it, p, itemValues)
     })
@@ -302,11 +308,11 @@ export default function CheckoutPage() {
                           {it.brand} · {it.variant}
                         </span>
                       )}
-                      {fields.map((f, i) => (
+                      {fields.map((f) => (
                         <DynamicField
                           key={f.key}
                           field={f}
-                          value={valueFor(it.key, f.key, i, it.pid)}
+                          value={valueFor(it, f, fields)}
                           onChange={(v) => setValue(it.key, f.key, v)}
                           error={fieldErrors[`${it.key}|${f.key}`]}
                         />

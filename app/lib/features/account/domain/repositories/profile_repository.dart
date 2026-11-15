@@ -21,4 +21,11 @@ abstract interface class ProfileRepository {
   /// processing (only offered after a [WalletNotEmptyFailure] /
   /// [OrdersInFlightFailure]); pending payments / top-ups still block.
   Future<Either<Failure, Unit>> deleteAccount({bool force = false});
+
+  /// Changes the signed-in user's own password (`POST /users/me/password`).
+  /// Refusals come back as a [ServerFailure] carrying the API code.
+  Future<Either<Failure, Unit>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
 }

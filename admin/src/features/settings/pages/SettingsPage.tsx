@@ -152,6 +152,7 @@ export default function SettingsPage() {
   return (
     <div className="page">
       <PageHead
+        back="/"
         crumbs={[t('grp_system'), t('nav_settings')]}
         title={t('nav_settings')}
         sub="Store contact, loyalty program and admin accounts"

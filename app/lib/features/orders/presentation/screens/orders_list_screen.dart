@@ -7,20 +7,27 @@ import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/locale/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
+import '../../../../core/widgets/live_refresh.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/product_chip.dart';
+import '../../../../core/widgets/search_field.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/format/date_time.dart';
 import '../../../checkout/domain/entities/order.dart';
 import '../../../checkout/presentation/providers.dart';
+import '../../domain/order_search.dart';
 import '../widgets/balance_line.dart';
 
 /// A client-side status filter for the order history list.
 enum _OrderFilter { all, completed, processing, refunded }
 
-/// Order history. Watches [ordersProvider] (newest-first) with All / Completed /
-/// Processing / Refunded filter tabs. Each row pushes `/orders/{id}`.
+/// Order history. Watches [ordersProvider] (newest-first) with a search field
+/// (order number, player ID, field values, recipient, product title; see
+/// [orderMatchesQuery]) and All / Completed / Processing / Refunded filter
+/// tabs. The API returns the whole history, so both filter on the client.
+/// Each row pushes `/orders/{id}`.
 class OrdersListScreen extends ConsumerStatefulWidget {
   const OrdersListScreen({super.key});
 
@@ -30,6 +37,19 @@ class OrdersListScreen extends ConsumerStatefulWidget {
 
 class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
   _OrderFilter _filter = _OrderFilter.all;
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _clearSearch() {
+    _search.clear();
+    setState(() => _query = '');
+  }
 
   /// Pull-to-refresh: invalidate then await the refetch so the pull spinner
   /// stays until fresh order history is in.
@@ -38,7 +58,10 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     await ref.read(ordersProvider.future);
   }
 
-  bool _matches(Order order) {
+  bool _matches(Order order) =>
+      _matchesStatus(order) && orderMatchesQuery(order, _query);
+
+  bool _matchesStatus(Order order) {
     switch (_filter) {
       case _OrderFilter.all:
         return true;
@@ -58,80 +81,158 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     final ordersAsync = ref.watch(ordersProvider);
     final localeCode = ref.watch(localeControllerProvider).languageCode;
 
-    return Scaffold(
-      backgroundColor: colors.bg,
-      appBar: AppBar(
-        backgroundColor: colors.topbar,
-        title: Text(l10n.ordersTitle),
-      ),
-      body: ordersAsync.when(
-        loading: () => const LoadingView(),
-        error: (_, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(l10n.loadFailed, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => ref.invalidate(ordersProvider),
-                  child: Text(l10n.retry),
-                ),
-              ],
+    return LiveRefresh(
+      onRefresh: () => ref.invalidate(ordersProvider),
+      child: Scaffold(
+        backgroundColor: colors.bg,
+        appBar: AppBar(
+          backgroundColor: colors.topbar,
+          // Normally pushed from the Menu tab, but order detail's fallback reaches
+          // it via go (order-success → "View order" → back) as the stack root,
+          // which would leave no back arrow at all.
+          leading: const AppBackButton(fallback: '/account'),
+          title: Text(l10n.ordersTitle),
+        ),
+        body: ordersAsync.when(
+          loading: () => const LoadingView(),
+          error: (_, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(l10n.loadFailed, textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => ref.invalidate(ordersProvider),
+                    child: Text(l10n.retry),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        data: (orders) {
-          final filtered = orders.where(_matches).toList();
-          return Column(
-            children: [
-              _FilterTabs(
-                selected: _filter,
-                onSelected: (f) => setState(() => _filter = f),
-                l10n: l10n,
-              ),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _refresh,
-                  // Keep the empty state pullable: a user with no matching
-                  // orders should still be able to pull to check for new ones.
-                  child: filtered.isEmpty
-                      ? LayoutBuilder(
-                          builder: (context, constraints) =>
-                              SingleChildScrollView(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: constraints.maxHeight,
-                                  ),
-                                  child: EmptyState(
-                                    icon: Icons.receipt_long_rounded,
-                                    title: l10n.ordersEmptyTitle,
-                                    message: l10n.ordersEmptySub,
-                                    actionLabel: l10n.browseCatalog,
-                                    onAction: () => context.go('/browse'),
+          data: (orders) {
+            final filtered = orders.where(_matches).toList();
+            final searching = normalizeOrderQuery(_query).isNotEmpty;
+            return Column(
+              children: [
+                if (orders.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: _SearchBox(
+                      controller: _search,
+                      hint: l10n.ordersSearchHint,
+                      clearLabel: l10n.ordersSearchClear,
+                      onChanged: (v) => setState(() => _query = v),
+                      onClear: _clearSearch,
+                    ),
+                  ),
+                _FilterTabs(
+                  selected: _filter,
+                  onSelected: (f) => setState(() => _filter = f),
+                  l10n: l10n,
+                ),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refresh,
+                    // Keep the empty state pullable: a user with no matching
+                    // orders should still be able to pull to check for new ones.
+                    child: filtered.isEmpty
+                        ? LayoutBuilder(
+                            builder: (context, constraints) =>
+                                SingleChildScrollView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minHeight: constraints.maxHeight,
+                                    ),
+                                    child: searching
+                                        ? EmptyState(
+                                            icon: Icons.search_off_rounded,
+                                            title: l10n.ordersSearchNoneTitle(
+                                              _query.trim(),
+                                            ),
+                                            message: l10n.ordersSearchNoneSub,
+                                            actionLabel: l10n.ordersSearchClear,
+                                            onAction: _clearSearch,
+                                          )
+                                        : EmptyState(
+                                            icon: Icons.receipt_long_rounded,
+                                            title: l10n.ordersEmptyTitle,
+                                            message: l10n.ordersEmptySub,
+                                            actionLabel: l10n.browseCatalog,
+                                            onAction: () =>
+                                                context.go('/browse'),
+                                          ),
                                   ),
                                 ),
-                              ),
-                        )
-                      : ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, i) => _OrderRow(
-                            order: filtered[i],
-                            localeCode: localeCode,
-                            l10n: l10n,
+                          )
+                        : ListView.separated(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, i) => _OrderRow(
+                              order: filtered[i],
+                              localeCode: localeCode,
+                              l10n: l10n,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// The rounded search pill above the filter tabs (search icon + the shared
+/// [SearchField], which brings its own clear button).
+class _SearchBox extends StatelessWidget {
+  const _SearchBox({
+    required this.controller,
+    required this.hint,
+    required this.clearLabel,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final String clearLabel;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      height: 48,
+      padding: const EdgeInsetsDirectional.only(start: 14, end: 4),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(AppTokens.rPill),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.search_rounded, size: 20, color: colors.textFaint),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SearchField(
+              controller: controller,
+              hint: hint,
+              clearTooltip: clearLabel,
+              onChanged: onChanged,
+              onClear: onClear,
+            ),
+          ),
+        ],
       ),
     );
   }

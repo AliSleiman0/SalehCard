@@ -1,6 +1,7 @@
 package product
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -86,8 +87,19 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for i := range products {
+		stripSupplierMapping(&products[i])
+	}
 	meta := pagination.CalcMeta(p, total)
 	response.OKWithMeta(w, products, meta)
+}
+
+// stripSupplierMapping removes which supplier fulfills a product (and its id
+// there) from a customer-facing read: that is business-internal. The admin
+// reads go through AdminProductView instead.
+func stripSupplierMapping(p *Product) {
+	p.FulfillmentProvider = nil
+	p.UpstreamProductID = ""
 }
 
 // GetByID handles GET /api/v1/products/{id}.
@@ -104,7 +116,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.OK(w, product)
+	response.OK(w, NewAdminProductView(product))
 }
 
 // ListPublic handles the customer-facing GET /api/v1/products: hidden (draft /
@@ -118,7 +130,8 @@ func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetByIDPublic handles the customer-facing GET /api/v1/products/{id}: a hidden
-// product reads as not found, so a stale link or cached id can't surface it.
+// or trashed product reads as not found, so a stale link or cached id can't
+// surface it.
 func (h *Handler) GetByIDPublic(w http.ResponseWriter, r *http.Request) {
 	product, err := h.svc.FindByID(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -129,10 +142,11 @@ func (h *Handler) GetByIDPublic(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w)
 		return
 	}
-	if !product.Available {
+	if !product.Purchasable() {
 		response.NotFound(w)
 		return
 	}
+	stripSupplierMapping(product)
 	response.OK(w, product)
 }
 
@@ -177,6 +191,12 @@ func (h *Handler) VerifyAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		response.InternalError(w)
+		return
+	}
+	// A hidden or trashed product can't be bought, so don't spend a billed
+	// upstream lookup on it — it reads as not found, like GetByIDPublic.
+	if !product.Purchasable() {
+		response.NotFound(w)
 		return
 	}
 	if product.Verification == nil {
@@ -225,6 +245,13 @@ func writeProductError(w http.ResponseWriter, err error) {
 			return
 		}
 		response.Error(w, http.StatusConflict, "CONFLICT", err.Error())
+	case errors.Is(err, errServiceUnavailable):
+		var appErr *apperrors.AppError
+		if errors.As(err, &appErr) {
+			response.Error(w, http.StatusServiceUnavailable, appErr.Code, appErr.Message)
+			return
+		}
+		response.Error(w, http.StatusServiceUnavailable, "UNAVAILABLE", err.Error())
 	default:
 		response.InternalError(w)
 	}
@@ -246,7 +273,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	response.JSON(w, http.StatusCreated, response.Response{
 		Success: true,
-		Data:    product,
+		Data:    NewAdminProductView(product),
 	})
 }
 
@@ -265,26 +292,63 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		writeProductError(w, err)
 		return
 	}
+	if in.SupplierLinks != nil && h.rec != nil {
+		links, active := EffectiveLinks(updated)
+		rows := make([]map[string]any, 0, len(links))
+		for _, l := range links {
+			rows = append(rows, map[string]any{"provider": l.Provider, "upstreamId": l.UpstreamID, "enabled": l.Enabled, "active": l.ID == active})
+		}
+		h.rec.Record(r.Context(), audit.Entry{
+			Action:     audit.ActionProductSupplierLinks,
+			TargetType: "product",
+			TargetID:   updated.ID.Hex(),
+			Summary:    map[string]any{"title": updated.Title.En, "links": rows, "rev": updated.SupplierLinksRev},
+		})
+	}
 
-	response.OK(w, updated)
+	response.OK(w, NewAdminProductView(updated))
 }
 
-// Delete handles DELETE /api/v1/products/{id}.
+// Delete handles DELETE /api/admin/products/{id}: a SOFT delete (moves the
+// product to the trash). It is reversible via Restore; Purge erases for good.
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	h.trashOp(w, r, h.svc.Delete, audit.ActionProductSoftDelete)
+}
+
+// Restore handles POST /api/admin/products/{id}/restore: takes a product back
+// out of the trash, returning it to its prior live/draft state.
+func (h *Handler) Restore(w http.ResponseWriter, r *http.Request) {
+	h.trashOp(w, r, h.svc.Restore, audit.ActionProductRestore)
+}
+
+// Purge handles DELETE /api/admin/products/{id}/permanent: permanently erases a
+// product that is already in the trash (409 PRODUCT_NOT_DELETED otherwise).
+// The route is gated to super admins (auth.RequireSuperAdmin in admin.go).
+func (h *Handler) Purge(w http.ResponseWriter, r *http.Request) {
+	h.trashOp(w, r, h.svc.Purge, audit.ActionProductDelete)
+}
+
+// trashOp runs a single-product trash operation, maps its errors, audits the
+// action and replies 204.
+func (h *Handler) trashOp(w http.ResponseWriter, r *http.Request, op func(context.Context, string) error, action string) {
 	id := chi.URLParam(r, "id")
 
-	if err := h.svc.Delete(r.Context(), id); err != nil {
-		if errors.Is(err, apperrors.ErrNotFound) {
+	if err := op(r.Context(), id); err != nil {
+		switch {
+		case errors.Is(err, apperrors.ErrNotFound):
 			response.NotFound(w)
-			return
+		case errors.Is(err, apperrors.ErrConflict):
+			response.Error(w, http.StatusConflict, "PRODUCT_NOT_DELETED",
+				"move the product to the trash before deleting it permanently")
+		default:
+			response.InternalError(w)
 		}
-		response.InternalError(w)
 		return
 	}
 
 	if h.rec != nil {
 		h.rec.Record(r.Context(), audit.Entry{
-			Action:     audit.ActionProductDelete,
+			Action:     action,
 			TargetType: "product",
 			TargetID:   id,
 		})

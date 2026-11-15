@@ -121,8 +121,9 @@ export default function ChatbotPage() {
   )
 
   return (
-    <div>
+    <div className="page">
       <PageHead
+        back="/"
         title={t('nav_chatbot')}
         sub="Predefined questions and answers for the storefront help bot (web + app). Customers tap a question to see its answer and follow-ups."
       >

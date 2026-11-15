@@ -1,7 +1,9 @@
 import type { Product } from '@/types'
 
-/** Display status derived from a product's flags + stock. */
-export function productStatus(p: Product): 'active' | 'draft' | 'out' {
+/** Display status derived from a product's flags + stock. A trashed product
+ *  reads as 'deleted' whatever its availability. */
+export function productStatus(p: Product): 'active' | 'draft' | 'out' | 'deleted' {
+  if (p.deletedAt) return 'deleted'
   if (!p.available) return 'draft'
   if (p.fulfillmentType === 'code' && p.stock <= 0) return 'out'
   return 'active'

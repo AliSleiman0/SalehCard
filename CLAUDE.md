@@ -151,6 +151,36 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   the double-refund lock; **delivered codes are never re-pooled on refund**).
   **Payments are wallet-only** — card/usdt are rejected (`PAYMENT_METHOD_UNAVAILABLE`)
   until a real gateway exists; only the wallet ledger moves real balance.
+- **Supplier fulfillment** (`platform/provider` panels jentel/speedcard/gift4card + umanage;
+  `order/supplier_settler.go`, `supplier_reroute.go`; live since PR #97, fixed in **PR #147**,
+  2026-11-14). A product is tied to a supplier by `FulfillmentProvider` + `UpstreamProductID` (the
+  supplier's OWN product id), chosen in the product editor from the supplier's live catalog
+  (`SupplierProductPicker`; typing a name like "soulchill" gets `109 Product Not Found`). Both are
+  copied onto the order line. **Quantity sent = the typed units on a per-unit line (`OrderItem.Amount`),
+  else the cart qty** (`supplierQty`; one shared builder `supplierFulfillInput` for placement, retry
+  and reroute). Per-unit pricing is allowed on supplier account-credit products, and a supplier product
+  with an amount box but a fixed price is refused on save. Admins can **send an order to a supplier**
+  from the order page (`POST /api/admin/orders/{id}/reroute`): a stuck/ref-less supplier order
+  ("Send to another supplier"), or a never-sent **single-line manual account-credit order** ("Send via
+  supplier" — the guarded claim pins the line's mode and flips it to `api`). Each attempt gets a fresh
+  upstream idempotency key. **A rejection of an admin-chosen route (attempt > 0) never auto-refunds**:
+  it is flagged stuck for the admin (placement-time orders keep the auto-refund).
+  **Double-delivery guard:** while a supplier may still deliver (`orderAtSupplier` = processing api
+  order with a live ref, even if stuck, or a live retry clock; Mongo twin `notAtSupplierFilter`, kept
+  in step by `TestAtSupplierRule_Mongo`), manual completion and refunds return `409
+  ORDER_AT_SUPPLIER` unless the body carries `acknowledgeSupplier: true` (bulk refund skips such
+  orders as `at_supplier`). See `HANDOFF-SUPPLIERS.md` + `DEVOPS-TODO.md §20`.
+- **Admin order → product links** (PR #136): on the admin order detail (Items card: name +
+  thumbnail) and orders list (first line's name), product names link to `/products/{id}/edit`.
+  Product deletes are **hard deletes**, so the admin order endpoints (list, detail, and the
+  post-action fresh view) return **`missingProductIds`**: line product ids with no product
+  document, from one batched `_id`-only lookup per response (`product.MongoRepository.ExistingIDs`).
+  Those names render as plain text. The lookup is best effort (on error the order still loads and
+  names link), zero product ids are never reported, links are gated on `products.view`, and a
+  product delete invalidates the cached admin order queries. Helper: `productEditPath` in
+  `admin/src/features/orders/lib/adaptOrder.ts`. If soft delete lands, soft-deleted products still
+  exist, so they keep linking (to the editor, where they can be restored).
+
 - **Per-product input fields** (`Product.InputFields` — key/label/type/sensitive): the fields a
   customer enters at checkout for non-`code` products (Account ID, Zone ID, Email, Server…). Admins
   define them in the product editor (add/remove, editable key + type + label). Captured values are
@@ -199,6 +229,22 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   `local` on Azure misconfig; audited as `product.image_upload`. Prod needs an Azure Storage account +
   public `product-images` container (see DEVOPS-TODO.md §13). Old blobs are **not deleted on replace**
   in v1 (orphans are pennies).
+- **Product soft delete / trash** (`internal/modules/product`, live since 2026-11-14, PR #142):
+  `Product.deletedAt` marks a trashed product. It is **independent of `available`**, so Restore returns each
+  product exactly to its prior active/draft state. Every listing excludes the trash (`buildFilter` adds
+  `{deletedAt: null}`, which also matches legacy docs without the field) unless `status=deleted`, the admin's
+  trash view. That covers customer lists/search, category counts, offers, category facets, inventory/low-stock
+  and the dashboard product count. Customer gating goes through **`Product.Purchasable()`** (`available &&
+  !deleted`): `GetByIDPublic` and verify-account 404 otherwise, and **`PlaceOrder` refuses hidden or trashed
+  products** (`400 PRODUCT_UNAVAILABLE`). Admin API: `DELETE /api/admin/products/{id}` **soft-deletes**,
+  `POST …/{id}/restore`, and `DELETE …/{id}/permanent` is super-admin only and trashed-only (`409
+  PRODUCT_NOT_DELETED` otherwise). Bulk actions take `delete` (trash), `restore`, or `purge` (super admin,
+  explicit ids only), plus an optional `filter` (the admin list filters) so one action covers **every
+  matching product** ("Select all N matching" in the admin bulk bar; a categoryId filter is subtree-expanded,
+  and an unknown node matches nothing). Trashing also clears `position`, and `directFilter`/`SetPositions`
+  exclude trashed products, so they can't be arranged. A trashed product still exists for order links; only a
+  purge makes it a `missingProductIds` entry. Writes are idempotent and use `$and`-guarded filters. Real-Mongo
+  test: `TestSoftDelete_Mongo` (`MONGO_TEST_URI`).
 - **iOS store scope** (`app/lib/core/config/regulated_finance.dart`): iOS builds show **only the `telecom`
   root domain** (App Review 3.1.1: no game currency / gift cards without IAP) and hide crypto, money
   transfer, player IDs and Whish/crypto top-up methods. It's a build-time platform check (never a remote flag,
@@ -213,6 +259,17 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   TOO_MANY_OPEN`), per-IP create limit `RATE_LIMIT_COMPLAINT_*`. Staff replies and resolve/close notify the
   customer (`complaint_reply` / `complaint_status`, inbox + push, never SMS); the push data carries `kind`
   so the app's tray tap opens the thread. Web has no push and polls every 30s.
+- **Help bot** (`internal/modules/chatbot`, RBAC domain `chatbot`, collection `chatbot_entries`): predefined
+  Q&A only, no AI. An entry has `question`/`answer` as `{en, ar}`, `keywords`, `sortOrder`, `enabled`, and an
+  optional `parentId` (follow-ups are **one level deep**); cap 500 entries. Public `GET /api/v1/chatbot`
+  returns enabled entries plus `support{email, phone, whatsapp}` from `app_settings` (`supportWhatsapp` is
+  free-typed; clients keep only the digits for the `wa.me` link). Admins edit it in admin → Help bot
+  (`/api/admin/chatbot`, audited `chatbot.create/update/delete`). Clients: web `ChatWidget` (floating button,
+  panel 440×640, hidden while there are no entries) and the app's help sheet (home + account). **Starter
+  content**: `chatbot.StarterContent` (6 questions + 10 follow-ups, EN + AR, iOS-safe wording enforced by a
+  test), loaded with `go run ./cmd/chatbotseed` (dry run by default; `--apply`, `--confirm-prod` for prod,
+  optional `--whatsapp "<number>"`). It only adds: a question already present at the same level is skipped,
+  never overwritten. **Prod was seeded 2026-11-14** (16 entries, WhatsApp `+961 71 363 772`).
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout
@@ -230,7 +287,8 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   admins approve (atomic pending-claim → credit → **mandatory** ledger row, with
   compensation) or reject at `/api/admin/wallet/topups`. There is NO instant top-up.
 - **Admin audit log** (`audit` module, `admin_audit_log`): role/status changes, wallet &
-  reseller adjustments, product deletes, order refunds/completions, KYC/review/top-up
+  reseller adjustments, product trash/restore/permanent delete (`product.soft_delete` / `product.restore` /
+  `product.delete`, one entry per bulk call), order refunds/completions, KYC/review/top-up
   decisions, bulk-SMS broadcasts are recorded (actor from JWT) and browsable at `/audit` + `GET
   /api/admin/audit-log`. Guardrails: last-admin demote/suspend → `409 LAST_ADMIN`;
   admin money adjustments reverse the balance if the ledger insert fails.

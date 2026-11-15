@@ -154,6 +154,9 @@ type Config struct {
 	// in the order module.
 	SupplierSettlerInterval time.Duration
 	SupplierSettlerGiveUp   time.Duration
+	// SupplierCatalogTTL is how long a supplier's product catalog is cached
+	// (provider.Probes) before the next admin view / reroute check refetches it.
+	SupplierCatalogTTL time.Duration
 
 	// On-chain USDT payments (payment module + platform/tron). The feature is
 	// enabled iff exactly one of USDTXPub / USDTAddress is set; USDTProvider
@@ -406,6 +409,7 @@ func Load() *Config {
 		},
 		SupplierSettlerInterval: getDuration("SUPPLIER_SETTLER_INTERVAL", 60*time.Second),
 		SupplierSettlerGiveUp:   getDuration("SUPPLIER_SETTLER_GIVEUP", 24*time.Hour),
+		SupplierCatalogTTL:      getDuration("SUPPLIER_CATALOG_TTL", 5*time.Minute),
 
 		USDTProvider:      getEnv("USDT_PROVIDER", "stub"),
 		USDTXPub:          os.Getenv("USDT_XPUB"),

@@ -80,11 +80,33 @@ func TestReroute_Eligibility(t *testing.T) {
 	ctx := context.Background()
 	in := RerouteInput{ProviderID: 9, UpstreamProductID: "U-900"}
 
-	t.Run("supplier still working (ref, not stuck) → refused", func(t *testing.T) {
-		st, repo, _, _ := newRerouteSUT(&fakeProvider{id: 7}, &fakeProvider{id: 9})
+	t.Run("supplier still working (ref, not stuck) → needs the double-delivery OK", func(t *testing.T) {
+		newP := &fakeProvider{id: 9, res: provider.Result{Reference: "N"}}
+		st, repo, _, rec := newRerouteSUT(&fakeProvider{id: 7}, newP)
 		o := settlerOrder(repo, func(o *Order) { o.Fulfillment.ProviderRef = "UP_1" })
 		_, err := st.Reroute(ctx, o.ID, in, "a")
-		assert.Equal(t, "REROUTE_NOT_STUCK", appCode(err))
+		assert.Equal(t, "REROUTE_NEEDS_ACK", appCode(err))
+		assert.Equal(t, 0, newP.calls)
+
+		ack := in
+		ack.AcknowledgeAtSupplier = true
+		got, err := st.Reroute(ctx, o.ID, ack, "a")
+		require.NoError(t, err)
+		assert.Equal(t, OrderStatusCompleted, got.Status)
+		require.Len(t, got.Fulfillment.SupplierAttempts, 1)
+		assert.Equal(t, "UP_1", got.Fulfillment.SupplierAttempts[0].ProviderRef, "the old attempt stays reconcilable")
+		require.NotEmpty(t, rec.entries)
+		assert.Equal(t, true, rec.entries[0].Summary["acknowledgedAtSupplier"])
+	})
+
+	t.Run("live retry clock counts as at the supplier", func(t *testing.T) {
+		st, repo, _, _ := newRerouteSUT(&fakeProvider{id: 7}, &fakeProvider{id: 9})
+		o := settlerOrder(repo, func(o *Order) {
+			next := time.Now().Add(time.Minute)
+			o.Fulfillment.SupplierNextRetryAt = &next
+		})
+		_, err := st.Reroute(ctx, o.ID, in, "a")
+		assert.Equal(t, "REROUTE_NEEDS_ACK", appCode(err))
 	})
 
 	t.Run("ref-less park (no stuck flag needed) → allowed", func(t *testing.T) {
@@ -196,4 +218,132 @@ func TestReroute_UnavailableRetriesWithFreshGiveUpWindow(t *testing.T) {
 	st.Tick(ctx)
 	assert.Equal(t, OrderStatusCompleted, got.Status)
 	assert.Equal(t, key, newP.lastIn.OrderUUID, "retries within one attempt reuse its key (deduped upstream)")
+}
+
+// catalogProvider is a fakeProvider that also lists a catalog and a balance,
+// so the reroute pre-checks (provider.Probes) have something to read.
+type catalogProvider struct {
+	fakeProvider
+	products []provider.CatalogProduct
+	listErr  error
+	balance  float64
+	profErr  error
+}
+
+func (c *catalogProvider) ListProducts(context.Context) ([]provider.CatalogProduct, error) {
+	return c.products, c.listErr
+}
+
+func (c *catalogProvider) Profile(context.Context) (provider.Account, error) {
+	return provider.Account{Balance: c.balance, Currency: "USD"}, c.profErr
+}
+
+func TestReroute_PreChecksAgainstCatalog(t *testing.T) {
+	ip := func(n int) *int { return &n }
+	cases := []struct {
+		name     string
+		target   catalogProvider
+		in       RerouteInput
+		wantCode string
+		wantSent bool
+	}{
+		{
+			name:     "id not in catalog (the 1045 mistake)",
+			target:   catalogProvider{products: []provider.CatalogProduct{{UpstreamID: "3258", Available: true}}},
+			in:       RerouteInput{UpstreamProductID: "1045"},
+			wantCode: "REROUTE_UPSTREAM_UNKNOWN",
+		},
+		{
+			name:     "unavailable upstream",
+			target:   catalogProvider{products: []provider.CatalogProduct{{UpstreamID: "3258"}}},
+			in:       RerouteInput{UpstreamProductID: "3258"},
+			wantCode: "REROUTE_UPSTREAM_UNAVAILABLE",
+		},
+		{
+			name:     "quantity below supplier minimum",
+			target:   catalogProvider{products: []provider.CatalogProduct{{UpstreamID: "3258", Available: true, QtyMin: ip(10000)}}},
+			in:       RerouteInput{UpstreamProductID: "3258"},
+			wantCode: "REROUTE_QTY_REJECTED",
+		},
+		{
+			name:     "catalog unreachable",
+			target:   catalogProvider{listErr: provider.ErrUnavailable},
+			in:       RerouteInput{UpstreamProductID: "3258"},
+			wantCode: "REROUTE_CATALOG_UNAVAILABLE",
+		},
+		{
+			name: "balance below cost",
+			target: catalogProvider{balance: 0.47,
+				products: []provider.CatalogProduct{{UpstreamID: "3258", Available: true, Price: 2}}},
+			in:       RerouteInput{UpstreamProductID: "3258"},
+			wantCode: "REROUTE_LOW_BALANCE",
+		},
+		{
+			name: "low balance acknowledged",
+			target: catalogProvider{balance: 0.47,
+				products: []provider.CatalogProduct{{UpstreamID: "3258", Available: true, Price: 2}}},
+			in:       RerouteInput{UpstreamProductID: "3258", AcknowledgeLowBalance: true},
+			wantSent: true,
+		},
+		{
+			name: "negative balance = credit account, not blocked",
+			target: catalogProvider{balance: -1861.19,
+				products: []provider.CatalogProduct{{UpstreamID: "3258", Available: true, Price: 2}}},
+			in:       RerouteInput{UpstreamProductID: "3258"},
+			wantSent: true,
+		},
+		{
+			name: "balance probe failure never blocks",
+			target: catalogProvider{profErr: errors.New("down"),
+				products: []provider.CatalogProduct{{UpstreamID: "3258", Available: true, Price: 2}}},
+			in:       RerouteInput{UpstreamProductID: "3258"},
+			wantSent: true,
+		},
+		{
+			name: "valid pick is sent",
+			target: catalogProvider{balance: 200,
+				products: []provider.CatalogProduct{{UpstreamID: "3258", Available: true, Price: 2, QtyMin: ip(1)}}},
+			in:       RerouteInput{UpstreamProductID: "3258"},
+			wantSent: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			target := c.target
+			target.id = 9
+			target.res = provider.Result{Reference: "NEW_1"}
+			oldP := &fakeProvider{id: 7}
+			st, repo, _, _ := newRerouteSUT(oldP, &fakeProvider{id: 99})
+			// Swap in a registry that knows the catalog-capable target.
+			reg := provider.NewRegistry(oldP, &target)
+			st.svc.providers = reg
+			st.WithProbes(provider.NewProbes(reg, provider.ProbesConfig{}))
+			o := settlerOrder(repo, stuckAt)
+
+			in := c.in
+			in.ProviderID = 9
+			_, err := st.Reroute(context.Background(), o.ID, in, "admin@x")
+			if c.wantSent {
+				require.NoError(t, err)
+				assert.Equal(t, 1, target.calls)
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, c.wantCode, appCode(err))
+			assert.Equal(t, 0, target.calls, "nothing is sent")
+			assert.Equal(t, 0, repo.byID[o.ID].Fulfillment.SupplierAttempt, "nothing is claimed")
+		})
+	}
+}
+
+func TestReroute_NonCatalogSupplierSkipsChecks(t *testing.T) {
+	oldP := &fakeProvider{id: 7}
+	newP := &fakeProvider{id: 9, res: provider.Result{Reference: "NEW_1"}}
+	st, repo, _, _ := newRerouteSUT(oldP, newP)
+	st.WithProbes(provider.NewProbes(st.svc.providers, provider.ProbesConfig{}))
+	o := settlerOrder(repo, stuckAt)
+
+	_, err := st.Reroute(context.Background(), o.ID, RerouteInput{ProviderID: 9, UpstreamProductID: "anything"}, "admin@x")
+	require.NoError(t, err)
+	assert.Equal(t, 1, newP.calls)
 }

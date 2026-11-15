@@ -66,6 +66,7 @@ export default function InventoryPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_catalog'), t('nav_inventory')]}
         title="Inventory & code management"
         sub="Mission-critical — if codes run out, purchases fail."

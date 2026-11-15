@@ -81,6 +81,7 @@ export default function TopupsPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_finance'), 'Top-up requests']}
         title="Top-up requests"
         sub={meta ? `${meta.total.toLocaleString()} requests` : ''}

@@ -20,7 +20,8 @@ export interface ProductListParams {
   // (used by the Categories page's inline product panel).
   categoryId?: string
   fulfillmentType?: FulfillmentType
-  status?: 'active' | 'draft' | 'out'
+  // 'deleted' lists only the trash; every other value (and none) excludes it.
+  status?: 'active' | 'draft' | 'out' | 'deleted'
   available?: boolean
   search?: string
   // 'name' = the customer catalog order: A to Z, with admin-arranged products
@@ -53,6 +54,13 @@ export interface ProductInput {
   // The supplier's own product id for api-mode products. '' clears. Omitted =
   // leave unchanged.
   upstreamProductId?: string
+  // Replaces the supplier links table (send only when it was edited). The
+  // server derives fulfillmentProvider/upstreamProductId from the active row
+  // and refuses a stale rev (409 SUPPLIER_LINKS_CHANGED).
+  supplierLinks?: SupplierLinksInput
+  // Automatic fallback to the next supplier link on a definite refusal.
+  // Omitted = unchanged (on for a new product).
+  supplierFallback?: boolean
   // Bridge recharge config. A non-empty `provider` sets it; `{provider:'',...}`
   // clears it. Omitted = leave unchanged.
   bridge?: BridgeSpec | { provider: ''; method: '' }
@@ -106,8 +114,19 @@ export function updateProduct(id: string, input: Partial<ProductInput>): Promise
   return apiClient.put<Product>(`${ADMIN}/${id}`, input)
 }
 
+/** Soft delete: moves the product to the trash (restorable). */
 export function deleteProduct(id: string): Promise<ApiResponse<unknown>> {
   return apiClient.delete(`${ADMIN}/${id}`)
+}
+
+/** Takes a product back out of the trash, to its prior active/draft state. */
+export function restoreProduct(id: string): Promise<ApiResponse<unknown>> {
+  return apiClient.post(`${ADMIN}/${id}/restore`)
+}
+
+/** Permanently erases a product that is already in the trash. Super admin only. */
+export function purgeProduct(id: string): Promise<ApiResponse<unknown>> {
+  return apiClient.delete(`${ADMIN}/${id}/permanent`)
 }
 
 // --- manual order inside a category ------------------------------------------
@@ -152,14 +171,86 @@ export function listFulfillmentProviders(): Promise<ApiResponse<FulfillmentProvi
   return apiClient.get<FulfillmentProviderOption[]>(`${ADMIN}/fulfillment-providers`)
 }
 
-export type BulkAction = 'activate' | 'deactivate' | 'delete' | 'assign-category'
+// 'delete' moves to the trash (soft); 'restore' takes out of it; 'purge'
+// permanently erases already-trashed products (super admin, explicit ids only).
+export type BulkAction = 'activate' | 'deactivate' | 'delete' | 'restore' | 'purge' | 'assign-category'
+
+/** "Select all matching": the admin list filters a bulk action applies to,
+ *  across every page (the server ignores `ids` when this is sent). */
+export type BulkFilter = Pick<ProductListParams, 'category' | 'categoryId' | 'fulfillmentType' | 'status' | 'search'>
 
 // For 'assign-category', pass the target taxonomy node id in categoryId; an empty
 // string unassigns (clears the product's category). Ignored for other actions.
+// Pass `filter` to act on every product matching it instead of `ids`.
 export function bulkProductAction(
   ids: string[],
   action: BulkAction,
   categoryId?: string,
+  filter?: BulkFilter,
 ): Promise<ApiResponse<{ modified: number }>> {
-  return apiClient.post<{ modified: number }>(`${ADMIN}/bulk`, { ids, action, categoryId })
+  return apiClient.post<{ modified: number }>(`${ADMIN}/bulk`, { ids, action, categoryId, filter })
+}
+
+export interface SupplierLinkInputRow {
+  /** Existing link id; omitted for a row added in this edit. */
+  id?: string
+  provider: number
+  upstreamId: string
+  enabled: boolean
+  active: boolean
+}
+
+export interface SupplierLinksInput {
+  links: SupplierLinkInputRow[]
+  rev: number
+}
+
+/** Live view of one supplier link (POST /products/supplier-links/quote). */
+export interface LinkQuote {
+  provider: number
+  upstreamId: string
+  /** ok = found · unknown = not in the supplier's catalog · unavailable = catalog didn't load · not_checked */
+  status: 'ok' | 'unknown' | 'unavailable' | 'not_checked'
+  name?: string
+  price?: number
+  currency?: string
+  available: boolean
+  qtyMin?: number
+  qtyMax?: number
+  qtyValues?: string[]
+  params?: string[]
+  stale?: boolean
+  checkedAt?: string
+}
+
+export function quoteSupplierLinks(
+  links: { provider: number; upstreamId: string }[],
+): Promise<ApiResponse<{ quotes: LinkQuote[] }>> {
+  return apiClient.post<{ quotes: LinkQuote[] }>(`${ADMIN}/supplier-links/quote`, { links })
+}
+
+/** One supplier product matching a cross-supplier search. */
+export interface SupplierSearchHit {
+  provider: number
+  providerName: string
+  upstreamId: string
+  name: string
+  category?: string
+  price: number
+  currency: string
+  available: boolean
+  qtyMin?: number
+  qtyMax?: number
+  qtyValues?: string[]
+  params?: string[]
+}
+
+export interface SupplierSearchResult {
+  results: SupplierSearchHit[]
+  unavailable: { provider: number; providerName: string; reason: 'unavailable' | 'not_supported' }[]
+}
+
+/** Searches every connected supplier's catalog for a product name or id. */
+export function searchSuppliers(q: string): Promise<ApiResponse<SupplierSearchResult>> {
+  return apiClient.get<SupplierSearchResult>(`${ADMIN}/supplier-search?q=${encodeURIComponent(q)}`)
 }

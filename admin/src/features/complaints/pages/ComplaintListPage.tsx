@@ -64,6 +64,7 @@ export default function ComplaintListPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_complaints')]}
         title={t('nav_complaints')}
         sub={

@@ -58,4 +58,13 @@ class NotificationRepositoryImpl implements NotificationRepository {
       return Left(mapError(error));
     }
   }
+
+  @override
+  Future<void> reportPushDiagnostic(String stage) async {
+    try {
+      await _remote.reportPushDiagnostic(stage);
+    } catch (_) {
+      // Diagnostics must never affect the app.
+    }
+  }
 }

@@ -106,7 +106,22 @@ describe('buildOrderLine', () => {
     const p = product({ fulfillmentType: 'transfer', inputFields: [field('name'), field('country', 'select'), field('iban')] })
     const line = buildOrderLine(cartItem, p, { name: 'Sam', country: 'Egypt', iban: 'EG99' })
     expect(line.recipient).toEqual({ name: 'Sam', country: 'Egypt', detail: 'EG99' })
-    expect(line.fields).toBeUndefined()
+    expect(line.fields).toEqual([
+      { key: 'name', value: 'Sam' },
+      { key: 'country', value: 'Egypt' },
+      { key: 'iban', value: 'EG99' },
+    ])
+  })
+  it('transfer with a photo → photo in fields, never in the recipient text', () => {
+    const p = product({ fulfillmentType: 'transfer', inputFields: [field('field_1', 'file'), field('amount', 'amount')] })
+    const url = 'https://cdn.example/order-files/abc.jpg'
+    const line = buildOrderLine(cartItem, p, { field_1: url, amount: '50' })
+    expect(line.fields).toEqual([
+      { key: 'field_1', value: url },
+      { key: 'amount', value: '50' },
+    ])
+    expect(JSON.stringify(line.recipient)).not.toContain(url)
+    expect(line.recipient).toEqual({ name: '50', country: '', detail: '50' })
   })
   it('code / no fields → carries the pre-collected pid', () => {
     const p = product({ fulfillmentType: 'code', inputFields: [] })

@@ -87,6 +87,7 @@ export default function KycPage() {
   return (
     <div className="page page-wide">
       <PageHead
+        back="/"
         crumbs={[t('grp_operations'), t('nav_kyc')]}
         title="KYC verification"
         sub={meta ? `${meta.total.toLocaleString()} submissions` : ''}

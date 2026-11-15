@@ -541,6 +541,23 @@ resolves to the parking stub with no env, which is exactly today's behavior
 Verify after setting creds: `/suppliers` renders live balances (not
 `unreachable`/`ip_blocked`), and the dashboard shows the supplier balance strip.
 
+6. **Prod catalog cleanup after PR #147 (2026-11-14) — needs the owner's OK; it changes live data.**
+   The first real canary (SOULCHILL, 2026-11-13) failed on bad product data plus a since-fixed qty bug
+   (see `HANDOFF-SUPPLIERS.md`, update 2026-11-14). In the admin console:
+   - **SOULCHILL** (`6a3f0399ea6747f81d0bad46`, linked as `soulchill`) and **"soul star"**
+     (`6a4cdc628c219c4d6d8d7741`, linked as `SOULSTAR`, no status):
+     1. Open the product editor and pick the real Jentel product from the catalog picker (SOULCHILL
+        was Jentel `2` in the reroute).
+     2. Turn on **per-unit pricing**. Set the amount field's min/max inside the supplier's qty range
+        (the picker warns if they don't fit).
+   - **10 PUBG UC / Free Fire products on `fulfillmentProvider: 5`**: an old-site id that doesn't
+     exist here (ours are 10–13). Orders for them would silently wait. Re-link each to a connected
+     supplier via the picker, or turn supplier fulfilment off.
+   - **Refund the stuck test order `6af76aab`** ($1.98, the client's own account) from its order page.
+     It is flagged stuck at the supplier, so the refund asks for the "Refund it anyway" confirmation
+     only if the order still holds a live ref.
+   - Then run the **canary** (step 5) once per supplier, with the client watching.
+
 ## 23. Codemagic iOS build didn't auto-trigger on push to `main` (2026-11-08)
 
 `codemagic.yaml` → `ios-release` declares `triggering: push` on `main`, but merging PR #110 (`60cef37`)
@@ -553,16 +570,37 @@ started **no** build. Build #5 had to be started by hand (Applications → Saleh
 - Until it's fixed, start iOS builds by hand after merging app changes. Build number = `4 + Codemagic
   index`.
 
-## 24. Customer complaints — after deploy (feat/complaints)
+## 24. Customer complaints — after deploy (PR #141)
+
+**Shipped 2026-11-14.** PR #141 merged as `78cf44e`. Its own deploy was replaced by #138's run, which
+deployed API + admin; web came with the manual full redeploy of `8287849` (all three jobs green). Prod check:
+`/api/v1/complaints` and `/api/admin/complaints/counts` answer 401 without a token (404 before the deploy).
+
+Still open:
 
 - **Grant `complaints.view` / `complaints.manage`** to any custom support role in admin → Roles. Super admins
-  already see it. A custom role without it gets 403 and no "Complaints" nav item.
-- **Android push is off in the app itself, not just blocked by the API-key restriction (§19).** On a debug
-  build, `initFirebase()` logs `[core/duplicate-app] A Firebase App named "[DEFAULT]" already exists` and
-  disables push. The `apiKey` in `app/lib/firebase_options.dart` does not match the `current_key` that
-  `app/android/app/google-services.json` holds for `com.flashcashglobal.app` (appId, sender id and bucket do
-  match). The Google Services plugin starts the default app natively with the JSON options, then the Dart
-  `initializeApp(options:)` conflicts. Pick the one key that is correct and unrestricted for this package
-  (regenerate `firebase_options.dart` with `flutterfire configure`, or initialize with no options on
-  Android), then re-test §19. Until then no device registers a token, so complaint replies reach customers
-  only as inbox rows.
+  already see it. A custom role without it gets 403 and no "Complaints" nav item. Script (no admin password:
+  uses your `az login` to read MONGO_URI from the App Service, opens a temporary Cosmos firewall rule for your
+  IP, previews with `dbtool role-grant`, applies after you type `yes`, always removes the rule; audited as
+  `role.update` by "dbtool (ops CLI)"):
+  `powershell -ExecutionPolicy Bypass -File deploy\grant-role-permission.ps1` (`-DryRun`, `-Level view`,
+  `-RoleId <id>`, `-Domain <area>` for other areas).
+- **Push notifications: FIXED in code by PR #150 (2026-11-14), not yet in any store build.** Root cause: since
+  `7eb3eba` (2026-08-07) `firebase_options.dart` held the old API key (app-restricted to
+  `com.salehcard.salehcard_app`) while `google-services.json` held the `com.flashcashglobal.app` key, so Firebase
+  threw `[core/duplicate-app]` and Android push was off on every build. #150 uses the JSON key (verified on the
+  emulator: token registers, real FCM pushes arrive, tap opens the complaint from background and killed) and
+  wires iOS (entitlements, APNs-token wait, real platform, `apns` payload block). Remaining:
+  1. Merge #150, then build + roll out a new Android AAB (users get push only after updating).
+  2. **Apple setup BEFORE the next iOS build** (or Codemagic signing fails): enable Push Notifications on the
+     `com.flashcashglobal.app` App ID; create an APNs auth key (.p8); upload it with Key ID + Team ID in Firebase
+     → `salehcard-app` → Project settings → Cloud Messaging → the iOS app. Then build iOS and check on a TestFlight
+     iPhone (admin Users → Push should arrive).
+  Until then, notifications reach customers only as in-app inbox rows.
+- **Ship a new app build** (Android AAB via Codemagic; iOS too) so complaint screens, the "Report a problem"
+  button and notification tap-to-open reach customers. Builds already in the stores show complaint
+  notifications as plain inbox rows only.
+- **Deploy gotcha seen here:** when two PRs merge seconds apart, GitHub keeps only the newest pending run in
+  the `deploy-prod` concurrency group. The replacement run's path filter sees only its own push, so an
+  earlier merge's components can be skipped. After back-to-back merges, check each component deployed, or
+  run **Deploy (prod)** manually (`workflow_dispatch` deploys everything).

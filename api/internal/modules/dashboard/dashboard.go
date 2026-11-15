@@ -119,7 +119,8 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		totalProducts, err = h.products.CountDocuments(ctx, bson.D{})
+		// Trashed (soft-deleted) products don't count toward the catalog size.
+		totalProducts, err = h.products.CountDocuments(ctx, bson.D{{Key: "deletedAt", Value: nil}})
 		return err
 	})
 	g.Go(func() error {

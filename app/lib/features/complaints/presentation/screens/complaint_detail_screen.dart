@@ -7,11 +7,13 @@ import '../../../../core/format/date_time.dart';
 import '../../../../core/i18n/arb/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../data/complaint_repository.dart';
 import '../../domain/complaint.dart';
 import '../complaint_labels.dart';
+import '../../../../core/format/order_number.dart';
 
 /// One complaint as a chat thread (customer on the end side, support on the
 /// start side) with a reply box, hidden once the complaint is closed. Reopened
@@ -79,11 +81,7 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
         backgroundColor: colors.topbar,
         // Reached by push from the list, or by go from a notification tap with
         // nothing beneath — fall back to the list rather than stranding the user.
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go('/complaints'),
-        ),
+        leading: const AppBackButton(fallback: '/complaints'),
         title: Text(async.value?.ref ?? l10n.complaintsTitle),
       ),
       body: async.when(
@@ -144,7 +142,7 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
                         InkWell(
                           onTap: () => context.push('/orders/${c.orderId}'),
                           child: Text(
-                            '${l10n.complaintLinkedOrder} #${c.orderId!.substring(c.orderId!.length - 8)}',
+                            '${l10n.complaintLinkedOrder} ${orderNumber(c.orderId!)}',
                             style: const TextStyle(
                               color: AppTokens.brand1,
                               fontWeight: FontWeight.w700,
