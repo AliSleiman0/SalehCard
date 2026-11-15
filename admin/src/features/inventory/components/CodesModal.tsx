@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { Modal, Icon, LoadingSpinner, EmptyState, Pagination } from '@/components'
 import { useCodes, useAddCode, useEditCode, useDeleteCode, useExpireCode } from '../hooks/useInventory'
 import type { Code, CodeStatus, InventoryStats } from '@/types'
@@ -24,6 +25,7 @@ const STATUS_BADGE: Record<CodeStatus, string> = {
  * tied to an order's fulfillment, so they carry no destructive actions.
  */
 export function CodesModal({ product, onClose }: { product: InventoryStats; onClose: () => void }) {
+  const { t } = useTranslation()
   const productId = product.productId
   const [page, setPage] = useState(1)
   const { data, isLoading } = useCodes(productId, { page, limit: PAGE_SIZE })
@@ -75,16 +77,16 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
       <div className="pad">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <Icon name="layers" size={18} />
-          <h3 style={{ margin: 0 }}>Codes — {product.title}</h3>
+          <h3 style={{ margin: 0 }}>{t('inv_codes_title', { title: product.title })}</h3>
         </div>
         <div className="faint" style={{ fontSize: 12.5, marginBottom: 16 }}>
-          {product.available} available · {product.uploaded.toLocaleString()} total
+          {t('inv_codes_summary', { available: product.available, total: product.uploaded.toLocaleString() })}
         </div>
 
         {/* Add a single code */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 220px' }}>
-            <label className="alabel">New code</label>
+            <label className="alabel">{t('inv_new_code')}</label>
             <input
               className="afield"
               style={{ width: '100%', fontFamily: 'ui-monospace' }}
@@ -95,7 +97,7 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
             />
           </div>
           <div style={{ flex: '0 1 130px' }}>
-            <label className="alabel">PIN (optional)</label>
+            <label className="alabel">{t('inv_pin_optional')}</label>
             <input
               className="afield"
               style={{ width: '100%', fontFamily: 'ui-monospace' }}
@@ -105,7 +107,7 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
             />
           </div>
           <button className="abtn primary" disabled={!newCode.trim() || add.isPending} onClick={submitAdd}>
-            <Icon name="plus" size={14} /> Add
+            <Icon name="plus" size={14} /> {t('add')}
           </button>
         </div>
 
@@ -113,16 +115,16 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
         {isLoading ? (
           <LoadingSpinner />
         ) : codes.length === 0 ? (
-          <EmptyState icon="layers" title="No codes yet" sub="Add a code above or bulk-upload a batch." />
+          <EmptyState icon="layers" title={t('inv_no_codes')} sub={t('inv_no_codes_sub')} />
         ) : (
           <div className="tablewrap" style={{ maxHeight: '46vh', overflowY: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>PIN</th>
-                  <th>Status</th>
-                  <th>Order</th>
+                  <th>{t('inv_f_code')}</th>
+                  <th>{t('inv_f_pin')}</th>
+                  <th>{t('status')}</th>
+                  <th>{t('col_order')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -160,7 +162,7 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
                       <td>
                         <span className={'st ' + STATUS_BADGE[c.status]} style={{ textTransform: 'capitalize' }}>
                           <i className="d" />
-                          {c.status}
+                          {t(`inv_status_${c.status}`, { defaultValue: c.status })}
                         </span>
                       </td>
                       <td className="mono faint">{c.orderId ? orderNumber(c.orderId) : '—'}</td>
@@ -173,36 +175,36 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
                                 disabled={!editCodeVal.trim() || edit.isPending}
                                 onClick={saveEdit}
                               >
-                                Save
+                                {t('inv_save')}
                               </button>
                               <button className="abtn xs" onClick={() => setEditing(null)}>
-                                Cancel
+                                {t('cancel')}
                               </button>
                             </>
                           ) : c.status === 'available' ? (
                             <>
                               <button className="abtn xs" onClick={() => startEdit(c)}>
-                                <Icon name="edit" size={12} /> Edit
+                                <Icon name="edit" size={12} /> {t('edit')}
                               </button>
                               <button
                                 className="abtn xs"
                                 disabled={expire.isPending}
                                 onClick={() => expire.mutate({ code: c.code, productId })}
-                                title="Retire this code from the available pool"
+                                title={t('inv_expire_tip')}
                               >
-                                Expire
+                                {t('inv_expire')}
                               </button>
-                              <button className="abtn xs danger" onClick={() => setConfirmDel(c)} title="Delete this code">
+                              <button className="abtn xs danger" onClick={() => setConfirmDel(c)} title={t('inv_delete_tip')}>
                                 <Icon name="trash" size={12} />
                               </button>
                             </>
                           ) : c.status === 'expired' ? (
                             <button className="abtn xs danger" onClick={() => setConfirmDel(c)}>
-                              <Icon name="trash" size={12} /> Delete
+                              <Icon name="trash" size={12} /> {t('delete')}
                             </button>
                           ) : (
                             <span className="faint" style={{ fontSize: 11.5 }}>
-                              Sold — no actions
+                              {t('inv_sold')}
                             </span>
                           )}
                         </div>
@@ -226,7 +228,7 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="abtn" onClick={onClose}>
-            Close
+            {t('inv_close')}
           </button>
         </div>
       </div>
@@ -234,17 +236,20 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
       {confirmDel && (
         <Modal onClose={() => setConfirmDel(null)}>
           <div className="pad">
-            <h3 style={{ marginTop: 0 }}>Delete this code?</h3>
+            <h3 style={{ marginTop: 0 }}>{t('inv_delete_title')}</h3>
             <p className="faint" style={{ fontSize: 13 }}>
-              <span className="mono">{confirmDel.code}</span> will be permanently removed from the pool. This can't be
-              undone.
+              <Trans
+                i18nKey="inv_delete_body"
+                values={{ code: confirmDel.code }}
+                components={{ m: <span className="mono" /> }}
+              />
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className="abtn" onClick={() => setConfirmDel(null)}>
-                Cancel
+                {t('cancel')}
               </button>
               <button className="abtn danger" disabled={del.isPending} onClick={runDelete}>
-                <Icon name="trash" size={14} /> Delete
+                <Icon name="trash" size={14} /> {t('delete')}
               </button>
             </div>
           </div>

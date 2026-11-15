@@ -8,6 +8,7 @@ import {
   type DepositListParams,
 } from '../api/payments'
 import { toast } from '@/stores/toast'
+import i18n from '@/i18n/config'
 
 export function usePayments(params: PaymentListParams) {
   return useQuery({
@@ -31,9 +32,9 @@ export function useAttributeDeposit() {
       attributeDeposit(id, { user, note }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'payments'] })
-      toast.success('Deposit credited to customer wallet')
+      toast.success(i18n.t('pay_attributed_toast'))
     },
-    onError: () => toast.error('Could not attribute deposit'),
+    onError: () => toast.error(i18n.t('pay_attribute_toast_failed')),
   })
 }
 
@@ -43,8 +44,8 @@ export function useIgnoreDeposit() {
     mutationFn: ({ id, note }: { id: string; note?: string }) => ignoreDeposit(id, { note }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'payments'] })
-      toast.info('Deposit ignored')
+      toast.info(i18n.t('pay_ignored_toast'))
     },
-    onError: () => toast.error('Could not ignore deposit'),
+    onError: () => toast.error(i18n.t('pay_ignore_toast_failed')),
   })
 }

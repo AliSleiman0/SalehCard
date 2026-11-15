@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
   Icon,
@@ -12,18 +12,18 @@ import {
   EmptyState,
   RoleBadge,
 } from '@/components'
-import { money } from '@/lib/utils'
-import { ApiError } from '@/lib/api-client'
+import { formatDateTime, money } from '@/lib/utils'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import { useKeyedPage } from '@/hooks/useKeyedPage'
 import { useTopUps, useApproveTopUp, useRejectTopUp } from '../hooks/useTopups'
 import type { AdminTopUp, TopUpStatus } from '../api/topups'
 
 const FILTERS: [TopUpStatus | '', string][] = [
-  ['pending', 'Pending'],
-  ['approved', 'Approved'],
-  ['rejected', 'Rejected'],
-  ['', 'All'],
+  ['pending', 'top_filter_pending'],
+  ['approved', 'top_filter_approved'],
+  ['rejected', 'top_filter_rejected'],
+  ['', 'all'],
 ]
 
 function statusFromParam(raw: string | null): TopUpStatus | '' {
@@ -74,7 +74,7 @@ export default function TopupsPage() {
   const approve = (id: string) => {
     setApproveError('')
     approveM.mutate(id, {
-      onError: (e) => setApproveError(e instanceof ApiError ? e.message : 'Approval failed.'),
+      onError: (e) => setApproveError(apiErrorText(e, 'top_approve_failed')),
     })
   }
 
@@ -82,12 +82,12 @@ export default function TopupsPage() {
     <div className="page page-wide">
       <PageHead
         back="/"
-        crumbs={[t('grp_finance'), 'Top-up requests']}
-        title="Top-up requests"
-        sub={meta ? `${meta.total.toLocaleString()} requests` : ''}
+        crumbs={[t('grp_finance'), t('nav_topups')]}
+        title={t('nav_topups')}
+        sub={meta ? t('top_n_requests', { n: meta.total.toLocaleString() }) : ''}
       >
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('top_refresh')}
         </button>
       </PageHead>
 
@@ -100,7 +100,7 @@ export default function TopupsPage() {
                 on={status === k}
                 onClick={() => setStatus(k)}
               >
-                {l}
+                {t(l)}
               </Chip>
             ))}
           </div>
@@ -113,12 +113,9 @@ export default function TopupsPage() {
         {isLoading ? (
           <LoadingSpinner />
         ) : isError && !data ? (
-          <ErrorState message="Couldn't load top-up requests." onRetry={() => refetch()} />
+          <ErrorState message={t('top_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState
-            title="No top-up requests"
-            sub="Customer wallet-funding requests appear here for approval after you receive their payment."
-          />
+          <EmptyState title={t('top_empty')} sub={t('top_empty_sub')} />
         ) : (
           <>
             <div>
@@ -126,17 +123,21 @@ export default function TopupsPage() {
                 <div key={r.id} style={{ borderBottom: '1px solid var(--border)', padding: '14px 18px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <b style={{ fontSize: 15 }}>{money(r.amount)}</b>
-                    <span className="bdg">{(r.methodName || r.channel).toUpperCase()}</span>
+                    <span className="bdg">
+                      {r.methodName
+                        ? r.methodName.toUpperCase()
+                        : t(`top_channel_${r.channel}_name`, { defaultValue: r.channel.toUpperCase() })}
+                    </span>
                     <span className="faint" style={{ fontSize: 12.5 }}>
                       {r.customerEmail || r.customerPhone || r.userId.slice(-8)}
                     </span>
                     {r.role && <RoleBadge role={r.role} />}
                     <span className="faint" style={{ fontSize: 12 }}>
-                      · {new Date(r.createdAt).toLocaleString()}
+                      · {formatDateTime(r.createdAt)}
                     </span>
                     <span style={{ marginInlineStart: 'auto' }} className={STATUS_CLASS[r.status]}>
                       <i className="d" />
-                      {r.status}
+                      {t(`top_status_${r.status}`, { defaultValue: r.status })}
                     </span>
                   </div>
                   {r.fields && r.fields.length > 0 && (
@@ -177,18 +178,18 @@ export default function TopupsPage() {
                   )}
                   {r.note && (
                     <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>
-                      Note: {r.note}
+                      {t('top_note', { note: r.note })}
                     </div>
                   )}
                   {r.status === 'rejected' && r.decisionReason && (
                     <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>
-                      Rejected: {r.decisionReason}
+                      {t('top_rejected_reason', { reason: r.decisionReason })}
                     </div>
                   )}
                   {r.status !== 'pending' && r.decidedBy && (
                     <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
-                      Decided by {r.decidedBy}
-                      {r.decidedAt ? ` · ${new Date(r.decidedAt).toLocaleString()}` : ''}
+                      {t('top_decided_by', { name: r.decidedBy })}
+                      {r.decidedAt ? ` · ${formatDateTime(r.decidedAt)}` : ''}
                     </div>
                   )}
                   {canManage && r.status === 'pending' && (
@@ -198,7 +199,7 @@ export default function TopupsPage() {
                         disabled={approveM.isPending}
                         onClick={() => approve(r.id)}
                       >
-                        <Icon name="check" size={13} /> Approve & credit
+                        <Icon name="check" size={13} /> {t('top_approve_credit')}
                       </button>
                       <button
                         className="abtn xs danger"
@@ -239,7 +240,7 @@ function RejectModal({ req, onClose }: { req: AdminTopUp; onClose: () => void })
 
   const apply = () => {
     if (!reason.trim()) {
-      setError('A rejection reason is required.')
+      setError(t('top_reason_required'))
       return
     }
     setError('')
@@ -247,7 +248,7 @@ function RejectModal({ req, onClose }: { req: AdminTopUp; onClose: () => void })
       { id: req.id, reason: reason.trim() },
       {
         onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Rejection failed.'),
+        onError: (e) => setError(apiErrorText(e, 'top_reject_failed')),
       },
     )
   }
@@ -255,15 +256,18 @@ function RejectModal({ req, onClose }: { req: AdminTopUp; onClose: () => void })
   return (
     <Modal onClose={onClose} maxWidth={440}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Reject top-up request</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('top_reject_title')}</h3>
         <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Reject the <b>{money(req.amount)}</b> request from <b>{req.customerEmail || 'customer'}</b>.
-          The reason is shown to the customer.
+          <Trans
+            i18nKey="top_reject_body"
+            values={{ amount: money(req.amount), who: req.customerEmail || t('top_customer') }}
+            components={{ b: <b /> }}
+          />
         </p>
-        <label className="alabel">Reason (required)</label>
+        <label className="alabel">{t('top_reason_label')}</label>
         <input
           className="afield"
-          placeholder="e.g. no matching payment received…"
+          placeholder={t('top_reject_ph')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
