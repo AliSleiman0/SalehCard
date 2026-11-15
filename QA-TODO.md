@@ -387,6 +387,33 @@ Still to check:
 5. **Category arrange**: a trashed product is absent from Categories → Arrange order. After restore it
    reappears unarranged (A to Z, after the ranked products).
 
+## Supplier choice + quantity fix (PR #147, live 2026-11-14)
+
+Verified locally 2026-11-14 (isolated DB, mock supplier; Go + Mongo integration tests, admin vitest,
+Chrome click-through):
+- a manual per-unit order "Send via supplier" → completed, and the mock received qty 20000
+- the product editor saves supplier + per-unit pricing
+- a customer per-unit supplier order sends the amount as the qty
+- "Mark completed" and "Refund" show the supplier warning and stay disabled until acknowledged
+
+GIF: `supplier_double_delivery_guards.gif`.
+
+Still to check (needs prod / the real suppliers — they only answer the prod NAT IP):
+
+1. **Catalog picker against the real panels** (Jentel / SpeedCard / Gift4Card), in the prod product editor:
+   - the list loads, search works, and price / qty range / availability are right
+   - typing a wrong id shows "not in this supplier's catalog"
+   - the amount min/max vs the supplier's qty range warning
+2. **"Send via supplier" on a real manual order** (small amount, the client watching):
+   - the quantity shown is the typed units
+   - the supplier delivers and the order completes
+   - `/audit` shows `order.supplier_reroute` with `fromMode: manual_operator`
+3. **Real rejection path**: send to a supplier product that refuses (e.g. a qty below its minimum). The order is
+   flagged stuck with **no refund**, the audit row carries the supplier error + ref, and a second send gets a
+   new attempt.
+4. **Bulk refund** of a selection that includes an order still at a supplier: that one is skipped as
+   "a supplier may still deliver it", and the rest are refunded.
+5. **Imported products whose param prompts have spaces / Arabic**: no false "missing parameter" warning.
 ## Help bot starter content (PR #139, seeded on prod 2026-11-14)
 
 The 16 starter Q&A and the support WhatsApp number are live on prod. Not yet checked:
@@ -399,4 +426,5 @@ The 16 starter Q&A and the support WhatsApp number are live on prod. Not yet che
    left.
 4. **App help sheet on a device**: home and account → help → the same questions, follow-ups and footer. The
    web panel was resized in PR #140; the app sheet wasn't changed.
+
 

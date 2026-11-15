@@ -541,6 +541,23 @@ resolves to the parking stub with no env, which is exactly today's behavior
 Verify after setting creds: `/suppliers` renders live balances (not
 `unreachable`/`ip_blocked`), and the dashboard shows the supplier balance strip.
 
+6. **Prod catalog cleanup after PR #147 (2026-11-14) — needs the owner's OK; it changes live data.**
+   The first real canary (SOULCHILL, 2026-11-13) failed on bad product data plus a since-fixed qty bug
+   (see `HANDOFF-SUPPLIERS.md`, update 2026-11-14). In the admin console:
+   - **SOULCHILL** (`6a3f0399ea6747f81d0bad46`, linked as `soulchill`) and **"soul star"**
+     (`6a4cdc628c219c4d6d8d7741`, linked as `SOULSTAR`, no status):
+     1. Open the product editor and pick the real Jentel product from the catalog picker (SOULCHILL
+        was Jentel `2` in the reroute).
+     2. Turn on **per-unit pricing**. Set the amount field's min/max inside the supplier's qty range
+        (the picker warns if they don't fit).
+   - **10 PUBG UC / Free Fire products on `fulfillmentProvider: 5`**: an old-site id that doesn't
+     exist here (ours are 10–13). Orders for them would silently wait. Re-link each to a connected
+     supplier via the picker, or turn supplier fulfilment off.
+   - **Refund the stuck test order `6af76aab`** ($1.98, the client's own account) from its order page.
+     It is flagged stuck at the supplier, so the refund asks for the "Refund it anyway" confirmation
+     only if the order still holds a live ref.
+   - Then run the **canary** (step 5) once per supplier, with the client watching.
+
 ## 23. Codemagic iOS build didn't auto-trigger on push to `main` (2026-11-08)
 
 `codemagic.yaml` → `ios-release` declares `triggering: push` on `main`, but merging PR #110 (`60cef37`)
