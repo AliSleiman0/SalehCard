@@ -1,42 +1,26 @@
-import type { ChatEntry, ChatText } from '../api/chatbot'
-
-type Locale = 'en' | 'ar' | 'tr'
-
-/** text picks the locale's string; Turkish (and blanks) fall back en → ar. */
-export function text(t: ChatText, locale: Locale): string {
-  if (locale === 'ar') return t.ar || t.en
-  return t.en || t.ar
-}
-
-const bySort = (a: ChatEntry, b: ChatEntry) => a.sortOrder - b.sortOrder
-
-/** topLevel returns the top-level questions in display order. */
-export function topLevel(entries: ChatEntry[]): ChatEntry[] {
-  return entries.filter((e) => !e.parentId).sort(bySort)
-}
-
-/** followUps returns the follow-up questions shown after `parentId`'s answer. */
-export function followUps(entries: ChatEntry[], parentId: string): ChatEntry[] {
-  return entries.filter((e) => e.parentId === parentId).sort(bySort)
-}
-
-/** filterEntries matches a typed query against question text (both languages)
- *  and admin keywords, case-insensitively; an empty query matches nothing. */
-export function filterEntries(entries: ChatEntry[], query: string): ChatEntry[] {
-  const q = query.trim().toLowerCase()
-  if (!q) return []
-  return entries
-    .filter(
-      (e) =>
-        e.question.en.toLowerCase().includes(q) ||
-        e.question.ar.toLowerCase().includes(q) ||
-        (e.keywords ?? []).some((k) => k.includes(q) || q.includes(k)),
-    )
-    .sort(bySort)
-}
+import type { AskTurn } from '../api/chatbot'
 
 /** whatsappLink builds a wa.me link from a free-typed number ("+961 70…"). */
 export function whatsappLink(raw: string): string | null {
   const digits = raw.replace(/[^0-9]/g, '').replace(/^00/, '')
   return digits.length >= 6 ? `https://wa.me/${digits}` : null
+}
+
+/** askLang maps the site locale to the assistant's languages (Turkish → English). */
+export function askLang(locale: string): 'en' | 'ar' {
+  return locale === 'ar' ? 'ar' : 'en'
+}
+
+/** askHistory keeps the last `max` turns (oldest first) to send as context. */
+export function askHistory(msgs: { from: 'bot' | 'user'; text: string }[], max = 6): AskTurn[] {
+  return msgs.slice(-max).map((m) => ({
+    role: m.from === 'user' ? 'user' : 'assistant',
+    content: m.text,
+  }))
+}
+
+/** Why an AI question got no answer: the customer's limit (429
+ *  CHATBOT_AI_LIMIT), or anything else (off, outage, network) = unavailable. */
+export function askFailure(code: string | undefined): 'limited' | 'unavailable' {
+  return code === 'CHATBOT_AI_LIMIT' ? 'limited' : 'unavailable'
 }

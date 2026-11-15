@@ -640,7 +640,8 @@ Remaining:
    `AZURE_OPENAI_ENDPOINT=https://salehcard-openai.openai.azure.com`, `AZURE_OPENAI_DEPLOYMENT=chat`,
    `AZURE_OPENAI_API_KEY=<az cognitiveservices account keys list -g salehcard-prod -n salehcard-openai --query key1 -o tsv>`.
    Optional caps (defaults): `CHATBOT_AI_USER_MAX=20`/24h, `CHATBOT_AI_IP_MAX=40`/1h, `CHATBOT_AI_GLOBAL_MAX=500`/24h.
-2. **Seed the AI knowledge on prod after the knowledge-simplification PR deploys** (2026-11-15: the 11
+2. ~~**Seed the AI knowledge on prod**~~ — DONE 2026-11-15 after PR #167 deployed (`chatbotseed --apply
+   --confirm-prod`, temp firewall rule removed). Original note: (2026-11-15: the 11
    per-article `kb_docs` were replaced by one `chatbot_knowledge` text, so until seeded the assistant falls
    back to "contact support"; insert-only, never overwrites an admin's text): `go run ./cmd/chatbotseed`
    (dry run) → `--apply --confirm-prod`, via the direct-DB firewall recipe. Then the client rewrites it in

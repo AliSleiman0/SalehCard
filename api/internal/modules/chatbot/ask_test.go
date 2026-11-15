@@ -337,10 +337,12 @@ func TestSectionsFor_SplitsParagraphs(t *testing.T) {
 	if len(ios) != 2 || ios[0].Ref != "s1" || ios[1].Text != "Verification: upload your ID." {
 		t.Fatalf("blank lines (incl. whitespace-only and CRLF) split paragraphs: %+v", ios)
 	}
-	if got := sectionsFor(testKnowledge(), "android"); len(got) != 3 || got[2].Ref != "s3" {
-		t.Errorf("android sees the android-only text as s3: %+v", got)
+	for _, p := range []string{"android", "web"} {
+		if got := sectionsFor(testKnowledge(), p); len(got) != 3 || got[2].Ref != "s3" {
+			t.Errorf("%s sees the android-only text as s3: %+v", p, got)
+		}
 	}
-	for _, p := range []string{"", "web", "IOS"} {
+	for _, p := range []string{"", "IOS", "Android"} {
 		if got := sectionsFor(testKnowledge(), p); len(got) != 2 {
 			t.Errorf("%q is treated as iOS: %+v", p, got)
 		}
