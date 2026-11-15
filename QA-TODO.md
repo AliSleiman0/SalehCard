@@ -447,6 +447,20 @@ The 16 starter Q&A and the support WhatsApp number are live on prod. Not yet che
 
 
 
+## Supplier sync job (PR5 `feat/supplier-sync`)
+
+Verified locally in Chrome against fake suppliers: loss → pause + switch to the backup, hide on no stock,
+recovery without switching back, re-show, admin save keeps the sync data, alerts + acknowledge, dashboard
+tile. Still to check:
+
+1. **Prod dry run** (DEVOPS-TODO §26): after a day, read every alert against the supplier panels. Are the
+   costs per block right, and are there no false "hidden" alerts while a supplier is down?
+2. **Settings → USD per 1 LBP** on umanage: the field shows only for non-USD suppliers (none locally). Check
+   it saves and the "Rate missing" alert closes on the next pass.
+3. **fallback_exhausted** on a real order: a supplier refusal with no other link → "No supplier left" alert
+   with a working "Open order" link.
+4. **Two API instances**: `sync-status` "last run" is per instance. If prod scales out, each instance runs
+   the job (writes are guarded, alerts dedupe), but "last run" may show a different instance's pass.
 ## AI help assistant (feat/ai-chatbot, 2026-11-15)
 
 Verified before the PR: Go unit + Mongo integration tests, `cmd/chateval` against the real deployment (33
@@ -473,3 +487,4 @@ contact card, toggle switched off mid-session → keyword answer). Still to chec
    used for tracking).
 5. **iOS gets no game content**: on a TestFlight build ask about player IDs / gift cards — the answer must not
    come from the `android-only` "Game top-ups, player IDs and gift card codes" article.
+

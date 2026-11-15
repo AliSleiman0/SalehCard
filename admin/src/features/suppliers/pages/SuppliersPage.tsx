@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { filterCatalog } from '../lib/filterCatalog'
+import { syncSummary } from '../lib/syncSummary'
 import { useTranslation } from 'react-i18next'
-import { PageHead, Icon, Modal, Pagination, LoadingSpinner, EmptyState, ErrorState } from '@/components'
+import { PageHead, Icon, Modal, Pagination, LoadingSpinner, EmptyState, ErrorState, Tabs } from '@/components'
 import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import {
@@ -11,9 +13,14 @@ import {
   useSyncSupplier,
   useImportProducts,
   useUpdateSupplierSettings,
+  useSyncStatus,
+  useSupplierAlerts,
+  useAckSupplierAlert,
+  useAckAllSupplierAlerts,
 } from '../hooks/useSuppliers'
-import type { SupplierView, SupplierHealth, CatalogProductView } from '../api/suppliers'
+import type { SupplierView, SupplierHealth, CatalogProductView, SupplierAlertKind } from '../api/suppliers'
 import { orderNumber } from '@/lib/orderNumber'
+import { relativeTime, relativeTimeInline } from '@/lib/utils'
 
 const HEALTH_CLASS: Record<SupplierHealth, string> = {
   ok: 'st-ok',
@@ -45,17 +52,22 @@ export default function SuppliersPage() {
   const [browse, setBrowse] = useState<SupplierView | null>(null)
   const [orders, setOrders] = useState<SupplierView | null>(null)
   const [settings, setSettings] = useState<SupplierView | null>(null)
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'alerts' ? 'alerts' : 'suppliers'
+  const setTab = (t: 'suppliers' | 'alerts') => {
+    const next = new URLSearchParams(params)
+    if (t === 'alerts') next.set('tab', 'alerts')
+    else next.delete('tab')
+    setParams(next, { replace: true })
+  }
+  const openAlerts = useSupplierAlerts('open')
+  const openCount = openAlerts.data?.data?.open ?? 0
 
   const sync = useSyncSupplier()
   const runSync = (s: SupplierView) => {
     sync.mutate(s.id, {
       onSuccess: (res) => {
-        const r = res.data
-        if (r) {
-          toast.success(
-            `${s.name}: ${r.updated} updated, ${r.unavailable} unavailable, ${r.drift.length} price changes`,
-          )
-        }
+        if (res.data) toast.success(`${s.name}: ${syncSummary(res.data)}`)
       },
     })
   }
@@ -69,7 +81,21 @@ export default function SuppliersPage() {
         sub="Upstream fulfillment suppliers — balance, health, mapped products, and catalog import."
       />
 
-      {isLoading ? (
+      <SyncStatusStrip />
+
+      <Tabs
+        items={[
+          { k: 'suppliers' as const, label: 'Suppliers' },
+          { k: 'alerts' as const, label: openCount > 0 ? `Alerts (${openCount})` : 'Alerts' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      <div style={{ height: 14 }} />
+
+      {tab === 'alerts' ? (
+        <AlertsPanel canManage={canManage} suppliers={suppliers} />
+      ) : isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
         <ErrorState message="Could not load suppliers." onRetry={() => refetch()} />
@@ -124,9 +150,10 @@ export default function SuppliersPage() {
                   <button
                     className="abtn sm"
                     disabled={sync.isPending}
+                    title="Check every product linked to this supplier now: record its costs, pause links that sell at a loss, hide / re-show products with its stock. Never changes a selling price."
                     onClick={() => runSync(s)}
                   >
-                    <Icon name="refresh" size={14} /> Sync catalog
+                    <Icon name="refresh" size={14} /> Sync now
                   </button>
                 )}
                 <button className="abtn sm" onClick={() => setOrders(s)}>
@@ -146,6 +173,150 @@ export default function SuppliersPage() {
       {browse && <BrowseModal supplier={browse} onClose={() => setBrowse(null)} />}
       {orders && <OrdersModal supplier={orders} onClose={() => setOrders(null)} />}
       {settings && <SettingsModal supplier={settings} onClose={() => setSettings(null)} />}
+    </div>
+  )
+}
+
+// --- Scheduled sync status ---
+
+function SyncStatusStrip() {
+  const { data } = useSyncStatus()
+  const st = data?.data
+  if (!st) return null
+  const mins = Math.round(st.intervalSeconds / 60)
+  const last = st.last
+  return (
+    <div className="acard pad" style={{ marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+      <Icon name="refresh" size={15} />
+      {st.enabled ? (
+        <span>
+          <b>Automatic supplier sync is on</b> — every {mins} min{st.dryRun ? '' : '.'}
+          {st.dryRun && (
+            <>
+              {' '}
+              in <span className="st st-warn">dry run</span>: it only raises alerts, nothing is changed.
+            </>
+          )}
+        </span>
+      ) : (
+        <span>
+          <b>Automatic supplier sync is off.</b> &ldquo;Sync now&rdquo; checks one supplier&apos;s products on demand
+          {st.dryRun ? ' (dry run: alerts only)' : ''}.
+        </span>
+      )}
+      {last && (
+        <span className="faint">
+          Last run {relativeTimeInline(last.finishedAt)}: {syncSummary(last)}
+        </span>
+      )}
+      {st.running && <span className="st st-mute">running…</span>}
+    </div>
+  )
+}
+
+// --- Alerts ---
+
+const ALERT_LABEL: Record<SupplierAlertKind, { label: string; cls: string }> = {
+  cost_changed: { label: 'Cost changed', cls: 'st-warn' },
+  loss_paused: { label: 'Selling at a loss', cls: 'st-danger' },
+  loss_recovered: { label: 'Profitable again', cls: 'st-ok' },
+  product_hidden: { label: 'Hidden', cls: 'st-danger' },
+  product_shown: { label: 'Back on sale', cls: 'st-ok' },
+  fx_missing: { label: 'Rate missing', cls: 'st-warn' },
+  fallback_exhausted: { label: 'No supplier left', cls: 'st-danger' },
+}
+
+function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: SupplierView[] }) {
+  const [show, setShow] = useState<'open' | 'all'>('open')
+  const { data, isLoading, isError, refetch } = useSupplierAlerts(show)
+  const alerts = data?.data?.alerts ?? []
+  const ack = useAckSupplierAlert()
+  const ackAll = useAckAllSupplierAlerts()
+  const provName = (id?: number) => (id ? suppliers.find((s) => s.id === id)?.name ?? `#${id}` : '')
+
+  return (
+    <div className="acard pad">
+      <div className="panelhead">
+        <Icon name="bell" size={16} />
+        <h3>Supplier alerts</h3>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button className={`abtn sm ${show === 'open' ? 'primary' : 'ghost'}`} onClick={() => setShow('open')}>
+            Open
+          </button>
+          <button className={`abtn sm ${show === 'all' ? 'primary' : 'ghost'}`} onClick={() => setShow('all')}>
+            All
+          </button>
+          {canManage && show === 'open' && alerts.length > 1 && (
+            <button className="abtn sm" disabled={ackAll.isPending} onClick={() => ackAll.mutate()}>
+              Acknowledge all
+            </button>
+          )}
+        </div>
+      </div>
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : isError ? (
+        <ErrorState message="Could not load alerts." onRetry={() => refetch()} />
+      ) : alerts.length === 0 ? (
+        <EmptyState
+          title={show === 'open' ? 'No open alerts' : 'No alerts yet'}
+          sub="Cost changes, links paused for selling at a loss, products hidden or re-shown by the supplier sync, and orders with no supplier left show up here."
+        />
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="tbl" aria-label="Supplier alerts">
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>What happened</th>
+                <th>Last seen</th>
+                <th style={{ textAlign: 'right' }} />
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.map((a) => {
+                const k = ALERT_LABEL[a.kind] ?? { label: a.kind, cls: 'st-mute' }
+                return (
+                  <tr key={a.id} style={{ opacity: a.open ? 1 : 0.6 }}>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span className={`st ${k.cls}`}>
+                        <i className="d" /> {k.label}
+                      </span>
+                      {a.dryRun && (
+                        <div>
+                          <span className="bdg" style={{ marginTop: 4 }}>
+                            dry run
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 13 }}>
+                      {a.message}
+                      <div className="faint" style={{ fontSize: 12, marginTop: 2 }}>
+                        {a.productId && <Link to={`/products/${a.productId}/edit`}>Open product</Link>}
+                        {a.orderId && <Link to={`/orders/${a.orderId}`}>Open order {orderNumber(a.orderId)}</Link>}
+                        {a.provider && !a.productId && !a.orderId ? provName(a.provider) : ''}
+                        {a.count > 1 ? ` · seen ${a.count}×` : ''}
+                        {!a.open && a.ackBy ? ` · closed by ${a.ackBy}` : ''}
+                      </div>
+                    </td>
+                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                      {relativeTime(a.lastAt)}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {canManage && a.open && (
+                        <button className="abtn xs" disabled={ack.isPending} onClick={() => ack.mutate(a.id)}>
+                          Acknowledge
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
@@ -392,7 +563,9 @@ function OrdersModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
 function SettingsModal({ supplier, onClose }: { supplier: SupplierView; onClose: () => void }) {
   const [threshold, setThreshold] = useState(String(supplier.lowBalanceThreshold || ''))
   const [markup, setMarkup] = useState(String(supplier.markupPercent || ''))
+  const [fx, setFx] = useState(supplier.fxToUsd ? String(supplier.fxToUsd) : '')
   const save = useUpdateSupplierSettings()
+  const usd = supplier.currency === 'USD'
 
   const submit = () => {
     save.mutate(
@@ -401,6 +574,7 @@ function SettingsModal({ supplier, onClose }: { supplier: SupplierView; onClose:
         patch: {
           lowBalanceThreshold: threshold.trim() === '' ? 0 : Number(threshold),
           markupPercent: markup.trim() === '' ? 0 : Number(markup),
+          ...(usd ? {} : { fxToUsd: fx.trim() === '' ? 0 : Number(fx) }),
         },
       },
       { onSuccess: () => onClose() },
@@ -434,6 +608,23 @@ function SettingsModal({ supplier, onClose }: { supplier: SupplierView; onClose:
             placeholder="0"
           />
         </div>
+        {!usd && (
+          <div>
+            <label className="alabel">USD per 1 {supplier.currency}</label>
+            <input
+              className="afield"
+              type="number"
+              step="any"
+              value={fx}
+              onChange={(e) => setFx(e.target.value)}
+              placeholder="e.g. 0.0000112 (1 / 89,500)"
+            />
+            <div className="ahint" style={{ margin: '4px 0 0' }}>
+              The supplier sync converts this supplier&apos;s prices with it to check for selling at a loss.
+              Empty = no loss check for {supplier.name}.
+            </div>
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button className="abtn" onClick={onClose}>

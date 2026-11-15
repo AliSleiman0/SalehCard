@@ -35,6 +35,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/role"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/settings"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/supplier"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/supplieralert"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/todo"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
@@ -64,6 +65,9 @@ type Server struct {
 	// supplierSettler reconciles parked api-mode supplier orders (nil when no
 	// supplier is configured); main.go runs it alongside the HTTP listener.
 	supplierSettler *order.SupplierSettler
+	// supplierSync is the scheduled supplier sync job (always built; its Run
+	// returns at once unless SUPPLIER_SYNC_ENABLED).
+	supplierSync *supplier.SyncJob
 }
 
 // Watcher returns the USDT payment watcher, or nil when the feature is off.
@@ -75,6 +79,10 @@ func (s *Server) BridgeReaper() *bridge.Reaper { return s.bridgeReaper }
 // SupplierSettler returns the supplier-order settler, or nil when no upstream
 // supplier is configured.
 func (s *Server) SupplierSettler() *order.SupplierSettler { return s.supplierSettler }
+
+// SupplierSync returns the supplier sync job, or nil when no supplier is
+// configured.
+func (s *Server) SupplierSync() *supplier.SyncJob { return s.supplierSync }
 
 // New creates a new Server instance with the provided config and database.
 func New(cfg *config.Config, db *mongo.Database) *Server {
@@ -253,6 +261,12 @@ func (s *Server) Routes() {
 	// Automatic fallback to a product's next supplier link on a definite
 	// refusal (placement + settler) checks links against the same cache.
 	orderSvc.SetSupplierFallback(supplierProbes, rec)
+	// Supplier alerts (sync job + order fallback) share one store.
+	supplierAlerts := supplieralert.NewRepo(s.db)
+	if err := supplierAlerts.EnsureIndexes(context.Background()); err != nil {
+		slog.Warn("supplieralert: failed to ensure indexes", "error", err)
+	}
+	orderSvc.SetSupplierAlerts(supplierAlerts)
 	bridgeReg.Service.SetOrderSettler(orderSvc)
 	if bridgeReg.Service.Enabled() {
 		s.bridgeReaper = bridge.NewReaper(bridgeReg.Service, s.cfg.Bridge.ReaperInterval)
@@ -366,8 +380,14 @@ func (s *Server) Routes() {
 		// built in order.RegisterRoutes (orderSvc.Providers()) — each configured
 		// supplier id resolves to its adapter's Cataloger for the live probes.
 		supplierProducts := product.NewProductService(product.NewMongoRepository(s.db), product.WithCategoryResolver(catResolver))
+		supplierSvc := supplier.NewService(s.db, supplierProbes, s.cfg.EnabledSuppliers(), supplierProducts)
+		s.supplierSync = supplier.NewSyncJob(supplierSvc, supplierAlerts, rec, supplier.SyncConfig{
+			Interval: s.cfg.SupplierSyncInterval,
+			Enabled:  s.cfg.SupplierSyncEnabled && len(s.cfg.EnabledSuppliers()) > 0,
+			DryRun:   s.cfg.SupplierSyncDryRun,
+		})
 		domain("suppliers", func(g chi.Router) {
-			supplier.RegisterAdminRoutes(g, s.db, rec, supplierProbes, s.cfg.EnabledSuppliers(), supplierProducts)
+			supplier.RegisterAdminRoutes(g, supplierSvc, s.supplierSync, supplierAlerts, rec)
 		})
 
 		// Role management mounts outside the domain wrapper: listing roles + the

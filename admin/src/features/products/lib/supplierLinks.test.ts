@@ -58,9 +58,9 @@ describe('supplier links table', () => {
     expect(toLinksInput(rows, 3)).toEqual({
       rev: 3,
       links: [
-        { id: 'a', provider: 10, upstreamId: '3258', enabled: true, active: true },
-        { id: 'b', provider: 11, upstreamId: '4410', enabled: true, active: false },
-        { provider: 12, upstreamId: '77', enabled: true, active: false },
+        { id: 'a', provider: 10, upstreamId: '3258', enabled: true, active: true, priceSync: true, statusSync: true },
+        { id: 'b', provider: 11, upstreamId: '4410', enabled: true, active: false, priceSync: true, statusSync: true },
+        { provider: 12, upstreamId: '77', enabled: true, active: false, priceSync: true, statusSync: true },
       ],
     })
   })

@@ -1,4 +1,4 @@
-import type { SupplierLink } from '@/types'
+import type { SupplierLink, SupplierLinkSync } from '@/types'
 import type { LinkQuote, SupplierLinkInputRow, SupplierLinksInput } from '../api/products'
 
 /** One row of the editor's supplier-links table. `key` is a stable React key
@@ -12,6 +12,13 @@ export interface LinkRow {
   name?: string
   enabled: boolean
   active: boolean
+  /** Supplier sync watches (cost + availability). */
+  priceSync: boolean
+  statusSync: boolean
+  /** "loss" when the sync job paused this link. */
+  pausedReason?: string
+  /** The sync job's last check (read-only). */
+  sync?: SupplierLinkSync
 }
 
 let tmpSeq = 0
@@ -25,6 +32,10 @@ export function toLinkRows(links: SupplierLink[] | undefined, activeId: string |
     upstreamId: l.upstreamId,
     enabled: l.enabled,
     active: l.id === activeId,
+    priceSync: l.priceSync ?? true,
+    statusSync: l.statusSync ?? true,
+    pausedReason: l.pausedReason || undefined,
+    sync: l.sync,
   }))
 }
 
@@ -39,8 +50,15 @@ export function addLink(rows: LinkRow[], provider: number, upstreamId: string, n
     name,
     enabled: true,
     active: rows.length === 0,
+    priceSync: true,
+    statusSync: true,
   }
   return [...rows, row]
+}
+
+/** Switches one of a row's sync watches. */
+export function setWatch(rows: LinkRow[], index: number, watch: 'priceSync' | 'statusSync', on: boolean): LinkRow[] {
+  return rows.map((r, i) => (i === index ? { ...r, [watch]: on } : r))
 }
 
 /** Moves a row up (-1) or down (+1) — the fallback priority order. */
@@ -84,6 +102,8 @@ export function toLinksInput(rows: LinkRow[], rev: number): SupplierLinksInput {
     upstreamId: r.upstreamId,
     enabled: r.enabled,
     active: r.active,
+    priceSync: r.priceSync,
+    statusSync: r.statusSync,
   }))
   return { links, rev }
 }

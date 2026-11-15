@@ -466,6 +466,20 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 		}
 		cur = loaded
 	}
+	// An admin's own visibility change overrides an earlier hide by the
+	// supplier sync job (which then never re-shows the product on its own).
+	// The stored flag is read separately when cur wasn't needed: loading cur
+	// would also re-validate the stored pricing shape, which a plain show /
+	// hide must not start failing on.
+	if in.Available != nil {
+		was := cur
+		if was == nil {
+			if loaded, err := s.repo.FindByID(ctx, id); err == nil {
+				was = loaded
+			}
+		}
+		in.clearSyncHide = was != nil && *in.Available != was.Available
+	}
 	stale, err := validateUnitPricingUpdate(cur, in)
 	if err != nil {
 		return nil, err

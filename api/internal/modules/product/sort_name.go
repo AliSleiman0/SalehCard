@@ -208,3 +208,7 @@ func cloneProducts(src []Product) []Product {
 	}
 	return out
 }
+
+// InvalidateListingCache drops the cached A to Z listings, for a writer
+// outside this package (the supplier sync job's hide / re-show).
+func InvalidateListingCache() { invalidateNameCache() }

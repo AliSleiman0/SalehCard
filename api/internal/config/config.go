@@ -175,6 +175,13 @@ type Config struct {
 	// SupplierCatalogTTL is how long a supplier's product catalog is cached
 	// (provider.Probes) before the next admin view / reroute check refetches it.
 	SupplierCatalogTTL time.Duration
+	// Supplier sync job (price / status watch, pause-on-loss, alerts):
+	// SUPPLIER_SYNC_ENABLED runs it on SUPPLIER_SYNC_INTERVAL (default off);
+	// SUPPLIER_SYNC_DRYRUN decides and alerts without changing anything a
+	// customer or an order sees.
+	SupplierSyncEnabled  bool
+	SupplierSyncInterval time.Duration
+	SupplierSyncDryRun   bool
 
 	// On-chain USDT payments (payment module + platform/tron). The feature is
 	// enabled iff exactly one of USDTXPub / USDTAddress is set; USDTProvider
@@ -439,6 +446,9 @@ func Load() *Config {
 		SupplierSettlerInterval: getDuration("SUPPLIER_SETTLER_INTERVAL", 60*time.Second),
 		SupplierSettlerGiveUp:   getDuration("SUPPLIER_SETTLER_GIVEUP", 24*time.Hour),
 		SupplierCatalogTTL:      getDuration("SUPPLIER_CATALOG_TTL", 5*time.Minute),
+		SupplierSyncEnabled:     getBool("SUPPLIER_SYNC_ENABLED", false),
+		SupplierSyncInterval:    getDuration("SUPPLIER_SYNC_INTERVAL", 10*time.Minute),
+		SupplierSyncDryRun:      getBool("SUPPLIER_SYNC_DRYRUN", false),
 
 		USDTProvider:      getEnv("USDT_PROVIDER", "stub"),
 		USDTXPub:          os.Getenv("USDT_XPUB"),

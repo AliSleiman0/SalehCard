@@ -198,6 +198,9 @@ export interface SupplierLinkInputRow {
   upstreamId: string
   enabled: boolean
   active: boolean
+  /** Sync watches (omitted = keep the stored value; new links start on). */
+  priceSync?: boolean
+  statusSync?: boolean
 }
 
 export interface SupplierLinksInput {

@@ -18,6 +18,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/payment"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/promo"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/supplieralert"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/payments"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/photoupload"
@@ -115,6 +116,7 @@ type OrderService struct {
 	// Automatic supplier fallback deps (SetSupplierFallback); both optional.
 	fbProbes *provider.Probes
 	fbRec    audit.Recorder
+	fbAlerts supplieralert.Raiser
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code

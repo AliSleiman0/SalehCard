@@ -24,6 +24,9 @@ export interface SupplierView {
   mappedProducts: number
   lowBalanceThreshold: number
   markupPercent: number
+  /** USD per one unit of the supplier's currency (non-USD suppliers; the
+   *  sync's loss check needs it). Absent = not set. */
+  fxToUsd?: number
 }
 
 /** A product line in a supplier's live upstream catalog. */
@@ -44,12 +47,61 @@ export interface CatalogProductView {
   mapped: boolean
 }
 
-/** Result of a catalog sync for already-mapped products. */
-export interface SyncResult {
+/** One supplier sync pass (the "Sync now" button or the scheduled job). */
+export interface SyncReport {
+  dryRun: boolean
+  supplier?: number
+  startedAt: string
+  finishedAt: string
+  suppliers: { id: number; name: string; status: 'ok' | 'stale' | 'unavailable' | 'not_supported'; error?: string }[]
   checked: number
-  updated: number
-  unavailable: number
-  drift: { upstreamId: string; name: string; oldPrice: number; newPrice: number }[]
+  snapshots: number
+  costChanges: number
+  paused: number
+  recovered: number
+  promoted: number
+  hidden: number
+  shown: number
+  conflicts: number
+  alerts: number
+  errors: number
+}
+
+/** The scheduled supplier sync's config + its last pass on this server. */
+export interface SyncStatus {
+  enabled: boolean
+  dryRun: boolean
+  intervalSeconds: number
+  running: boolean
+  last?: SyncReport
+}
+
+export type SupplierAlertKind =
+  | 'cost_changed'
+  | 'loss_paused'
+  | 'loss_recovered'
+  | 'product_hidden'
+  | 'product_shown'
+  | 'fx_missing'
+  | 'fallback_exhausted'
+
+export interface SupplierAlert {
+  id: string
+  kind: SupplierAlertKind
+  key: string
+  open: boolean
+  message: string
+  provider?: number
+  productId?: string
+  productName?: string
+  linkId?: string
+  orderId?: string
+  dryRun?: boolean
+  count: number
+  firstAt: string
+  lastAt: string
+  ackAt?: string
+  ackBy?: string
 }
 
 /** One item to import into the SalehCard catalog from the live upstream entry. */
@@ -67,6 +119,13 @@ export interface ImportResult {
 export interface SupplierSettings {
   lowBalanceThreshold: number
   markupPercent: number
+  fxToUsd?: number
+}
+
+export interface SupplierSettingsPatch {
+  lowBalanceThreshold?: number | null
+  markupPercent?: number | null
+  fxToUsd?: number | null
 }
 
 /** A recent api-mode order fulfilled through this supplier. */
@@ -97,8 +156,26 @@ export function getSupplierCatalog(id: number): Promise<ApiResponse<{ products: 
   return apiClient.get<{ products: CatalogProductView[] }>(`${ADMIN}/${id}/catalog`)
 }
 
-export function syncSupplier(id: number): Promise<ApiResponse<SyncResult>> {
-  return apiClient.post<SyncResult>(`${ADMIN}/${id}/sync`)
+export function syncSupplier(id: number): Promise<ApiResponse<SyncReport>> {
+  return apiClient.post<SyncReport>(`${ADMIN}/${id}/sync`)
+}
+
+export function getSyncStatus(): Promise<ApiResponse<SyncStatus>> {
+  return apiClient.get<SyncStatus>(`${ADMIN}/sync-status`)
+}
+
+export function listSupplierAlerts(
+  status: 'open' | 'all',
+): Promise<ApiResponse<{ alerts: SupplierAlert[]; open: number }>> {
+  return apiClient.get<{ alerts: SupplierAlert[]; open: number }>(`${ADMIN}/alerts?status=${status}`)
+}
+
+export function ackSupplierAlert(id: string): Promise<ApiResponse<SupplierAlert>> {
+  return apiClient.post<SupplierAlert>(`${ADMIN}/alerts/${id}/ack`)
+}
+
+export function ackAllSupplierAlerts(): Promise<ApiResponse<{ acknowledged: number }>> {
+  return apiClient.post<{ acknowledged: number }>(`${ADMIN}/alerts/ack-all`)
 }
 
 export function importSupplierProducts(
@@ -110,7 +187,7 @@ export function importSupplierProducts(
 
 export function updateSupplierSettings(
   id: number,
-  patch: { lowBalanceThreshold?: number | null; markupPercent?: number | null },
+  patch: SupplierSettingsPatch,
 ): Promise<ApiResponse<SupplierSettings>> {
   return apiClient.put<SupplierSettings>(`${ADMIN}/${id}/settings`, patch)
 }

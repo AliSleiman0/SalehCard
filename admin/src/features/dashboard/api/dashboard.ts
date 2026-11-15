@@ -29,6 +29,7 @@ export interface DashboardStats {
   // Supplier signals (DESIGN-SUPPLIERS.md Phase 3):
   parkedUpstream: number // processing api-mode orders awaiting a supplier
   stuckUpstream: number // orders flagged stuck upstream (need attention)
+  supplierAlerts?: number // open supplier alerts (sync job + order fallback)
 }
 
 export function getDashboardStats(): Promise<ApiResponse<DashboardStats>> {

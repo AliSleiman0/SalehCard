@@ -40,7 +40,7 @@ function Harness({ initial }: { initial: LinkRow[] }) {
   )
 }
 
-const jentel: LinkRow = { key: 'a', id: 'a', provider: 10, upstreamId: '3258', enabled: true, active: true }
+const jentel: LinkRow = { key: 'a', id: 'a', provider: 10, upstreamId: '3258', enabled: true, active: true, priceSync: true, statusSync: true }
 
 describe('SupplierLinksTable', () => {
   beforeEach(() => {
@@ -89,5 +89,21 @@ describe('SupplierLinksTable', () => {
     expect(latest.map((r) => r.active)).toEqual([false, true])
     fireEvent.click(screen.getByRole('button', { name: 'Move speedcard up' }))
     expect(latest.map((r) => r.provider)).toEqual([11, 10])
+  })
+
+  it('shows the sync state and toggles the per-link watches', async () => {
+    const paused: LinkRow = {
+      ...jentel,
+      pausedReason: 'loss',
+      sync: { checkedAt: new Date(Date.now() - 5 * 60_000).toISOString(), found: true, available: true, cost: 0.00013 },
+    }
+    wrap(<Harness initial={[paused]} />)
+    expect(await screen.findByText('Paused: loss')).toBeInTheDocument()
+    expect(screen.getByText(/checked 5m ago/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Price sync for jentel #3258' }))
+    expect(latest[0].priceSync).toBe(false)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Stock sync for jentel #3258' }))
+    expect(latest[0].statusSync).toBe(false)
   })
 })
