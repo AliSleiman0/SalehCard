@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/i18n/arb/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../help/presentation/help_sheet.dart';
 import 'widgets/topup_notification_listener.dart';
 // Cart is disabled for now (direct-checkout funnel); re-add this import with
 // the Cart _NavItem / cartCount below.
@@ -12,17 +13,12 @@ import 'widgets/topup_notification_listener.dart';
 
 /// App shell: hosts the 5-tab bottom nav over the branch navigators. Branch
 /// order matches [StatefulShellRoute] branches: 0 Home · 1 Categories · 2 Cart ·
-/// 3 Menu. The center scan button is an action, not a branch.
+/// 3 Menu. The raised center button is an action, not a branch: it opens the
+/// Help Center (AI assistant + support contacts).
 class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
-
-  void _comingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context).comingSoon)),
-    );
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -70,7 +66,10 @@ class AppShell extends ConsumerWidget {
                   active: index == 1,
                   onTap: () => navigationShell.goBranch(1),
                 ),
-                _ScanFab(onTap: () => _comingSoon(context)),
+                _HelpNavButton(
+                  label: l10n.helpTitle,
+                  onTap: () => showHelpSheet(context),
+                ),
                 // Cart tab disabled for now — replaced by an "Offers" placeholder
                 // (feature deferred). The /cart branch (index 2) still exists in
                 // the router; it's just unreachable from the nav. Re-enable by
@@ -179,9 +178,13 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _ScanFab extends StatelessWidget {
-  const _ScanFab({required this.onTap});
+/// The raised center button: always shown (the Help sheet copes with the AI
+/// being off — it then offers only the support contacts), so the nav never
+/// shifts.
+class _HelpNavButton extends StatelessWidget {
+  const _HelpNavButton({required this.label, required this.onTap});
 
+  final String label;
   final VoidCallback onTap;
 
   @override
@@ -191,26 +194,33 @@ class _ScanFab extends StatelessWidget {
       child: Center(
         child: Transform.translate(
           offset: const Offset(0, -16),
-          child: GestureDetector(
-            onTap: onTap,
-            child: Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                gradient: AppTokens.brandGradient,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTokens.cta.withValues(alpha: 0.45),
-                    blurRadius: 22,
-                    offset: const Offset(0, 10),
+          child: Semantics(
+            button: true,
+            label: label,
+            child: Tooltip(
+              message: label,
+              child: GestureDetector(
+                onTap: onTap,
+                child: Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    gradient: AppTokens.brandGradient,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTokens.cta.withValues(alpha: 0.45),
+                        blurRadius: 22,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: const Icon(
-                Icons.qr_code_scanner_rounded,
-                color: Colors.white,
-                size: 25,
+                  child: const Icon(
+                    Icons.support_agent_rounded,
+                    color: Colors.white,
+                    size: 27,
+                  ),
+                ),
               ),
             ),
           ),

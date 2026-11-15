@@ -210,9 +210,17 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   `api-key`, strict JSON schema, `reasoning_effort: minimal`) + `stub` adapters, selected by
   **`LLM_PROVIDER`** (default `stub` → assistant reports off outside dev). Prod: Azure OpenAI
   `salehcard-openai` / deployment `chat` = gpt-5-mini (DEVOPS-TODO §25). **The hard rule is enforced in code,
-  not the prompt**: the model must return `{answerable, answer, sourceIds}` and the server shows the answer
-  only when it cites ≥1 real paragraph — anything else (off-topic, invented source, content-filter block)
-  becomes a localized "can't help, contact support" fallback. `POST /api/v1/chatbot/ask` (AuthRequired) +
+  not the prompt**: the model only *classifies* each message — `{intent, answer, sourceIds}`, intent ∈
+  `answer` (grounded, incl. overviews like "what is this app?") / `handoff` (about the app but not in the
+  knowledge → contacts; logged `unanswered` = a gap) / `clarify` / `smalltalk` / `out_of_scope` — and
+  `enforce` (prompt.go) decides what is shown: an `answer` needs ≥1 real cited paragraph; the conversational
+  kinds are length-capped (no room for facts); `out_of_scope` → a fixed polite decline (`off_topic`);
+  unusable output / content-filter block → the "contact support" fallback. On iOS an **output guard**
+  (`guard.go` `restrictedTerms`) hides any AI reply naming crypto / Whish / money transfer / games / gift
+  cards (logged `filtered`). Never fix a bad answer with a per-question prompt line: fix the knowledge, or
+  the general rule; regression-check with `go run ./cmd/chateval -v` (real model, ~1¢). In the app the chat
+  opens from the raised **center button of the bottom nav** (`app_shell.dart`, was a "coming soon" QR scan; the
+  Home floating help button is gone) and from Menu → Help. `POST /api/v1/chatbot/ask` (AuthRequired) +
   `/ask/{id}/report` (Play AI-content policy); public `GET /api/v1/chatbot` carries `ai` + `support`. Gated by
   the **`chatbotAiEnabled`** setting (off by default — the kill switch; off → the Help Center shows only the
   support contacts). Billed → per-user / per-IP / global caps (`CHATBOT_AI_*`) that **fail CLOSED** and always

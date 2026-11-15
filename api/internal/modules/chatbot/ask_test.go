@@ -161,7 +161,7 @@ func TestAsk_RateLimitsFailClosed(t *testing.T) {
 
 func TestAsk_AnsweredWithRealSources(t *testing.T) {
 	r := newRig(t, true, true)
-	r.model.content = `{"answerable":true,"answer":"Open Wallet and tap Top up.","sourceIds":["s1"]}`
+	r.model.content = `{"intent":"answer","answer":"Open Wallet and tap Top up.","sourceIds":["s1"]}`
 	res, err := ask(r, "how do I top up?")
 	if err != nil {
 		t.Fatal(err)
@@ -185,14 +185,17 @@ func TestAsk_AnsweredWithRealSources(t *testing.T) {
 }
 
 func TestAsk_HardRuleRejections(t *testing.T) {
+	long := strings.Repeat("x", maxReplyRunes+1)
 	cases := map[string]string{
-		"model says unanswerable": `{"answerable":false,"answer":"","sourceIds":[]}`,
-		"answer without sources":  `{"answerable":true,"answer":"Sure!","sourceIds":[]}`,
-		"invented source":         `{"answerable":true,"answer":"Bitcoin is $1","sourceIds":["s9"]}`,
-		"mixed real+invented":     `{"answerable":true,"answer":"x","sourceIds":["s1","s7"]}`,
-		"empty answer":            `{"answerable":true,"answer":"  ","sourceIds":["s1"]}`,
-		"android-only on iOS":     `{"answerable":true,"answer":"Enter the player ID.","sourceIds":["s3"]}`,
-		"not json":                `Here is a poem about the sea…`,
+		"answer without sources":   `{"intent":"answer","answer":"Sure!","sourceIds":[]}`,
+		"invented source":          `{"intent":"answer","answer":"Bitcoin is $1","sourceIds":["s9"]}`,
+		"mixed real+invented":      `{"intent":"answer","answer":"x","sourceIds":["s1","s7"]}`,
+		"empty answer":             `{"intent":"answer","answer":"  ","sourceIds":["s1"]}`,
+		"android-only on iOS":      `{"intent":"answer","answer":"Enter the player ID.","sourceIds":["s3"]}`,
+		"unknown intent":           `{"intent":"poem","answer":"Roses are red","sourceIds":[]}`,
+		"empty handoff":            `{"intent":"handoff","answer":"","sourceIds":[]}`,
+		"long smalltalk (= facts)": `{"intent":"smalltalk","answer":"` + long + `","sourceIds":[]}`,
+		"not json":                 `Here is a poem about the sea…`,
 	}
 	for name, content := range cases {
 		r := newRig(t, true, true)
@@ -201,12 +204,57 @@ func TestAsk_HardRuleRejections(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if res.Answered || !res.ShowSupport || !strings.Contains(res.Answer, "FlashCash Global") {
+		if res.Answered || !res.ShowSupport || res.Answer != fallbackText("en") {
 			t.Errorf("%s: must fall back, got %+v", name, res)
 		}
 		if r.logs.logs[0].Outcome != outcomeUnanswered || r.logs.logs[0].Answer != "" {
 			t.Errorf("%s: bad log %+v", name, r.logs.logs[0])
 		}
+	}
+}
+
+func TestAsk_Intents(t *testing.T) {
+	cases := []struct {
+		name, content, outcome string
+		answered, support      bool
+		answer                 string
+	}{
+		{"off-topic is declined politely", `{"intent":"out_of_scope","answer":"Here is a poem","sourceIds":[]}`,
+			outcomeOffTopic, false, false, offTopicText("en", "FlashCash Global")},
+		{"not covered → handoff + contacts (a gap)", `{"intent":"handoff","answer":"I don't have that — support can help.","sourceIds":[]}`,
+			outcomeUnanswered, true, true, "I don't have that — support can help."},
+		{"vague → clarifying question", `{"intent":"clarify","answer":"Is it about a top-up or an order?","sourceIds":[]}`,
+			outcomeAnswered, true, false, "Is it about a top-up or an order?"},
+		{"greeting → small talk", `{"intent":"smalltalk","answer":"Hi! How can I help?","sourceIds":["s99"]}`,
+			outcomeAnswered, true, false, "Hi! How can I help?"},
+		{"overview → grounded answer", `{"intent":"answer","answer":"You can top up and verify.","sourceIds":["s1","s2"]}`,
+			outcomeAnswered, true, false, "You can top up and verify."},
+	}
+	for _, c := range cases {
+		r := newRig(t, true, true)
+		r.model.content = c.content
+		res, err := ask(r, "q")
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if res.Answered != c.answered || res.ShowSupport != c.support || res.Answer != c.answer {
+			t.Errorf("%s: got %+v", c.name, res)
+		}
+		l := r.logs.logs[0]
+		if l.Outcome != c.outcome || l.Intent == "" {
+			t.Errorf("%s: bad log outcome=%s intent=%q", c.name, l.Outcome, l.Intent)
+		}
+		if c.outcome == outcomeOffTopic && l.Answer != "" {
+			t.Errorf("%s: the model's off-topic draft must never be kept or shown", c.name)
+		}
+	}
+	r := newRig(t, true, true)
+	r.model.content = cases[4].content
+	if _, err := ask(r, "tell me about the app"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.logs.logs[0].Sources; len(got) != 2 {
+		t.Errorf("an overview cites every paragraph it used, got %q", got)
 	}
 }
 
@@ -249,7 +297,7 @@ func TestAsk_NoKnowledgeSkipsTheModel(t *testing.T) {
 
 func TestAsk_AndroidGetsAndroidOnlyKnowledge(t *testing.T) {
 	r := newRig(t, true, true)
-	r.model.content = `{"answerable":true,"answer":"Enter the player ID.","sourceIds":["s3"]}`
+	r.model.content = `{"intent":"answer","answer":"Enter the player ID.","sourceIds":["s3"]}`
 	res, _, err := r.a.Ask(context.Background(), "u", "ip", AskInput{Question: "player id?", Platform: "android"})
 	if err != nil || !res.Answered {
 		t.Fatalf("android may be answered from the android-only text: %+v %v", res, err)
@@ -258,7 +306,7 @@ func TestAsk_AndroidGetsAndroidOnlyKnowledge(t *testing.T) {
 		t.Error("android prompt must include the android-only text")
 	}
 	ios := newRig(t, true, true)
-	ios.model.content = `{"answerable":false,"answer":"","sourceIds":[]}`
+	ios.model.content = `{"intent":"handoff","answer":"Please contact support.","sourceIds":[]}`
 	if _, _, err := ios.a.Ask(context.Background(), "u", "ip", AskInput{Question: "player id?", Platform: "ios"}); err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +317,7 @@ func TestAsk_AndroidGetsAndroidOnlyKnowledge(t *testing.T) {
 
 func TestAsk_ArabicFallbackAndHistory(t *testing.T) {
 	r := newRig(t, true, true)
-	r.model.content = `{"answerable":false,"answer":"","sourceIds":[]}`
+	r.model.content = `{"intent":"answer","answer":"x","sourceIds":[]}`
 	hist := make([]Turn, 0, 10)
 	for i := 0; i < 10; i++ {
 		role := "user"
@@ -293,7 +341,7 @@ func TestAsk_ArabicFallbackAndHistory(t *testing.T) {
 		t.Errorf("an Arabic app gets the Arabic-names note last, got %+v", last)
 	}
 	en := newRig(t, true, true)
-	en.model.content = `{"answerable":false,"answer":"","sourceIds":[]}`
+	en.model.content = `{"intent":"smalltalk","answer":"Hi!","sourceIds":[]}`
 	if _, err := ask(en, "q"); err != nil {
 		t.Fatal(err)
 	}
@@ -307,9 +355,9 @@ func TestAsk_ArabicFallbackAndHistory(t *testing.T) {
 
 func TestEnforce_CapsLength(t *testing.T) {
 	long := strings.Repeat("a", maxAnswerRunes+50)
-	ans, cited, ok := enforce(`{"answerable":true,"answer":"`+long+`","sourceIds":["s1","s1"]}`, sectionsFor(testKnowledge(), "ios"))
-	if !ok || len([]rune(ans)) != maxAnswerRunes+1 || len(cited) != 1 {
-		t.Fatalf("answer must be capped and sources deduped, got ok=%v len=%d cited=%d", ok, len([]rune(ans)), len(cited))
+	v, ok := enforce(`{"intent":"answer","answer":"`+long+`","sourceIds":["s1","s1"]}`, sectionsFor(testKnowledge(), "ios"))
+	if !ok || len([]rune(v.Answer)) != maxAnswerRunes+1 || len(v.Cited) != 1 {
+		t.Fatalf("answer must be capped and sources deduped, got ok=%v len=%d cited=%d", ok, len([]rune(v.Answer)), len(v.Cited))
 	}
 }
 
@@ -319,7 +367,7 @@ func TestBuildSystemPrompt_StableAndGrounded(t *testing.T) {
 	if a != b {
 		t.Fatal("prompt must be deterministic (provider prompt caching)")
 	}
-	for _, want := range []string{`<section id="s1">`, `<section id="s2">`, "go to Wallet → Top up.", "Verification: upload your ID.", "Answer ONLY from the KNOWLEDGE"} {
+	for _, want := range []string{`<section id="s1">`, `<section id="s2">`, "go to Wallet → Top up.", "Verification: upload your ID.", "only facts written in the KNOWLEDGE", `"out_of_scope"`} {
 		if !strings.Contains(a, want) {
 			t.Errorf("prompt missing %q", want)
 		}
@@ -393,6 +441,9 @@ func TestStarterKnowledge(t *testing.T) {
 	if m := notOnIOS.FindString(in.General); m != "" {
 		t.Errorf("the general text reaches iOS but mentions %q — move it to AndroidOnly", m)
 	}
+	if m := restrictedHit(in.General); m != "" {
+		t.Errorf("the general text would trip the iOS output guard on %q — every answer citing it would be hidden on iOS", m)
+	}
 	for _, txt := range []string{in.General, in.AndroidOnly} {
 		if m := forbidden.FindString(txt); m != "" {
 			t.Errorf("starter knowledge mentions %q", m)
@@ -418,5 +469,42 @@ func TestSeedKnowledge_NeverOverwrites(t *testing.T) {
 	}
 	if would, _ := SeedKnowledge(context.Background(), repo, StarterKnowledge, false, now); would {
 		t.Fatal("dry run reports nothing to do once knowledge exists")
+	}
+}
+
+func TestAsk_IOSOutputGuard(t *testing.T) {
+	echo := `{"intent":"answer","answer":"If USDT is shown on Top up you can use it.","sourceIds":["s1"]}`
+	for _, platform := range []string{"ios", ""} { // unknown = iOS
+		r := newRig(t, true, true)
+		r.model.content = echo
+		res, _, err := r.a.Ask(context.Background(), "u", "ip", AskInput{Question: "pay with usdt?", Platform: platform})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Answered || !res.ShowSupport || strings.Contains(strings.ToLower(res.Answer), "usdt") {
+			t.Errorf("%q: a restricted term must never reach iOS, got %+v", platform, res)
+		}
+		if l := r.logs.logs[0]; l.Outcome != outcomeFiltered || l.Answer == "" || len(l.Sources) != 0 {
+			t.Errorf("%q: guard must log filtered and keep the draft for the admin, got %+v", platform, l)
+		}
+	}
+	r := newRig(t, true, true)
+	r.model.content = echo
+	res, _, err := r.a.Ask(context.Background(), "u", "ip", AskInput{Question: "pay with usdt?", Platform: "android"})
+	if err != nil || !res.Answered {
+		t.Fatalf("android sells crypto: the answer must be shown, got %+v %v", res, err)
+	}
+}
+
+func TestRestrictedHit(t *testing.T) {
+	for _, s := range []string{"Bitcoin", "pay by Whish", "a Game top-up", "عملات رقمية", "بطاقة هدايا", "Money Transfer"} {
+		if restrictedHit(s) == "" {
+			t.Errorf("%q must be restricted", s)
+		}
+	}
+	for _, s := range []string{"Top up your Wallet", "Recharge your line", "transfer credit to another line", "إضافة رصيد", "التحقق من الهوية"} {
+		if hit := restrictedHit(s); hit != "" {
+			t.Errorf("%q is fine on iOS, but hit %q", s, hit)
+		}
 	}
 }
