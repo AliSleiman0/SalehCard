@@ -28,7 +28,14 @@ type RerouteInput struct {
 	// outcome is unknown (a umanage "search:" ref): the old supplier may still
 	// deliver, so the admin has to accept the double-delivery risk explicitly.
 	AcknowledgeAmbiguous bool `json:"acknowledgeAmbiguous"`
+	// AcknowledgeLowBalance sends even though the supplier's balance looks too
+	// low for this order (some supplier accounts run on credit).
+	AcknowledgeLowBalance bool `json:"acknowledgeLowBalance"`
 }
+
+// errServiceUnavailable marks a reroute refusal caused by the supplier's
+// catalog being unreachable (HTTP 503): retrying later can succeed.
+var errServiceUnavailable = errors.New("service unavailable")
 
 // Reroute error codes (typed so the console can explain each refusal).
 func rerouteErr(code, msg string, base error) error {
@@ -154,8 +161,12 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 	if strings.HasPrefix(ref, "search:") && !in.AcknowledgeAmbiguous {
 		return nil, rerouteErr("REROUTE_AMBIGUOUS", "the previous supplier's outcome is unknown and it may still deliver — confirm the double-delivery risk to continue", apperrors.ErrConflict)
 	}
-	if _, ok := supplierQty(o.Items[idx]); !ok {
+	qty, ok := supplierQty(o.Items[idx])
+	if !ok {
 		return nil, rerouteErr("REROUTE_BAD_QUANTITY", "this order's quantity can't be sent to a supplier — complete or refund it by hand", apperrors.ErrBadRequest)
+	}
+	if err := s.checkRerouteTarget(ctx, in, upstream, qty); err != nil {
+		return nil, err
 	}
 
 	old := o.Items[idx]
@@ -229,6 +240,48 @@ func (s *SupplierSettler) Reroute(ctx context.Context, id bson.ObjectID, in Rero
 		slog.Error("order: reroute dispatch outcome not persisted; settler will retry", "order", o.ID.Hex(), "error", err)
 	}
 	return s.svc.repo.FindByID(ctx, o.ID)
+}
+
+// checkRerouteTarget refuses a reroute the target supplier would certainly
+// refuse, before anything is claimed: a product id that isn't in its catalog
+// (the 2026-11-14 "1045" mistake), a product it marks unavailable, a quantity
+// it doesn't sell, or (unless acknowledged) a balance below this order's cost.
+// A supplier whose adapter can't list its catalog is not checked; a catalog
+// that fails to load blocks the send (the admin retries shortly — the cache
+// serves a recent copy when one exists). A failed balance probe never blocks.
+func (s *SupplierSettler) checkRerouteTarget(ctx context.Context, in RerouteInput, upstream string, qty int) error {
+	if s.probes == nil {
+		return nil
+	}
+	cp, found, _, err := s.probes.Lookup(ctx, in.ProviderID, upstream)
+	switch {
+	case errors.Is(err, provider.ErrNotImplemented):
+		return nil
+	case err != nil:
+		slog.Warn("order: reroute catalog check failed", "provider", in.ProviderID, "error", err)
+		return rerouteErr("REROUTE_CATALOG_UNAVAILABLE", "couldn't load that supplier's product list to check the product — try again in a minute", errServiceUnavailable)
+	case !found:
+		return rerouteErr("REROUTE_UPSTREAM_UNKNOWN", fmt.Sprintf("product %q is not in that supplier's catalog — pick the product from the list", upstream), apperrors.ErrBadRequest)
+	case !cp.Available:
+		return rerouteErr("REROUTE_UPSTREAM_UNAVAILABLE", "that supplier marks this product unavailable right now — choose another supplier", apperrors.ErrConflict)
+	case !provider.AcceptsQty(cp, qty):
+		return rerouteErr("REROUTE_QTY_REJECTED", fmt.Sprintf("this order sends quantity %d, which that supplier product doesn't accept", qty), apperrors.ErrBadRequest)
+	}
+	if cp.Price <= 0 || in.AcknowledgeLowBalance {
+		return nil
+	}
+	acc, err := s.probes.Balance(ctx, in.ProviderID)
+	if err != nil {
+		return nil
+	}
+	cost := cp.Price * float64(qty)
+	// A negative balance means the account runs on credit (jentel does): we
+	// can't tell its limit, so only a non-negative balance below the cost is
+	// flagged.
+	if acc.Balance >= 0 && acc.Balance < cost {
+		return rerouteErr("REROUTE_LOW_BALANCE", fmt.Sprintf("that supplier's balance (%.2f %s) is below this order's cost (%.2f %s) — top it up, or confirm to send anyway", acc.Balance, acc.Currency, cost, cp.Currency), apperrors.ErrConflict)
+	}
+	return nil
 }
 
 // dispatchRerouted sends the freshly claimed attempt to its new supplier and

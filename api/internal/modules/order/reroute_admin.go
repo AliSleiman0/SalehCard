@@ -11,6 +11,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	apperrors "github.com/AliSleiman0/salehcard/api/pkg/errors"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
 )
@@ -29,9 +30,10 @@ type rerouteHandler struct {
 // RegisterRerouteRoutes mounts the "send to another supplier" action on the
 // admin orders group (the caller wraps it in the orders domain, so the POST
 // needs orders.manage). options are the configured suppliers with display
-// names; only those with a real adapter are offered.
-func RegisterRerouteRoutes(r chi.Router, svc *OrderService, rec audit.Recorder, options []RerouteProvider, interval, giveUp time.Duration) {
-	h := &rerouteHandler{settler: NewSupplierSettler(svc, rec, interval, giveUp)}
+// names; only those with a real adapter are offered. probes (may be nil) is the
+// shared supplier catalog/balance cache the pre-send checks read.
+func RegisterRerouteRoutes(r chi.Router, svc *OrderService, probes *provider.Probes, rec audit.Recorder, options []RerouteProvider, interval, giveUp time.Duration) {
+	h := &rerouteHandler{settler: NewSupplierSettler(svc, rec, interval, giveUp).WithProbes(probes)}
 	for _, p := range options {
 		if svc.providers.Has(p.ID) {
 			h.providers = append(h.providers, p)
@@ -67,6 +69,8 @@ func (h *rerouteHandler) reroute(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, apperrors.ErrNotFound):
 			response.NotFound(w)
+		case errors.As(err, &ae) && errors.Is(err, errServiceUnavailable):
+			response.Error(w, http.StatusServiceUnavailable, ae.Code, ae.Message)
 		case errors.As(err, &ae) && errors.Is(err, apperrors.ErrConflict):
 			response.Error(w, http.StatusConflict, ae.Code, ae.Message)
 		case errors.As(err, &ae) && errors.Is(err, apperrors.ErrBadRequest):

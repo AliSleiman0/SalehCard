@@ -141,6 +141,17 @@ type SupplierSettler struct {
 	rec      audit.Recorder
 	interval time.Duration
 	giveUp   time.Duration
+	// probes (optional) is the shared supplier catalog/balance cache. When set,
+	// an admin reroute is checked against the target supplier's live catalog
+	// and balance before anything is claimed (WithProbes).
+	probes *provider.Probes
+}
+
+// WithProbes enables the reroute pre-checks against the shared supplier
+// catalog/balance cache. Returns s for chaining.
+func (s *SupplierSettler) WithProbes(p *provider.Probes) *SupplierSettler {
+	s.probes = p
+	return s
 }
 
 // NewSupplierSettler builds the settler; non-positive durations get defaults.

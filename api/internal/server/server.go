@@ -41,6 +41,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/platform/auth"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/blob"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/bsc"
+	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/push"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/sms"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/tron"
@@ -245,6 +246,10 @@ func (s *Server) Routes() {
 	// module (OrderSettler for confirmed device recharges).
 	orderSvc := order.RegisterRoutes(s.router, s.db, s.cfg, ntf, paySvc, bridgeReg.Service, store)
 	paySvc.SetOrderSettler(orderSvc)
+	// One shared catalog/balance cache over the fulfillment registry: the
+	// /suppliers page, the catalog picker and the reroute guards all read
+	// through it, so supplier APIs aren't hit on every click.
+	supplierProbes := provider.NewProbes(orderSvc.Providers(), provider.ProbesConfig{CatalogTTL: s.cfg.SupplierCatalogTTL})
 	bridgeReg.Service.SetOrderSettler(orderSvc)
 	if bridgeReg.Service.Enabled() {
 		s.bridgeReaper = bridge.NewReaper(bridgeReg.Service, s.cfg.Bridge.ReaperInterval)
@@ -329,7 +334,7 @@ func (s *Server) Routes() {
 			for _, p := range provOpts {
 				rerouteOpts = append(rerouteOpts, order.RerouteProvider{ID: p.ID, Name: p.Name})
 			}
-			order.RegisterRerouteRoutes(g, orderSvc, rec, rerouteOpts, s.cfg.SupplierSettlerInterval, s.cfg.SupplierSettlerGiveUp)
+			order.RegisterRerouteRoutes(g, orderSvc, supplierProbes, rec, rerouteOpts, s.cfg.SupplierSettlerInterval, s.cfg.SupplierSettlerGiveUp)
 		})
 		domain("users", func(g chi.Router) {
 			user.RegisterAdminRoutes(g, s.db, rec, smsSender, s.cfg.BulkSMSMax, ntf, s.cfg.BulkPushMax)
@@ -354,7 +359,7 @@ func (s *Server) Routes() {
 		// supplier id resolves to its adapter's Cataloger for the live probes.
 		supplierProducts := product.NewProductService(product.NewMongoRepository(s.db), product.WithCategoryResolver(catResolver))
 		domain("suppliers", func(g chi.Router) {
-			supplier.RegisterAdminRoutes(g, s.db, rec, orderSvc.Providers(), s.cfg.EnabledSuppliers(), supplierProducts)
+			supplier.RegisterAdminRoutes(g, s.db, rec, supplierProbes, s.cfg.EnabledSuppliers(), supplierProducts)
 		})
 
 		// Role management mounts outside the domain wrapper: listing roles + the
