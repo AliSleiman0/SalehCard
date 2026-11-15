@@ -56,4 +56,16 @@ describe('addItem', () => {
       ['B2', 3],
     ])
   })
+
+  it('keeps lines with different delivery fields apart', () => {
+    const a = cartKey({ ...base, pid: '50', fields: { amount: '50', field_1: 'https://x/a.jpg' } })
+    const b = cartKey({ ...base, pid: '50', fields: { field_1: 'https://x/b.jpg', amount: '50' } })
+    expect(a).not.toBe(b)
+    expect(cartKey({ ...base, pid: '50', fields: { field_1: ' ', amount: '' } })).toBe(
+      cartKey({ ...base, pid: '50' }),
+    )
+    let items = addItem([], { ...base, qty: 1, pid: '50', fields: { field_1: 'u1' } })
+    items = addItem(items, { ...base, qty: 1, pid: '50', fields: { field_1: 'u2' } })
+    expect(items.map((x) => x.fields?.field_1)).toEqual(['u1', 'u2'])
+  })
 })

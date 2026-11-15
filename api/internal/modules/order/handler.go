@@ -72,11 +72,11 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	if order.PaymentMethod == PaymentMethodUSDT && order.Status == OrderStatusPending && h.usdt != nil {
 		if intent, ierr := h.usdt.GetActiveOrderIntent(r.Context(), order.ID); ierr == nil {
 			view := payment.NewIntentView(intent)
-			response.OK(w, placeOrderResponse{Order: order, PaymentIntent: &view})
+			response.OK(w, placeOrderResponse{Order: customerOrder(order), PaymentIntent: &view})
 			return
 		}
 	}
-	response.OK(w, order)
+	response.OK(w, customerOrder(order))
 }
 
 // ListOrders handles GET /api/v1/orders.
@@ -91,7 +91,7 @@ func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
 		writeOrderError(w, err)
 		return
 	}
-	response.OK(w, orders)
+	response.OK(w, customerOrders(orders))
 }
 
 // GetOrder handles GET /api/v1/orders/{id}.
@@ -111,7 +111,7 @@ func (h *Handler) GetOrder(w http.ResponseWriter, r *http.Request) {
 		writeOrderError(w, err)
 		return
 	}
-	response.OK(w, order)
+	response.OK(w, customerOrder(order))
 }
 
 // writeOrderError maps domain errors to HTTP responses.
@@ -135,4 +135,25 @@ func writeOrderError(w http.ResponseWriter, err error) {
 	default:
 		response.InternalError(w)
 	}
+}
+
+// customerOrder is the customer's view of an order: the archive of earlier
+// supplier attempts (supplier ids, refs and refusal reasons) is internal and
+// stays out of customer responses. o is never mutated (it may be shared).
+func customerOrder(o *Order) *Order {
+	if o == nil || len(o.Fulfillment.SupplierAttempts) == 0 {
+		return o
+	}
+	c := *o
+	c.Fulfillment.SupplierAttempts = nil
+	return &c
+}
+
+// customerOrders applies customerOrder to a list.
+func customerOrders(in []*Order) []*Order {
+	out := make([]*Order, len(in))
+	for i, o := range in {
+		out[i] = customerOrder(o)
+	}
+	return out
 }

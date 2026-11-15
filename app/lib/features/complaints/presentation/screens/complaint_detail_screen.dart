@@ -13,6 +13,7 @@ import '../../../../core/widgets/status_badge.dart';
 import '../../data/complaint_repository.dart';
 import '../../domain/complaint.dart';
 import '../complaint_labels.dart';
+import '../../../../core/format/order_number.dart';
 
 /// One complaint as a chat thread (customer on the end side, support on the
 /// start side) with a reply box, hidden once the complaint is closed. Reopened
@@ -141,7 +142,7 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
                         InkWell(
                           onTap: () => context.push('/orders/${c.orderId}'),
                           child: Text(
-                            '${l10n.complaintLinkedOrder} #${c.orderId!.substring(c.orderId!.length - 8)}',
+                            '${l10n.complaintLinkedOrder} ${orderNumber(c.orderId!)}',
                             style: const TextStyle(
                               color: AppTokens.brand1,
                               fontWeight: FontWeight.w700,

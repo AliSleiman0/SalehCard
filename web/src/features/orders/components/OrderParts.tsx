@@ -3,6 +3,7 @@ import { Icon, ImageArt, Price, Badge, Button, CodeVault, useToast } from '@/com
 import { useCurrencyStore } from '@/stores/currency'
 import { fmtPrice } from '@/lib/utils'
 import type { OrderView } from '../types'
+import { orderNumber } from '@/lib/orderNumber'
 
 // Single source of truth for order-status badges (head, list rows, credit card).
 const STATUS_VARIANT: Record<string, 'instant' | 'soft' | 'disc'> = {
@@ -82,7 +83,7 @@ export function OrderHead({ o }: { o: OrderView }) {
         <div className="col" style={{ gap: 2, alignItems: 'flex-start' }}>
           <span style={{ fontWeight: 800 }}>{o.product}</span>
           <span className="tiny faint num">
-            {o.id} · {o.method}
+            {orderNumber(o.id)} · {o.method}
           </span>
           <BalanceLine o={o} />
           <div style={{ marginTop: 4 }}>

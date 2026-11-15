@@ -272,7 +272,22 @@ type Product struct {
 	// UpstreamProductID is the supplier's own product id (e.g. a panel's "364")
 	// for api-mode products — the path segment of the panel newOrder call.
 	// Meaningful only when FulfillmentMode == api; empty otherwise.
-	UpstreamProductID      string     `bson:"upstreamProductId,omitempty"      json:"upstreamProductId,omitempty"`
+	UpstreamProductID string `bson:"upstreamProductId,omitempty"      json:"upstreamProductId,omitempty"`
+	// SupplierLinks are every supplier product this product can be fulfilled
+	// by, in the admin's priority order (supplier_links.go). The active one
+	// (ActiveSupplierLinkID) is mirrored into FulfillmentProvider /
+	// UpstreamProductID in the same write. Admin-only: never in public JSON
+	// (the admin read goes through AdminProductView).
+	SupplierLinks        []SupplierLink `bson:"supplierLinks,omitempty"        json:"-"`
+	ActiveSupplierLinkID string         `bson:"activeSupplierLinkId,omitempty" json:"-"`
+	// SupplierLinksRev increments on every links write; an editor save must
+	// carry the rev it loaded (optimistic concurrency).
+	SupplierLinksRev int `bson:"supplierLinksRev,omitempty"       json:"-"`
+	// SupplierFallbackOff switches OFF the automatic fallback to the next
+	// supplier link when the active one definitely refuses an order (stored
+	// inverted so every existing product defaults to fallback ON). Admin-only;
+	// the admin read exposes it as supplierFallback.
+	SupplierFallbackOff    bool       `bson:"supplierFallbackOff,omitempty" json:"-"`
 	FulfillmentConfidence  Confidence `bson:"fulfillmentConfidence,omitempty"  json:"fulfillmentConfidence,omitempty"`
 	FulfillmentCancellable *bool      `bson:"fulfillmentCancellable,omitempty" json:"fulfillmentCancellable,omitempty"`
 	// Migration: rich economics + checkout schema (spec §3/§4).
@@ -388,8 +403,16 @@ type CreateProductInput struct {
 	// UpstreamProductID maps an api-mode product onto the supplier's catalog
 	// (DESIGN-SUPPLIERS.md). Deliberately unvalidated: a provider-less or
 	// id-less api product parks safely at order time (stub / ErrUnavailable).
-	UpstreamProductID string      `json:"upstreamProductId,omitempty"`
-	Bridge            *BridgeSpec `json:"bridge,omitempty"`
+	UpstreamProductID string `json:"upstreamProductId,omitempty"`
+	// SupplierLinks sets the supplier links table (supplier_links.go); when
+	// set, FulfillmentProvider/UpstreamProductID are derived from its active
+	// link. When nil, a legacy provider+upstream pair becomes one active link.
+	SupplierLinks *SupplierLinksInput `json:"supplierLinks,omitempty"`
+	// SupplierFallback sets the automatic next-supplier fallback (nil = on).
+	SupplierFallback *bool `json:"supplierFallback,omitempty"`
+	// linksPlan is the service-resolved links table the repository stores.
+	linksPlan *linksPlan
+	Bridge    *BridgeSpec `json:"bridge,omitempty"`
 	// MoneyTransfer sets the buy/sell rate board; only valid on a transfer product.
 	MoneyTransfer *MoneyTransfer `json:"moneyTransfer,omitempty"`
 	// UnitPricing switches on per-unit pricing (see UnitPricing).
@@ -423,11 +446,21 @@ type UpdateProductInput struct {
 	// clear-sentinel convention).
 	FulfillmentProvider *int `json:"fulfillmentProvider,omitempty"`
 	// UpstreamProductID: nil = unchanged; non-nil "" clears.
-	UpstreamProductID *string         `json:"upstreamProductId,omitempty"`
-	Stock             *int            `json:"stock,omitempty"`
-	Available         *bool           `json:"available,omitempty"`
-	Ratings           *RatingsSummary `json:"ratings,omitempty"`
-	InputFields       []InputField    `json:"inputFields,omitempty"`
+	UpstreamProductID *string `json:"upstreamProductId,omitempty"`
+	// SupplierLinks replaces the supplier links table (nil = unchanged). The
+	// service derives FulfillmentProvider/UpstreamProductID from its active
+	// link and guards the write on SupplierLinks.Rev.
+	SupplierLinks *SupplierLinksInput `json:"supplierLinks,omitempty"`
+	// SupplierFallback switches the automatic next-supplier fallback on/off
+	// (nil = unchanged).
+	SupplierFallback *bool `json:"supplierFallback,omitempty"`
+	// linksPlan is the service-resolved links table + mirror the repository
+	// stores, guarded on the rev the editor loaded.
+	linksPlan   *linksPlan
+	Stock       *int            `json:"stock,omitempty"`
+	Available   *bool           `json:"available,omitempty"`
+	Ratings     *RatingsSummary `json:"ratings,omitempty"`
+	InputFields []InputField    `json:"inputFields,omitempty"`
 	// Verification configures the check_name ID-verification hook. A non-nil value
 	// with a non-empty App sets it; a non-nil value with an empty App clears it
 	// (disables verification). Nil leaves it unchanged.

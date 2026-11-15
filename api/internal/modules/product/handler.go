@@ -87,8 +87,19 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for i := range products {
+		stripSupplierMapping(&products[i])
+	}
 	meta := pagination.CalcMeta(p, total)
 	response.OKWithMeta(w, products, meta)
+}
+
+// stripSupplierMapping removes which supplier fulfills a product (and its id
+// there) from a customer-facing read: that is business-internal. The admin
+// reads go through AdminProductView instead.
+func stripSupplierMapping(p *Product) {
+	p.FulfillmentProvider = nil
+	p.UpstreamProductID = ""
 }
 
 // GetByID handles GET /api/v1/products/{id}.
@@ -105,7 +116,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.OK(w, product)
+	response.OK(w, NewAdminProductView(product))
 }
 
 // ListPublic handles the customer-facing GET /api/v1/products: hidden (draft /
@@ -135,6 +146,7 @@ func (h *Handler) GetByIDPublic(w http.ResponseWriter, r *http.Request) {
 		response.NotFound(w)
 		return
 	}
+	stripSupplierMapping(product)
 	response.OK(w, product)
 }
 
@@ -233,6 +245,13 @@ func writeProductError(w http.ResponseWriter, err error) {
 			return
 		}
 		response.Error(w, http.StatusConflict, "CONFLICT", err.Error())
+	case errors.Is(err, errServiceUnavailable):
+		var appErr *apperrors.AppError
+		if errors.As(err, &appErr) {
+			response.Error(w, http.StatusServiceUnavailable, appErr.Code, appErr.Message)
+			return
+		}
+		response.Error(w, http.StatusServiceUnavailable, "UNAVAILABLE", err.Error())
 	default:
 		response.InternalError(w)
 	}
@@ -254,7 +273,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	response.JSON(w, http.StatusCreated, response.Response{
 		Success: true,
-		Data:    product,
+		Data:    NewAdminProductView(product),
 	})
 }
 
@@ -273,8 +292,21 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		writeProductError(w, err)
 		return
 	}
+	if in.SupplierLinks != nil && h.rec != nil {
+		links, active := EffectiveLinks(updated)
+		rows := make([]map[string]any, 0, len(links))
+		for _, l := range links {
+			rows = append(rows, map[string]any{"provider": l.Provider, "upstreamId": l.UpstreamID, "enabled": l.Enabled, "active": l.ID == active})
+		}
+		h.rec.Record(r.Context(), audit.Entry{
+			Action:     audit.ActionProductSupplierLinks,
+			TargetType: "product",
+			TargetID:   updated.ID.Hex(),
+			Summary:    map[string]any{"title": updated.Title.En, "links": rows, "rev": updated.SupplierLinksRev},
+		})
+	}
 
-	response.OK(w, updated)
+	response.OK(w, NewAdminProductView(updated))
 }
 
 // Delete handles DELETE /api/admin/products/{id}: a SOFT delete (moves the

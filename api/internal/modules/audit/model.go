@@ -43,7 +43,10 @@ const (
 	ActionOrderSupplierSettle = "order.supplier_settle"
 	// ActionOrderSupplierReroute records an admin sending a stuck order to
 	// another supplier (from/to supplier + product, archived ref).
-	ActionOrderSupplierReroute   = "order.supplier_reroute"
+	ActionOrderSupplierReroute = "order.supplier_reroute"
+	// ActionOrderSupplierFallback records an automatic hop to the product's
+	// next supplier link after a definite refusal (actor system:supplier-fallback).
+	ActionOrderSupplierFallback  = "order.supplier_fallback"
 	ActionSupplierSync           = "supplier.sync"
 	ActionSupplierImport         = "supplier.import"
 	ActionSupplierSettingsUpdate = "supplier.settings_update"
@@ -51,6 +54,7 @@ const (
 	ActionProductSoftDelete      = "product.soft_delete" // moved to the trash (reversible)
 	ActionProductRestore         = "product.restore"     // taken back out of the trash
 	ActionProductImageUpload     = "product.image_upload"
+	ActionProductSupplierLinks   = "product.supplier_links_update" // supplier links table edited
 	ActionKYCDecision            = "kyc.decision"
 	ActionReviewDecision         = "review.decision"
 	ActionReviewDelete           = "review.delete"

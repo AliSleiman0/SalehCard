@@ -57,7 +57,9 @@ type Repository interface {
 	ListSupplierRetryable(ctx context.Context, now time.Time, limit int) ([]*Order, error)
 	// BumpSupplierRetry quietly advances the retry bookkeeping (no timeline
 	// event — retries must not spam the customer-visible timeline).
-	BumpSupplierRetry(ctx context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time) error
+	// ambiguous additionally marks the current attempt ambiguous (the dispatch
+	// failed without a definite refusal), which blocks the automatic fallback.
+	BumpSupplierRetry(ctx context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time, ambiguous bool) error
 	// SetSupplierRef promotes a retryable park to the pollable class after a
 	// re-dispatch came back pending: stores the upstream ref, clears the retry
 	// clock, and appends one timeline event.
@@ -185,8 +187,8 @@ func (f OrderFilter) build() bson.D {
 			bson.D{{Key: "items.playerId", Value: f.SearchRaw}},
 			bson.D{{Key: "items.fields.value", Value: f.SearchRaw}},
 		}
-		if isShortRef(f.SearchRaw) {
-			or = append(or, bson.D{{Key: "ref", Value: bson.D{{Key: "$regex", Value: strings.ToLower(f.SearchRaw)}}}})
+		if ref := strings.TrimPrefix(f.SearchRaw, "#"); isShortRef(ref) {
+			or = append(or, bson.D{{Key: "ref", Value: bson.D{{Key: "$regex", Value: strings.ToLower(ref)}}}})
 		}
 		if len(f.UserIDs) > 0 {
 			or = append(or, bson.D{{Key: "userId", Value: bson.D{{Key: "$in", Value: f.UserIDs}}}})
@@ -561,14 +563,19 @@ func (r *MongoRepository) findSupplierBatch(ctx context.Context, filter bson.D, 
 // BumpSupplierRetry quietly advances the retry bookkeeping. Guarded on
 // status==processing (a no-op on an order that moved on) and deliberately
 // timeline-free — hourly retries must not spam the customer-visible timeline.
-func (r *MongoRepository) BumpSupplierRetry(ctx context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time) error {
+func (r *MongoRepository) BumpSupplierRetry(ctx context.Context, id bson.ObjectID, attempt, retryCount int, nextRetryAt time.Time, ambiguous bool) error {
+	set := bson.D{
+		{Key: "fulfillment.supplierRetryCount", Value: retryCount},
+		{Key: "fulfillment.supplierNextRetryAt", Value: nextRetryAt},
+		{Key: "updatedAt", Value: time.Now().UTC()},
+	}
+	if ambiguous {
+		// Sticky for the attempt: only a new attempt (a claim) clears it.
+		set = append(set, bson.E{Key: "fulfillment.supplierAmbiguous", Value: true})
+	}
 	_, err := r.collection.UpdateOne(ctx,
 		bson.D{{Key: "_id", Value: id}, {Key: "status", Value: OrderStatusProcessing}, attemptFilter(attempt)},
-		bson.D{{Key: "$set", Value: bson.D{
-			{Key: "fulfillment.supplierRetryCount", Value: retryCount},
-			{Key: "fulfillment.supplierNextRetryAt", Value: nextRetryAt},
-			{Key: "updatedAt", Value: time.Now().UTC()},
-		}}},
+		bson.D{{Key: "$set", Value: set}},
 	)
 	return err
 }
@@ -1122,6 +1129,17 @@ type RerouteClaim struct {
 	// (a manual line was never sent to a supplier).
 	Archived *SupplierAttempt
 	Event    TimelineEvent
+	// Auto marks a claim made by the automatic fallback: the new attempt is
+	// flagged supplierAttemptAuto, and the filter additionally refuses an
+	// attempt marked ambiguous (the old supplier may have taken the order).
+	// Callers pass ExpectedRef "" for it: never fall back from a live ref.
+	Auto bool
+	// AllowPending also matches a still-pending order (the placement-time
+	// fallback runs before the order is parked as processing).
+	AllowPending bool
+	// KeepClock leaves supplierAttemptAt alone, so the settler's give-up
+	// window keeps counting from placement (automatic hops never extend it).
+	KeepClock bool
 }
 
 // ClaimSupplierReroute implements Repository.ClaimSupplierReroute. One
@@ -1131,9 +1149,16 @@ type RerouteClaim struct {
 // stops polling the old supplier and treats the order as a fresh attempt.
 func (r *MongoRepository) ClaimSupplierReroute(ctx context.Context, c RerouteClaim) (*Order, error) {
 	now := time.Now().UTC()
+	statuses := bson.A{OrderStatusProcessing}
+	if c.AllowPending {
+		statuses = append(statuses, OrderStatusPending)
+	}
 	filter := bson.D{
 		{Key: "_id", Value: c.OrderID},
-		{Key: "status", Value: OrderStatusProcessing},
+		{Key: "status", Value: bson.D{{Key: "$in", Value: statuses}}},
+	}
+	if c.Auto {
+		filter = append(filter, bson.E{Key: "fulfillment.supplierAmbiguous", Value: bson.D{{Key: "$ne", Value: true}}})
 	}
 	if c.ExpectedAttempt == 0 {
 		filter = append(filter, bson.E{Key: "fulfillment.supplierAttempt", Value: bson.D{{Key: "$exists", Value: false}}})
@@ -1160,7 +1185,6 @@ func (r *MongoRepository) ClaimSupplierReroute(ctx context.Context, c RerouteCla
 		{Key: item + "upstreamProductId", Value: c.NewUpstreamID},
 		{Key: "fulfillment.supplierAttempt", Value: c.ExpectedAttempt + 1},
 		{Key: "fulfillment.supplierOrderUUID", Value: c.NewOrderUUID},
-		{Key: "fulfillment.supplierAttemptAt", Value: now},
 		// Fallback retry clock: the immediate dispatch overwrites it (ref,
 		// completion, backoff or stuck flag). If that never lands (crash,
 		// DB error) the settler still re-dispatches this attempt — same key —
@@ -1171,6 +1195,22 @@ func (r *MongoRepository) ClaimSupplierReroute(ctx context.Context, c RerouteCla
 	if c.FromManual {
 		set = append(set, bson.E{Key: item + "fulfillmentMode", Value: "api"})
 	}
+	if !c.KeepClock {
+		set = append(set, bson.E{Key: "fulfillment.supplierAttemptAt", Value: now})
+	}
+	unset := bson.D{
+		{Key: "fulfillment.providerRef", Value: ""},
+		{Key: "fulfillment.rejectedProviderRef", Value: ""},
+		{Key: "fulfillment.supplierRetryCount", Value: ""},
+		{Key: "fulfillment.supplierStuckAt", Value: ""},
+		// A new attempt starts unambiguous.
+		{Key: "fulfillment.supplierAmbiguous", Value: ""},
+	}
+	if c.Auto {
+		set = append(set, bson.E{Key: "fulfillment.supplierAttemptAuto", Value: true})
+	} else {
+		unset = append(unset, bson.E{Key: "fulfillment.supplierAttemptAuto", Value: ""})
+	}
 	push := bson.D{{Key: "fulfillment.statusTimeline", Value: c.Event}}
 	if c.Archived != nil {
 		push = append(bson.D{{Key: "fulfillment.supplierAttempts", Value: *c.Archived}}, push...)
@@ -1179,12 +1219,7 @@ func (r *MongoRepository) ClaimSupplierReroute(ctx context.Context, c RerouteCla
 	err := r.collection.FindOneAndUpdate(ctx, filter,
 		bson.D{
 			{Key: "$set", Value: set},
-			{Key: "$unset", Value: bson.D{
-				{Key: "fulfillment.providerRef", Value: ""},
-				{Key: "fulfillment.rejectedProviderRef", Value: ""},
-				{Key: "fulfillment.supplierRetryCount", Value: ""},
-				{Key: "fulfillment.supplierStuckAt", Value: ""},
-			}},
+			{Key: "$unset", Value: unset},
 			{Key: "$push", Value: push},
 		},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),

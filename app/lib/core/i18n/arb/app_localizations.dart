@@ -926,6 +926,30 @@ abstract class AppLocalizations {
   /// **'Your purchases will show up here once you place an order.'**
   String get ordersEmptySub;
 
+  /// No description provided for @ordersSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by order number, player ID or product'**
+  String get ordersSearchHint;
+
+  /// No description provided for @ordersSearchClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get ordersSearchClear;
+
+  /// No description provided for @ordersSearchNoneTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders match “{query}”'**
+  String ordersSearchNoneTitle(String query);
+
+  /// No description provided for @ordersSearchNoneSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the order number or ID, or clear the search to see all your orders.'**
+  String get ordersSearchNoneSub;
+
   /// No description provided for @orderRefundedNote.
   ///
   /// In en, this message translates to:
@@ -1880,16 +1904,34 @@ abstract class AppLocalizations {
   /// **'Help'**
   String get helpTitle;
 
+  /// No description provided for @helpCenterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Help Center'**
+  String get helpCenterTitle;
+
+  /// No description provided for @helpSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Get quick answers to common questions'**
+  String get helpSubtitle;
+
+  /// No description provided for @helpGreetingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hi! 👋 I\'m here to help.'**
+  String get helpGreetingTitle;
+
   /// No description provided for @helpGreeting.
   ///
   /// In en, this message translates to:
-  /// **'Hi! Pick a question below, or type to search.'**
+  /// **'Choose a question below to get an instant answer.'**
   String get helpGreeting;
 
   /// No description provided for @helpSearchHint.
   ///
   /// In en, this message translates to:
-  /// **'Type to search questions…'**
+  /// **'Type your question...'**
   String get helpSearchHint;
 
   /// No description provided for @helpAllQuestions.
@@ -1904,11 +1946,35 @@ abstract class AppLocalizations {
   /// **'No matching questions'**
   String get helpNoMatch;
 
-  /// No description provided for @helpNeedHelp.
+  /// No description provided for @helpNoAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Still need help?'**
-  String get helpNeedHelp;
+  /// **'Sorry, I couldn\'t find an answer to that. Try one of the questions above, or contact us below.'**
+  String get helpNoAnswer;
+
+  /// No description provided for @helpOtherWays.
+  ///
+  /// In en, this message translates to:
+  /// **'Other ways to get help'**
+  String get helpOtherWays;
+
+  /// No description provided for @helpWhatsappSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat with us'**
+  String get helpWhatsappSub;
+
+  /// No description provided for @helpReportIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Report an issue'**
+  String get helpReportIssue;
+
+  /// No description provided for @helpSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get helpSend;
 
   /// No description provided for @uploadPhoto.
   ///
@@ -2185,6 +2251,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Thank you for contacting support.'**
   String get notifComplaintClosedBody;
+
+  /// No description provided for @changePasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordTitle;
+
+  /// No description provided for @changePasswordIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a new password for signing in. Your other signed-in devices stay signed in.'**
+  String get changePasswordIntro;
+
+  /// No description provided for @changePasswordCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get changePasswordCurrent;
+
+  /// No description provided for @changePasswordNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get changePasswordNew;
+
+  /// No description provided for @changePasswordConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm new password'**
+  String get changePasswordConfirm;
+
+  /// No description provided for @changePasswordRules.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 8 characters.'**
+  String get changePasswordRules;
+
+  /// No description provided for @changePasswordShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get changePasswordShow;
+
+  /// No description provided for @changePasswordHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get changePasswordHide;
+
+  /// No description provided for @changePasswordSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordSubmit;
+
+  /// No description provided for @changePasswordDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed'**
+  String get changePasswordDone;
+
+  /// No description provided for @changePasswordErrCurrentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your current password.'**
+  String get changePasswordErrCurrentRequired;
+
+  /// No description provided for @changePasswordErrShort.
+  ///
+  /// In en, this message translates to:
+  /// **'The new password must be at least 8 characters.'**
+  String get changePasswordErrShort;
+
+  /// No description provided for @changePasswordErrLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The new password is too long. Use a shorter one (Arabic letters count double).'**
+  String get changePasswordErrLong;
+
+  /// No description provided for @changePasswordErrMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The two new passwords don\'t match.'**
+  String get changePasswordErrMismatch;
+
+  /// No description provided for @changePasswordErrWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Your current password is incorrect.'**
+  String get changePasswordErrWrong;
+
+  /// No description provided for @changePasswordErrNoPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'This account doesn\'t have a password yet.'**
+  String get changePasswordErrNoPassword;
+
+  /// No description provided for @changePasswordNoPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a password by signing in with an SMS code: sign out, tap \"Sign up\", enter this same phone number, choose a password, then enter the SMS code.'**
+  String get changePasswordNoPasswordHint;
+
+  /// No description provided for @changePasswordErrRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Please wait a minute and try again.'**
+  String get changePasswordErrRateLimited;
+
+  /// No description provided for @changePasswordErrGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change your password. Please try again.'**
+  String get changePasswordErrGeneric;
 }
 
 class _AppLocalizationsDelegate

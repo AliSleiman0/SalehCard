@@ -73,20 +73,27 @@ function buildBaseLine(
     const values: Record<string, string> = {}
     for (const f of fields) values[f.key] = (itemValues[f.key] ?? '').trim()
 
+    // Structured per-field capture: every filled field (key + value) so the
+    // operator sees labeled inputs and photos (QR / barcode) as images.
+    const filled = fields
+      .filter((f) => (values[f.key] ?? '').length > 0)
+      .map((f) => ({ key: f.key, value: values[f.key] }))
+
     if (fulfillmentType === 'transfer') {
+      // The recipient summary is text only: a photo URL never goes into it.
+      const textValues: Record<string, string> = {}
+      for (const f of fields) if (f.type !== 'file') textValues[f.key] = values[f.key]
       return {
         productId: item.id,
         variantId: item.variantId,
         qty: item.qty,
-        recipient: buildRecipient(values),
+        recipient: buildRecipient(textValues),
+        fields: filled.length ? filled : undefined,
       }
     }
 
-    // account_credit: structured per-field capture, playerId = first filled field
-    // (keeps the server's CreditedToID / api-mode fulfillment clean).
-    const filled = fields
-      .filter((f) => (values[f.key] ?? '').length > 0)
-      .map((f) => ({ key: f.key, value: values[f.key] }))
+    // account_credit: playerId = first filled typed field (keeps the server's
+    // CreditedToID / api-mode fulfillment clean).
     return {
       productId: item.id,
       variantId: item.variantId,

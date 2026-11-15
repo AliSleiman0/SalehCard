@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../core/network/api_envelope.dart';
 import '../dtos/notification_dto.dart';
@@ -38,7 +39,18 @@ class NotificationRemoteDataSource {
   Future<void> registerDevice(String token) async {
     await _dio.post<dynamic>(
       '/notifications/devices',
-      data: {'token': token, 'platform': 'android'},
+      data: {'token': token, 'platform': pushPlatform()},
+    );
+  }
+
+  /// Reports how far push registration got, as a `pushdiag` query parameter
+  /// on the cheap unread-count read, so it shows up in the API access log.
+  /// Push registration fails silently on the device (there is no console on a
+  /// release build); this is how an operator can see where it stopped.
+  Future<void> reportPushDiagnostic(String stage) async {
+    await _dio.get<dynamic>(
+      '/notifications/unread-count',
+      queryParameters: {'pushdiag': stage, 'platform': pushPlatform()},
     );
   }
 
@@ -50,3 +62,8 @@ class NotificationRemoteDataSource {
     );
   }
 }
+
+/// The platform reported with a device token (`ios` or `android`), so the
+/// server can tell APNs-backed tokens apart.
+String pushPlatform() =>
+    defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';

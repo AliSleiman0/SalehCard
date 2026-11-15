@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/bridge"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/notification"
@@ -111,6 +112,9 @@ type OrderService struct {
 	// orderFileOK verifies a photo-field value is one of OUR uploads (host +
 	// keyspace); nil falls back to the path-shape check. Set by RegisterRoutes.
 	orderFileOK photoupload.Checker
+	// Automatic supplier fallback deps (SetSupplierFallback); both optional.
+	fbProbes *provider.Probes
+	fbRec    audit.Recorder
 }
 
 // NewOrderService constructs an OrderService wired to the catalog, code
@@ -337,6 +341,14 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		if err := validateFieldInputsWith(p, in.Fields, s.orderFileOK); err != nil {
 			return nil, err
 		}
+		// The supplier mapping mirrors the product's active supplier link,
+		// which a product keeps even when not fulfilled via supplier; only an
+		// api-mode line is sent to a supplier, so only it records one.
+		var lineProvider *int
+		lineUpstream := ""
+		if mode == product.FulfillmentModeAPI {
+			lineProvider, lineUpstream = p.FulfillmentProvider, p.UpstreamProductID
+		}
 		items = append(items, OrderItem{
 			ProductID:           p.ID,
 			VariantID:           variant.ID,
@@ -348,8 +360,8 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			Price:               price,
 			FulfillmentType:     ft,
 			FulfillmentMode:     string(mode),
-			FulfillmentProvider: p.FulfillmentProvider,
-			UpstreamProductID:   p.UpstreamProductID,
+			FulfillmentProvider: lineProvider,
+			UpstreamProductID:   lineUpstream,
 			PlayerID:            linePlayerID(p, in),
 			Recipient:           in.Recipient,
 			Fields:              resolveOrderFields(p, in.Fields, in.Qty),
@@ -692,19 +704,40 @@ func (s *OrderService) park(ctx context.Context, order *Order, note string) (*Or
 // balance/throttle/auth/transport ambiguity, no acceptance) parks it WITHOUT a
 // reference so a re-dispatch with the same order_uuid stays idempotent; any
 // other error is definitively about this order → compensate (refund + fail).
+//
+// A definite refusal (provider.Refused) falls back to the product's next
+// supplier link (supplier_fallback.go) up to maxPlacementHops times, each hop a
+// guarded claim with a fresh idempotency key; the claimed document replaces the
+// in-memory order so the outcome below persists the new attempt.
 func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, order *Order, charged bool) (*Order, error) {
-	provID, in, ok := supplierFulfillInput(order)
-	if !ok {
-		// Unsendable line (e.g. a corrupt per-unit amount): never dispatch a
-		// wrong quantity. Flag it stuck (no retry clock) so it shows in the
-		// stuck-orders list and dashboard count for an admin to resolve.
-		slog.Warn("order: supplier line not sendable, flagged stuck", "order", order.ID.Hex())
-		now := time.Now().UTC()
-		order.Fulfillment.SupplierStuckAt = &now
-		return s.park(ctx, order, "stuck upstream — needs attention")
+	var (
+		res provider.Result
+		err error
+	)
+	for hop := 0; ; hop++ {
+		provID, in, ok := supplierFulfillInput(order)
+		if !ok {
+			// Unsendable line (e.g. a corrupt per-unit amount): never dispatch a
+			// wrong quantity. Flag it stuck (no retry clock) so it shows in the
+			// stuck-orders list and dashboard count for an admin to resolve.
+			slog.Warn("order: supplier line not sendable, flagged stuck", "order", order.ID.Hex())
+			now := time.Now().UTC()
+			order.Fulfillment.SupplierStuckAt = &now
+			return s.park(ctx, order, "stuck upstream — needs attention")
+		}
+		res, err = s.providers.Resolve(provID).Fulfill(ctx, in)
+		if hop >= maxPlacementHops || !provider.Refused(err) {
+			break
+		}
+		claimed := s.tryFallback(ctx, order, err, true)
+		if claimed == nil {
+			break
+		}
+		// The claim armed the settler's crash-safety retry clock; the outcome
+		// below rewrites the fulfillment, re-arming it only for a park.
+		claimed.Fulfillment.SupplierNextRetryAt = nil
+		order = claimed
 	}
-
-	res, err := s.providers.Resolve(provID).Fulfill(ctx, in)
 	switch {
 	case errors.Is(err, provider.ErrNotImplemented):
 		// No real upstream wired yet → queue for future/manual completion.
@@ -725,6 +758,10 @@ func (s *OrderService) fulfillAPI(ctx context.Context, userID bson.ObjectID, ord
 		slog.Warn("order: upstream unavailable, parking", "order", order.ID.Hex(), "error", err)
 		next := time.Now().UTC().Add(supplierBackoff[0])
 		order.Fulfillment.SupplierNextRetryAt = &next
+		if retryAmbiguous(err) {
+			// The supplier may have taken it: never fall back from this attempt.
+			order.Fulfillment.SupplierAmbiguous = true
+		}
 		return s.park(ctx, order, "upstream temporarily unavailable")
 	case err != nil:
 		// A wired provider hard-failed → reverse the charge and fail the order.

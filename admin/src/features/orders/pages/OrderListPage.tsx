@@ -25,8 +25,10 @@ import { toast } from '@/stores/toast'
 import { useOrders } from '../hooks/useOrders'
 import { useRefundBulk } from '../hooks/useOrderMutations'
 import { adaptOrder, productEditPath } from '../lib/adaptOrder'
-import { listOrders, type OrderStatus, type PaymentMethod, type AdminOrder } from '../api/orders'
+import { listOrders, MAX_BULK_RESEND, type OrderStatus, type PaymentMethod, type AdminOrder } from '../api/orders'
+import { BulkResendModal } from '../components/BulkResendModal'
 import type { FulfillmentType } from '@/types'
+import { orderNumber } from '@/lib/orderNumber'
 
 const FF_DOT: Record<FfKey, string> = {
   code: 'var(--ff-code)',
@@ -131,6 +133,7 @@ export default function OrderListPage() {
   const meta = data?.meta
   const bulk = useBulk(rows.map((r) => r.id))
   const refundBulk = useRefundBulk()
+  const [resending, setResending] = useState(false)
 
   // Bulk refund: each order refunds independently (its own atomic lock + ledger),
   // so the result is a per-order summary — some may be skipped as not-refundable.
@@ -284,12 +287,37 @@ export default function OrderListPage() {
                 <Icon name="download" size={13} /> {exporting ? '…' : t('export')}
               </button>
               {canManage && (
+                <button
+                  className="abtn xs"
+                  onClick={() => setResending(true)}
+                  disabled={bulk.sel.length > MAX_BULK_RESEND}
+                  title={
+                    bulk.sel.length > MAX_BULK_RESEND
+                      ? `Re-send at most ${MAX_BULK_RESEND} orders at once`
+                      : 'Send the selected orders to a supplier again'
+                  }
+                >
+                  <Icon name="send" size={13} /> Re-send ({bulk.sel.length})
+                </button>
+              )}
+              {canManage && (
                 <button className="abtn xs danger" onClick={runBulkRefund} disabled={refundBulk.isPending}>
                   <Icon name="refresh" size={13} /> {refundBulk.isPending ? '…' : t('refund')}
                 </button>
               )}
             </div>
           </div>
+        )}
+
+        {resending && (
+          <BulkResendModal
+            ids={bulk.sel}
+            onClose={() => setResending(false)}
+            onDone={() => {
+              setResending(false)
+              bulk.clear()
+            }}
+          />
         )}
 
         {isLoading ? (
@@ -329,7 +357,7 @@ export default function OrderListPage() {
                           <Checkbox on={bulk.sel.includes(o.id)} onClick={() => bulk.toggle(o.id)} />
                         </td>
                         <td>
-                          <span className="mono strong">{o.id.slice(-8)}</span>
+                          <span className="mono strong">{orderNumber(o.id)}</span>
                         </td>
                         <td>
                           <div className="cellprod">

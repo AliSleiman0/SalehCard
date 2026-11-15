@@ -22,13 +22,15 @@ import (
 // responsible for applying the AdminOnly middleware to r (the /api/admin group).
 // Destructive actions are recorded via rec. store persists uploaded product
 // images (POST /products/images). providers is the env-configured fulfillment
-// supplier list served to the editor's supplier dropdown.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, store blob.Storage, categories CategoryResolver, providers []FulfillmentProviderOption) {
+// supplier list served to the editor's supplier dropdown. catalog (may be nil)
+// is the shared supplier catalog cache the supplier-links checks, quote and
+// search read.
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, store blob.Storage, categories CategoryResolver, providers []FulfillmentProviderOption, catalog SupplierCatalog) {
 	repo := NewMongoRepository(db)
 	_ = EnsureIndexes(context.Background(), db)
 	// The reseller repository drops stale per-reseller custom prices when an
 	// admin switches a product to per-unit pricing.
-	svc := NewProductService(repo, WithCategoryResolver(categories), WithResellerPriceCleaner(reseller.NewMongoRepository(db)))
+	svc := NewProductService(repo, WithCategoryResolver(categories), WithResellerPriceCleaner(reseller.NewMongoRepository(db)), WithSupplierCatalog(catalog))
 	h := NewHandler(svc)
 	h.rec = rec
 	h.store = store
@@ -42,6 +44,9 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, s
 	r.Post("/products", h.Create)
 	r.Post("/products/bulk", h.Bulk)
 	r.Post("/products/images", h.UploadImage)
+	links := &supplierLinksAPI{catalog: catalog, providers: providers}
+	r.Post("/products/supplier-links/quote", links.quote)
+	r.Get("/products/supplier-search", links.search)
 	// Manual product order inside a category (catalog_order.go). Static paths,
 	// so chi matches them before /products/{id}.
 	ord := &orderService{store: repo, categories: categories}

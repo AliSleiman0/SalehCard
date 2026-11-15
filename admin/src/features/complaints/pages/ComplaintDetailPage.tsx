@@ -22,6 +22,7 @@ import {
   useSetComplaintAssignee,
   useSetComplaintStatus,
 } from '../hooks/useComplaints'
+import { orderNumber } from '@/lib/orderNumber'
 
 const MAX_BODY = 2000
 
@@ -194,7 +195,7 @@ export default function ComplaintDetailPage() {
                 <div className="deflist">
                   <div className="defrow">
                     <span className="dk">Order</span>
-                    <span className="dv mono">{c.order.id.slice(-8)}</span>
+                    <span className="dv mono">{orderNumber(c.order.id)}</span>
                   </div>
                   {c.order.items.map((it, i) => (
                     <div className="defrow" key={i}>

@@ -11,6 +11,7 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // ErrNotImplemented is returned by adapters that have no real upstream wiring
@@ -66,6 +67,36 @@ func HealthFromError(err error) string {
 // didn't take the order); a retry with the same OrderUUID is safe because the
 // upstream dedupes on it.
 var ErrUnavailable = errors.New("provider: upstream unavailable")
+
+// ErrRefused narrows ErrUnavailable to a DEFINITE refusal: the supplier
+// answered and certainly created no order (its balance is empty, it throttled
+// us, our credentials/IP were refused, it is under maintenance, or it doesn't
+// sell that product id). Only Fulfill returns it, always together with
+// ErrUnavailable (see refusedf), so every errors.Is(err, ErrUnavailable) check
+// keeps its meaning. The order engine may fall back to the product's next
+// supplier only on this — never on a transport/decode failure, where the first
+// supplier may still have taken the order.
+var ErrRefused = errors.New("provider: supplier refused the order")
+
+// Refused reports whether a Fulfill error is a definite refusal (no upstream
+// order was created), which makes the automatic supplier fallback safe.
+func Refused(err error) bool { return errors.Is(err, ErrRefused) }
+
+// refusedError is a definite refusal: it matches both ErrRefused and
+// ErrUnavailable.
+type refusedError struct{ msg string }
+
+func (e *refusedError) Error() string { return e.msg }
+
+func (e *refusedError) Is(target error) bool {
+	return target == ErrRefused || target == ErrUnavailable
+}
+
+// refusedf builds a definite-refusal error (errors.Is matches ErrRefused and
+// ErrUnavailable).
+func refusedf(format string, args ...any) error {
+	return &refusedError{msg: fmt.Sprintf(format, args...) + ": " + ErrRefused.Error()}
+}
 
 // FulfillInput carries the data an adapter needs to fulfill one order line.
 // Sensitive inputs (spec §3.2) are passed through to the upstream call and must

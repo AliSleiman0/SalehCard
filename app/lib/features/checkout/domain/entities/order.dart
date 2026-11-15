@@ -1,5 +1,6 @@
 import '../../../../core/i18n/i18n_string.dart';
 import '../../../payments/domain/entities/payment_intent.dart';
+import '../../../../core/format/order_number.dart';
 
 /// Lifecycle status of an order (mirrors the backend `OrderStatus`).
 enum OrderStatus { pending, processing, completed, failed, refunded, unknown }
@@ -32,6 +33,20 @@ class OrderRecipient {
   final String name;
   final String country;
   final String detail;
+}
+
+/// One labeled checkout input on a placed order line (Account ID, Zone ID,
+/// Email…). A photo field (QR / barcode) carries its stored image URL.
+class OrderLineField {
+  const OrderLineField({
+    required this.key,
+    required this.label,
+    required this.value,
+  });
+
+  final String key;
+  final I18nString label;
+  final String value;
 }
 
 /// A status transition recorded on a fulfillment.
@@ -72,6 +87,7 @@ class OrderItem {
     required this.fulfillmentType,
     this.playerId,
     this.recipient,
+    this.fields = const [],
     this.amount,
     this.codes = const [],
   });
@@ -90,6 +106,9 @@ class OrderItem {
   final String fulfillmentType;
   final String? playerId;
   final OrderRecipient? recipient;
+
+  /// The customer's labeled checkout inputs for this line; empty when none.
+  final List<OrderLineField> fields;
 
   /// Codes delivered for this line — one per unit on inventory/code lines;
   /// empty for manual (account_credit / transfer) lines and for responses from
@@ -226,11 +245,9 @@ class Order {
     ];
   }
 
-  /// Short, human-friendly order reference (last 6 chars of the id, upper-cased).
-  String get reference {
-    if (id.length <= 6) return id.toUpperCase();
-    return id.substring(id.length - 6).toUpperCase();
-  }
+  /// The order number shown everywhere, without its leading "#": the last 8
+  /// characters of the id, upper-cased (see [orderNumber]).
+  String get reference => orderNumber(id).substring(1);
 }
 
 /// One labeled customer input on an order line (e.g. Account ID, Zone ID). Only

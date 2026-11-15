@@ -13,6 +13,7 @@ import '../../../checkout/presentation/providers.dart';
 import '../../data/complaint_repository.dart';
 import '../../domain/complaint.dart';
 import '../complaint_labels.dart';
+import '../../../../core/format/order_number.dart';
 
 /// New complaint form: category, optional order (their recent orders),
 /// subject, description and an optional photo. Submit stays disabled while a
@@ -178,7 +179,7 @@ class _NewComplaintScreenState extends ConsumerState<NewComplaintScreen> {
                   DropdownMenuItem(
                     value: _orderId,
                     child: Text(
-                      '#${_orderId.substring(_orderId.length > 8 ? _orderId.length - 8 : 0)}',
+                      orderNumber(_orderId),
                     ),
                   ),
                 for (final o in recent)

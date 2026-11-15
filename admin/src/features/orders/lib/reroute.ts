@@ -2,8 +2,9 @@ import type { AdminOrder, AdminOrderItem } from '../api/orders'
 
 /** rerouteState mirrors the server's eligibility rule (rerouteEligible) for
  *  sending an order to a supplier:
- *  - a processing supplier (api-mode) order that is flagged stuck, or parked
- *    with no supplier reference ("Send to another supplier");
+ *  - any processing supplier (api-mode) order ("Send to a supplier"). When the
+ *    current supplier may still deliver it, the server asks for an explicit
+ *    double-delivery OK (supplier-options `needsAck`);
  *  - fromManual: a processing single-line manual account-credit order that was
  *    never sent to a supplier ("Send via supplier"). Transfers, bridge
  *    recharges, code lines and multi-line orders are excluded.
@@ -14,7 +15,7 @@ export function rerouteState(o: AdminOrder): { eligible: boolean; ambiguous: boo
   const ambiguous = ref.startsWith('search:')
   if (o.status !== 'processing') return { eligible: false, ambiguous, fromManual: false }
   if (o.items.some((it) => it.fulfillmentMode === 'api')) {
-    return { eligible: !!o.fulfillment.supplierStuckAt || ref === '', ambiguous, fromManual: false }
+    return { eligible: true, ambiguous, fromManual: false }
   }
   const f = o.fulfillment
   const manual =
@@ -36,4 +37,12 @@ function isManualCredit(it: AdminOrderItem): boolean {
  *  line (amount), else the cart qty — mirrors the server's supplierQty. */
 export function supplierQty(it: Pick<AdminOrderItem, 'qty' | 'amount'>): number {
   return it.amount != null ? it.amount : it.qty
+}
+
+/** Margin of what the customer paid over the supplier cost, in percent; null
+ *  when unknown or not comparable (a supplier billing in another currency). */
+export function orderMargin(linePrice: number, cost: number | undefined, costCurrency: string | undefined, orderCurrency: string): number | null {
+  if (cost == null || !(linePrice > 0)) return null
+  if ((costCurrency || 'USD') !== (orderCurrency || 'USD')) return null
+  return ((linePrice - cost) / linePrice) * 100
 }

@@ -46,4 +46,20 @@ class ProfileRepositoryImpl implements ProfileRepository {
       return Left(mapError(error));
     }
   }
+
+  @override
+  Future<Either<Failure, Unit>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _remote.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      return const Right(unit);
+    } catch (error) {
+      return Left(mapError(error));
+    }
+  }
 }

@@ -170,6 +170,17 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   in step by `TestAtSupplierRule_Mongo`), manual completion and refunds return `409
   ORDER_AT_SUPPLIER` unless the body carries `acknowledgeSupplier: true` (bulk refund skips such
   orders as `at_supplier`). See `HANDOFF-SUPPLIERS.md` + `DEVOPS-TODO.md §20`.
+- **Admin order → product links** (PR #136): on the admin order detail (Items card: name +
+  thumbnail) and orders list (first line's name), product names link to `/products/{id}/edit`.
+  Product deletes are **hard deletes**, so the admin order endpoints (list, detail, and the
+  post-action fresh view) return **`missingProductIds`**: line product ids with no product
+  document, from one batched `_id`-only lookup per response (`product.MongoRepository.ExistingIDs`).
+  Those names render as plain text. The lookup is best effort (on error the order still loads and
+  names link), zero product ids are never reported, links are gated on `products.view`, and a
+  product delete invalidates the cached admin order queries. Helper: `productEditPath` in
+  `admin/src/features/orders/lib/adaptOrder.ts`. If soft delete lands, soft-deleted products still
+  exist, so they keep linking (to the editor, where they can be restored).
+
 - **Per-product input fields** (`Product.InputFields` — key/label/type/sensitive): the fields a
   customer enters at checkout for non-`code` products (Account ID, Zone ID, Email, Server…). Admins
   define them in the product editor (add/remove, editable key + type + label). Captured values are
@@ -234,6 +245,17 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   TOO_MANY_OPEN`), per-IP create limit `RATE_LIMIT_COMPLAINT_*`. Staff replies and resolve/close notify the
   customer (`complaint_reply` / `complaint_status`, inbox + push, never SMS); the push data carries `kind`
   so the app's tray tap opens the thread. Web has no push and polls every 30s.
+- **Help bot** (`internal/modules/chatbot`, RBAC domain `chatbot`, collection `chatbot_entries`): predefined
+  Q&A only, no AI. An entry has `question`/`answer` as `{en, ar}`, `keywords`, `sortOrder`, `enabled`, and an
+  optional `parentId` (follow-ups are **one level deep**); cap 500 entries. Public `GET /api/v1/chatbot`
+  returns enabled entries plus `support{email, phone, whatsapp}` from `app_settings` (`supportWhatsapp` is
+  free-typed; clients keep only the digits for the `wa.me` link). Admins edit it in admin → Help bot
+  (`/api/admin/chatbot`, audited `chatbot.create/update/delete`). Clients: web `ChatWidget` (floating button,
+  panel 440×640, hidden while there are no entries) and the app's help sheet (home + account). **Starter
+  content**: `chatbot.StarterContent` (6 questions + 10 follow-ups, EN + AR, iOS-safe wording enforced by a
+  test), loaded with `go run ./cmd/chatbotseed` (dry run by default; `--apply`, `--confirm-prod` for prod,
+  optional `--whatsapp "<number>"`). It only adds: a question already present at the same level is skipped,
+  never overwritten. **Prod was seeded 2026-11-14** (16 entries, WhatsApp `+961 71 363 772`).
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403
   KYC_REQUIRED`). KYC is **not part of signup**: users skip it, see a home-screen banner
   ("verify to purchase" → `/kyc`), and can also start it from the account menu; checkout

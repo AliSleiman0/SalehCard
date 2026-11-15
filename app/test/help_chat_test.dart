@@ -53,4 +53,44 @@ void main() {
     );
     expect(whatsappUri('x'), isNull);
   });
+
+  ChatEntry entry(Map<String, String> q, [List<String> kw = const []]) =>
+      ChatbotData.fromJson(<String, dynamic>{
+        'entries': [
+          {
+            'id': 'x',
+            'question': q,
+            'answer': {'en': 'a'},
+            'keywords': kw,
+          },
+        ],
+      }).entries.single;
+
+  test('infers the card icon kind', () {
+    expect(
+      helpIconKind(entry({'en': 'How do I buy a product?'})),
+      HelpIconKind.cart,
+    );
+    expect(
+      helpIconKind(entry({'en': 'How to top up my wallet?'})),
+      HelpIconKind.wallet,
+    );
+    expect(
+      helpIconKind(entry({'en': 'Why do I need to verify my identity?'})),
+      HelpIconKind.shield,
+    );
+    expect(helpIconKind(entry({'ar': 'كيف أشحن رصيدي؟'})), HelpIconKind.wallet);
+    expect(helpIconKind(entry({'en': 'Hours?'}, ['kyc'])), HelpIconKind.shield);
+    expect(helpIconKind(entry({'en': 'Delivery time'})), HelpIconKind.help);
+  });
+
+  test('derives a card subtitle from the answer', () {
+    expect(
+      helpSubtitle('Browse products, choose an option. Then pay.'),
+      'Browse products, choose an option.',
+    );
+    expect(helpSubtitle('\n  First line\nSecond line'), 'First line');
+    expect(helpSubtitle('Yes. It is free.'), 'Yes. It is free.');
+    expect(helpSubtitle(''), '');
+  });
 }

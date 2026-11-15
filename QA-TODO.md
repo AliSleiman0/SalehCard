@@ -308,11 +308,15 @@ check:
 4. **The Android emulator can mimic iOS:** `flutter run --dart-define=FORCE_IOS_SCOPE=true`
    (debug only) shows the iOS scope.
 
-## Customer complaints (feat/complaints)
+## Customer complaints (PR #141, in prod 2026-11-14)
 
 Verified locally 2026-11-14 (Chrome web + admin, Android emulator): submit with photo, internal note hidden
 from the customer, reply, resolve then reopen by customer reply, inbox row tap opens the thread.
-Still to check:
+Not yet exercised in prod. Still to check:
+
+0. **Prod smoke (web + admin):** file a complaint on the prod website with a test customer, answer it from
+   the prod admin console (a note, then a reply), and confirm the customer sees the reply but not the note.
+   Close it afterwards. Test complaints stay in the queue; there is no delete.
 
 1. **Push tray tap on a real device** (needs DEVOPS-TODO §24 fixed first): an admin reply should show a tray
    notification "Reply to your complaint C-xxxx"; tapping it with the app in the background, and again with
@@ -322,6 +326,22 @@ Still to check:
 4. **Caps**: a sixth open complaint → "You already have several open complaints"; the 11th create from one IP
    within an hour → 429 (`RATE_LIMIT_COMPLAINT_MAX`, default 10/hour).
 
+## Admin order → product links (PR #136, merged + deployed 2026-11-14)
+
+Verified locally 2026-11-14 in Chrome (local stack, throwaway DB):
+- detail name and thumbnail open the right product editor;
+- the list links only the first name, while the rest of the row still opens the order;
+- after a product delete, that name turns to plain text on the list and detail;
+- Tab order (thumbnail skipped) and focus ring;
+- light and dark themes.
+
+Still to check:
+
+1. **Prod click-through:** open a real order (e.g. a SOUL STAR one), then click its product name and thumbnail.
+2. **Custom role without `products.view`:** an admin on a role with `orders.view` but no Products access sees
+   plain-text names, with no links.
+3. **Ctrl/cmd-click** on a product name (detail and list row) opens the editor in a new tab and does not
+   open the order.
 ## Back buttons (feat/back-buttons, KICKOFF-2026-11-14 §6)
 
 Verified locally 2026-11-14 in Chrome (admin): every page shows "‹ Back" except the Dashboard; Orders →
@@ -394,3 +414,17 @@ Still to check (needs prod / the real suppliers — they only answer the prod NA
 4. **Bulk refund** of a selection that includes an order still at a supplier: that one is skipped as
    "a supplier may still deliver it", and the rest are refunded.
 5. **Imported products whose param prompts have spaces / Arabic**: no false "missing parameter" warning.
+## Help bot starter content (PR #139, seeded on prod 2026-11-14)
+
+The 16 starter Q&A and the support WhatsApp number are live on prod. Not yet checked:
+
+1. **Client review of the wording**: the owner skipped it. Have the client read every answer in admin → Help
+   bot (EN and AR) and correct anything that doesn't match how they actually work (top-up times, KYC wait,
+   refund rules). Edits there are safe; a re-run of `chatbotseed` never overwrites them.
+2. **WhatsApp link**: web help panel → Contact support → WhatsApp opens a chat with +961 71 363 772.
+3. **Arabic on the web panel**: switch to AR, open the panel, and check the bubbles and chips read right to
+   left.
+4. **App help sheet on a device**: home and account → help → the same questions, follow-ups and footer. The
+   web panel was resized in PR #140; the app sheet wasn't changed.
+
+
