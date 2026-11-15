@@ -121,7 +121,7 @@ export default function ChatbotPage() {
   )
 
   return (
-    <div>
+    <div className="page">
       <PageHead
         back="/"
         title={t('nav_chatbot')}

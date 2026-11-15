@@ -19,14 +19,24 @@ export interface CartItem {
   /** customer-typed amount on a unit-priced line; such lines are always qty 1 */
   amount?: number
   pid?: string
+  /** every delivery field typed on the product page (fieldKey → value); checkout
+   * prefills its boxes from it */
+  fields?: Record<string, string>
   fulfill: 'code' | 'credit' | 'transfer'
   recipient?: { name: string; country: string; detail: string } | null
 }
 
-/** Cart line identity: different typed amounts — or different player IDs —
- * never merge into one line (merging would silently drop one of the IDs). */
-export function cartKey(item: Pick<CartItem, 'id' | 'variantId' | 'amount' | 'pid'>): string {
-  return `${item.id}|${item.variantId}|${item.amount ?? ''}|${(item.pid ?? '').trim()}`
+/** Cart line identity: different typed amounts — or different player IDs or
+ * delivery fields — never merge into one line (merging would silently drop one). */
+export function cartKey(
+  item: Pick<CartItem, 'id' | 'variantId' | 'amount' | 'pid' | 'fields'>,
+): string {
+  const base = `${item.id}|${item.variantId}|${item.amount ?? ''}|${(item.pid ?? '').trim()}`
+  const entries = Object.entries(item.fields ?? {})
+    .map(([k, v]) => [k, v.trim()])
+    .filter(([, v]) => v !== '')
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return entries.length ? `${base}|${JSON.stringify(entries)}` : base
 }
 
 /** Pure add/merge step (exported for tests). Amount lines stay qty 1 — re-adding
