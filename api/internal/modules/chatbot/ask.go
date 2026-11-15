@@ -80,8 +80,8 @@ type Turn struct {
 type AskInput struct {
 	Question string `json:"question"`
 	Lang     string `json:"lang"`
-	// Platform is the client OS ("ios" | "android"). iOS never receives the
-	// android-only knowledge (App Review), so the model cannot answer from it.
+	// Platform is the client ("ios" | "android" | "web"). iOS never receives
+	// the android-only knowledge (App Review), so the model cannot answer from it.
 	Platform string `json:"platform"`
 	History  []Turn `json:"history"`
 }

@@ -1,27 +1,38 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '@/components'
+import { useAuthStore } from '@/stores/auth'
 import { useLocaleStore } from '@/stores/locale'
-import { fetchChatbot, type ChatEntry } from '../api/chatbot'
-import { filterEntries, followUps, text, topLevel, whatsappLink } from '../lib/chat'
+import { askChatbot, fetchChatbot, reportAnswer } from '../api/chatbot'
+import { askFailure, askHistory, askLang, whatsappLink } from '../lib/chat'
 
-type Msg = { from: 'bot' | 'user'; text: string }
+type Msg = {
+  from: 'bot' | 'user'
+  text: string
+  pending?: boolean
+  /** An AI-generated answer: shows the AI note + Report. */
+  ai?: boolean
+  logId?: string
+  reported?: boolean
+}
 
-// ChatWidget is the storefront help bot (client msg #74): a floating button
-// opening a chat-style panel of PREDEFINED questions maintained in the admin
-// console. Tapping a question shows its answer, then its follow-ups; a filter
-// box searches questions + keywords; "Still need help?" links to support.
-// Hidden entirely while the admin has not added any questions.
+// ChatWidget is the storefront Help Center: a floating button opening a chat
+// panel. When the AI assistant is on, a signed-in customer types a question and
+// it is answered from the admin's knowledge (2026-11-15: the predefined quick
+// questions are gone); signed-out visitors are asked to sign in. The support
+// contacts + complaint link are always at the bottom. Hidden while there is
+// nothing to offer (AI off and no contact set).
 export function ChatWidget() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const locale = useLocaleStore((s) => s.locale)
+  const signedIn = useAuthStore((s) => s.isAuthenticated)
   const [open, setOpen] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([])
-  const [current, setCurrent] = useState<string | null>(null) // last answered top-level id
   const [query, setQuery] = useState('')
+  const [asking, setAsking] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   const { data } = useQuery({
@@ -29,7 +40,7 @@ export function ChatWidget() {
     queryFn: fetchChatbot,
     staleTime: 5 * 60 * 1000,
   })
-  const entries = useMemo(() => data?.data?.entries ?? [], [data])
+  const ai = !!data?.data?.ai
   const support = data?.data?.support ?? {}
 
   useEffect(() => {
@@ -43,27 +54,42 @@ export function ChatWidget() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  if (entries.length === 0) return null
+  const wa = support.whatsapp ? whatsappLink(support.whatsapp) : null
+  const hasContact = !!(wa || support.phone || support.email)
+  if (!ai && !hasContact) return null
 
-  const ask = (e: ChatEntry) => {
-    setMsgs((m) => [
-      ...m,
-      { from: 'user', text: text(e.question, locale) },
-      { from: 'bot', text: text(e.answer, locale) },
-    ])
+  const send = async () => {
+    const q = query.trim()
+    if (!q || asking) return
+    const history = askHistory(msgs.filter((m) => !m.pending))
+    setMsgs((m) => [...m, { from: 'user', text: q }, { from: 'bot', text: t('chat_thinking'), pending: true }])
     setQuery('')
-    // After a top-level answer offer its follow-ups; after a follow-up, the
-    // remaining follow-ups of the same parent.
-    setCurrent(e.parentId ?? e.id)
+    setAsking(true)
+    let reply: Msg
+    try {
+      const res = await askChatbot(q, askLang(locale), history)
+      if (res.success && res.data) {
+        reply = { from: 'bot', text: res.data.answer, ai: res.data.answered, logId: res.data.logId }
+      } else {
+        reply = {
+          from: 'bot',
+          text: askFailure(res.error?.code) === 'limited' ? t('chat_ai_limit') : t('chat_ai_unavailable'),
+        }
+      }
+    } catch {
+      reply = { from: 'bot', text: t('chat_ai_unavailable') }
+    }
+    setMsgs((m) => [...m.filter((x) => !x.pending), reply])
+    setAsking(false)
   }
 
-  const filtered = filterEntries(entries, query)
-  const suggestions = query.trim()
-    ? filtered
-    : current
-      ? followUps(entries, current)
-      : topLevel(entries)
-  const wa = support.whatsapp ? whatsappLink(support.whatsapp) : null
+  const report = (i: number) => {
+    const m = msgs[i]
+    if (!m?.logId || m.reported) return
+    setMsgs((all) => all.map((x, j) => (j === i ? { ...x, reported: true } : x)))
+    // Best-effort: the thank-you stays; a lost report is not worth an error.
+    reportAnswer(m.logId).catch(() => {})
+  }
 
   return (
     <>
@@ -79,38 +105,75 @@ export function ChatWidget() {
           </div>
 
           <div className="chatlist" ref={listRef}>
-            <div className="chatmsg bot">{t('chat_greeting')}</div>
+            <div className="chatmsg bot">{ai ? t('chat_greeting_ai') : t('chat_greeting_support')}</div>
             {msgs.map((m, i) => (
-              <div key={i} className={`chatmsg ${m.from}`}>
+              <div key={i} className={`chatmsg ${m.from}`} dir="auto" style={m.pending ? { opacity: 0.6 } : undefined}>
                 {m.text}
+                {m.ai && (
+                  <div className="tiny faint" style={{ marginTop: 6 }}>
+                    {t('chat_ai_note')}
+                    {' · '}
+                    {m.reported ? (
+                      t('chat_ai_reported')
+                    ) : m.logId ? (
+                      <a className="clickable" style={{ textDecoration: 'underline' }} onClick={() => report(i)}>
+                        {t('chat_ai_report')}
+                      </a>
+                    ) : null}
+                  </div>
+                )}
               </div>
             ))}
           </div>
 
-          <div className="chatchips">
-            {suggestions.map((e) => (
-              <button key={e.id} className="chatchip" onClick={() => ask(e)}>
-                {text(e.question, locale)}
-              </button>
-            ))}
-            {query.trim() && filtered.length === 0 && <span className="tiny faint">{t('no_results')}</span>}
-            {current && !query.trim() && (
-              <button className="chatchip ghost" onClick={() => setCurrent(null)}>
-                {t('chat_all_questions')}
-              </button>
-            )}
-          </div>
-
           <div className="chatfoot">
-            <input
-              className="field"
-              style={{ padding: '9px 12px', fontSize: 14 }}
-              placeholder={t('chat_filter_ph')}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            {(wa || support.phone || support.email) && (
-              <div className="row wrap-gap" style={{ gap: 10, marginTop: 8, alignItems: 'center' }}>
+            {ai &&
+              (signedIn ? (
+                <form
+                  className="row"
+                  style={{ gap: 8 }}
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void send()
+                  }}
+                >
+                  <input
+                    className="field"
+                    style={{ padding: '9px 12px', fontSize: 14, flex: 1 }}
+                    placeholder={t('chat_ask_ph')}
+                    maxLength={500}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    dir="auto"
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ padding: '9px 14px' }}
+                    disabled={asking || !query.trim()}
+                    aria-label={t('chat_send')}
+                    title={t('chat_send')}
+                  >
+                    <Icon name="arrow" size={16} />
+                  </button>
+                </form>
+              ) : (
+                <div className="tiny">
+                  <a
+                    className="clickable"
+                    style={{ fontWeight: 700 }}
+                    onClick={() => {
+                      setOpen(false)
+                      navigate('/login')
+                    }}
+                  >
+                    {t('login')}
+                  </a>{' '}
+                  <span className="faint">{t('chat_sign_in_to_ask')}</span>
+                </div>
+              ))}
+            {hasContact && (
+              <div className="row wrap-gap" style={{ gap: 10, marginTop: ai ? 8 : 0, alignItems: 'center' }}>
                 <span className="tiny faint">{t('chat_need_help')}</span>
                 {wa && (
                   <a className="tiny" style={{ fontWeight: 700 }} href={wa} target="_blank" rel="noreferrer">
@@ -130,7 +193,7 @@ export function ChatWidget() {
               </div>
             )}
             <div className="row" style={{ gap: 10, marginTop: 8, alignItems: 'center' }}>
-              {!(wa || support.phone || support.email) && <span className="tiny faint">{t('chat_need_help')}</span>}
+              {!hasContact && <span className="tiny faint">{t('chat_need_help')}</span>}
               <a
                 className="tiny clickable"
                 style={{ fontWeight: 700 }}

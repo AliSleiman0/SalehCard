@@ -1,41 +1,33 @@
 import { describe, it, expect } from 'vitest'
-import { filterEntries, followUps, text, topLevel, whatsappLink } from './chat'
-import type { ChatEntry } from '../api/chatbot'
-
-const e = (id: string, sortOrder: number, over: Partial<ChatEntry> = {}): ChatEntry => ({
-  id,
-  question: { en: id, ar: '' },
-  answer: { en: 'a', ar: '' },
-  sortOrder,
-  ...over,
-})
+import { askFailure, askHistory, askLang, whatsappLink } from './chat'
 
 describe('chat helpers', () => {
-  const all = [
-    e('Top up wallet', 2, { keywords: ['wallet', 'شحن'] }),
-    e('Delivery time', 1),
-    e('Approval time', 1, { parentId: 'Top up wallet' }),
-  ]
-
-  it('orders top-level questions and their follow-ups', () => {
-    expect(topLevel(all).map((x) => x.id)).toEqual(['Delivery time', 'Top up wallet'])
-    expect(followUps(all, 'Top up wallet').map((x) => x.id)).toEqual(['Approval time'])
-  })
-
-  it('filters by question text and keywords (any language)', () => {
-    expect(filterEntries(all, 'deliv').map((x) => x.id)).toEqual(['Delivery time'])
-    expect(filterEntries(all, 'شحن').map((x) => x.id)).toEqual(['Top up wallet'])
-    expect(filterEntries(all, '  ')).toEqual([])
-  })
-
-  it('falls back between languages', () => {
-    expect(text({ en: '', ar: 'مرحبا' }, 'en')).toBe('مرحبا')
-    expect(text({ en: 'Hi', ar: '' }, 'ar')).toBe('Hi')
-  })
-
-  it('builds wa.me links from free-typed numbers', () => {
+  it('builds a wa.me link from a free-typed number', () => {
     expect(whatsappLink('+961 70 123 456')).toBe('https://wa.me/96170123456')
-    expect(whatsappLink('00961 70 123456')).toBe('https://wa.me/96170123456')
-    expect(whatsappLink('abc')).toBeNull()
+    expect(whatsappLink('0096170123456')).toBe('https://wa.me/96170123456')
+    expect(whatsappLink('x')).toBeNull()
+  })
+
+  it('asks in Arabic only for the Arabic locale', () => {
+    expect(askLang('ar')).toBe('ar')
+    expect(askLang('en')).toBe('en')
+    expect(askLang('tr')).toBe('en')
+  })
+
+  it('keeps the last turns, oldest first, as user/assistant', () => {
+    const msgs = Array.from({ length: 9 }, (_, i) => ({
+      from: (i % 2 === 0 ? 'user' : 'bot') as 'user' | 'bot',
+      text: `t${i}`,
+    }))
+    const h = askHistory(msgs)
+    expect(h).toHaveLength(6)
+    expect(h[0]).toEqual({ role: 'assistant', content: 't3' })
+    expect(h[5]).toEqual({ role: 'user', content: 't8' })
+  })
+
+  it('maps only the AI limit code to "limited"', () => {
+    expect(askFailure('CHATBOT_AI_LIMIT')).toBe('limited')
+    expect(askFailure('CHATBOT_AI_DISABLED')).toBe('unavailable')
+    expect(askFailure(undefined)).toBe('unavailable')
   })
 })

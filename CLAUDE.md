@@ -216,7 +216,7 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   `/ask/{id}/report` (Play AI-content policy); public `GET /api/v1/chatbot` carries `ai` + `support`. Gated by
   the **`chatbotAiEnabled`** setting (off by default — the kill switch; off → the Help Center shows only the
   support contacts). Billed → per-user / per-IP / global caps (`CHATBOT_AI_*`) that **fail CLOSED** and always
-  use the Mongo limiter. `androidOnly` never reaches iOS (`platform` field; unknown = iOS; App Review: the
+  use the Mongo limiter. `androidOnly` reaches only `platform` = `android` / `web` (unknown = iOS; App Review: the
   iOS build is telecom-only, so `general` must not mention games / player IDs / gift cards / crypto /
   transfers — `TestStarterKnowledge` enforces it for the starter text). `chat_logs` keep Q&A, the cited
   paragraphs' opening words (`sources`) and token usage for 30 days (TTL; admin → Conversations), never slog.
@@ -286,8 +286,9 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   so the app's tray tap opens the thread. Web has no push and polls every 30s.
 - **Help bot quick questions — RETIRED 2026-11-15** (replaced by the AI knowledge above: one box is simpler
   for admins). The old `chatbot_entries` (predefined EN+AR Q&A with follow-ups) are no longer editable or
-  seeded; `GET /api/v1/chatbot` still serves them read-only as `entries` **only for old app builds** and the
-  legacy `/web` `ChatWidget`. The new app ignores them. Drop the collection (and the unused `kb_docs` from
+  seeded; `GET /api/v1/chatbot` still serves them read-only as `entries` **only for old app builds**. The
+  new app and the `/web` `ChatWidget` (AI chat for signed-in customers, "sign in to ask" otherwise, contacts
+  always) ignore them. Drop the collection (and the unused `kb_docs` from
   the first AI version) once old builds are gone (DEVOPS-TODO §25). Support WhatsApp comes from
   `app_settings.supportWhatsapp` (free-typed; clients keep only the digits for the `wa.me` link).
 - **KYC gates every purchase** (`kyc.Gate` checked first in `PlaceOrder` → `403

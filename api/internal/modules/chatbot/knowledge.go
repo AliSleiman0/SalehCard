@@ -69,14 +69,15 @@ var blankLines = regexp.MustCompile(`\n\s*\n`)
 // sectionsFor splits the knowledge the given platform may see into paragraphs
 // (separated by blank lines). The admin just writes text; the paragraphs are
 // what the hard rule checks citations against. Android-only text is included
-// only for "android" — an unknown platform is treated as iOS (the conservative
-// side for App Review).
+// only for "android" and "web" (the website sells everything the Android app
+// does) — an unknown platform is treated as iOS (the conservative side for App
+// Review).
 func sectionsFor(k *Knowledge, platform string) []section {
 	if k == nil {
 		return nil
 	}
 	texts := []string{k.General}
-	if platform == "android" {
+	if platform == "android" || platform == "web" {
 		texts = append(texts, k.AndroidOnly)
 	}
 	var out []section

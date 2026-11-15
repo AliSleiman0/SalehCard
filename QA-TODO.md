@@ -464,6 +464,10 @@ audit), the admin Help bot tabs + Settings toggle in Chrome, Flutter widget test
 against a local API (EN + AR/RTL answers with the AI note, Report → thank-you, off-topic refusal with the
 contact card, toggle switched off mid-session → keyword answer). Still to check:
 
+0. **Website Help panel on prod** (PR after #167): signed in on www.flashcashglobal.com → Help → type a
+   question → AI answer with "Report"; signed out → "Sign in to ask"; WhatsApp + complaint links work.
+   Note: the starter knowledge names app menus ("Menu → Orders"); on the website that is the account
+   sidebar ("Order history") — have the client add a line for website wording if it confuses customers.
 1. **Client review of the knowledge** (admin → Help bot → AI knowledge — two plain-text boxes since
    2026-11-15, written in English; the assistant answers Arabic questions in Arabic): the starter text is
    drafted from how the app works today; the client must correct anything that doesn't match how they
