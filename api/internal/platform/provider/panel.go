@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,6 +35,8 @@ type Panel struct {
 	baseURL  string // override point for tests
 	token    string
 	http     *http.Client
+	// uuidKeys sends order_uuid as a UUID v4 (see panelOrderKey).
+	uuidKeys bool
 }
 
 // PanelConfig configures one panel supplier instance.
@@ -43,7 +46,17 @@ type PanelConfig struct {
 	Currency string // balance currency for the admin probe (USD); defaults to USD
 	BaseURL  string // e.g. https://api.jentel-cash.com
 	Token    string // api-token header value
+	// UUIDKeys sends order_uuid as a UUID v4 derived from our key. Some panels
+	// (gift4card) reject anything else with code 500 "order_uuid not valid
+	// UUID V4"; it is on for every name in uuidKeyPanels regardless.
+	UUIDKeys bool
 }
+
+// uuidKeyPanels are the panels known to validate order_uuid as a UUID v4
+// (prod, 2026-11-15: gift4card refused every order with our 24-hex order id).
+// jentel/speedcard keep the raw key: changing it would break the upstream
+// dedupe of retries for orders already parked there.
+var uuidKeyPanels = map[string]bool{"gift4card": true}
 
 // NewPanel builds a panel adapter, erroring on missing config (the caller
 // skips a misconfigured supplier so its id falls back to the parking stub).
@@ -62,6 +75,7 @@ func NewPanel(cfg PanelConfig) (*Panel, error) {
 		baseURL:  strings.TrimRight(cfg.BaseURL, "/"),
 		token:    cfg.Token,
 		http:     &http.Client{Timeout: 20 * time.Second},
+		uuidKeys: cfg.UUIDKeys || uuidKeyPanels[cfg.Name],
 	}, nil
 }
 
@@ -135,7 +149,7 @@ func (p *Panel) Fulfill(ctx context.Context, in FulfillInput) (Result, error) {
 		q.Set("playerId", in.PlayerID)
 	}
 	q.Set("qty", strconv.Itoa(in.Qty))
-	q.Set("order_uuid", in.OrderUUID)
+	q.Set("order_uuid", p.orderKey(in.OrderUUID))
 
 	endpoint := fmt.Sprintf("%s/client/api/newOrder/%s/params?%s", p.baseURL, url.PathEscape(in.UpstreamID), q.Encode())
 	env, err := p.get(ctx, endpoint)
@@ -162,6 +176,49 @@ func (p *Panel) Fulfill(ctx context.Context, in FulfillInput) (Result, error) {
 		// An acknowledged order in an unknown state is ambiguous — park.
 		return res, fmt.Errorf("panel %s: unknown order status %q: %w", p.name, ord.Status, ErrUnavailable)
 	}
+}
+
+// orderKey is the order_uuid sent upstream for our idempotency key.
+func (p *Panel) orderKey(key string) string {
+	if p.uuidKeys {
+		return panelOrderKey(key)
+	}
+	return key
+}
+
+// panelOrderKey maps our idempotency key (an order id / attempt key) onto a
+// UUID v4: the first 16 bytes of its SHA-256 with the version and variant bits
+// set. Deterministic, so every retry of one attempt sends the same order_uuid
+// and the panel still dedupes it; a key that already is a UUID passes through.
+func panelOrderKey(key string) string {
+	if isUUID(key) {
+		return strings.ToLower(key)
+	}
+	sum := sha256.Sum256([]byte(key))
+	b := sum[:16]
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // RFC 4122 variant
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// isUUID reports an 8-4-4-4-12 hex string.
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range s {
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // CheckStatus reconciles one previously-pending order:
