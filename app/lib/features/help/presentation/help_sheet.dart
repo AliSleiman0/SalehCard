@@ -65,14 +65,34 @@ const _whatsappGreen = Color(0xFF25D366);
 };
 
 class _Msg {
-  const _Msg(this.fromUser, this.text);
+  const _Msg(
+    this.fromUser,
+    this.text, {
+    this.pending = false,
+    this.ai = false,
+    this.logId = '',
+    this.reported = false,
+  });
   final bool fromUser;
   final String text;
+
+  /// The "Thinking…" placeholder while an AI answer is on its way.
+  final bool pending;
+
+  /// An AI-generated answer (shows the AI note + Report).
+  final bool ai;
+  final String logId;
+  final bool reported;
+
+  _Msg reportedCopy() =>
+      _Msg(fromUser, text, ai: ai, logId: logId, reported: true);
 }
 
 /// The Help Center panel: tap a predefined question card (or type one and
 /// send) → its answer appears as a bot bubble, followed by its follow-up
-/// questions as cards. WhatsApp + complaint escalation sit at the bottom.
+/// questions as cards. When the AI assistant is on, typed questions are
+/// answered by it from the admin knowledge base instead of the keyword match.
+/// WhatsApp + complaint escalation sit at the bottom.
 class HelpSheet extends ConsumerStatefulWidget {
   const HelpSheet({super.key});
 
@@ -85,6 +105,8 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
   final _scroll = ScrollController();
   final _search = TextEditingController();
   String? _current; // top-level id whose follow-ups are offered
+  bool _asking = false; // an AI answer is on its way
+  final _lastMsgKey = GlobalKey(); // newest bubble, for _scrollToLatest
 
   @override
   void dispose() {
@@ -105,6 +127,21 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
     });
   }
 
+  /// Brings the newest bubble to the top of the view. Used for AI turns:
+  /// the question cards still render below the chat, so scrolling to the end
+  /// would push the answer (or the "Thinking…" bubble) out of sight.
+  void _scrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _lastMsgKey.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   void _ask(ChatEntry e, String locale) {
     setState(() {
       _msgs
@@ -116,11 +153,93 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
     _scrollToEnd();
   }
 
-  /// Send button / keyboard submit: answers the best match for the typed
-  /// question, or says no answer was found.
-  void _submit(List<ChatEntry> all, String locale, String noAnswer) {
+  /// Send button / keyboard submit: asks the AI assistant when it is on,
+  /// otherwise answers the best keyword match for the typed question.
+  void _submit(ChatbotData data, String locale, AppLocalizations l10n) {
     final q = _search.text.trim();
-    if (q.isEmpty) return;
+    if (q.isEmpty || _asking) return;
+    if (data.ai) {
+      _askAi(q, data.entries, locale, l10n);
+      return;
+    }
+    _localAnswer(q, data.entries, locale, l10n.helpNoAnswer);
+  }
+
+  Future<void> _askAi(
+    String q,
+    List<ChatEntry> all,
+    String locale,
+    AppLocalizations l10n,
+  ) async {
+    final history = askHistory([
+      for (final m in _msgs)
+        if (!m.pending) (fromUser: m.fromUser, text: m.text),
+    ]);
+    setState(() {
+      _asking = true;
+      _msgs
+        ..add(_Msg(true, q))
+        ..add(_Msg(false, l10n.helpThinking, pending: true));
+      _search.clear();
+    });
+    _scrollToLatest();
+
+    late _Msg reply;
+    var revealSupport = false;
+    String? followUpsOf;
+    try {
+      final r = await ref
+          .read(chatbotRepositoryProvider)
+          .ask(q, lang: locale, history: history);
+      reply = _Msg(false, r.answer, ai: r.answered, logId: r.logId);
+      revealSupport = !r.answered || r.showSupport;
+    } catch (e) {
+      if (askFailure(e) == AskFailure.limited) {
+        reply = _Msg(false, l10n.helpAiLimit);
+        revealSupport = true;
+      } else {
+        // Assistant off/unavailable: still give the keyword-matched answer.
+        final matches = searchQuestions(all, q);
+        if (matches.isNotEmpty) {
+          reply = _Msg(false, matches.first.answer.resolve(locale));
+          followUpsOf = matches.first.parentId ?? matches.first.id;
+        } else {
+          reply = _Msg(false, l10n.helpNoAnswer);
+          revealSupport = true;
+        }
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _asking = false;
+      _msgs
+        ..removeWhere((m) => m.pending)
+        ..add(reply);
+      if (followUpsOf != null) _current = followUpsOf;
+    });
+    // The contact cards hide while the keyboard is up — drop it so a
+    // "can't help" reply lands next to WhatsApp / complaint.
+    if (revealSupport) FocusScope.of(context).unfocus();
+    _scrollToLatest();
+  }
+
+  Future<void> _report(int index) async {
+    final m = _msgs[index];
+    if (m.logId.isEmpty || m.reported) return;
+    setState(() => _msgs[index] = m.reportedCopy());
+    try {
+      await ref.read(chatbotRepositoryProvider).report(m.logId);
+    } catch (_) {
+      // Best-effort: the thank-you stays; a lost report is not worth an error.
+    }
+  }
+
+  void _localAnswer(
+    String q,
+    List<ChatEntry> all,
+    String locale,
+    String noAnswer,
+  ) {
     final matches = searchQuestions(all, q);
     if (matches.isNotEmpty) {
       _ask(matches.first, locale);
@@ -201,7 +320,7 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        l10n.helpGreeting,
+                        data.ai ? l10n.helpGreetingAi : l10n.helpGreeting,
                         style: TextStyle(
                           fontSize: 14,
                           height: 1.35,
@@ -215,17 +334,17 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
                     ],
                   ),
                 ),
-                for (final m in _msgs)
-                  m.fromUser
-                      ? _UserBubble(text: m.text)
+                for (var i = 0; i < _msgs.length; i++)
+                  _msgs[i].fromUser
+                      ? _UserBubble(text: _msgs[i].text)
                       : _BotRow(
-                          child: Text(
-                            m.text,
-                            style: TextStyle(
-                              fontSize: 14,
-                              height: 1.4,
-                              color: colors.text,
-                            ),
+                          key: i == _msgs.length - 1 ? _lastMsgKey : null,
+                          child: _BotMessage(
+                            msg: _msgs[i],
+                            aiNote: l10n.helpAiNote,
+                            reportLabel: l10n.helpAiReport,
+                            reportedLabel: l10n.helpAiReported,
+                            onReport: () => _report(i),
                           ),
                         ),
                 const SizedBox(height: 6),
@@ -266,7 +385,7 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
               hint: l10n.helpSearchHint,
               sendLabel: l10n.helpSend,
               onChanged: () => setState(() {}),
-              onSubmit: () => _submit(all, locale, l10n.helpNoAnswer),
+              onSubmit: () => _submit(data, locale, l10n),
             ),
           ),
           if (!keyboardOpen)
@@ -321,6 +440,102 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// A bot bubble's content: the text, a spinner while pending, and — for AI
+/// answers — a small "AI answer" note with a Report action (store policy:
+/// users must be able to flag generated content).
+class _BotMessage extends StatelessWidget {
+  const _BotMessage({
+    required this.msg,
+    required this.aiNote,
+    required this.reportLabel,
+    required this.reportedLabel,
+    required this.onReport,
+  });
+
+  final _Msg msg;
+  final String aiNote;
+  final String reportLabel;
+  final String reportedLabel;
+  final VoidCallback onReport;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final text = Text(
+      msg.text,
+      style: TextStyle(
+        fontSize: 14,
+        height: 1.4,
+        color: msg.pending ? colors.textDim : colors.text,
+      ),
+    );
+    if (msg.pending) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colors.textDim,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(child: text),
+        ],
+      );
+    }
+    if (!msg.ai) return text;
+    final small = TextStyle(fontSize: 11.5, color: colors.textDim);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        text,
+        const SizedBox(height: 8),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          children: [
+            Text(aiNote, style: small),
+            if (msg.reported)
+              Text(reportedLabel, style: small)
+            else if (msg.logId.isNotEmpty)
+              InkWell(
+                key: const ValueKey('help-ai-report'),
+                onTap: onReport,
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.flag_outlined,
+                        size: 13,
+                        color: colors.textDim,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        reportLabel,
+                        style: small.copyWith(
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -493,7 +708,7 @@ class _RobotAvatar extends StatelessWidget {
 
 /// A bot message: avatar + bubble with a tail pointing at it.
 class _BotRow extends StatelessWidget {
-  const _BotRow({required this.child});
+  const _BotRow({super.key, required this.child});
 
   final Widget child;
 
