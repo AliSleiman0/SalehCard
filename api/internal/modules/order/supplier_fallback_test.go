@@ -13,6 +13,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/supplieralert"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 )
 
@@ -69,6 +70,11 @@ func TestNextLink(t *testing.T) {
 	}{
 		{"first eligible in admin order", base(), prod(nil, cur, link("b", 9, "A", true), link("c", 10, "B", true)), nil, "b"},
 		{"skips disabled", base(), prod(nil, cur, link("b", 9, "A", false), link("c", 10, "B", true)), nil, "c"},
+		{"skips a link the sync paused (loss)", base(), prod(nil, cur, func() product.SupplierLink {
+			l := link("b", 9, "A", true)
+			l.PausedReason = product.PausedLoss
+			return l
+		}(), link("c", 10, "B", true)), nil, "c"},
 		{"skips empty upstream", base(), prod(nil, cur, link("b", 9, " ", true), link("c", 10, "B", true)), nil, "c"},
 		{"skips unconfigured supplier", base(), prod(nil, cur, link("b", 99, "A", true), link("c", 10, "B", true)), nil, "c"},
 		{"skips a link tried earlier", base(func(o *Order) {
@@ -102,6 +108,56 @@ func TestNextLink(t *testing.T) {
 			assert.Equal(t, tc.want, l.ID)
 		})
 	}
+}
+
+// fakeAlerts records raised alerts.
+type fakeAlerts struct{ raised []supplieralert.Alert }
+
+func (f *fakeAlerts) Raise(_ context.Context, a supplieralert.Alert) error {
+	f.raised = append(f.raised, a)
+	return nil
+}
+func (f *fakeAlerts) Resolve(context.Context, string, string) error { return nil }
+
+func TestFallbackExhaustedAlert(t *testing.T) {
+	t.Run("refused with no other link raises one alert per order", func(t *testing.T) {
+		p := fallbackProduct() // only the active link
+		svc, _ := newSUTWithProviders([]*product.Product{p}, &fakeCodeSvc{available: map[string]int{}}, &fakeWalletSvc{balance: 100}, refusedFake(7))
+		al := &fakeAlerts{}
+		svc.SetSupplierAlerts(al)
+
+		o, err := placeOne(t, svc, p)
+		require.NoError(t, err)
+		assert.Equal(t, OrderStatusProcessing, o.Status)
+		require.Len(t, al.raised, 1)
+		a := al.raised[0]
+		assert.Equal(t, supplieralert.KindFallbackExhausted, a.Kind)
+		assert.Equal(t, "fallback:"+o.ID.Hex(), a.Key)
+		assert.Equal(t, o.ID.Hex(), a.OrderID)
+		assert.Contains(t, a.Message, "supplier #7 refused it")
+	})
+
+	t.Run("no alert when the product switched fallback off", func(t *testing.T) {
+		p := fallbackProduct()
+		p.SupplierFallbackOff = true
+		svc, _ := newSUTWithProviders([]*product.Product{p}, &fakeCodeSvc{available: map[string]int{}}, &fakeWalletSvc{balance: 100}, refusedFake(7))
+		al := &fakeAlerts{}
+		svc.SetSupplierAlerts(al)
+		_, err := placeOne(t, svc, p)
+		require.NoError(t, err)
+		assert.Empty(t, al.raised)
+	})
+
+	t.Run("no alert when the fallback found a link", func(t *testing.T) {
+		p := fallbackProduct(link("b", 9, "U-9", true))
+		backup := &fakeProvider{id: 9, res: provider.Result{Reference: "B_1"}}
+		svc, _ := newSUTWithProviders([]*product.Product{p}, &fakeCodeSvc{available: map[string]int{}}, &fakeWalletSvc{balance: 100}, refusedFake(7), backup)
+		al := &fakeAlerts{}
+		svc.SetSupplierAlerts(al)
+		_, err := placeOne(t, svc, p)
+		require.NoError(t, err)
+		assert.Empty(t, al.raised)
+	})
 }
 
 // --- placement ----------------------------------------------------------------

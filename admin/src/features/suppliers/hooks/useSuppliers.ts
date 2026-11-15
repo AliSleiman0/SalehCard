@@ -7,8 +7,13 @@ import {
   importSupplierProducts,
   updateSupplierSettings,
   getSupplierOrders,
+  getSyncStatus,
+  listSupplierAlerts,
+  ackSupplierAlert,
+  ackAllSupplierAlerts,
   type ImportItem,
   type SupplierOrdersParams,
+  type SupplierSettingsPatch,
 } from '../api/suppliers'
 
 /** Supplier list with live balance + health. Polls so balances/health stay fresh. */
@@ -34,6 +39,50 @@ export function useSupplierCatalog(id: number | null, opts: { enabled?: boolean;
   })
 }
 
+/** The scheduled sync's config + last pass (polled while the page is open). */
+export function useSyncStatus() {
+  return useQuery({
+    queryKey: ['admin', 'suppliers', 'sync-status'],
+    queryFn: getSyncStatus,
+    refetchInterval: 60_000,
+  })
+}
+
+/** Supplier alerts (open by default). */
+export function useSupplierAlerts(status: 'open' | 'all') {
+  return useQuery({
+    queryKey: ['admin', 'suppliers', 'alerts', status],
+    queryFn: () => listSupplierAlerts(status),
+    refetchInterval: 60_000,
+  })
+}
+
+export function useAckSupplierAlert() {
+  const invalidate = useInvalidateSuppliers()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => ackSupplierAlert(id),
+    onSuccess: () => {
+      invalidate()
+      qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
+    },
+    onError: () => toast.error('Could not acknowledge the alert'),
+  })
+}
+
+export function useAckAllSupplierAlerts() {
+  const invalidate = useInvalidateSuppliers()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => ackAllSupplierAlerts(),
+    onSuccess: () => {
+      invalidate()
+      qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
+    },
+    onError: () => toast.error('Could not acknowledge the alerts'),
+  })
+}
+
 export function useSupplierOrders(id: number | null, params: SupplierOrdersParams) {
   return useQuery({
     queryKey: ['admin', 'suppliers', 'orders', id, params],
@@ -52,7 +101,8 @@ export function useSyncSupplier() {
   return useMutation({
     mutationFn: (id: number) => syncSupplier(id),
     onSuccess: () => invalidate(),
-    onError: () => toast.error('Could not sync supplier catalog'),
+    onError: (err) =>
+      toast.error(err instanceof Error && err.message ? err.message : 'Could not sync supplier catalog'),
   })
 }
 
@@ -74,7 +124,7 @@ export function useUpdateSupplierSettings() {
       patch,
     }: {
       id: number
-      patch: { lowBalanceThreshold?: number | null; markupPercent?: number | null }
+      patch: SupplierSettingsPatch
     }) => updateSupplierSettings(id, patch),
     onSuccess: () => {
       invalidate()

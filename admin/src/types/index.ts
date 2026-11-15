@@ -218,4 +218,26 @@ export interface SupplierLink {
   enabled: boolean
   addedAt?: string
   addedBy?: string
+  /** Supplier sync watches (both default on): cost alerts + pause-on-loss,
+   *  and hide / re-show on the supplier's availability. */
+  priceSync?: boolean
+  statusSync?: boolean
+  /** Set by the sync job: "loss" = the supplier costs at least our price. */
+  pausedReason?: string
+  pausedAt?: string
+  /** The sync job's last look at this supplier product. */
+  sync?: SupplierLinkSync
+}
+
+export interface SupplierLinkSync {
+  checkedAt: string
+  found: boolean
+  available: boolean
+  name?: string
+  /** Supplier price for ONE upstream unit, in `currency`. */
+  cost: number
+  currency?: string
+  costUsd?: number
+  costChangedAt?: string
+  prevCost?: number
 }

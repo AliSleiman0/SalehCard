@@ -11,9 +11,11 @@ import {
   moveLink,
   removeLink,
   setEnabled,
+  setWatch,
   type LinkRow,
 } from '../lib/supplierLinks'
 import { SupplierSearchModal } from './SupplierSearchModal'
+import { relativeTimeInline } from '@/lib/utils'
 
 function qtyOK(q: LinkQuote, n: number): boolean {
   if (q.qtyValues && q.qtyValues.length > 0) return q.qtyValues.some((v) => Number(v) === n)
@@ -78,6 +80,9 @@ export function SupplierLinksTable({
                 <th>Cost{blockUnits > 1 ? ` / ${blockUnits.toLocaleString('en-US')}` : ''}</th>
                 <th>Margin</th>
                 <th>Status</th>
+                <th title="Automatic supplier sync: Price = cost alerts and pause when it sells at a loss; Stock = hide / re-show the product with the supplier's availability">
+                  Sync
+                </th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -154,7 +159,41 @@ export function SupplierLinksTable({
                         {q?.status === 'unknown' && <span className="st st-danger">Not in catalog</span>}
                         {qtyWarn && <span className="st st-warn">Qty range</span>}
                         {q?.stale && <span className="st st-mute">Old data</span>}
+                        {r.pausedReason === 'loss' && (
+                          <span
+                            className="st st-danger"
+                            title="The supplier sync paused this link: it costs at least our selling price. It un-pauses by itself when the cost drops; making it active un-pauses it now."
+                          >
+                            Paused: loss
+                          </span>
+                        )}
                       </div>
+                      {r.sync?.checkedAt && (
+                        <div className="faint" style={{ fontSize: 11.5, marginTop: 2 }}>
+                          checked {relativeTimeInline(r.sync.checkedAt)}
+                          {r.sync.costChangedAt ? ` · cost changed ${relativeTimeInline(r.sync.costChangedAt)}` : ''}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 12.5 }}>
+                      <label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginRight: 8, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Price sync for ${provName(r.provider)} #${r.upstreamId}`}
+                          checked={r.priceSync}
+                          onChange={(e) => onChange(setWatch(rows, i, 'priceSync', e.target.checked))}
+                        />
+                        Price
+                      </label>
+                      <label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Stock sync for ${provName(r.provider)} #${r.upstreamId}`}
+                          checked={r.statusSync}
+                          onChange={(e) => onChange(setWatch(rows, i, 'statusSync', e.target.checked))}
+                        />
+                        Stock
+                      </label>
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {!r.active && (
@@ -197,7 +236,10 @@ export function SupplierLinksTable({
           <Icon name="search" size={13} /> Find at all suppliers
         </button>
         <span className="ahint" style={{ margin: 0 }}>
-          Orders go to the <b>Active</b> supplier. The order of the rows is the backup order.
+          Orders go to the <b>Active</b> supplier. The order of the rows is the backup order. <b>Sync</b>: the
+          supplier sync watches each ticked link&apos;s cost (alerts, pauses a link that sells at a loss) and
+          stock (hides the product when no supplier has it, shows it again when one does). It never changes your
+          selling price.
         </span>
       </div>
       {searching && (

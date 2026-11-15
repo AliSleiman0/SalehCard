@@ -14,11 +14,14 @@ import "time"
 // (keyed by the int id as _id in supplier_settings). Zero values are the
 // defaults (no low-balance alert, no default markup).
 type Settings struct {
-	ID                  int       `bson:"_id"                 json:"id"`
-	LowBalanceThreshold float64   `bson:"lowBalanceThreshold" json:"lowBalanceThreshold"`
-	MarkupPercent       float64   `bson:"markupPercent"       json:"markupPercent"`
-	UpdatedAt           time.Time `bson:"updatedAt,omitempty" json:"updatedAt,omitempty"`
-	UpdatedBy           string    `bson:"updatedBy,omitempty" json:"updatedBy,omitempty"`
+	ID                  int     `bson:"_id"                 json:"id"`
+	LowBalanceThreshold float64 `bson:"lowBalanceThreshold" json:"lowBalanceThreshold"`
+	MarkupPercent       float64 `bson:"markupPercent"       json:"markupPercent"`
+	// FxToUSD converts this supplier's prices to USD for the sync job's loss
+	// check (USD suppliers are always 1; 0 = not set).
+	FxToUSD   float64   `bson:"fxToUsd,omitempty"   json:"fxToUsd,omitempty"`
+	UpdatedAt time.Time `bson:"updatedAt,omitempty" json:"updatedAt,omitempty"`
+	UpdatedBy string    `bson:"updatedBy,omitempty" json:"updatedBy,omitempty"`
 }
 
 // SettingsInput carries the editable fields for PUT /suppliers/{id}/settings.
@@ -26,6 +29,7 @@ type Settings struct {
 type SettingsInput struct {
 	LowBalanceThreshold *float64 `json:"lowBalanceThreshold"`
 	MarkupPercent       *float64 `json:"markupPercent"`
+	FxToUSD             *float64 `json:"fxToUsd"`
 }
 
 // SupplierView is one row of GET /suppliers: identity + live balance/health +
@@ -42,6 +46,7 @@ type SupplierView struct {
 	MappedProducts      int64    `json:"mappedProducts"`
 	LowBalanceThreshold float64  `json:"lowBalanceThreshold"`
 	MarkupPercent       float64  `json:"markupPercent"`
+	FxToUSD             float64  `json:"fxToUsd,omitempty"`
 }
 
 // CatalogProductView is one row of GET /suppliers/{id}/catalog.
@@ -85,23 +90,6 @@ type ImportResult struct {
 type ImportSkipped struct {
 	UpstreamID string `json:"upstreamId"`
 	Reason     string `json:"reason"`
-}
-
-// SyncResult reports a catalog sync over the already-mapped products.
-type SyncResult struct {
-	Checked     int          `json:"checked"`
-	Updated     int          `json:"updated"`
-	Unavailable int          `json:"unavailable"`
-	Drift       []PriceDrift `json:"drift"`
-}
-
-// PriceDrift records a mapped product whose stored price no longer matches the
-// upstream base price (informational — sync never rewrites the sell price).
-type PriceDrift struct {
-	UpstreamID string  `json:"upstreamId"`
-	Name       string  `json:"name"`
-	OldPrice   float64 `json:"oldPrice"`
-	NewPrice   float64 `json:"newPrice"`
 }
 
 // RecentOrderView is one row of GET /suppliers/{id}/orders.

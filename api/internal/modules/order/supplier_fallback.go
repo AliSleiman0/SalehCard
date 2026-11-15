@@ -12,6 +12,7 @@ import (
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/product"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/supplieralert"
 	"github.com/AliSleiman0/salehcard/api/internal/platform/provider"
 )
 
@@ -46,6 +47,11 @@ func (s *OrderService) SetSupplierFallback(probes *provider.Probes, rec audit.Re
 	s.fbProbes = probes
 	s.fbRec = rec
 }
+
+// SetSupplierAlerts wires the supplier alerts store: an order whose supplier
+// refused it with no other link left to try raises a fallback_exhausted
+// alert (nil raises nothing).
+func (s *OrderService) SetSupplierAlerts(a supplieralert.Raiser) { s.fbAlerts = a }
 
 // adminRouted reports whether the order's current attempt is one an admin chose
 // (a reroute, a manual order sent to a supplier, a bulk re-send) rather than
@@ -102,7 +108,8 @@ func nextLink(o *Order, p *product.Product, has func(int) bool, usable func(prod
 	links, _ := product.EffectiveLinks(p)
 	for _, l := range links {
 		up := strings.TrimSpace(l.UpstreamID)
-		if !l.Enabled || up == "" || tried[supplierKey{l.Provider, up}] || !has(l.Provider) {
+		// A link the supplier sync paused (it sells at a loss) is skipped.
+		if !l.Enabled || l.Paused() || up == "" || tried[supplierKey{l.Provider, up}] || !has(l.Provider) {
 			continue
 		}
 		if usable != nil && !usable(l) {
@@ -152,6 +159,7 @@ func (s *OrderService) tryFallback(ctx context.Context, o *Order, cause error, p
 	}
 	l, ok := nextLink(o, p, s.providers.Has, s.linkUsable(ctx, qty))
 	if !ok {
+		s.alertFallbackExhausted(ctx, o, p, cause)
 		return nil
 	}
 	claimed, err := s.claimFallback(ctx, o, idx, l, cause, placing)
@@ -160,6 +168,35 @@ func (s *OrderService) tryFallback(ctx context.Context, o *Order, cause error, p
 		return nil
 	}
 	return claimed
+}
+
+// alertFallbackExhausted raises one open alert per order whose supplier
+// definitely refused it with no other link left to try (the order parks and
+// keeps retrying). Not for a product with fallback off or an attempt that
+// could never fall back (admin-routed, ambiguous, holding a ref).
+func (s *OrderService) alertFallbackExhausted(ctx context.Context, o *Order, p *product.Product, cause error) {
+	f := o.Fulfillment
+	if s.fbAlerts == nil || p == nil || p.SupplierFallbackOff || adminRouted(o) || f.SupplierAmbiguous || f.ProviderRef != "" {
+		return
+	}
+	idx := apiLineIndex(o)
+	name := strings.TrimSpace(p.Title.En)
+	from := "(none)"
+	if idx >= 0 {
+		from = supplierLabel(o.Items[idx].FulfillmentProvider)
+	}
+	err := s.fbAlerts.Raise(ctx, supplieralert.Alert{
+		Kind:        supplieralert.KindFallbackExhausted,
+		Key:         "fallback:" + o.ID.Hex(),
+		OrderID:     o.ID.Hex(),
+		ProductID:   p.ID.Hex(),
+		ProductName: name,
+		Message: fmt.Sprintf("Order %s (%s): supplier %s refused it and no other linked supplier can take it (%s). It keeps retrying — send it to another supplier or fulfil it by hand.",
+			strings.ToUpper(o.ID.Hex()[len(o.ID.Hex())-8:]), name, from, fallbackReason(cause)),
+	})
+	if err != nil {
+		slog.Warn("order: fallback-exhausted alert", "order", o.ID.Hex(), "error", err)
+	}
 }
 
 // claimFallback claims the automatic attempt at link l (it does not dispatch).

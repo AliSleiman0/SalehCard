@@ -604,3 +604,21 @@ Still open:
   the `deploy-prod` concurrency group. The replacement run's path filter sees only its own push, so an
   earlier merge's components can be skipped. After back-to-back merges, check each component deployed, or
   run **Deploy (prod)** manually (`workflow_dispatch` deploys everything).
+
+## 25. Supplier sync job — turn it on in prod (PR5 `feat/supplier-sync`)
+
+The job ships **off**. Each step needs the owner's OK.
+
+1. In Azure (`salehcard-api` app settings) set `SUPPLIER_SYNC_ENABLED=true` and `SUPPLIER_SYNC_DRYRUN=true`.
+   Optional: `SUPPLIER_SYNC_INTERVAL` (default `10m`).
+2. Leave it a day. Read **Suppliers → Alerts** (each one is marked "dry run"). Nothing customer-facing
+   changes in a dry run. Only each link's "last checked" cost snapshot is stored.
+3. If the alerts look right, set `SUPPLIER_SYNC_DRYRUN=false`. From then on the job pauses links that sell at a
+   loss, switches the active supplier to the next profitable one, and hides / re-shows products with the
+   suppliers' stock.
+4. umanage (LBP): set **Suppliers → umanage → Settings → USD per 1 LBP**. Without it the loss check is skipped
+   for umanage links and one "Rate missing" alert stays open.
+
+Note: the "Sync now" button on each supplier card works whether or not the schedule is on, and it follows
+`SUPPLIER_SYNC_DRYRUN`. It replaces the old "Sync catalog" (which hid products directly and never re-showed
+them).

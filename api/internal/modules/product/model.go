@@ -306,6 +306,11 @@ type Product struct {
 	UnitPricing *UnitPricing `bson:"unitPricing,omitempty" json:"unitPricing,omitempty"`
 	Stock       int          `bson:"stock"     json:"stock"`
 	Available   bool         `bson:"available" json:"available"`
+	// HiddenBySyncAt is set when the supplier sync job took the product off
+	// sale (no linked supplier has it, or every link sells at a loss). Only a
+	// product hidden this way is ever re-shown by the sync; an admin's own
+	// change of Available clears it, so a manual hide always wins.
+	HiddenBySyncAt *time.Time `bson:"hiddenBySyncAt,omitempty" json:"-"`
 	// Migration: status fidelity + ordering + review markers.
 	Status    string `bson:"status,omitempty"    json:"status,omitempty"`
 	SortOrder int    `bson:"sortOrder,omitempty" json:"sortOrder,omitempty"`
@@ -456,11 +461,14 @@ type UpdateProductInput struct {
 	SupplierFallback *bool `json:"supplierFallback,omitempty"`
 	// linksPlan is the service-resolved links table + mirror the repository
 	// stores, guarded on the rev the editor loaded.
-	linksPlan   *linksPlan
-	Stock       *int            `json:"stock,omitempty"`
-	Available   *bool           `json:"available,omitempty"`
-	Ratings     *RatingsSummary `json:"ratings,omitempty"`
-	InputFields []InputField    `json:"inputFields,omitempty"`
+	linksPlan *linksPlan
+	// clearSyncHide: this update changes Available, so the sync job's
+	// "hidden by sync" marker is cleared in the same write (service-set).
+	clearSyncHide bool
+	Stock         *int            `json:"stock,omitempty"`
+	Available     *bool           `json:"available,omitempty"`
+	Ratings       *RatingsSummary `json:"ratings,omitempty"`
+	InputFields   []InputField    `json:"inputFields,omitempty"`
 	// Verification configures the check_name ID-verification hook. A non-nil value
 	// with a non-empty App sets it; a non-nil value with an empty App clears it
 	// (disables verification). Nil leaves it unchanged.

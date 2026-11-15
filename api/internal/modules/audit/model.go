@@ -46,8 +46,14 @@ const (
 	ActionOrderSupplierReroute = "order.supplier_reroute"
 	// ActionOrderSupplierFallback records an automatic hop to the product's
 	// next supplier link after a definite refusal (actor system:supplier-fallback).
-	ActionOrderSupplierFallback  = "order.supplier_fallback"
-	ActionSupplierSync           = "supplier.sync"
+	ActionOrderSupplierFallback = "order.supplier_fallback"
+	ActionSupplierSync          = "supplier.sync"
+	// ActionSupplierSyncChange: the supplier sync job paused / unpaused a
+	// link, switched a product's active supplier, or hid / re-showed a
+	// product (actor system:supplier-sync).
+	ActionSupplierSyncChange = "supplier.sync_change"
+	// ActionSupplierAlertAck: an admin acknowledged supplier alert(s).
+	ActionSupplierAlertAck       = "supplier.alert_ack"
 	ActionSupplierImport         = "supplier.import"
 	ActionSupplierSettingsUpdate = "supplier.settings_update"
 	ActionProductDelete          = "product.delete"      // permanent erase (super admin, trash only)

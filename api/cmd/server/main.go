@@ -86,6 +86,13 @@ func main() {
 			st.Run(workerCtx)
 		}()
 	}
+	if sj := srv.SupplierSync(); sj != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			sj.Run(workerCtx)
+		}()
+	}
 
 	// Wait for interrupt signal to gracefully shut down the server.
 	quit := make(chan os.Signal, 1)

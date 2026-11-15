@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,6 +35,56 @@ type SupplierLink struct {
 	Enabled    bool      `bson:"enabled"           json:"enabled"`
 	AddedAt    time.Time `bson:"addedAt"           json:"addedAt"`
 	AddedBy    string    `bson:"addedBy,omitempty" json:"addedBy,omitempty"`
+	// PriceSyncOff / StatusSyncOff switch off the supplier sync job's cost
+	// watch (cost alerts + pause-on-loss) and availability watch (hide /
+	// re-show) for this link. Stored inverted so every link defaults to on;
+	// the JSON shape is priceSync / statusSync (MarshalJSON).
+	PriceSyncOff  bool `bson:"priceSyncOff,omitempty"  json:"-"`
+	StatusSyncOff bool `bson:"statusSyncOff,omitempty" json:"-"`
+	// PausedReason is set by the sync job ("loss": the supplier's cost is at
+	// or above our selling price). A paused link is never made active by the
+	// sync and the order fallback skips it; the sync clears it when the cost
+	// recovers.
+	PausedReason string     `bson:"pausedReason,omitempty" json:"pausedReason,omitempty"`
+	PausedAt     *time.Time `bson:"pausedAt,omitempty"     json:"pausedAt,omitempty"`
+	// Sync is the sync job's last look at this supplier product (nil = never
+	// checked). Admin saves carry it over by link id.
+	Sync *LinkSync `bson:"sync,omitempty" json:"sync,omitempty"`
+}
+
+// PausedLoss is the PausedReason of a link paused because it sells at a loss.
+const PausedLoss = "loss"
+
+// Paused reports whether the sync job paused this link.
+func (l SupplierLink) Paused() bool { return l.PausedReason != "" }
+
+// MarshalJSON adds the positive priceSync / statusSync flags the admin reads.
+func (l SupplierLink) MarshalJSON() ([]byte, error) {
+	type plain SupplierLink
+	return json.Marshal(struct {
+		plain
+		PriceSync  bool `json:"priceSync"`
+		StatusSync bool `json:"statusSync"`
+	}{plain(l), !l.PriceSyncOff, !l.StatusSyncOff})
+}
+
+// LinkSync is one supplier product as the sync job last saw it.
+type LinkSync struct {
+	CheckedAt time.Time `bson:"checkedAt" json:"checkedAt"`
+	// Found: the supplier's catalog lists this product id.
+	Found     bool   `bson:"found"          json:"found"`
+	Available bool   `bson:"available"      json:"available"`
+	Name      string `bson:"name,omitempty" json:"name,omitempty"`
+	// Cost is the supplier's price for one upstream unit, in Currency;
+	// CostUSD is the same in USD (nil when no exchange rate is set).
+	Cost     float64  `bson:"cost"               json:"cost"`
+	Currency string   `bson:"currency,omitempty" json:"currency,omitempty"`
+	CostUSD  *float64 `bson:"costUsd,omitempty"  json:"costUsd,omitempty"`
+	QtyMin   *int     `bson:"qtyMin,omitempty"   json:"qtyMin,omitempty"`
+	QtyMax   *int     `bson:"qtyMax,omitempty"   json:"qtyMax,omitempty"`
+	// CostChangedAt / PrevCost record the last cost move the sync alerted on.
+	CostChangedAt *time.Time `bson:"costChangedAt,omitempty" json:"costChangedAt,omitempty"`
+	PrevCost      *float64   `bson:"prevCost,omitempty"      json:"prevCost,omitempty"`
 }
 
 // SupplierLinkInput is one row of the editor's links table. ID is empty for a
@@ -44,6 +95,10 @@ type SupplierLinkInput struct {
 	UpstreamID string `json:"upstreamId"`
 	Enabled    bool   `json:"enabled"`
 	Active     bool   `json:"active"`
+	// PriceSync / StatusSync set the link's sync watches (nil = keep the
+	// stored value; a new link starts with both on).
+	PriceSync  *bool `json:"priceSync,omitempty"`
+	StatusSync *bool `json:"statusSync,omitempty"`
 }
 
 // SupplierLinksInput replaces a product's whole links table. Rev is the
@@ -184,12 +239,25 @@ func (s *ProductService) planSupplierLinks(ctx context.Context, cur *Product, in
 		link := SupplierLink{Provider: row.Provider, UpstreamID: up, Enabled: row.Enabled}
 		if old, ok := byID[row.ID]; ok && row.ID != legacyLinkID {
 			link.ID, link.AddedAt, link.AddedBy = old.ID, old.AddedAt, old.AddedBy
+			link.PriceSyncOff, link.StatusSyncOff = old.PriceSyncOff, old.StatusSyncOff
+			if old.Provider == link.Provider && old.UpstreamID == link.UpstreamID {
+				// Same supplier product: keep what the sync job knows about
+				// it, so a save never wipes the last check or a loss pause.
+				link.Sync = old.Sync
+				link.PausedReason, link.PausedAt = old.PausedReason, old.PausedAt
+			}
 		} else {
 			link.ID = bson.NewObjectID().Hex()
 			link.AddedAt, link.AddedBy = now, actor
 			if old, ok := byID[row.ID]; ok && row.ID == legacyLinkID {
 				link.AddedAt = old.AddedAt // the legacy mapping's age, not today
 			}
+		}
+		if row.PriceSync != nil {
+			link.PriceSyncOff = !*row.PriceSync
+		}
+		if row.StatusSync != nil {
+			link.StatusSyncOff = !*row.StatusSync
 		}
 		if !known[key] {
 			toCheck = append(toCheck, link)
@@ -200,6 +268,11 @@ func (s *ProductService) planSupplierLinks(ctx context.Context, cur *Product, in
 				return nil, linkErr("LINK_INVALID", "the active supplier link can't be disabled — make another link active first", apperrors.ErrBadRequest)
 			}
 			plan.ActiveID = link.ID
+			if link.Paused() && (cur == nil || link.ID != cur.ActiveSupplierLinkID) {
+				// An admin made this paused link active on purpose: their
+				// call wins over the sync job's loss pause.
+				link.PausedReason, link.PausedAt = "", nil
+			}
 		}
 		plan.Links = append(plan.Links, link)
 	}

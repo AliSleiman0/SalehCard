@@ -68,6 +68,9 @@ func (r *settingsRepo) Update(ctx context.Context, id int, in SettingsInput, act
 	if in.MarkupPercent != nil {
 		cur.MarkupPercent = *in.MarkupPercent
 	}
+	if in.FxToUSD != nil {
+		cur.FxToUSD = *in.FxToUSD
+	}
 	cur.ID = id
 	cur.UpdatedAt = time.Now().UTC()
 	cur.UpdatedBy = actor

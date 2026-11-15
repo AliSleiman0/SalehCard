@@ -42,6 +42,12 @@ export function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+/** relativeTime for the middle of a sentence ("checked just now"). */
+export function relativeTimeInline(iso: string): string {
+  const t = relativeTime(iso)
+  return t === 'Just now' || t === 'Yesterday' ? t.toLowerCase() : t
+}
+
 /** Long human date, e.g. "June 28, 2026". */
 export function formatLongDate(d: Date = new Date()): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })

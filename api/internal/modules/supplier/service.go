@@ -112,6 +112,7 @@ func (s *Service) List(ctx context.Context) ([]SupplierView, error) {
 				MappedProducts:      mapped,
 				LowBalanceThreshold: set.LowBalanceThreshold,
 				MarkupPercent:       set.MarkupPercent,
+				FxToUSD:             set.FxToUSD,
 			}
 		}(i, sc)
 	}
@@ -196,94 +197,6 @@ func (s *Service) Catalog(ctx context.Context, id int) ([]CatalogProductView, er
 		})
 	}
 	return out, nil
-}
-
-// mappedProduct is the projection used by Sync over the products collection.
-type mappedProduct struct {
-	ID                bson.ObjectID      `bson:"_id"`
-	Title             product.I18nString `bson:"title"`
-	UpstreamProductID string             `bson:"upstreamProductId"`
-	Available         bool               `bson:"available"`
-	Variants          []struct {
-		Price float64 `bson:"price"`
-	} `bson:"variants"`
-}
-
-// Sync reconciles the already-mapped products against the live catalog: it
-// updates each product's availability to match the upstream (products that
-// vanished upstream are marked unavailable) and REPORTS price drift without ever
-// rewriting the customer-facing sell price (that stays an explicit admin
-// decision — an automated FX-free price rewrite is exactly the footgun we avoid).
-func (s *Service) Sync(ctx context.Context, id int) (SyncResult, error) {
-	// An explicit sync always asks the supplier (never a cached copy), and
-	// never acts on a stale fallback: hiding products on old data is wrong.
-	snap, err := s.probes.Refresh(ctx, id)
-	if err != nil {
-		return SyncResult{}, err
-	}
-	if snap.Stale {
-		return SyncResult{}, fmt.Errorf("supplier %d: catalog refresh failed: %w", id, provider.ErrUnavailable)
-	}
-	catalog := snap.Products
-	byID := make(map[string]provider.CatalogProduct, len(catalog))
-	for _, p := range catalog {
-		byID[p.UpstreamID] = p
-	}
-
-	cur, err := s.productc.Find(ctx, liveMapped(id))
-	if err != nil {
-		return SyncResult{}, err
-	}
-	defer cur.Close(ctx)
-
-	var res SyncResult
-	for cur.Next(ctx) {
-		var mp mappedProduct
-		if err := cur.Decode(&mp); err != nil {
-			return SyncResult{}, err
-		}
-		if mp.UpstreamProductID == "" {
-			continue
-		}
-		res.Checked++
-		up, found := byID[mp.UpstreamProductID]
-		if !found || !up.Available {
-			// Withdrawn or unavailable upstream — pull it OFF sale (never delete;
-			// orders may reference it). Sync ONLY ever hides (true→false): it never
-			// auto-publishes (false→true), so an imported-hidden product stays
-			// hidden until an admin reviews it — publishing is an admin decision.
-			res.Unavailable++
-			if mp.Available {
-				_ = s.setAvailable(ctx, mp.ID, false)
-				res.Updated++
-			}
-			if !found {
-				continue
-			}
-		}
-		if len(mp.Variants) > 0 {
-			old := mp.Variants[0].Price
-			if up.BasePrice > 0 && !floatEq(old, up.BasePrice) {
-				res.Drift = append(res.Drift, PriceDrift{
-					UpstreamID: mp.UpstreamProductID,
-					Name:       mp.Title.En,
-					OldPrice:   old,
-					NewPrice:   up.BasePrice,
-				})
-			}
-		}
-	}
-	return res, cur.Err()
-}
-
-// setAvailable flips a product's availability directly (a targeted, safe write —
-// Sync never touches anything else on the product).
-func (s *Service) setAvailable(ctx context.Context, id bson.ObjectID, available bool) error {
-	_, err := s.productc.UpdateByID(ctx, id, bson.D{{Key: "$set", Value: bson.D{
-		{Key: "available", Value: available},
-		{Key: "updatedAt", Value: time.Now().UTC()},
-	}}})
-	return err
 }
 
 // Import creates SalehCard products from selected upstream products. Created
@@ -431,11 +344,6 @@ func (s *Service) UpdateSettings(ctx context.Context, id int, in SettingsInput, 
 // --- pure helpers ---
 
 func intPtr(n int) *int { return &n }
-
-func floatEq(a, b float64) bool {
-	d := a - b
-	return d < 0.0001 && d > -0.0001
-}
 
 func round2(v float64) float64 {
 	return float64(int64(v*100+0.5)) / 100

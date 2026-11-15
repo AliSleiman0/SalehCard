@@ -17,6 +17,7 @@ import (
 	"github.com/AliSleiman0/salehcard/api/internal/modules/code"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/kyc"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/order"
+	"github.com/AliSleiman0/salehcard/api/internal/modules/supplieralert"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/user"
 	"github.com/AliSleiman0/salehcard/api/internal/modules/wallet"
 	"github.com/AliSleiman0/salehcard/api/pkg/response"
@@ -51,6 +52,7 @@ type Stats struct {
 	// Supplier signals (DESIGN-SUPPLIERS.md Phase 3):
 	ParkedUpstream int `json:"parkedUpstream"` // processing api-mode orders awaiting the supplier
 	StuckUpstream  int `json:"stuckUpstream"`  // orders flagged stuck upstream (need attention)
+	SupplierAlerts int `json:"supplierAlerts"` // open supplier alerts (sync job + order fallback)
 }
 
 // ffSlice is one segment of the fulfillment-breakdown donut.
@@ -64,6 +66,7 @@ type ffSlice struct {
 type Handler struct {
 	products  *mongo.Collection
 	ordersCol *mongo.Collection
+	alertsCol *mongo.Collection
 	codes     code.Service
 	orders    order.Repository
 	users     user.Repository
@@ -77,6 +80,7 @@ func RegisterAdminRoutes(r chi.Router, db *mongo.Database) {
 	h := &Handler{
 		products:  db.Collection("products"),
 		ordersCol: db.Collection("orders"),
+		alertsCol: db.Collection(supplieralert.Collection),
 		codes:     code.NewService(db),
 		orders:    order.NewMongoRepository(db.Collection("orders")),
 		users:     user.NewMongoRepository(db),
@@ -115,6 +119,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		ordersCompleted, ordersRefunded int64
 
 		parkedUpstream, stuckUpstream int64
+		supplierAlerts                int64
 	)
 
 	g.Go(func() error {
@@ -216,6 +221,12 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 
+	g.Go(func() error {
+		var err error
+		supplierAlerts, err = h.alertsCol.CountDocuments(ctx, bson.D{{Key: "open", Value: true}})
+		return err
+	})
+
 	if err := g.Wait(); err != nil {
 		response.InternalError(w)
 		return
@@ -243,6 +254,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		PendingKyc:       int(pendingKyc),
 		ParkedUpstream:   int(parkedUpstream),
 		StuckUpstream:    int(stuckUpstream),
+		SupplierAlerts:   int(supplierAlerts),
 	}
 	response.OK(w, stats)
 }

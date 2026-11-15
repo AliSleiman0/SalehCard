@@ -200,6 +200,9 @@ func (r *MongoRepository) BulkSetAvailable(ctx context.Context, sel Selector, av
 		filter,
 		bson.D{{Key: "$set", Value: bson.D{
 			{Key: "available", Value: available},
+			// A bulk show/hide is an admin decision: it overrides a hide by
+			// the supplier sync job.
+			{Key: "hiddenBySyncAt", Value: nil},
 			{Key: "updatedAt", Value: time.Now().UTC()},
 		}}},
 	)
@@ -950,6 +953,9 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	}
 	if in.Available != nil {
 		set = append(set, bson.E{Key: "available", Value: *in.Available})
+	}
+	if in.clearSyncHide {
+		set = append(set, bson.E{Key: "hiddenBySyncAt", Value: nil})
 	}
 	if in.Ratings != nil {
 		set = append(set, bson.E{Key: "ratings", Value: *in.Ratings})

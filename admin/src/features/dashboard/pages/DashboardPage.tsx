@@ -338,6 +338,17 @@ export default function DashboardPage() {
           cls="crit"
           to={tileLink(can, 'orders', '/orders?stuck=1')}
         />
+        {can('suppliers.view') && (
+          <Kpi
+            icon={<Icon name="bell" size={17} />}
+            iconBg="rgba(255,155,61,.2)"
+            label="Supplier alerts"
+            value={s ? String(s.supplierAlerts ?? 0) : '—'}
+            since="open — cost, loss, stock"
+            cls={s && (s.supplierAlerts ?? 0) > 0 ? 'alert' : undefined}
+            to="/suppliers?tab=alerts"
+          />
+        )}
         {can('bridge.view') && <BridgeBalanceTiles to="/bridge" />}
         {can('suppliers.view') && <SuppliersBalanceTiles to="/suppliers" />}
       </div>
