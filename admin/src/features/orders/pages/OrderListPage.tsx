@@ -27,6 +27,7 @@ import { useRefundBulk } from '../hooks/useOrderMutations'
 import { adaptOrder, productEditPath } from '../lib/adaptOrder'
 import { listOrders, type OrderStatus, type PaymentMethod, type AdminOrder } from '../api/orders'
 import type { FulfillmentType } from '@/types'
+import { orderNumber } from '@/lib/orderNumber'
 
 const FF_DOT: Record<FfKey, string> = {
   code: 'var(--ff-code)',
@@ -329,7 +330,7 @@ export default function OrderListPage() {
                           <Checkbox on={bulk.sel.includes(o.id)} onClick={() => bulk.toggle(o.id)} />
                         </td>
                         <td>
-                          <span className="mono strong">{o.id.slice(-8)}</span>
+                          <span className="mono strong">{orderNumber(o.id)}</span>
                         </td>
                         <td>
                           <div className="cellprod">

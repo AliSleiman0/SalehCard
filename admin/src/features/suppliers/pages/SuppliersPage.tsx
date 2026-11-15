@@ -13,6 +13,7 @@ import {
   useUpdateSupplierSettings,
 } from '../hooks/useSuppliers'
 import type { SupplierView, SupplierHealth, CatalogProductView } from '../api/suppliers'
+import { orderNumber } from '@/lib/orderNumber'
 
 const HEALTH_CLASS: Record<SupplierHealth, string> = {
   ok: 'st-ok',
@@ -355,7 +356,7 @@ function OrdersModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
                 {orders.map((o) => (
                   <tr key={o.id}>
                     <td className="mono">
-                      <a href={`/orders/${o.id}`}>{o.id.slice(-8)}</a>
+                      <a href={`/orders/${o.id}`}>{orderNumber(o.id)}</a>
                     </td>
                     <td>
                       <span className={`st ${o.stuckAt ? 'st-danger' : o.status === 'completed' ? 'st-ok' : o.status === 'refunded' || o.status === 'failed' ? 'st-warn' : 'st-mute'}`}>

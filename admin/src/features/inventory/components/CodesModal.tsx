@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Modal, Icon, LoadingSpinner, EmptyState, Pagination } from '@/components'
 import { useCodes, useAddCode, useEditCode, useDeleteCode, useExpireCode } from '../hooks/useInventory'
 import type { Code, CodeStatus, InventoryStats } from '@/types'
+import { orderNumber } from '@/lib/orderNumber'
 
 // Keep a page short enough that the whole modal — add form, list, pagination and
 // Close — fits on screen without the footer falling below the fold (the modal has
@@ -162,7 +163,7 @@ export function CodesModal({ product, onClose }: { product: InventoryStats; onCl
                           {c.status}
                         </span>
                       </td>
-                      <td className="mono faint">{c.orderId ? c.orderId.slice(-8) : '—'}</td>
+                      <td className="mono faint">{c.orderId ? orderNumber(c.orderId) : '—'}</td>
                       <td>
                         <div className="row-actions">
                           {isEditing ? (

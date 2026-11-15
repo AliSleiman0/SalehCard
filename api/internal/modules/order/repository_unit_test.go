@@ -99,6 +99,15 @@ func TestOrderFilter_build(t *testing.T) {
 		require.Len(t, or, 5)
 		assert.Equal(t, bson.D{{Key: "ref", Value: bson.D{{Key: "$regex", Value: "2f1e2818"}}}}, or[4])
 	})
+
+	t.Run("the displayed #ABCDEF12 form matches the ref; field values keep the #", func(t *testing.T) {
+		d := OrderFilter{SearchRaw: "#2F1E2818"}.build()
+		v, _ := get(d, "$or")
+		or, _ := v.(bson.A)
+		require.Len(t, or, 5)
+		assert.Equal(t, bson.D{{Key: "items.playerId", Value: "#2F1E2818"}}, or[2])
+		assert.Equal(t, bson.D{{Key: "ref", Value: bson.D{{Key: "$regex", Value: "2f1e2818"}}}}, or[4])
+	})
 }
 
 func TestIsShortRef(t *testing.T) {

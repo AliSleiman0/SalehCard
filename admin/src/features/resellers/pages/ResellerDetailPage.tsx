@@ -31,6 +31,7 @@ import {
   useDeleteResellerPrice,
 } from '../hooks/useResellers'
 import { adaptReseller, effectivePrice, tierColor } from '../lib/adaptReseller'
+import { orderNumber } from '@/lib/orderNumber'
 
 type Tab = 'overview' | 'balance' | 'pricing' | 'orders'
 
@@ -500,7 +501,7 @@ function OrdersTab({ email, total }: { email: string; total: number }) {
             <tbody>
               {rows.map((o) => (
                 <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
-                  <td className="mono strong">{o.id.slice(-8)}</td>
+                  <td className="mono strong">{orderNumber(o.id)}</td>
                   <td>
                     <div className="cellprod">
                       <Art art={o.art} size={28} radius={6} />

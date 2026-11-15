@@ -46,7 +46,7 @@ void main() {
       expect(order.items.single.title.resolve('ar'), 'روبلوكس');
       expect(order.items.single.qty, 2);
       expect(order.total, 20.0);
-      expect(order.reference, '0000AA');
+      expect(order.reference, '000000AA');
     });
 
     test('maps a processing order with no delivered code', () {

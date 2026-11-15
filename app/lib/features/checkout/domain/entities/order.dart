@@ -1,5 +1,6 @@
 import '../../../../core/i18n/i18n_string.dart';
 import '../../../payments/domain/entities/payment_intent.dart';
+import '../../../../core/format/order_number.dart';
 
 /// Lifecycle status of an order (mirrors the backend `OrderStatus`).
 enum OrderStatus { pending, processing, completed, failed, refunded, unknown }
@@ -226,11 +227,9 @@ class Order {
     ];
   }
 
-  /// Short, human-friendly order reference (last 6 chars of the id, upper-cased).
-  String get reference {
-    if (id.length <= 6) return id.toUpperCase();
-    return id.substring(id.length - 6).toUpperCase();
-  }
+  /// The order number shown everywhere, without its leading "#": the last 8
+  /// characters of the id, upper-cased (see [orderNumber]).
+  String get reference => orderNumber(id).substring(1);
 }
 
 /// One labeled customer input on an order line (e.g. Account ID, Zone ID). Only

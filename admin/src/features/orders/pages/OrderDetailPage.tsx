@@ -21,6 +21,7 @@ import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrde
 import { adaptOrder, codeLines, creditLines, itemQtyLabel, productEditPath } from '../lib/adaptOrder'
 import type { AdminOrder } from '../api/orders'
 import { SupplierPanel } from '../components/SupplierPanel'
+import { orderNumber } from '@/lib/orderNumber'
 
 /** isOrderFileUrl detects a checkout photo-field upload (re-encoded JPEG under
  *  the order-files/ keyspace — the API rejects any other link for a file field). */
@@ -86,10 +87,10 @@ export default function OrderDetailPage() {
     <div className="page">
       <PageHead
         back="/orders"
-        crumbs={[t('nav_orders'), v.id.slice(-8)]}
+        crumbs={[t('nav_orders'), orderNumber(v.id)]}
         title={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-            Order {v.id.slice(-8)} <StatusBadge s={v.status} />
+            Order {orderNumber(v.id)} <StatusBadge s={v.status} />
           </span>
         }
         sub={`Placed ${v.date} · ${v.customer}`}
@@ -548,7 +549,7 @@ function RefundModal({
             <Icon name="refresh" size={20} />
           </div>
           <div>
-            <h3 style={{ fontSize: 17, fontWeight: 800 }}>Refund order {order.id.slice(-8)}</h3>
+            <h3 style={{ fontSize: 17, fontWeight: 800 }}>Refund order {orderNumber(order.id)}</h3>
             <div className="faint" style={{ fontSize: 12.5 }}>
               {money(order.total, cur)} · {label}
             </div>
@@ -642,7 +643,7 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
     <Modal onClose={onClose} maxWidth={440}>
       <div style={{ padding: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-          Complete order {order.id.slice(-8)}
+          Complete order {orderNumber(order.id)}
         </h3>
         <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 16 }}>
           Confirm the credit/transfer was delivered outside the platform. The order moves to
@@ -747,7 +748,7 @@ function FailModal({ order, onClose }: { order: AdminOrder; onClose: () => void 
     <Modal onClose={onClose} maxWidth={440}>
       <div style={{ padding: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-          Mark order {order.id.slice(-8)} as failed
+          Mark order {orderNumber(order.id)} as failed
         </h3>
         <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 16 }}>
           Clears a stuck <b>pending</b> order (crashed mid-placement). This moves the order to
