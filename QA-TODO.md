@@ -483,6 +483,8 @@ contact card, toggle switched off mid-session → keyword answer). Still to chec
    "Tell me about the system", "Hello", "Tell me about the solar system" → an overview, a greeting, the
    polite off-topic line; on iOS "How do I pay with USDT?" → the contact-support fallback (never "USDT").
    Admin → Conversations shows Off-topic / Sent to support / Asked to clarify / Small talk.
+   App (needs a new Android/iOS build): the bottom-nav center button (was the QR scan) opens the Help chat —
+   verified on the emulator in EN + AR (RTL) against a local API; check on a real phone, Android and iOS.
 4. **Store disclosures** (owner): typed help questions are processed by Azure OpenAI. The `/privacy` page
    already says so (updated 2026-11-15, EN + AR). Still to do in the consoles before shipping the app build:
    Play Data safety → add "Other user-generated content" (collected, shared with a service provider,

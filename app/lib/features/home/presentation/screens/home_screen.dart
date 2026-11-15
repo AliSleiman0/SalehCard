@@ -11,11 +11,11 @@ import '../../../../core/widgets/app_spinner.dart';
 import '../../../../core/widgets/brand_logo.dart';
 import '../../../../core/widgets/notification_bell.dart';
 import '../../../../core/widgets/product_chip.dart';
-import '../../../help/presentation/help_sheet.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../browse/domain/entities/category.dart';
 import '../../../browse/presentation/providers.dart';
-import '../../../browse/presentation/screens/categories_screen.dart' show openCategory;
+import '../../../browse/presentation/screens/categories_screen.dart'
+    show openCategory;
 import '../../../catalog/domain/entities/product.dart';
 import '../../../catalog/presentation/providers.dart';
 import '../../../kyc/presentation/providers.dart';
@@ -27,11 +27,11 @@ import '../../../wallet/presentation/providers.dart';
 /// collection's category id. Failures degrade to an empty row (hidden).
 final _collectionSampleProvider = FutureProvider.autoDispose
     .family<List<Product>, String>((ref, categoryId) async {
-  final result = await ref
-      .watch(getProductsPageUseCaseProvider)
-      .call(categoryId: categoryId, limit: 8);
-  return result.match((_) => <Product>[], (page) => page.items);
-});
+      final result = await ref
+          .watch(getProductsPageUseCaseProvider)
+          .call(categoryId: categoryId, limit: 8);
+      return result.match((_) => <Product>[], (page) => page.items);
+    });
 
 /// Home / wallet landing (content only — the bottom nav is provided by the app
 /// shell). The wallet/promo are design chrome; the Featured row and Collection
@@ -97,7 +97,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       backgroundColor: colors.bg,
-      floatingActionButton: const HelpFab(),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -220,11 +219,15 @@ class _CollectionsSection extends ConsumerWidget {
     final collections = ref.watch(categoriesProvider);
     return collections.maybeWhen(
       data: (cats) {
-        final withProducts = cats.where((c) => (c.productCount ?? 0) > 0).toList();
+        final withProducts = cats
+            .where((c) => (c.productCount ?? 0) > 0)
+            .toList();
         if (withProducts.isEmpty) return const SizedBox.shrink();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [for (final c in withProducts) _CollectionRow(collection: c)],
+          children: [
+            for (final c in withProducts) _CollectionRow(collection: c),
+          ],
         );
       },
       orElse: () => const SizedBox.shrink(),
@@ -578,7 +581,11 @@ class _PromoCard extends StatelessWidget {
 }
 
 class _ProductRow extends StatelessWidget {
-  const _ProductRow({required this.title, required this.children, this.onTitleTap});
+  const _ProductRow({
+    required this.title,
+    required this.children,
+    this.onTitleTap,
+  });
 
   final String title;
   final List<Widget> children;
@@ -608,7 +615,11 @@ class _ProductRow extends StatelessWidget {
                 children: [
                   titleText,
                   const SizedBox(width: 4),
-                  Icon(Icons.chevron_right_rounded, size: 22, color: context.colors.textDim),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 22,
+                    color: context.colors.textDim,
+                  ),
                 ],
               ),
             )

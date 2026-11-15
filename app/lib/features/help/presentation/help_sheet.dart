@@ -21,26 +21,6 @@ Future<void> showHelpSheet(BuildContext context) => showModalBottomSheet<void>(
       const FractionallySizedBox(heightFactor: 0.9, child: HelpSheet()),
 );
 
-/// Floating help button; hidden while the Help Center has nothing to offer
-/// (AI off and no WhatsApp contact) or the chatbot endpoint is unreachable.
-class HelpFab extends ConsumerWidget {
-  const HelpFab({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final has = ref
-        .watch(chatbotProvider)
-        .maybeWhen(data: showHelpCenter, orElse: () => false);
-    if (!has) return const SizedBox.shrink();
-    return FloatingActionButton(
-      heroTag: 'help-fab',
-      tooltip: AppLocalizations.of(context).helpTitle,
-      onPressed: () => showHelpSheet(context),
-      child: const Icon(Icons.chat_bubble_outline_rounded),
-    );
-  }
-}
-
 const _robotAsset = 'assets/help/robot.png';
 const _whatsappGreen = Color(0xFF25D366);
 
