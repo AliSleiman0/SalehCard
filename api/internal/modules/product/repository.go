@@ -75,6 +75,10 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 			Keys:    bson.D{{Key: "legacyId", Value: 1}},
 			Options: options.Index().SetUnique(true).SetSparse(true),
 		},
+		{
+			// Supplier pages: every product linked to a supplier (any link).
+			Keys: bson.D{{Key: "supplierLinks.provider", Value: 1}},
+		},
 	}
 
 	_, err := col.Indexes().CreateMany(ctx, indexes)
@@ -679,6 +683,9 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
+	if lp := in.linksPlan; lp != nil && len(lp.Links) > 0 {
+		p.SupplierLinks, p.ActiveSupplierLinkID, p.SupplierLinksRev = lp.Links, lp.ActiveID, lp.Rev
+	}
 	p.normalize() // persist images as [] (not null) when created without any
 
 	if _, err := r.col.InsertOne(ctx, p); err != nil {
@@ -773,6 +780,15 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		}}}
 	}
 	variantExpr := keepIfUnitPriced("variants", refreshed)
+	keepIfLinked := func(field string, refreshedValue any) bson.D {
+		return bson.D{{Key: "$cond", Value: bson.D{
+			{Key: "if", Value: bson.D{{Key: "$gt", Value: bson.A{
+				bson.D{{Key: "$size", Value: bson.D{{Key: "$ifNull", Value: bson.A{"$supplierLinks", bson.A{}}}}}}, 0,
+			}}}},
+			{Key: "then", Value: "$" + field},
+			{Key: "else", Value: refreshedValue},
+		}}}
+	}
 
 	ifNull := func(field string, fallback any) bson.D {
 		return bson.D{{Key: "$ifNull", Value: bson.A{"$" + field, fallback}}}
@@ -792,7 +808,9 @@ func buildUpsertSet(in UpsertProductInput, now time.Time, newVariantID bson.Obje
 		{Key: "descriptionHadMarkup", Value: lit(in.DescriptionHadMarkup)},
 		{Key: "fulfillmentType", Value: keepIfUnitPriced("fulfillmentType", lit(in.FulfillmentType))},
 		{Key: "fulfillmentMode", Value: keepIfUnitPriced("fulfillmentMode", lit(mode))},
-		{Key: "fulfillmentProvider", Value: lit(in.FulfillmentProvider)},
+		// fulfillmentProvider mirrors the active supplier link once a product
+		// has a links table: a re-import must not desync the mirror.
+		{Key: "fulfillmentProvider", Value: keepIfLinked("fulfillmentProvider", lit(in.FulfillmentProvider))},
 		// upstreamProductId is deliberately ABSENT here: supplier mappings are
 		// admin-owned, and a legacy-catalog re-import must never wipe them
 		// (omitting the key leaves the stored value untouched). moneyTransfer is
@@ -900,6 +918,27 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 			set = append(set, bson.E{Key: "upstreamProductId", Value: *in.UpstreamProductID})
 		}
 	}
+	// Supplier links: the whole table + active id + rev in this same write as
+	// the mirror above, guarded on the rev the editor loaded.
+	idFilter := bson.D{{Key: "_id", Value: oid}}
+	if lp := in.linksPlan; lp != nil {
+		links := lp.Links
+		if links == nil {
+			links = []SupplierLink{}
+		}
+		set = append(set,
+			bson.E{Key: "supplierLinks", Value: links},
+			bson.E{Key: "activeSupplierLinkId", Value: lp.ActiveID},
+			bson.E{Key: "supplierLinksRev", Value: lp.Rev},
+		)
+		prev := lp.Rev - 1
+		if prev == 0 {
+			// Never-linked documents have no field: {$in:[0,null]} matches both.
+			idFilter = append(idFilter, bson.E{Key: "supplierLinksRev", Value: bson.D{{Key: "$in", Value: bson.A{0, nil}}}})
+		} else {
+			idFilter = append(idFilter, bson.E{Key: "supplierLinksRev", Value: prev})
+		}
+	}
 	if in.Stock != nil {
 		set = append(set, bson.E{Key: "stock", Value: *in.Stock})
 	}
@@ -956,8 +995,9 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 		// The editor sends categoryId on every save, so no match here means
 		// "already in that node" (or gone) → the plain update below, which
 		// keeps the rank.
+		moveFilter := append(append(bson.D{}, idFilter...), bson.E{Key: "categoryId", Value: bson.D{{Key: "$ne", Value: *moveTo}}})
 		err = r.col.FindOneAndUpdate(ctx,
-			bson.D{{Key: "_id", Value: oid}, {Key: "categoryId", Value: bson.D{{Key: "$ne", Value: *moveTo}}}},
+			moveFilter,
 			bson.D{{Key: "$set", Value: set}, {Key: "$unset", Value: bson.D{{Key: "position", Value: ""}}}},
 			opts,
 		).Decode(&updated)
@@ -971,12 +1011,17 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 	}
 	err = r.col.FindOneAndUpdate(
 		ctx,
-		bson.D{{Key: "_id", Value: oid}},
+		idFilter,
 		bson.D{{Key: "$set", Value: set}},
 		opts,
 	).Decode(&updated)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
+			if in.linksPlan != nil {
+				// The rev guard failed (another save got there first) — or
+				// the product vanished; the service loaded it a moment ago.
+				return nil, errLinksChanged()
+			}
 			return nil, apperrors.ErrNotFound
 		}
 		return nil, err

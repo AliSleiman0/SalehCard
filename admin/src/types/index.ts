@@ -113,6 +113,11 @@ export interface Product {
   fulfillmentProvider?: number
   /** The supplier's own product id (api-mode products). */
   upstreamProductId?: string
+  // Supplier links table (admin reads only — never in the public product JSON).
+  // The active link is mirrored into fulfillmentProvider/upstreamProductId.
+  supplierLinks?: SupplierLink[]
+  activeSupplierLinkId?: string
+  supplierLinksRev?: number
   bridge?: BridgeSpec
   stock: number
   available: boolean
@@ -201,3 +206,13 @@ export interface AdminUser {
 // ---- Locale / theme ----
 export type Locale = 'en' | 'ar' | 'tr'
 export type Theme = 'light' | 'dark'
+
+/** One supplier product a product can be fulfilled by (admin product editor). */
+export interface SupplierLink {
+  id: string
+  provider: number
+  upstreamId: string
+  enabled: boolean
+  addedAt?: string
+  addedBy?: string
+}

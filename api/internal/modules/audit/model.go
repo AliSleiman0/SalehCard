@@ -51,6 +51,7 @@ const (
 	ActionProductSoftDelete      = "product.soft_delete" // moved to the trash (reversible)
 	ActionProductRestore         = "product.restore"     // taken back out of the trash
 	ActionProductImageUpload     = "product.image_upload"
+	ActionProductSupplierLinks   = "product.supplier_links_update" // supplier links table edited
 	ActionKYCDecision            = "kyc.decision"
 	ActionReviewDecision         = "review.decision"
 	ActionReviewDelete           = "review.delete"

@@ -119,14 +119,24 @@ func (s *Service) List(ctx context.Context) ([]SupplierView, error) {
 	return views, nil
 }
 
-// mappedUpstreamIDs returns the set of upstream ids already imported for a
-// supplier (non-trashed products with this provider id and a non-empty
-// upstreamProductId). A product switched to manual mode still counts, so an
-// import never duplicates it; a trashed one does not.
+// mappedUpstreamIDs returns the set of upstream ids already linked to a
+// supplier: the legacy mapping and every supplier link of every non-trashed
+// product. A product switched to manual mode still counts, so an import never
+// duplicates it; a trashed one does not.
 func (s *Service) mappedUpstreamIDs(ctx context.Context, id int) (map[string]bool, error) {
 	cur, err := s.productc.Find(ctx,
-		bson.D{{Key: "fulfillmentProvider", Value: id}, {Key: "deletedAt", Value: nil}},
-		options.Find().SetProjection(bson.D{{Key: "upstreamProductId", Value: 1}}),
+		bson.D{
+			{Key: "deletedAt", Value: nil},
+			{Key: "$or", Value: bson.A{
+				bson.D{{Key: "fulfillmentProvider", Value: id}},
+				bson.D{{Key: "supplierLinks.provider", Value: id}},
+			}},
+		},
+		options.Find().SetProjection(bson.D{
+			{Key: "fulfillmentProvider", Value: 1},
+			{Key: "upstreamProductId", Value: 1},
+			{Key: "supplierLinks", Value: 1},
+		}),
 	)
 	if err != nil {
 		return nil, err
@@ -135,13 +145,20 @@ func (s *Service) mappedUpstreamIDs(ctx context.Context, id int) (map[string]boo
 	out := map[string]bool{}
 	for cur.Next(ctx) {
 		var row struct {
-			UpstreamProductID string `bson:"upstreamProductId"`
+			FulfillmentProvider *int                   `bson:"fulfillmentProvider"`
+			UpstreamProductID   string                 `bson:"upstreamProductId"`
+			SupplierLinks       []product.SupplierLink `bson:"supplierLinks"`
 		}
 		if err := cur.Decode(&row); err != nil {
 			return nil, err
 		}
-		if row.UpstreamProductID != "" {
+		if row.FulfillmentProvider != nil && *row.FulfillmentProvider == id && row.UpstreamProductID != "" {
 			out[row.UpstreamProductID] = true
+		}
+		for _, l := range row.SupplierLinks {
+			if l.Provider == id && l.UpstreamID != "" {
+				out[l.UpstreamID] = true
+			}
 		}
 	}
 	return out, cur.Err()

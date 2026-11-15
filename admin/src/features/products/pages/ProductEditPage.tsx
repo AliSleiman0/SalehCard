@@ -35,7 +35,8 @@ import {
 } from '../lib/unitPricing'
 import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
-import { SupplierProductPicker } from '@/features/suppliers/components/SupplierProductPicker'
+import { SupplierLinksTable } from '../components/SupplierLinksTable'
+import { linkIssues, toLinkRows, toLinksInput, type LinkRow } from '../lib/supplierLinks'
 import type { FulfillmentType, Locale, InputFieldType } from '@/types'
 
 const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
@@ -124,10 +125,12 @@ export default function ProductEditPage() {
   )
   // Upstream supplier (api-mode) delivery: orders are placed automatically at a
   // wholesale panel supplier. Mutually exclusive with the bridge checkbox —
-  // both imply fulfillmentMode. Provider id is string-backed for the select.
+  // both imply fulfillmentMode. The supplier links table lists every supplier
+  // product it can be fulfilled by; it is sent only when edited (rev-guarded).
   const [apiOn, setApiOn] = useState(false)
-  const [apiProvider, setApiProvider] = useState('')
-  const [upstreamProductId, setUpstreamProductId] = useState('')
+  const [linkRows, setLinkRows] = useState<LinkRow[]>([])
+  const [linksRev, setLinksRev] = useState(0)
+  const [linksDirty, setLinksDirty] = useState(false)
   const { data: provRes } = useFulfillmentProviders()
   const providerOptions = provRes?.data ?? []
   // Input-field specs: key, type, labels, and constraints (min/max, select
@@ -186,8 +189,9 @@ export default function ProductEditPage() {
       setBridgeMethod(p.bridge.method)
     }
     setApiOn(p.fulfillmentMode === 'api')
-    setApiProvider(p.fulfillmentProvider != null ? String(p.fulfillmentProvider) : '')
-    setUpstreamProductId(p.upstreamProductId ?? '')
+    setLinkRows(toLinkRows(p.supplierLinks, p.activeSupplierLinkId))
+    setLinksRev(p.supplierLinksRev ?? 0)
+    setLinksDirty(false)
     setInputFields(toRows(p.inputFields ?? []))
     setVerifyEnabled(!!p.verification)
     setVerifyApp(p.verification?.app ?? '')
@@ -299,43 +303,20 @@ export default function ProductEditPage() {
         Orders are placed automatically at the selected wholesale supplier and paid from its
         prepaid balance. Input-field keys must match the supplier's parameter names.
       </div>
-      {apiOn && (
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
-          <div>
-            <label className="alabel">Supplier</label>
-            <select
-              className="select"
-              value={apiProvider}
-              onChange={(e) => setApiProvider(e.target.value)}
-            >
-              <option value="">— select —</option>
-              {/* Preserve a stored id that isn't in the configured list (e.g. its
-                  token was removed) so editing doesn't silently drop it. */}
-              {apiProvider && !providerOptions.some((o) => String(o.id) === apiProvider) && (
-                <option value={apiProvider}>provider #{apiProvider}</option>
-              )}
-              {providerOptions.map((o) => (
-                <option key={o.id} value={String(o.id)}>
-                  {o.name} (#{o.id})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-            <label className="alabel">Supplier product</label>
-            <SupplierProductPicker
-              providerId={Number(apiProvider) || 0}
-              value={upstreamProductId}
-              onChange={setUpstreamProductId}
-              amountRange={supplierAmountRange}
-            />
-          </div>
-        </div>
-      )}
-      {apiOn && apiProvider && providerOptions.length > 0 && !providerOptions.some((o) => String(o.id) === apiProvider) && (
-        <div className="ahint" style={{ margin: '10px 0 0', color: 'var(--warn)' }}>
-          Supplier #{apiProvider} isn't connected — orders for this product wait for manual completion. Pick a
-          connected supplier.
+      {apiOn && providerOptions.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <SupplierLinksTable
+            rows={linkRows}
+            onChange={(rows) => {
+              setLinkRows(rows)
+              setLinksDirty(true)
+            }}
+            providers={providerOptions}
+            sellPrice={parseFloat(variants[0]?.price ?? '') || 0}
+            blockUnits={perUnit ? Number(unit.blockUnits) || 1 : 1}
+            amountRange={supplierAmountRange}
+            searchHint={title.en}
+          />
         </div>
       )}
       {apiOn && ff === 'credit' && !perUnit && ignoredAmounts.length > 0 && (
@@ -375,9 +356,9 @@ export default function ProductEditPage() {
     const wasBridge = data?.data?.fulfillmentMode === 'bridge_device'
     // Supplier API delivery applies to credit AND code products (panels deliver
     // top-ups and codes alike); bridge wins when both are somehow on. Turning it
-    // off emits the clear sentinels (provider 0 / '') plus the mode the backend
-    // would otherwise derive — a code product must fall back to `inventory`, not
-    // `manual_operator`, or its code-pool dispatch would break.
+    // off sends the mode the backend would otherwise derive — a code product
+    // must fall back to `inventory`, not `manual_operator`, or its code-pool
+    // dispatch would break. The supplier links stay (not sent unless edited).
     const isApi = (ff === 'credit' || ff === 'code') && apiOn && !isBridge
     const wasApi = data?.data?.fulfillmentMode === 'api'
     // Convert rows to the API shape first so reconcileBridgePhoneField keeps
@@ -434,13 +415,10 @@ export default function ProductEditPage() {
         ? {
             fulfillmentMode: 'bridge_device' as const,
             bridge: { provider: bridgeProvider, method: bridgeMethod },
-            ...(wasApi ? { fulfillmentProvider: 0, upstreamProductId: '' } : {}),
           }
         : isApi
           ? {
               fulfillmentMode: 'api' as const,
-              ...(apiProvider ? { fulfillmentProvider: Number(apiProvider) } : {}),
-              upstreamProductId: upstreamProductId.trim(),
               ...(wasBridge ? { bridge: { provider: '' as const, method: '' as const } } : {}),
             }
           : wasBridge || wasApi
@@ -448,10 +426,12 @@ export default function ProductEditPage() {
                 fulfillmentMode:
                   !wasBridge && ff === 'code' ? ('inventory' as const) : ('manual_operator' as const),
                 ...(wasBridge ? { bridge: { provider: '' as const, method: '' as const } } : {}),
-                ...(wasApi ? { fulfillmentProvider: 0, upstreamProductId: '' } : {}),
               }
             : {}),
       available: active,
+      // The supplier links table is kept when supplier delivery is turned off
+      // (orders then just don't go to a supplier); sent only when edited.
+      ...(linksDirty ? { supplierLinks: toLinksInput(linkRows, linksRev) } : {}),
       stock,
       // Unit cost: send only when filled so a blank preserves the stored value.
       ...(cost.trim() !== '' ? { cost: Math.max(0, parseFloat(cost) || 0) } : {}),
@@ -530,7 +510,13 @@ export default function ProductEditPage() {
     // Block the save on input-field problems the admin can fix in the table
     // (duplicate keys, min>max, optionless select …) — mirrors the server's
     // validation so a submit never bounces on a 400 the UI could have caught.
-    const issues = [...rowIssues(inputFields), ...unitIssues(unitForm, inputFields, variants)]
+    const apiDelivery =
+      (ff === 'credit' || ff === 'code') && apiOn && !(ff === 'credit' && bridgeOn) && providerOptions.length > 0
+    const issues = [
+      ...rowIssues(inputFields),
+      ...unitIssues(unitForm, inputFields, variants),
+      ...(linksDirty || (apiDelivery && linkRows.length === 0) ? linkIssues(linkRows, apiDelivery) : []),
+    ]
     setFieldIssues(issues)
     if (issues.length) return
     const mtErr = mtIssue()

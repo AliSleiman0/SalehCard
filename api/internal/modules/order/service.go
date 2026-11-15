@@ -337,6 +337,14 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 		if err := validateFieldInputsWith(p, in.Fields, s.orderFileOK); err != nil {
 			return nil, err
 		}
+		// The supplier mapping mirrors the product's active supplier link,
+		// which a product keeps even when not fulfilled via supplier; only an
+		// api-mode line is sent to a supplier, so only it records one.
+		var lineProvider *int
+		lineUpstream := ""
+		if mode == product.FulfillmentModeAPI {
+			lineProvider, lineUpstream = p.FulfillmentProvider, p.UpstreamProductID
+		}
 		items = append(items, OrderItem{
 			ProductID:           p.ID,
 			VariantID:           variant.ID,
@@ -348,8 +356,8 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID bson.ObjectID, isR
 			Price:               price,
 			FulfillmentType:     ft,
 			FulfillmentMode:     string(mode),
-			FulfillmentProvider: p.FulfillmentProvider,
-			UpstreamProductID:   p.UpstreamProductID,
+			FulfillmentProvider: lineProvider,
+			UpstreamProductID:   lineUpstream,
 			PlayerID:            linePlayerID(p, in),
 			Recipient:           in.Recipient,
 			Fields:              resolveOrderFields(p, in.Fields, in.Qty),

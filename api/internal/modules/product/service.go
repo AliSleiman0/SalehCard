@@ -87,6 +87,7 @@ type ProductService struct {
 	resellers  ResellerPricing      // optional; nil disables reseller catalog pricing
 	categories CategoryResolver     // optional; nil disables tree-aware category filtering
 	priceClean ResellerPriceCleaner // optional; nil skips custom-price cleanup on per-unit conversion
+	catalog    SupplierCatalog      // optional; nil skips live checks on new supplier links
 }
 
 // ServiceOption configures a ProductService.
@@ -349,9 +350,21 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*Pr
 	if in.Cost != nil && *in.Cost < 0 {
 		return nil, badRequest("cost must be non-negative")
 	}
-	// Supplier mapping is deliberately NOT hard-validated (an api product
-	// without provider/upstream id parks safely at order time via the stub).
+	// The legacy single mapping is deliberately NOT hard-validated (an api
+	// product without provider/upstream id parks safely at order time via the
+	// stub); a links table is (supplier_links.go). Either way the stored
+	// mapping mirrors the active link.
 	in.UpstreamProductID = strings.TrimSpace(in.UpstreamProductID)
+	if in.SupplierLinks != nil {
+		plan, err := s.planSupplierLinks(ctx, nil, in.SupplierLinks)
+		if err != nil {
+			return nil, err
+		}
+		in.linksPlan = plan
+		in.FulfillmentProvider, in.UpstreamProductID = plan.MirrorProvider, plan.MirrorUpstream
+	} else if links, active := linksFromLegacy(in.FulfillmentProvider, in.UpstreamProductID); links != nil {
+		in.linksPlan = &linksPlan{Links: links, ActiveID: active, Rev: 1, MirrorProvider: in.FulfillmentProvider, MirrorUpstream: in.UpstreamProductID}
+	}
 	fields, err := sanitizeInputFields(in.InputFields)
 	if err != nil {
 		return nil, err
@@ -445,7 +458,8 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 	// only when the update touches something they depend on.
 	var cur *Product
 	if in.UnitPricing != nil || in.InputFields != nil || in.Variants != nil ||
-		in.FulfillmentType != nil || in.FulfillmentMode != nil {
+		in.FulfillmentType != nil || in.FulfillmentMode != nil ||
+		in.SupplierLinks != nil || in.FulfillmentProvider != nil || in.UpstreamProductID != nil {
 		loaded, err := s.repo.FindByID(ctx, id)
 		if err != nil {
 			return nil, err
@@ -458,6 +472,24 @@ func (s *ProductService) Update(ctx context.Context, id string, in UpdateProduct
 	}
 	if err := validateSupplierAmountUpdate(cur, in); err != nil {
 		return nil, err
+	}
+	if cur != nil {
+		if err := checkLegacySupplierFields(cur, in); err != nil {
+			return nil, err
+		}
+	}
+	if in.SupplierLinks != nil {
+		plan, err := s.planSupplierLinks(ctx, cur, in.SupplierLinks)
+		if err != nil {
+			return nil, err
+		}
+		in.linksPlan = plan
+		// The mirror always follows the active link (0 / "" = clear).
+		mp, mu := 0, plan.MirrorUpstream
+		if plan.MirrorProvider != nil {
+			mp = *plan.MirrorProvider
+		}
+		in.FulfillmentProvider, in.UpstreamProductID = &mp, &mu
 	}
 	// Switching to per-unit: drop the variants' flat-price reseller overrides
 	// BEFORE the write, so a cleanup failure leaves the product on fixed
