@@ -610,9 +610,10 @@ Still open:
 The job ships **off**. Each step needs the owner's OK.
 
 1. ✅ **DONE 2026-11-15** (owner OK): in Azure (`salehcard-api` app settings) set `SUPPLIER_SYNC_ENABLED=true` and
-   `SUPPLIER_SYNC_DRYRUN=true`. Optional: `SUPPLIER_SYNC_INTERVAL` (default `10m`). NOTE: until the
-   `fix/supplier-sync-prod` fix shipped, every prod pass checked **0 products** (Cosmos vCore matched nothing
-   for the old query) — the day of reading alerts starts once that fix is deployed.
+   `SUPPLIER_SYNC_DRYRUN=true`. Optional: `SUPPLIER_SYNC_INTERVAL` (default `10m`). NOTE: prod passes
+   check **0 products** because the admin deliberately trashed the whole catalog (2026-11-15: all 593 products
+   have `deletedAt`; the sync skips trashed products by design — not a bug). The day of reading alerts starts
+   once live (untrashed) products set to "Fulfill via supplier API" on jentel / speedcard / gift4card exist.
 2. Leave it a day. Read **Suppliers → Alerts**. In this mode the admin sees "only warns you" on the page and
    each alert is tagged "warning only" and worded as what *would* happen. Nothing customer-facing changes;
    only each link's "last checked" cost snapshot is stored.
