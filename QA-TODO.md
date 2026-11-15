@@ -485,13 +485,13 @@ contact card, toggle switched off mid-session → keyword answer). Still to chec
    Admin → Conversations shows Off-topic / Sent to support / Asked to clarify / Small talk.
    App (needs a new Android/iOS build): the bottom-nav center button (was the QR scan) opens the Help chat —
    verified on the emulator in EN + AR (RTL) against a local API; check on a real phone, Android and iOS.
-4. **Store disclosures** (owner): typed help questions are processed by Azure OpenAI. The `/privacy` page
-   already says so (updated 2026-11-15, EN + AR). Still to do in the consoles before shipping the app build:
-   Play Data safety → add "Other user-generated content" (collected, shared with a service provider,
-   optional (only when the user types a question), purpose: app functionality + customer support, deleted
-   after 30 days), and
-   App Store privacy → "Other User Content" (App Functionality + Customer Support, linked to the user, not
-   used for tracking).
+4. ~~**Store disclosures**~~ — **checked 2026-11-15, no console change needed.** Typed help questions are
+   processed by Azure OpenAI; the `/privacy` page says so (EN + AR). Play Data safety already declares
+   "Other user-generated content" (collected, **not** shared — Azure OpenAI is a service provider acting on
+   our instructions, which Play does not count as sharing — not ephemeral, optional, App functionality), and
+   App Store App Privacy already declares "Other User Content" (App Functionality — Apple's definition
+   includes customer support — linked to the user, not used for tracking). Re-check only if the assistant
+   starts collecting a new kind of data.
 5. **iOS gets no game content**: on a TestFlight build ask about player IDs / gift cards — the answer must not
    come from the `android-only` "Game top-ups, player IDs and gift card codes" article.
 
