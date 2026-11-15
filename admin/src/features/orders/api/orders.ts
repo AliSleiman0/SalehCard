@@ -40,6 +40,10 @@ export interface SupplierAttempt {
   stuckAt?: string
   reroutedAt: string
   reroutedBy?: string
+  /** The system moved on by itself (the supplier refused for sure). */
+  auto?: boolean
+  /** Why the automatic fallback left this supplier. */
+  reason?: string
 }
 
 export interface OrderFulfillment {
@@ -51,6 +55,8 @@ export interface OrderFulfillment {
   /** Set once the supplier settler gave up waiting — eligible for a reroute. */
   supplierStuckAt?: string
   supplierAttempt?: number
+  /** The current attempt was made by the automatic fallback, not an admin. */
+  supplierAttemptAuto?: boolean
   supplierAttemptAt?: string
   /** Abandoned attempts, archived on each "send to another supplier". */
   supplierAttempts?: SupplierAttempt[]

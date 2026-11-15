@@ -61,6 +61,9 @@ type AdminProductView struct {
 	SupplierLinks        []SupplierLink `json:"supplierLinks"`
 	ActiveSupplierLinkID string         `json:"activeSupplierLinkId"`
 	SupplierLinksRev     int            `json:"supplierLinksRev"`
+	// SupplierFallback: the order engine falls back to the next link when the
+	// active one definitely refuses an order.
+	SupplierFallback bool `json:"supplierFallback"`
 }
 
 // NewAdminProductView builds the admin read of p (links resolved through
@@ -70,7 +73,7 @@ func NewAdminProductView(p *Product) AdminProductView {
 	if links == nil {
 		links = []SupplierLink{}
 	}
-	return AdminProductView{Product: p, SupplierLinks: links, ActiveSupplierLinkID: active, SupplierLinksRev: p.SupplierLinksRev}
+	return AdminProductView{Product: p, SupplierLinks: links, ActiveSupplierLinkID: active, SupplierLinksRev: p.SupplierLinksRev, SupplierFallback: !p.SupplierFallbackOff}
 }
 
 // EffectiveLinks returns a product's supplier links and the active link's id.

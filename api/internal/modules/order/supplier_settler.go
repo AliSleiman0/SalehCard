@@ -220,7 +220,7 @@ func (s *SupplierSettler) pollOne(ctx context.Context, o *Order) error {
 	case "accept":
 		return s.settleAccept(ctx, o, o.Fulfillment.ProviderRef, st.Codes, "completed by supplier check")
 	case "reject":
-		if o.Fulfillment.SupplierAttempt > 0 {
+		if adminRouted(o) {
 			return s.rejectAdminRoute(ctx, o, o.Fulfillment.ProviderRef, "rejected by the supplier", "rejected on status check")
 		}
 		return s.settleReject(ctx, o, "rejected upstream — refunded")
@@ -362,22 +362,28 @@ func (s *SupplierSettler) redispatchOne(ctx context.Context, o *Order) error {
 	case errors.Is(err, provider.ErrPending):
 		// Accepted, still working: promote to the pollable class.
 		if res.Reference == "" {
-			// Pending without a reference cannot be polled: retry instead.
+			// Pending without a reference cannot be polled: retry instead (the
+			// supplier did accept something, so the attempt is ambiguous).
 			n := o.Fulfillment.SupplierRetryCount + 1
-			return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, n, time.Now().UTC().Add(backoffDelay(n)))
+			return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, n, time.Now().UTC().Add(backoffDelay(n)), true)
 		}
 		return s.svc.repo.SetSupplierRef(ctx, o.ID, o.Fulfillment.SupplierAttempt, res.Reference,
 			TimelineEvent{Status: "processing", Note: "awaiting upstream provider", At: time.Now().UTC()})
 	case errors.Is(err, provider.ErrUnavailable), errors.Is(err, provider.ErrNotImplemented), isCtxErr(err):
+		// A definite refusal moves on to the product's next supplier link when
+		// one is eligible (never for an admin-routed or ambiguous attempt).
+		if claimed := s.svc.tryFallback(ctx, o, err, false); claimed != nil {
+			return s.dispatchRerouted(ctx, claimed)
+		}
 		// Still environmental (or the supplier token was pulled → stub):
 		// quiet backoff bump.
 		n := o.Fulfillment.SupplierRetryCount + 1
-		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, n, time.Now().UTC().Add(backoffDelay(n)))
+		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, n, time.Now().UTC().Add(backoffDelay(n)), retryAmbiguous(err))
 	default:
 		// The panel adapter wraps everything ambiguous in ErrUnavailable, so a
 		// plain error here is a definitive order-level rejection; upstream
 		// idempotency rules out "the original landed and this is a dup error".
-		if o.Fulfillment.SupplierAttempt > 0 {
+		if adminRouted(o) {
 			return s.rejectAdminRoute(ctx, o, "", "rejected by the supplier", "rejected on retry: "+err.Error())
 		}
 		return s.settleReject(ctx, o, "rejected upstream on re-dispatch — refunded")
@@ -393,15 +399,15 @@ func (s *SupplierSettler) maybeFlagStuck(ctx context.Context, o *Order, why stri
 }
 
 // rejectAdminRoute handles a definitive rejection of an attempt an admin chose
-// (SupplierAttempt > 0: a reroute, or a manual order sent to a supplier). It
+// (adminRouted: a reroute, or a manual order sent to a supplier). It
 // never auto-refunds — the admin picked this route, so they decide next: try
 // another supplier, complete by hand, or refund. MarkSupplierRejected flags it
 // stuck and moves the dead ref aside (kept for reconciliation, no longer
 // polled), pinned to the ref the caller saw (ref) — or, for a ref-less
 // dispatch, to the live retry clock — so concurrent ticks/replicas record the
 // rejection once. why goes to the customer-visible timeline; the upstream
-// detail goes to the audit log only. Placement-time orders (attempt 0) keep
-// the auto-refund.
+// detail goes to the audit log only. Placement-time attempts and automatic
+// fallback hops keep the auto-refund (owner decision 2026-11-15).
 func (s *SupplierSettler) rejectAdminRoute(ctx context.Context, o *Order, ref, why, detail string) error {
 	applied, err := s.svc.repo.MarkSupplierRejected(ctx, o.ID, o.Fulfillment.SupplierAttempt, ref, TimelineEvent{
 		Status: "stuck_upstream",

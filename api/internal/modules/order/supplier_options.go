@@ -22,9 +22,9 @@ type SupplierOption struct {
 	Provider     int    `json:"provider"`
 	ProviderName string `json:"providerName,omitempty"`
 	UpstreamID   string `json:"upstreamId"`
-	Name       string `json:"name,omitempty"`
-	Enabled    bool   `json:"enabled"`
-	Active     bool   `json:"active"`
+	Name         string `json:"name,omitempty"`
+	Enabled      bool   `json:"enabled"`
+	Active       bool   `json:"active"`
 	// Current = the order's current attempt went to this supplier product;
 	// Tried = an earlier attempt of this order did.
 	Current bool `json:"current"`

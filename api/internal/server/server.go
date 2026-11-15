@@ -250,6 +250,9 @@ func (s *Server) Routes() {
 	// /suppliers page, the catalog picker and the reroute guards all read
 	// through it, so supplier APIs aren't hit on every click.
 	supplierProbes := provider.NewProbes(orderSvc.Providers(), provider.ProbesConfig{CatalogTTL: s.cfg.SupplierCatalogTTL})
+	// Automatic fallback to a product's next supplier link on a definite
+	// refusal (placement + settler) checks links against the same cache.
+	orderSvc.SetSupplierFallback(supplierProbes, rec)
 	bridgeReg.Service.SetOrderSettler(orderSvc)
 	if bridgeReg.Service.Enabled() {
 		s.bridgeReaper = bridge.NewReaper(bridgeReg.Service, s.cfg.Bridge.ReaperInterval)

@@ -686,6 +686,9 @@ func (r *MongoRepository) Create(ctx context.Context, in CreateProductInput) (*P
 	if lp := in.linksPlan; lp != nil && len(lp.Links) > 0 {
 		p.SupplierLinks, p.ActiveSupplierLinkID, p.SupplierLinksRev = lp.Links, lp.ActiveID, lp.Rev
 	}
+	if in.SupplierFallback != nil {
+		p.SupplierFallbackOff = !*in.SupplierFallback
+	}
 	p.normalize() // persist images as [] (not null) when created without any
 
 	if _, err := r.col.InsertOne(ctx, p); err != nil {
@@ -938,6 +941,9 @@ func (r *MongoRepository) Update(ctx context.Context, id string, in UpdateProduc
 		} else {
 			idFilter = append(idFilter, bson.E{Key: "supplierLinksRev", Value: prev})
 		}
+	}
+	if in.SupplierFallback != nil {
+		set = append(set, bson.E{Key: "supplierFallbackOff", Value: !*in.SupplierFallback})
 	}
 	if in.Stock != nil {
 		set = append(set, bson.E{Key: "stock", Value: *in.Stock})

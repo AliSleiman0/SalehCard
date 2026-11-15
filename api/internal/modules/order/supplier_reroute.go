@@ -423,9 +423,15 @@ func (s *SupplierSettler) dispatchRerouted(ctx context.Context, o *Order) error 
 		errors.Is(err, provider.ErrNotImplemented), isCtxErr(err):
 		// Environmental: the settler retries on the normal backoff (same new key).
 		// (Pending with no reference cannot be polled, and a cancelled or timed-out
-		// call is never a definitive rejection: both retry.)
-		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, 1, time.Now().UTC().Add(backoffDelay(1)))
+		// call is never a definitive rejection: both retry.) An automatic attempt
+		// refused here falls back again on that retry (redispatchOne).
+		return s.svc.repo.BumpSupplierRetry(ctx, o.ID, o.Fulfillment.SupplierAttempt, 1, time.Now().UTC().Add(backoffDelay(1)), retryAmbiguous(err))
 	default:
+		if !adminRouted(o) {
+			// An automatic fallback attempt definitively rejected: refund, like a
+			// placement-time rejection (owner decision 2026-11-15).
+			return s.settleReject(ctx, o, "rejected by the backup supplier — refunded")
+		}
 		// A definitive rejection by the NEW supplier: no automatic refund — the
 		// admin just chose this route (rejectAdminRoute, shared with the
 		// settler's later rejections).

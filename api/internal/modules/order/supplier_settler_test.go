@@ -354,7 +354,7 @@ func TestSettler_RedispatchSuccessLosesRaceToAdmin(t *testing.T) {
 
 	// The admin completes/refunds between the list query and the settle: the
 	// upstream Fulfill still runs, but the guarded transition must lose cleanly.
-	require.NoError(t, st.svc.repo.BumpSupplierRetry(context.Background(), o.ID, 0, 1, due)) // keep retryable
+	require.NoError(t, st.svc.repo.BumpSupplierRetry(context.Background(), o.ID, 0, 1, due, false)) // keep retryable
 	o.Status = OrderStatusRefunded
 	require.NoError(t, st.redispatchOne(context.Background(), o))
 
