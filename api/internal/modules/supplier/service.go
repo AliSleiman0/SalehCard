@@ -18,47 +18,29 @@ import (
 	"github.com/AliSleiman0/salehcard/api/pkg/pagination"
 )
 
-// balanceCacheTTL bounds how stale a supplier balance probe may be. Probes hit a
-// billed/rate-limited upstream, so the /suppliers list and dashboard strip share
-// this short cache instead of probing on every request.
-const balanceCacheTTL = 60 * time.Second
-
-// probeTimeout caps a single balance/catalog probe so one slow supplier never
-// stalls the whole list.
-const probeTimeout = 8 * time.Second
-
-// Service is the admin supplier surface. It resolves each configured supplier id
-// to its provider.Cataloger (through the shared registry) for live probes, and
+// Service is the admin supplier surface. It reads each configured supplier's
+// balance and catalog through the shared provider.Probes cache (one cache for
+// the /suppliers page, the catalog picker and the order reroute guards), and
 // owns the supplier_settings persistence plus catalog import/sync over the
 // products collection.
 type Service struct {
-	registry  *provider.Registry
+	probes    *provider.Probes
 	suppliers []config.SupplierConfig
 	settings  *settingsRepo
 	products  product.Service
 	productc  *mongo.Collection
 	orderc    *mongo.Collection
-
-	mu    sync.Mutex
-	cache map[int]cachedProbe
 }
 
-type cachedProbe struct {
-	acc provider.Account
-	err error
-	at  time.Time
-}
-
-// NewService builds the supplier service.
-func NewService(db *mongo.Database, registry *provider.Registry, suppliers []config.SupplierConfig, products product.Service) *Service {
+// NewService builds the supplier service over the shared probes cache.
+func NewService(db *mongo.Database, probes *provider.Probes, suppliers []config.SupplierConfig, products product.Service) *Service {
 	return &Service{
-		registry:  registry,
+		probes:    probes,
 		suppliers: suppliers,
 		settings:  newSettingsRepo(db),
 		products:  products,
 		productc:  db.Collection("products"),
 		orderc:    db.Collection("orders"),
-		cache:     map[int]cachedProbe{},
 	}
 }
 
@@ -72,36 +54,22 @@ func (s *Service) supplierByID(id int) (config.SupplierConfig, bool) {
 	return config.SupplierConfig{}, false
 }
 
-// cataloger resolves a supplier id to its Cataloger, or (nil,false) when the
-// adapter doesn't support catalog/balance probes (stub / non-Cataloger).
-func (s *Service) cataloger(id int) (provider.Cataloger, bool) {
-	cat, ok := s.registry.Resolve(&id).(provider.Cataloger)
-	return cat, ok
+// probe returns a supplier's account balance (cached by Probes). A supplier
+// whose adapter is not a Cataloger returns provider.ErrNotImplemented (health
+// "not_probed").
+func (s *Service) probe(ctx context.Context, id int) (provider.Account, error) {
+	return s.probes.Balance(ctx, id)
 }
 
-// probe returns a supplier's account balance, cached for balanceCacheTTL. A
-// supplier whose adapter is not a Cataloger returns provider.ErrNotImplemented
-// (health "not_probed").
-func (s *Service) probe(ctx context.Context, id int) (provider.Account, error) {
-	s.mu.Lock()
-	if c, ok := s.cache[id]; ok && time.Since(c.at) < balanceCacheTTL {
-		s.mu.Unlock()
-		return c.acc, c.err
+// liveMapped matches the non-trashed, supplier-mode products mapped to a
+// supplier — what the mapped count and catalog sync act on. A trashed product
+// or one switched to manual fulfillment is not "using" the supplier.
+func liveMapped(id int) bson.D {
+	return bson.D{
+		{Key: "fulfillmentProvider", Value: id},
+		{Key: "fulfillmentMode", Value: string(product.FulfillmentModeAPI)},
+		{Key: "deletedAt", Value: nil},
 	}
-	s.mu.Unlock()
-
-	cat, ok := s.cataloger(id)
-	if !ok {
-		return provider.Account{}, provider.ErrNotImplemented
-	}
-	cctx, cancel := context.WithTimeout(ctx, probeTimeout)
-	defer cancel()
-	acc, err := cat.Profile(cctx)
-
-	s.mu.Lock()
-	s.cache[id] = cachedProbe{acc: acc, err: err, at: time.Now()}
-	s.mu.Unlock()
-	return acc, err
 }
 
 // List returns every configured supplier with a live (cached) balance/health
@@ -119,7 +87,7 @@ func (s *Service) List(ctx context.Context) ([]SupplierView, error) {
 			defer wg.Done()
 			set := settingsMap[sc.ID] // zero value when unset
 			acc, perr := s.probe(ctx, sc.ID)
-			mapped, _ := s.productc.CountDocuments(ctx, bson.D{{Key: "fulfillmentProvider", Value: sc.ID}})
+			mapped, _ := s.productc.CountDocuments(ctx, liveMapped(sc.ID))
 
 			health := provider.HealthFromError(perr)
 			var balance *float64
@@ -152,10 +120,12 @@ func (s *Service) List(ctx context.Context) ([]SupplierView, error) {
 }
 
 // mappedUpstreamIDs returns the set of upstream ids already imported for a
-// supplier (products with this provider id and a non-empty upstreamProductId).
+// supplier (non-trashed products with this provider id and a non-empty
+// upstreamProductId). A product switched to manual mode still counts, so an
+// import never duplicates it; a trashed one does not.
 func (s *Service) mappedUpstreamIDs(ctx context.Context, id int) (map[string]bool, error) {
 	cur, err := s.productc.Find(ctx,
-		bson.D{{Key: "fulfillmentProvider", Value: id}},
+		bson.D{{Key: "fulfillmentProvider", Value: id}, {Key: "deletedAt", Value: nil}},
 		options.Find().SetProjection(bson.D{{Key: "upstreamProductId", Value: 1}}),
 	)
 	if err != nil {
@@ -180,16 +150,11 @@ func (s *Service) mappedUpstreamIDs(ctx context.Context, id int) (map[string]boo
 // Catalog lists a supplier's upstream products, flagging which are already
 // mapped to a SalehCard product.
 func (s *Service) Catalog(ctx context.Context, id int) ([]CatalogProductView, error) {
-	cat, ok := s.cataloger(id)
-	if !ok {
-		return nil, provider.ErrNotImplemented
-	}
-	cctx, cancel := context.WithTimeout(ctx, probeTimeout)
-	defer cancel()
-	products, err := cat.ListProducts(cctx)
+	snap, err := s.probes.Catalog(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	products := snap.Products
 	mapped, err := s.mappedUpstreamIDs(ctx, id)
 	if err != nil {
 		return nil, err
@@ -233,22 +198,22 @@ type mappedProduct struct {
 // rewriting the customer-facing sell price (that stays an explicit admin
 // decision — an automated FX-free price rewrite is exactly the footgun we avoid).
 func (s *Service) Sync(ctx context.Context, id int) (SyncResult, error) {
-	cat, ok := s.cataloger(id)
-	if !ok {
-		return SyncResult{}, provider.ErrNotImplemented
-	}
-	cctx, cancel := context.WithTimeout(ctx, probeTimeout)
-	defer cancel()
-	catalog, err := cat.ListProducts(cctx)
+	// An explicit sync always asks the supplier (never a cached copy), and
+	// never acts on a stale fallback: hiding products on old data is wrong.
+	snap, err := s.probes.Refresh(ctx, id)
 	if err != nil {
 		return SyncResult{}, err
 	}
+	if snap.Stale {
+		return SyncResult{}, fmt.Errorf("supplier %d: catalog refresh failed: %w", id, provider.ErrUnavailable)
+	}
+	catalog := snap.Products
 	byID := make(map[string]provider.CatalogProduct, len(catalog))
 	for _, p := range catalog {
 		byID[p.UpstreamID] = p
 	}
 
-	cur, err := s.productc.Find(ctx, bson.D{{Key: "fulfillmentProvider", Value: id}})
+	cur, err := s.productc.Find(ctx, liveMapped(id))
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -312,16 +277,11 @@ func (s *Service) Import(ctx context.Context, id int, in ImportInput) (ImportRes
 	if !ok {
 		return ImportResult{}, fmt.Errorf("unknown supplier %d", id)
 	}
-	cat, ok := s.cataloger(id)
-	if !ok {
-		return ImportResult{}, provider.ErrNotImplemented
-	}
-	cctx, cancel := context.WithTimeout(ctx, probeTimeout)
-	defer cancel()
-	catalog, err := cat.ListProducts(cctx)
+	snap, err := s.probes.Catalog(ctx, id)
 	if err != nil {
 		return ImportResult{}, err
 	}
+	catalog := snap.Products
 	byID := make(map[string]provider.CatalogProduct, len(catalog))
 	for _, p := range catalog {
 		byID[p.UpstreamID] = p

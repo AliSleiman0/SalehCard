@@ -169,11 +169,37 @@ function RerouteModal({
   const [ack, setAck] = useState(false)
   const [understood, setUnderstood] = useState(false)
   const [error, setError] = useState('')
+  // Set when the server says the supplier's balance looks too low: the admin
+  // may still send (some supplier accounts run on credit).
+  const [lowBalance, setLowBalance] = useState(false)
+  const [sendAnyway, setSendAnyway] = useState(false)
   const qty = supplierQty(line)
+
+  // A supplier product id belongs to ONE supplier: switching supplier must
+  // clear it, or the old id goes to the new supplier (prod 2026-11-14:
+  // order #D74816BC went to speedcard with jentel's id).
+  const changeProvider = (id: number) => {
+    setProviderId(id)
+    setUpstream('')
+    setError('')
+    setLowBalance(false)
+    setSendAnyway(false)
+  }
+  const changeUpstream = (v: string) => {
+    setUpstream(v)
+    setError('')
+    setLowBalance(false)
+    setSendAnyway(false)
+  }
 
   const send = useMutation({
     mutationFn: () =>
-      rerouteOrder(order.id, { providerId, upstreamProductId: upstream.trim(), acknowledgeAmbiguous: ack }),
+      rerouteOrder(order.id, {
+        providerId,
+        upstreamProductId: upstream.trim(),
+        acknowledgeAmbiguous: ack,
+        acknowledgeLowBalance: sendAnyway,
+      }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin', 'order', order.id] })
       qc.invalidateQueries({ queryKey: ['admin', 'orders'] })
@@ -184,10 +210,18 @@ function RerouteModal({
       else toast.success('Sent to the supplier')
       onClose()
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not send the order.'),
+    onError: (e) => {
+      if (e instanceof ApiError) {
+        setError(e.message)
+        if (e.code === 'REROUTE_LOW_BALANCE') setLowBalance(true)
+      } else {
+        setError('Could not send the order.')
+      }
+    },
   })
 
-  const ready = providerId > 0 && upstream.trim() !== '' && understood && (!ambiguous || ack)
+  const ready =
+    providerId > 0 && upstream.trim() !== '' && understood && (!ambiguous || ack) && (!lowBalance || sendAnyway)
 
   return (
     <Modal onClose={onClose} maxWidth={640}>
@@ -202,7 +236,12 @@ function RerouteModal({
         </p>
 
         <label className="alabel">Supplier</label>
-        <select className="afield" value={providerId} onChange={(e) => setProviderId(Number(e.target.value))}>
+        <select
+          className="afield"
+          aria-label="Supplier"
+          value={providerId}
+          onChange={(e) => changeProvider(Number(e.target.value))}
+        >
           {providers.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -217,7 +256,7 @@ function RerouteModal({
         <SupplierProductPicker
           providerId={providerId}
           value={upstream}
-          onChange={setUpstream}
+          onChange={changeUpstream}
           qty={qty}
           sends={sentParams(line)}
         />
@@ -272,7 +311,17 @@ function RerouteModal({
           )}
         </div>
 
-        {error && <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 12 }}>{error}</div>}
+        {error && (
+          <div role="alert" style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, marginTop: 12 }}>
+            {error}
+          </div>
+        )}
+        {lowBalance && (
+          <label style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', fontSize: 13 }}>
+            <input type="checkbox" checked={sendAnyway} onChange={(e) => setSendAnyway(e.target.checked)} /> Send
+            anyway — this supplier account allows credit
+          </label>
+        )}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
           <button className="abtn" onClick={onClose}>
             Cancel

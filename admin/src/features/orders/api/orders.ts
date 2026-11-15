@@ -182,6 +182,8 @@ export interface RerouteInput {
   providerId: number
   upstreamProductId: string
   acknowledgeAmbiguous?: boolean
+  /** Send even though the supplier's balance looks below this order's cost. */
+  acknowledgeLowBalance?: boolean
 }
 
 /** Sends a stuck supplier order to another supplier and dispatches it there now. */
