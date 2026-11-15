@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   Icon,
   PageHead,
@@ -11,20 +11,26 @@ import {
 } from '@/components'
 import { useAuditLog } from '../hooks/useAuditLog'
 import type { AuditEntry } from '../api/audit'
+import { formatDateTime } from '@/lib/utils'
 
-/** Quick action filters — the money/permission actions an operator audits most. */
+/** `user.bulk_sms` → `aud_act_user_bulk_sms` (dots and other separators become underscores). */
+const keyPart = (s: string) => s.replace(/[^a-zA-Z0-9_]/g, '_')
+
+/** Quick action filters — the money/permission actions an operator audits most.
+ *  Labels are translation keys (looked up at render time). */
 const FILTERS: [string, string][] = [
-  ['', 'All'],
-  ['wallet.adjust', 'Wallet adjustments'],
-  ['reseller.balance_adjust', 'Reseller balances'],
-  ['user.role_change', 'Role changes'],
-  ['role.update', 'RBAC role edits'],
-  ['order.refund', 'Refunds'],
-  ['kyc.decision', 'KYC decisions'],
+  ['', 'all'],
+  ['wallet.adjust', 'aud_f_wallet'],
+  ['reseller.balance_adjust', 'aud_f_reseller'],
+  ['user.role_change', 'aud_f_role_change'],
+  ['role.update', 'aud_f_role_edit'],
+  ['order.refund', 'aud_f_refund'],
+  ['kyc.decision', 'aud_f_kyc'],
 ]
 
 /** Renders the summary object as compact `key: value` pills. */
 function SummaryPills({ summary }: { summary?: Record<string, unknown> }) {
+  const { t } = useTranslation()
   if (!summary || Object.keys(summary).length === 0) return null
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
@@ -41,7 +47,7 @@ function SummaryPills({ summary }: { summary?: Record<string, unknown> }) {
             color: 'var(--text-dim)',
           }}
         >
-          {k}: {String(v)}
+          {t(`aud_key_${keyPart(k)}`, { defaultValue: k })}: {String(v)}
         </span>
       ))}
     </div>
@@ -49,21 +55,24 @@ function SummaryPills({ summary }: { summary?: Record<string, unknown> }) {
 }
 
 function Row({ e }: { e: AuditEntry }) {
+  const { t } = useTranslation()
   const at = new Date(e.at)
   return (
     <div style={{ display: 'flex', gap: 14, padding: '12px 18px', alignItems: 'flex-start', borderBottom: '1px solid var(--border)' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <b className="mono" style={{ fontSize: 13 }}>{e.action}</b>
+          <b className="mono" style={{ fontSize: 13 }} title={e.action}>
+            {t(`aud_act_${keyPart(e.action)}`, { defaultValue: e.action })}
+          </b>
           <span className="faint" style={{ fontSize: 12 }}>
-            {e.targetType} <span className="mono">{e.targetId.slice(-8)}</span>
+            {t(`aud_target_${keyPart(e.targetType)}`, { defaultValue: e.targetType })} <span className="mono">{e.targetId.slice(-8)}</span>
           </span>
-          <span className="faint" style={{ fontSize: 12, marginInlineStart: 'auto' }} title={at.toISOString()}>
-            {at.toLocaleString()}
+          <span className="faint" style={{ fontSize: 12, marginInlineStart: 'auto' }} title={Number.isNaN(at.getTime()) ? undefined : at.toISOString()}>
+            {formatDateTime(e.at)}
           </span>
         </div>
         <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginTop: 2 }}>
-          by <b>{e.actorEmail || e.actorId || '—'}</b>
+          <Trans i18nKey="aud_by" values={{ who: e.actorEmail || e.actorId || '—' }} components={{ b: <b /> }} />
         </div>
         <SummaryPills summary={e.summary} />
       </div>
@@ -88,12 +97,12 @@ export default function AuditLogPage() {
     <div className="page page-wide">
       <PageHead
         back="/"
-        crumbs={[t('grp_system'), 'Activity log']}
-        title="Activity log"
-        sub={meta ? `${meta.total.toLocaleString()} recorded actions` : ''}
+        crumbs={[t('grp_system'), t('nav_audit')]}
+        title={t('nav_audit')}
+        sub={meta ? t('aud_sub', { n: meta.total.toLocaleString() }) : ''}
       >
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('exp_refresh')}
         </button>
       </PageHead>
 
@@ -109,7 +118,7 @@ export default function AuditLogPage() {
                   setPage(1)
                 }}
               >
-                {l}
+                {t(l)}
               </Chip>
             ))}
           </div>
@@ -118,9 +127,9 @@ export default function AuditLogPage() {
         {isLoading ? (
           <LoadingSpinner />
         ) : isError ? (
-          <ErrorState message="Couldn't load the activity log." onRetry={() => refetch()} />
+          <ErrorState message={t('aud_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No recorded actions yet" sub="Admin actions (role changes, wallet adjustments, refunds, moderation decisions) appear here." />
+          <EmptyState title={t('aud_empty')} sub={t('aud_empty_sub')} />
         ) : (
           <>
             <div>

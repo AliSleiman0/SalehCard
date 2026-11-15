@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { Icon, PageHead, Art, LoadingSpinner, ErrorState, EmptyState, Pagination, artForCategory } from '@/components'
 import {
@@ -13,6 +13,7 @@ import {
 import { parseCodesFile, listCodes, type UploadItem } from '../api/codes'
 import { CodesModal } from '../components/CodesModal'
 import { formatDateTime, downloadCsv, money } from '@/lib/utils'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import { useKeyedPage } from '@/hooks/useKeyedPage'
 import type { InventoryStats, Code } from '@/types'
@@ -68,12 +69,12 @@ export default function InventoryPage() {
       <PageHead
         back="/"
         crumbs={[t('grp_catalog'), t('nav_inventory')]}
-        title="Inventory & code management"
-        sub="Mission-critical — if codes run out, purchases fail."
+        title={t('inv_title')}
+        sub={t('inv_sub')}
       >
         {canManage && (
           <button className="abtn primary" onClick={() => openUpload()}>
-            <Icon name="upload" size={15} /> Bulk upload codes
+            <Icon name="upload" size={15} /> {t('inv_bulk_upload_codes')}
           </button>
         )}
       </PageHead>
@@ -81,10 +82,10 @@ export default function InventoryPage() {
       <div className="atabs">
         {(
           [
-            ['stock', 'Code stock'],
-            ['upload', 'Bulk upload'],
-            ['config', 'Low-stock config'],
-            ['audit', 'Code lookup'],
+            ['stock', t('inv_tab_stock')],
+            ['upload', t('inv_tab_upload')],
+            ['config', t('inv_tab_config')],
+            ['audit', t('inv_tab_audit')],
           ] as [Tab, string][]
         )
           // Upload + threshold config are mutations — hidden for view-only admins.
@@ -102,7 +103,7 @@ export default function InventoryPage() {
         (isLoading ? (
           <LoadingSpinner />
         ) : isError ? (
-          <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
+          <ErrorState message={t('inv_load_error')} onRetry={() => refetch()} />
         ) : (
           <>
             {tab === 'upload' && canManage && <UploadTab stats={stats} defaultProduct={uploadProduct} />}
@@ -181,7 +182,15 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
         p++
       } while (p <= pages)
 
-      const header = ['Code', 'PIN', 'Status', 'Order ID', 'Delivered to', 'Delivered at', 'Batch']
+      const header = [
+        t('inv_f_code'),
+        t('inv_f_pin'),
+        t('status'),
+        t('inv_f_order_id'),
+        t('inv_f_delivered_to'),
+        t('inv_f_delivered_at'),
+        t('inv_f_batch'),
+      ]
       const csvRows = all.map((c) => [
         c.code,
         c.pin ?? '',
@@ -199,26 +208,26 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
   }
 
   if (isLoading) return <LoadingSpinner />
-  if (isError) return <ErrorState message="Could not load inventory" onRetry={() => refetch()} />
+  if (isError) return <ErrorState message={t('inv_load_error')} onRetry={() => refetch()} />
   if (view === 'all' && !debouncedSearch.trim() && (meta?.total ?? 0) === 0)
-    return <EmptyState icon="layers" title="No code inventory yet" sub="Code-type products will appear here once created." />
+    return <EmptyState icon="layers" title={t('inv_empty_title')} sub={t('inv_empty_sub')} />
 
   return (
     <div>
       <div className="kpigrid" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
         {(
           [
-            ['Total codes', (totals?.uploaded ?? 0).toLocaleString(), 'box', 'var(--grad)'],
-            ['Available', (totals?.available ?? 0).toLocaleString(), 'checkc', 'linear-gradient(135deg,#2fd47a,#22e3c8)'],
-            ['Delivered', (totals?.delivered ?? 0).toLocaleString(), 'send', 'linear-gradient(135deg,#3b5bff,#8a3bff)'],
-            ['Low-stock products', String(totals?.lowStock ?? 0), 'alert', 'rgba(255,77,109,.2)'],
+            [t('inv_kpi_total_codes'), (totals?.uploaded ?? 0).toLocaleString(), 'box', 'var(--grad)'],
+            [t('inv_available'), (totals?.available ?? 0).toLocaleString(), 'checkc', 'linear-gradient(135deg,#2fd47a,#22e3c8)'],
+            [t('inv_delivered'), (totals?.delivered ?? 0).toLocaleString(), 'send', 'linear-gradient(135deg,#3b5bff,#8a3bff)'],
+            [t('inv_kpi_low_stock'), String(totals?.lowStock ?? 0), 'alert', 'rgba(255,77,109,.2)'],
             [
-              'Total stock value',
+              t('inv_kpi_stock_value'),
               money(totals?.totalValue ?? 0),
               'wallet',
               'linear-gradient(135deg,#f0a020,#f5c542)',
               totals?.unvaluedProducts
-                ? `${totals.unvaluedProducts} product${totals.unvaluedProducts === 1 ? '' : 's'} not priced`
+                ? t('inv_unpriced', { count: totals.unvaluedProducts })
                 : undefined,
             ],
           ] as [string, string, 'box' | 'checkc' | 'send' | 'alert' | 'wallet', string, string?][]
@@ -232,7 +241,7 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
             </div>
             <div className="k-val">{v}</div>
             {note && (
-              <div className="k-foot" title="Products with no unit price set are excluded from this total.">
+              <div className="k-foot" title={t('inv_unpriced_tip')}>
                 <span className="k-since">{note}</span>
               </div>
             )}
@@ -242,12 +251,12 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
       <div className="acard">
         <div className="panelhead">
           <Icon name="layers" size={17} />
-          <h3>Code inventory by product</h3>
+          <h3>{t('inv_by_product')}</h3>
           <div className="ph-act">
             <div className="fsearch" style={{ minWidth: 0 }}>
               <Icon name="search" size={15} />
               <input
-                placeholder="Search by product…"
+                placeholder={t('inv_search_ph')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -257,10 +266,10 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                 {t('all')}
               </button>
               <button className={view === 'below' ? 'on' : ''} onClick={() => setView('below')}>
-                Below threshold
+                {t('inv_below_threshold')}
               </button>
               <button className={view === 'low' ? 'on' : ''} onClick={() => setView('low')}>
-                Low only
+                {t('inv_low_only')}
               </button>
             </div>
           </div>
@@ -269,15 +278,15 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Uploaded</th>
-                <th>Available</th>
-                <th>Delivered</th>
-                <th>Expired</th>
-                <th>Unit price</th>
-                <th>Total value</th>
-                <th>Threshold</th>
-                <th>Stock level</th>
+                <th>{t('col_product')}</th>
+                <th>{t('inv_uploaded')}</th>
+                <th>{t('inv_available')}</th>
+                <th>{t('inv_delivered')}</th>
+                <th>{t('inv_expired')}</th>
+                <th>{t('inv_unit_price')}</th>
+                <th>{t('inv_total_value')}</th>
+                <th>{t('inv_threshold')}</th>
+                <th>{t('inv_stock_level')}</th>
                 <th></th>
               </tr>
             </thead>
@@ -291,7 +300,7 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                         className="cellprod"
                         onClick={() => canManage && onAdd(it.productId)}
                         style={{ cursor: canManage ? 'pointer' : 'default' }}
-                        title={canManage ? 'Upload codes for this product' : undefined}
+                        title={canManage ? t('inv_row_upload_tip') : undefined}
                       >
                         <Art art={artForCategory(it.category || it.title)} size={34} />
                         <div className="pn">
@@ -313,7 +322,13 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                           <i style={{ width: (it.available === 0 ? 4 : pct) + '%' }} />
                         </div>
                         <span className="num">
-                          {it.available === 0 ? 'Empty' : it.level === 'lo' ? 'Low' : it.level === 'mid' ? 'OK' : 'Healthy'}
+                          {it.available === 0
+                            ? t('inv_level_empty')
+                            : it.level === 'lo'
+                              ? t('inv_level_low')
+                              : it.level === 'mid'
+                                ? t('inv_level_ok')
+                                : t('inv_level_healthy')}
                         </span>
                       </span>
                     </td>
@@ -323,14 +338,14 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                           <button
                             className="abtn xs"
                             onClick={() => setCodesFor(it)}
-                            title="View & manage this product's codes"
+                            title={t('inv_codes_tip')}
                           >
-                            <Icon name="layers" size={13} /> Codes
+                            <Icon name="layers" size={13} /> {t('inv_codes_btn')}
                           </button>
                         )}
                         {canManage && (
                           <button className="abtn xs" onClick={() => onAdd(it.productId)}>
-                            <Icon name="upload" size={13} /> Add
+                            <Icon name="upload" size={13} /> {t('add')}
                           </button>
                         )}
                         {canManage && (
@@ -338,9 +353,9 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
                             className="abtn xs"
                             onClick={() => exportCodes(it.productId, it.title)}
                             disabled={exportingId === it.productId}
-                            title="Export this product's codes as CSV"
+                            title={t('inv_export_tip')}
                           >
-                            <Icon name="download" size={13} /> {exportingId === it.productId ? '…' : 'Export'}
+                            <Icon name="download" size={13} /> {exportingId === it.productId ? '…' : t('export')}
                           </button>
                         )}
                       </div>
@@ -353,7 +368,7 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
         </div>
         {rows.length === 0 && (
           <div className="lsrow faint" style={{ fontSize: 12.5, justifyContent: 'center' }}>
-            {debouncedSearch.trim() ? 'No products match your search.' : 'No low-stock products.'}
+            {debouncedSearch.trim() ? t('inv_no_match') : t('inv_no_low')}
           </div>
         )}
         <Pagination
@@ -372,6 +387,7 @@ function StockTab({ onAdd }: { onAdd: (productId?: string) => void }) {
 }
 
 function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; defaultProduct?: string }) {
+  const { t } = useTranslation()
   const upload = useUploadCodes()
   const { data: historyRes } = useUploadHistory()
   const history = historyRes?.data ?? []
@@ -444,18 +460,18 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
     <div className="formgrid">
       <div className="fieldset">
         <div className="acard pad">
-          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Bulk upload codes</h3>
-          <label className="alabel">Product</label>
+          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('inv_bulk_upload_codes')}</h3>
+          <label className="alabel">{t('col_product')}</label>
           <select
             className="select"
             style={{ width: '100%', marginBottom: 16 }}
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
           >
-            {stats.length === 0 && <option value="">No code products</option>}
+            {stats.length === 0 && <option value="">{t('inv_no_code_products')}</option>}
             {stats.map((it) => (
               <option key={it.productId} value={it.productId}>
-                {it.title} — {it.available} available
+                {t('inv_option_available', { title: it.title, n: it.available })}
               </option>
             ))}
           </select>
@@ -470,12 +486,12 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
             <div className="dz-ic">
               <Icon name="upload" size={22} />
             </div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)' }}>Drop a CSV or TXT file of codes</div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)' }}>{t('inv_drop_title')}</div>
             <div className="ahint" style={{ marginTop: 6 }}>
-              One code per line, or <span style={{ fontFamily: 'ui-monospace' }}>code,pin</span> per line · max 50,000
+              <Trans i18nKey="inv_line_format_max" components={{ m: <span style={{ fontFamily: 'ui-monospace' }} /> }} />
             </div>
             <button className="abtn sm" style={{ marginTop: 14 }} onClick={() => fileRef.current?.click()}>
-              Choose file
+              {t('inv_choose_file')}
             </button>
           </div>
 
@@ -485,21 +501,21 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
                 <Icon name="file" size={15} />
                 <b style={{ fontSize: 13 }}>{fileName}</b>
                 <span className="faint" style={{ fontSize: 12, marginInlineStart: 'auto' }}>
-                  {items.length} rows
+                  {t('inv_rows', { n: items.length })}
                 </span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
                 <span className="st st-ok" style={{ fontSize: 11 }}>
                   <i className="d" />
-                  {validCount} valid
+                  {t('inv_valid', { n: validCount })}
                 </span>
                 <span className="st st-warn" style={{ fontSize: 11 }}>
                   <i className="d" />
-                  {dupes} duplicates
+                  {t('inv_duplicates', { n: dupes })}
                 </span>
                 <span className="st st-mute" style={{ fontSize: 11 }}>
                   <i className="d" />
-                  {invalid} bad format
+                  {t('inv_bad_format', { n: invalid })}
                 </span>
               </div>
             </div>
@@ -517,29 +533,30 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
                 fontWeight: 700,
               }}
             >
-              <Icon name="checkc" size={15} /> Committed {result.inserted} codes ({result.duplicates} duplicates skipped).
+              <Icon name="checkc" size={15} />{' '}
+              {t('inv_committed', { inserted: result.inserted, duplicates: result.duplicates })}
             </div>
           )}
           {upload.error && (
             <div style={{ marginTop: 12, color: 'var(--danger)', fontSize: 13, fontWeight: 700 }}>
-              {(upload.error as Error).message}
+              {apiErrorText(upload.error, 'inv_upload_failed')}
             </div>
           )}
 
           <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
             <button className="abtn" onClick={() => fileRef.current?.click()}>
-              Choose another
+              {t('inv_choose_another')}
             </button>
             <button className="abtn primary" disabled={validCount === 0 || upload.isPending} onClick={commit}>
-              <Icon name="check" size={15} /> {upload.isPending ? 'Committing…' : `Commit ${validCount} codes`}
+              <Icon name="check" size={15} /> {upload.isPending ? t('inv_committing') : t('inv_commit_n', { n: validCount })}
             </button>
           </div>
 
           {/* Manual entry — type codes directly instead of uploading a file. */}
           <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
-            <label className="alabel">Or type codes</label>
+            <label className="alabel">{t('inv_or_type')}</label>
             <div className="ahint" style={{ marginBottom: 8 }}>
-              One code per line, or <span style={{ fontFamily: 'ui-monospace' }}>code,pin</span> per line
+              <Trans i18nKey="inv_line_format" components={{ m: <span style={{ fontFamily: 'ui-monospace' }} /> }} />
             </div>
             <textarea
               className="afield"
@@ -551,8 +568,8 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
             <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
               {manualText.trim() && (
                 <span className="faint" style={{ fontSize: 12 }}>
-                  {manualParsed.items.length} valid
-                  {manualParsed.invalid > 0 ? ` · ${manualParsed.invalid} bad format` : ''}
+                  {t('inv_valid', { n: manualParsed.items.length })}
+                  {manualParsed.invalid > 0 ? ` · ${t('inv_bad_format', { n: manualParsed.invalid })}` : ''}
                 </span>
               )}
               <button
@@ -563,8 +580,10 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
               >
                 <Icon name="check" size={15} />{' '}
                 {upload.isPending
-                  ? 'Committing…'
-                  : `Add ${manualParsed.items.length || ''} code${manualParsed.items.length === 1 ? '' : 's'}`}
+                  ? t('inv_committing')
+                  : manualParsed.items.length
+                    ? t('inv_add_codes_n', { count: manualParsed.items.length })
+                    : t('inv_add_codes')}
               </button>
             </div>
           </div>
@@ -574,12 +593,12 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
         <div className="acard">
           <div className="panelhead">
             <Icon name="clock" size={17} />
-            <h3>Upload history</h3>
+            <h3>{t('inv_upload_history')}</h3>
           </div>
           <div>
             {history.length === 0 && (
               <div className="lsrow faint" style={{ fontSize: 12.5 }}>
-                No uploads yet — bulk-uploaded code batches will appear here.
+                {t('inv_no_uploads')}
               </div>
             )}
             {history.map((u) => (
@@ -592,15 +611,15 @@ function UploadTab({ stats, defaultProduct }: { stats: InventoryStats[]; default
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                   <span className="st st-ok" style={{ fontSize: 10.5 }}>
-                    +{u.inserted} codes
+                    {t('inv_plus_codes', { n: u.inserted })}
                   </span>
                   {u.duplicates > 0 && (
                     <span className="st st-warn" style={{ fontSize: 10.5 }}>
-                      {u.duplicates} dupes
+                      {t('inv_dupes', { n: u.duplicates })}
                     </span>
                   )}
                   <span className="faint" style={{ marginInlineStart: 'auto' }}>
-                    by {u.uploadedBy ? u.uploadedBy.split('@')[0] : '—'}
+                    {t('inv_by', { name: u.uploadedBy ? u.uploadedBy.split('@')[0] : '—' })}
                   </span>
                 </div>
               </div>
@@ -627,10 +646,10 @@ function ConfigTab({ stats }: { stats: InventoryStats[] }) {
     <div className="acard">
       <div className="panelhead">
         <Icon name="alert" size={17} />
-        <h3>Low-stock thresholds</h3>
+        <h3>{t('inv_thresholds_title')}</h3>
         <div className="ph-act">
           <span className="faint" style={{ fontSize: 12 }}>
-            Edit a value and press Enter to save
+            {t('inv_enter_to_save')}
           </span>
         </div>
       </div>
@@ -638,10 +657,10 @@ function ConfigTab({ stats }: { stats: InventoryStats[] }) {
         <table className="tbl">
           <thead>
             <tr>
-              <th>Product</th>
-              <th>Available now</th>
-              <th>Alert threshold</th>
-              <th>Auto-disable at 0</th>
+              <th>{t('col_product')}</th>
+              <th>{t('inv_available_now')}</th>
+              <th>{t('inv_alert_threshold')}</th>
+              <th>{t('inv_auto_disable')}</th>
               <th>{t('status')}</th>
             </tr>
           </thead>
@@ -676,12 +695,12 @@ function ConfigTab({ stats }: { stats: InventoryStats[] }) {
                     {it.available < it.threshold ? (
                       <span className="st st-danger">
                         <i className="d" />
-                        Below threshold
+                        {t('inv_below_threshold')}
                       </span>
                     ) : (
                       <span className="st st-ok">
                         <i className="d" />
-                        OK
+                        {t('inv_level_ok')}
                       </span>
                     )}
                   </td>
@@ -696,6 +715,7 @@ function ConfigTab({ stats }: { stats: InventoryStats[] }) {
 }
 
 function AuditTab() {
+  const { t } = useTranslation()
   const [code, setCode] = useState('')
   const { data, isFetching } = useLookupCode(code)
   const audit = data?.data
@@ -703,19 +723,19 @@ function AuditTab() {
   return (
     <div className="formgrid">
       <div className="acard pad">
-        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Code lookup &amp; audit</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('inv_lookup_title')}</h3>
         <div className="fsearch" style={{ minWidth: 0, marginBottom: 18 }}>
           <Icon name="search" size={16} />
           <input
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="Paste a code or last 4 digits…"
+            placeholder={t('inv_lookup_ph')}
             style={{ fontFamily: 'ui-monospace' }}
           />
         </div>
         {isFetching && <LoadingSpinner />}
         {!isFetching && code.trim().length >= 3 && !audit && (
-          <EmptyState icon="search" title="No matching code" sub="Check the value and try again." />
+          <EmptyState icon="search" title={t('inv_no_match_code')} sub={t('inv_no_match_code_sub')} />
         )}
         {audit && (
           <>
@@ -723,38 +743,38 @@ function AuditTab() {
               <span className="vc">{audit.code.code}</span>
               <span className="st st-mute">
                 <i className="d" />
-                {audit.code.status}
+                {t(`inv_status_${audit.code.status}`, { defaultValue: audit.code.status })}
               </span>
             </div>
             <div className="deflist">
               <div className="defrow">
-                <span className="dk">Product</span>
+                <span className="dk">{t('col_product')}</span>
                 <span className="dv">{audit.product?.title ?? audit.code.productId}</span>
               </div>
               <div className="defrow">
-                <span className="dk">Code ID</span>
+                <span className="dk">{t('inv_code_id')}</span>
                 <span className="dv mono">{audit.code.id.slice(-10)}</span>
               </div>
               <div className="defrow">
-                <span className="dk">Status</span>
+                <span className="dk">{t('status')}</span>
                 <span className="dv" style={{ textTransform: 'capitalize' }}>
-                  {audit.code.status}
+                  {t(`inv_status_${audit.code.status}`, { defaultValue: audit.code.status })}
                 </span>
               </div>
               <div className="defrow">
-                <span className="dk">Consumed by order</span>
+                <span className="dk">{t('inv_consumed_by')}</span>
                 <span className="dv mono">{audit.code.orderId ?? '—'}</span>
               </div>
               <div className="defrow">
-                <span className="dk">Delivered to</span>
+                <span className="dk">{t('inv_f_delivered_to')}</span>
                 <span className="dv">{audit.code.deliveredTo ?? '—'}</span>
               </div>
               <div className="defrow">
-                <span className="dk">Delivered at</span>
+                <span className="dk">{t('inv_f_delivered_at')}</span>
                 <span className="dv">{audit.code.deliveredAt ?? '—'}</span>
               </div>
               <div className="defrow">
-                <span className="dk">Uploaded batch</span>
+                <span className="dk">{t('inv_uploaded_batch')}</span>
                 <span className="dv">{audit.code.batch ?? '—'}</span>
               </div>
             </div>
@@ -762,29 +782,29 @@ function AuditTab() {
         )}
       </div>
       <div className="acard pad">
-        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Audit trail</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{t('inv_audit_trail')}</h3>
         {!audit ? (
           <div className="faint" style={{ fontSize: 13 }}>
-            Look up a code to see its lifecycle.
+            {t('inv_lookup_hint')}
           </div>
         ) : (
           <div className="timeline">
             {(
               [
-                ['done', 'Uploaded', audit.code.batch ?? 'batch', 'checkc'],
+                ['done', t('inv_tl_uploaded'), audit.code.batch ?? t('inv_tl_batch'), 'checkc'],
                 [
                   audit.code.orderId ? 'done' : 'todo',
-                  'Reserved at checkout',
+                  t('inv_tl_reserved'),
                   audit.code.orderId ?? '—',
                   'clock',
                 ],
                 [
                   audit.code.status === 'delivered' ? 'done' : 'todo',
-                  'Delivered to customer',
+                  t('inv_tl_delivered'),
                   audit.code.deliveredAt ?? '—',
                   'send',
                 ],
-                [audit.code.status === 'delivered' ? 'active' : 'todo', 'Active in customer vault', '—', 'shield'],
+                [audit.code.status === 'delivered' ? 'active' : 'todo', t('inv_tl_vault'), '—', 'shield'],
               ] as [string, string, string, 'checkc' | 'clock' | 'send' | 'shield'][]
             ).map(([st, title, sub, ic], i) => (
               <div className={'tlitem ' + st} key={i}>

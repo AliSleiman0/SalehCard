@@ -1,4 +1,7 @@
+import { periodLabel } from '@/features/promos/lib/adaptPromo'
 import type { AdminOffer } from '../api/offers'
+
+export { periodLabel }
 
 /** The flat shape the offer list renders. */
 export interface OfferView {
@@ -19,24 +22,6 @@ export interface OfferView {
   period: string
   sortOrder: number
   raw: AdminOffer
-}
-
-/** Short "Mon D" label for an ISO date, or '' when absent/unparseable. */
-function shortDate(iso?: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-/** Build the valid-period label from optional start/end bounds. */
-export function periodLabel(startsAt?: string, endsAt?: string): string {
-  const s = shortDate(startsAt)
-  const e = shortDate(endsAt)
-  if (s && e) return `${s} – ${e}`
-  if (s) return `From ${s}`
-  if (e) return `Until ${e}`
-  return 'Always'
 }
 
 /** Display label for an offer's discount, keyed on its type. */

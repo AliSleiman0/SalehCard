@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   Icon,
   PageHead,
@@ -10,8 +10,8 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
-import { money } from '@/lib/utils'
-import { ApiError } from '@/lib/api-client'
+import { formatDateTime, money } from '@/lib/utils'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import {
   usePayments,
@@ -30,17 +30,17 @@ import {
 import { orderNumber } from '@/lib/orderNumber'
 
 const STATUS_FILTERS: [PaymentIntentStatus | '', string][] = [
-  ['', 'All'],
-  ['pending', 'Pending'],
-  ['confirming', 'Confirming'],
-  ['confirmed', 'Confirmed'],
-  ['expired', 'Expired'],
+  ['', 'all'],
+  ['pending', 'pay_filter_pending'],
+  ['confirming', 'pay_filter_confirming'],
+  ['confirmed', 'pay_filter_confirmed'],
+  ['expired', 'pay_filter_expired'],
 ]
 
 const PURPOSE_FILTERS: [PaymentPurpose | '', string][] = [
-  ['', 'All types'],
-  ['topup', 'Top-ups'],
-  ['order', 'Orders'],
+  ['', 'pay_all_types'],
+  ['topup', 'pay_filter_topups'],
+  ['order', 'pay_filter_orders'],
 ]
 
 const STATUS_CLASS: Record<PaymentIntentStatus, string> = {
@@ -51,10 +51,10 @@ const STATUS_CLASS: Record<PaymentIntentStatus, string> = {
 }
 
 const DEPOSIT_FILTERS: [DepositStatus | '', string][] = [
-  ['unmatched', 'Unmatched'],
-  ['credited', 'Credited'],
-  ['ignored', 'Ignored'],
-  ['', 'All'],
+  ['unmatched', 'pay_filter_unmatched'],
+  ['credited', 'pay_filter_credited'],
+  ['ignored', 'pay_filter_ignored'],
+  ['', 'all'],
 ]
 
 const DEPOSIT_STATUS_CLASS: Record<DepositStatus, string> = {
@@ -131,7 +131,7 @@ function IntentsView() {
                 setPage(1)
               }}
             >
-              {l}
+              {t(l)}
             </Chip>
           ))}
         </div>
@@ -145,24 +145,21 @@ function IntentsView() {
                 setPage(1)
               }}
             >
-              {l}
+              {t(l)}
             </Chip>
           ))}
         </div>
         <button className="abtn" style={{ marginInlineStart: 'auto' }} onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('top_refresh')}
         </button>
       </div>
 
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Couldn't load payments." onRetry={() => refetch()} />
+        <ErrorState message={t('pay_load_error')} onRetry={() => refetch()} />
       ) : rows.length === 0 ? (
-        <EmptyState
-          title="No USDT payments"
-          sub="On-chain USDT deposits (wallet top-ups and order payments) appear here as customers pay."
-        />
+        <EmptyState title={t('pay_empty')} sub={t('pay_empty_sub')} />
       ) : (
         <>
           <div>
@@ -171,17 +168,17 @@ function IntentsView() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <b style={{ fontSize: 15 }}>{usdtAmount(r.amountUsd)}</b>
                   <span className="bdg">{r.network.toUpperCase()}</span>
-                  <span className="bdg">{r.addressMode === 'shared' ? 'Shared' : 'Derived'}</span>
-                  <span className="bdg">{r.purpose === 'order' ? 'Order' : 'Top-up'}</span>
+                  <span className="bdg">{r.addressMode === 'shared' ? t('pay_shared') : t('pay_derived')}</span>
+                  <span className="bdg">{r.purpose === 'order' ? t('pay_order') : t('pay_topup')}</span>
                   <span className="faint" style={{ fontSize: 12.5 }}>
                     {r.user.email || r.user.phone || r.userId.slice(-8)}
                   </span>
                   <span className="faint" style={{ fontSize: 12 }}>
-                    · {new Date(r.createdAt).toLocaleString()}
+                    · {formatDateTime(r.createdAt)}
                   </span>
                   <span style={{ marginInlineStart: 'auto' }} className={STATUS_CLASS[r.status]}>
                     <i className="d" />
-                    {r.status}
+                    {t(`pay_status_${r.status}`, { defaultValue: r.status })}
                   </span>
                 </div>
 
@@ -194,12 +191,12 @@ function IntentsView() {
                   </a>
                   {r.txHash && (
                     <a href={explorerTx(r.network, r.txHash)} target="_blank" rel="noreferrer" title={r.txHash}>
-                      tx {short(r.txHash)} ↗
+                      {t('pay_tx', { hash: short(r.txHash) })} ↗
                     </a>
                   )}
-                  {r.orderId && <span>order {orderNumber(r.orderId)}</span>}
+                  {r.orderId && <span>{t('pay_order_ref', { n: orderNumber(r.orderId) })}</span>}
                   {r.receivedUsd > 0 && r.receivedUsd !== r.amountUsd && (
-                    <span style={{ color: 'var(--danger)' }}>received {usdtAmount(r.receivedUsd)}</span>
+                    <span style={{ color: 'var(--danger)' }}>{t('pay_received', { amount: usdtAmount(r.receivedUsd) })}</span>
                   )}
                   {r.settlement && <span>· {r.settlement}</span>}
                 </div>
@@ -250,19 +247,19 @@ function DepositsView() {
                 setPage(1)
               }}
             >
-              {l}
+              {t(l)}
             </Chip>
           ))}
         </div>
         <button className="abtn" style={{ marginInlineStart: 'auto' }} onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('top_refresh')}
         </button>
       </div>
 
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Couldn't load deposits." onRetry={() => refetch()} />
+        <ErrorState message={t('pay_dep_load_error')} onRetry={() => refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
           title={t('payments_deposits_empty')}
@@ -277,11 +274,11 @@ function DepositsView() {
                   <b style={{ fontSize: 15 }}>{usdtAmount(d.amountUsd)}</b>
                   <span className="bdg">{d.network.toUpperCase()}</span>
                   <span className="faint" style={{ fontSize: 12 }}>
-                    {new Date(d.blockTime).toLocaleString()}
+                    {formatDateTime(d.blockTime)}
                   </span>
                   <span style={{ marginInlineStart: 'auto' }} className={DEPOSIT_STATUS_CLASS[d.status]}>
                     <i className="d" />
-                    {d.status}
+                    {t(`pay_dep_status_${d.status}`, { defaultValue: d.status })}
                   </span>
                 </div>
 
@@ -290,10 +287,10 @@ function DepositsView() {
                   className="faint"
                 >
                   <a href={explorerTx(d.network, d.txHash)} target="_blank" rel="noreferrer" title={d.txHash}>
-                    tx {short(d.txHash)} ↗
+                    {t('pay_tx', { hash: short(d.txHash) })} ↗
                   </a>
-                  <span title={d.fromAddress}>from {short(d.fromAddress)}</span>
-                  {d.attributedBy && <span>· by {d.attributedBy}</span>}
+                  <span title={d.fromAddress}>{t('pay_from', { addr: short(d.fromAddress) })}</span>
+                  {d.attributedBy && <span>· {t('pay_by', { name: d.attributedBy })}</span>}
                   {d.note && <span>· {d.note}</span>}
                   {canManage && d.status === 'unmatched' && (
                     <span style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
@@ -337,7 +334,7 @@ function AttributeModal({ dep, onClose }: { dep: UnmatchedDeposit; onClose: () =
 
   const apply = () => {
     if (!user.trim()) {
-      setError('A customer email or user id is required.')
+      setError(t('pay_err_user_required'))
       return
     }
     setError('')
@@ -345,7 +342,7 @@ function AttributeModal({ dep, onClose }: { dep: UnmatchedDeposit; onClose: () =
       { id: dep.id, user: user.trim(), note: note.trim() || undefined },
       {
         onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Attribution failed.'),
+        onError: (e) => setError(apiErrorText(e, 'pay_attribute_failed')),
       },
     )
   }
@@ -355,10 +352,13 @@ function AttributeModal({ dep, onClose }: { dep: UnmatchedDeposit; onClose: () =
       <div style={{ padding: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('payments_attribute_title')}</h3>
         <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Credit the <b>{money(dep.amountUsd)}</b> deposit (tx {short(dep.txHash)}) to a customer's
-          wallet. This cannot be undone.
+          <Trans
+            i18nKey="pay_attribute_body"
+            values={{ amount: money(dep.amountUsd), hash: short(dep.txHash) }}
+            components={{ b: <b /> }}
+          />
         </p>
-        <label className="alabel">Customer email or user id</label>
+        <label className="alabel">{t('pay_customer_label')}</label>
         <input
           className="afield"
           placeholder="customer@example.com"
@@ -366,11 +366,11 @@ function AttributeModal({ dep, onClose }: { dep: UnmatchedDeposit; onClose: () =
           onChange={(e) => setUser(e.target.value)}
         />
         <label className="alabel" style={{ marginTop: 12 }}>
-          Note (optional)
+          {t('pay_note_optional')}
         </label>
         <input
           className="afield"
-          placeholder="e.g. customer sent the base amount without the cents…"
+          placeholder={t('pay_attribute_ph')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
@@ -401,7 +401,7 @@ function IgnoreModal({ dep, onClose }: { dep: UnmatchedDeposit; onClose: () => v
       { id: dep.id, note: note.trim() || undefined },
       {
         onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not ignore deposit.'),
+        onError: (e) => setError(apiErrorText(e, 'pay_ignore_failed')),
       },
     )
   }
@@ -411,13 +411,16 @@ function IgnoreModal({ dep, onClose }: { dep: UnmatchedDeposit; onClose: () => v
       <div style={{ padding: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('payments_ignore_title')}</h3>
         <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Mark the <b>{money(dep.amountUsd)}</b> deposit (tx {short(dep.txHash)}) as ignored — no
-          customer will be credited.
+          <Trans
+            i18nKey="pay_ignore_body"
+            values={{ amount: money(dep.amountUsd), hash: short(dep.txHash) }}
+            components={{ b: <b /> }}
+          />
         </p>
-        <label className="alabel">Note (optional)</label>
+        <label className="alabel">{t('pay_note_optional')}</label>
         <input
           className="afield"
-          placeholder="e.g. dust / spam transfer…"
+          placeholder={t('pay_ignore_ph')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />

@@ -1,3 +1,4 @@
+import i18n from '@/i18n/config'
 import type { BulkAction } from '../api/products'
 
 /**
@@ -23,7 +24,9 @@ export function canSelectAllMatching(allOnPageSelected: boolean, shown: number, 
   return allOnPageSelected && total > shown
 }
 
-const plural = (n: number) => `${n.toLocaleString()} product${n === 1 ? '' : 's'}`
+/** i18n options for a product count: `count` picks the English plural, `n` is
+ *  the grouped number shown ("1,240"). */
+const counted = (n: number) => ({ count: n, n: n.toLocaleString() })
 
 /**
  * Confirmation text for a bulk action, or null when it needs none. Trash and
@@ -31,18 +34,15 @@ const plural = (n: number) => `${n.toLocaleString()} product${n === 1 ? '' : 's'
  * with the full count, since it reaches beyond the rows on screen.
  */
 export function bulkConfirmText(action: BulkAction, count: number, matchAll: boolean): string | null {
-  const what = matchAll ? `all ${plural(count)} matching the current filters` : plural(count)
+  const all = matchAll ? '_all' : ''
   switch (action) {
     case 'delete':
-      return `Move ${what} to the trash? Customers won't see or be able to buy them until you restore them from the Deleted view.`
     case 'purge':
-      return `Permanently delete ${what}? This erases them for good and cannot be undone. Past orders keep their own copy of the product.`
+      return i18n.t(`prod_confirm_${action}${all}`, counted(count))
     case 'restore':
-      return matchAll ? `Restore ${what}? Each goes back to its previous status (active or draft).` : null
     case 'activate':
-      return matchAll ? `Activate ${what}? Customers will see them.` : null
     case 'deactivate':
-      return matchAll ? `Deactivate ${what}? Customers won't see them.` : null
+      return matchAll ? i18n.t(`prod_confirm_${action}_all`, counted(count)) : null
     default:
       return null
   }
@@ -52,16 +52,12 @@ export function bulkConfirmText(action: BulkAction, count: number, matchAll: boo
 export function bulkDoneText(action: BulkAction, modified: number): string {
   switch (action) {
     case 'delete':
-      return `Moved ${plural(modified)} to the trash.`
     case 'restore':
-      return `Restored ${plural(modified)}.`
     case 'purge':
-      return `Permanently deleted ${plural(modified)}.`
     case 'activate':
-      return `Activated ${plural(modified)}.`
     case 'deactivate':
-      return `Deactivated ${plural(modified)}.`
+      return i18n.t(`prod_done_${action}`, counted(modified))
     default:
-      return `Updated ${plural(modified)}.`
+      return i18n.t('prod_done_updated', counted(modified))
   }
 }

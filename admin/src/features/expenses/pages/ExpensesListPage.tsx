@@ -35,7 +35,7 @@ function endOfDayISO(d: string): string | undefined {
 }
 
 export default function ExpensesListPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const can = useCan()
   const canManage = can('expenses.manage')
@@ -60,7 +60,9 @@ export default function ExpensesListPage() {
   const { data, isLoading, isError, refetch } = useExpenses({ page, ...filters })
   const summary = useExpenseSummary(filters)
 
-  const rows = useMemo(() => (data?.data ?? []).map(adaptExpense), [data])
+  // The date label follows the language, so re-adapt when it changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => (data?.data ?? []).map(adaptExpense), [data, i18n.language])
   const meta = data?.meta
   const totals = summary.data?.data?.totals ?? []
 
@@ -96,7 +98,7 @@ export default function ExpensesListPage() {
         p++
       } while (p <= pages)
 
-      const header = [t('exp_date'), t('exp_category'), t('exp_note'), t('exp_amount'), 'Currency']
+      const header = [t('exp_date'), t('exp_category'), t('exp_note'), t('exp_amount'), t('exp_currency')]
       const csvRows = all.map((e) => {
         const v = adaptExpense(e)
         return [v.dateLabel, catLabel(v.category, v.categoryOther), v.note || '', v.raw.amount, v.raw.currency]
@@ -297,7 +299,7 @@ function DeleteModal({
           <b>
             {label} · {expense.amountLabel}
           </b>
-          ? {t('exp_delete_irreversible')}
+          {t('exp_qmark')} {t('exp_delete_irreversible')}
         </p>
         {del.isError && (
           <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 12 }}>{t('exp_delete_error')}</div>

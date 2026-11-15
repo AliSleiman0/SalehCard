@@ -14,7 +14,7 @@ import {
   EmptyState,
 } from '@/components'
 import { money, downloadCsv } from '@/lib/utils'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useUsers } from '@/features/users/hooks/useUsers'
 import { adaptUser } from '@/features/users/lib/adaptUser'
 import {
@@ -92,7 +92,17 @@ export default function ResellerListPage() {
         p++
       } while (p <= pages)
 
-      const header = ['ID', 'Email', 'Phone', 'Tier', 'Margin %', 'Sub-balance', 'Orders', 'Volume', 'Status']
+      const header = [
+        t('usr_csv_id'),
+        t('login_email'),
+        t('rd_phone'),
+        t('res_col_tier'),
+        t('res_csv_margin'),
+        t('rd_kpi_subbalance'),
+        t('usr_col_orders'),
+        t('res_col_volume'),
+        t('status'),
+      ]
       const csvRows = all.map((raw) => {
         const r = adaptReseller(raw)
         return [r.id, r.email, r.phone, r.tier, r.margin, r.balance.toFixed(2), r.orders, r.vol.toFixed(2), r.status]
@@ -108,17 +118,17 @@ export default function ResellerListPage() {
       <PageHead
         back="/"
         crumbs={[t('grp_operations'), t('nav_resellers')]}
-        title="Reseller & agent management"
-        sub={meta ? `${meta.total.toLocaleString()} resellers across ${tiers.length} tiers` : ''}
+        title={t('res_title')}
+        sub={meta ? t('res_sub', { n: meta.total.toLocaleString(), tiers: tiers.length }) : ''}
       >
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('exp_refresh')}
         </button>
         <button className="abtn" onClick={handleExport} disabled={exporting}>
           <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
         </button>
         <button className="abtn primary" onClick={() => setAdding(true)}>
-          <Icon name="plus" size={15} /> Add reseller
+          <Icon name="plus" size={15} /> {t('res_add')}
         </button>
       </PageHead>
 
@@ -148,19 +158,19 @@ export default function ResellerListPage() {
                     </span>
                     <b style={{ fontSize: 15 }}>{tn.name}</b>
                     <span className="faint" style={{ marginInlineStart: 'auto', fontSize: 12.5 }}>
-                      {tn.count} agents
+                      {t('res_agents', { n: tn.count })}
                     </span>
                   </div>
                   <div>
                     <div className="faint" style={{ fontSize: 11.5, fontWeight: 700 }}>
-                      Discount
+                      {t('res_discount')}
                     </div>
                     <div className="num" style={{ fontSize: 19, fontWeight: 800, color: tc }}>
                       {tn.marginPercent}%
                     </div>
                   </div>
                   <button className="abtn xs" style={{ width: '100%', marginTop: 12 }} onClick={() => setEditTier(tn)}>
-                    <Icon name="edit" size={13} /> Edit tier
+                    <Icon name="edit" size={13} /> {t('res_edit_tier')}
                   </button>
                 </div>
               )
@@ -183,7 +193,7 @@ export default function ResellerListPage() {
               }}
             >
               <Icon name="plus" size={20} />
-              <b style={{ fontSize: 13.5 }}>{tiers.length === 0 ? 'Create your first tier' : 'New tier'}</b>
+              <b style={{ fontSize: 13.5 }}>{tiers.length === 0 ? t('res_first_tier') : t('res_new_tier')}</b>
             </button>
           </>
         )}
@@ -194,14 +204,14 @@ export default function ResellerListPage() {
           <div className="fsearch">
             <Icon name="search" size={15} />
             <input
-              placeholder="Search email or phone…"
+              placeholder={t('usr_search_ph')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="chiprow">
             <Chip on={tier === ''} onClick={() => onTier('')}>
-              All tiers
+              {t('res_all_tiers')}
             </Chip>
             {tiers.map((tn) => (
               <Chip key={tn.id} on={tier === tn.name} onClick={() => onTier(tn.name)}>
@@ -217,30 +227,30 @@ export default function ResellerListPage() {
               setPage(1)
             }}
           >
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
+            <option value="">{t('usr_all_statuses')}</option>
+            <option value="active">{t('active')}</option>
+            <option value="suspended">{t('usr_status_suspended')}</option>
           </select>
         </div>
 
         {isLoading ? (
           <LoadingSpinner />
         ) : isError ? (
-          <ErrorState message="Couldn't load resellers." onRetry={() => refetch()} />
+          <ErrorState message={t('res_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No resellers found" />
+          <EmptyState title={t('res_empty')} />
         ) : (
           <>
             <div className="tablewrap">
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Reseller</th>
-                    <th>Tier</th>
-                    <th>Sub-balance</th>
-                    <th>Margin</th>
-                    <th>Orders</th>
-                    <th>Volume</th>
+                    <th>{t('res_col_reseller')}</th>
+                    <th>{t('res_col_tier')}</th>
+                    <th>{t('rd_kpi_subbalance')}</th>
+                    <th>{t('res_col_margin')}</th>
+                    <th>{t('usr_col_orders')}</th>
+                    <th>{t('res_col_volume')}</th>
                     <th>{t('status')}</th>
                     <th></th>
                   </tr>
@@ -336,30 +346,30 @@ function AddResellerModal({ tiers, onClose }: { tiers: TierDef[]; onClose: () =>
 
   const submit = () => {
     if (!selectedId) {
-      setError('Select a user to promote.')
+      setError(t('res_err_select_user'))
       return
     }
     setError('')
     promote.mutate(
       { userId: selectedId, tier },
-      { onSuccess: onClose, onError: (e) => setError(e instanceof ApiError ? e.message : 'Promotion failed.') },
+      { onSuccess: onClose, onError: (e) => setError(apiErrorText(e, 'res_promote_failed')) },
     )
   }
 
   return (
     <Modal onClose={onClose} maxWidth={480}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>Add reseller</h3>
-        <label className="alabel">Find a user (email or phone)</label>
-        <input className="afield" placeholder="Search users…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>{t('res_add')}</h3>
+        <label className="alabel">{t('res_find_user')}</label>
+        <input className="afield" placeholder={t('res_search_users_ph')} value={q} onChange={(e) => setQ(e.target.value)} />
         <div style={{ maxHeight: 220, overflowY: 'auto', marginTop: 10 }}>
           {isFetching && candidates.length === 0 ? (
             <div className="faint" style={{ fontSize: 12.5, padding: 8 }}>
-              Searching…
+              {t('res_searching')}
             </div>
           ) : candidates.length === 0 ? (
             <div className="faint" style={{ fontSize: 12.5, padding: 8 }}>
-              No eligible users found.
+              {t('res_no_eligible')}
             </div>
           ) : (
             candidates.map((u) => (
@@ -371,17 +381,17 @@ function AddResellerModal({ tiers, onClose }: { tiers: TierDef[]; onClose: () =>
               >
                 <Avatar name={u.name} />
                 <span style={{ marginInlineStart: 8 }}>
-                  {u.email || u.phone} <span className="faint">· {u.role}</span>
+                  {u.email || u.phone} <span className="faint">· {t(`res_role_${u.role}`, { defaultValue: u.role })}</span>
                 </span>
               </button>
             ))
           )}
         </div>
         <label className="alabel" style={{ marginTop: 14 }}>
-          Starting tier
+          {t('res_starting_tier')}
         </label>
         <select className="select" value={tier} onChange={(e) => setTier(e.target.value)} style={{ width: '100%' }}>
-          <option value="">No tier</option>
+          <option value="">{t('res_no_tier_option')}</option>
           {tiers.map((tn) => (
             <option key={tn.id} value={tn.name}>
               {tn.name} ({tn.marginPercent}%)
@@ -394,7 +404,7 @@ function AddResellerModal({ tiers, onClose }: { tiers: TierDef[]; onClose: () =>
             {t('cancel')}
           </button>
           <button className="abtn primary" onClick={submit} disabled={promote.isPending || !selectedId}>
-            <Icon name="check" size={15} /> Promote to reseller
+            <Icon name="check" size={15} /> {t('res_promote')}
           </button>
         </div>
       </div>
@@ -415,16 +425,16 @@ function TierModal({ tier, onClose }: { tier: TierDef | null; onClose: () => voi
   const del = useDeleteTier()
   const busy = create.isPending || update.isPending || del.isPending
 
-  const fail = (e: unknown) => setError(e instanceof ApiError ? e.message : 'Something went wrong.')
+  const fail = (e: unknown) => setError(apiErrorText(e, 'res_err_generic'))
 
   const save = () => {
     const m = Number(margin)
     if (!name.trim()) {
-      setError('Name is required.')
+      setError(t('res_err_name_required'))
       return
     }
     if (!Number.isFinite(m) || m < 0 || m > 100) {
-      setError('Margin must be between 0 and 100.')
+      setError(t('res_err_margin_range'))
       return
     }
     setError('')
@@ -438,8 +448,8 @@ function TierModal({ tier, onClose }: { tier: TierDef | null; onClose: () => voi
     if (!tier) return
     const warn =
       tier.count > 0
-        ? `Delete the ${tier.name} tier? ${tier.count} reseller(s) are on it and will fall back to retail pricing until reassigned.`
-        : `Delete the ${tier.name} tier?`
+        ? t('res_delete_tier_used', { name: tier.name, n: tier.count })
+        : t('res_delete_tier', { name: tier.name })
     if (!window.confirm(warn)) return
     setError('')
     del.mutate(tier.id, { onSuccess: onClose, onError: fail })
@@ -449,18 +459,18 @@ function TierModal({ tier, onClose }: { tier: TierDef | null; onClose: () => voi
     <Modal onClose={onClose} maxWidth={420}>
       <div style={{ padding: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>
-          {tier ? `Edit ${tier.name} tier` : 'New tier'}
+          {tier ? t('res_edit_tier_title', { name: tier.name }) : t('res_new_tier')}
         </h3>
-        <label className="alabel">Name</label>
+        <label className="alabel">{t('res_name')}</label>
         <input
           className="afield"
-          placeholder="e.g. Gold"
+          placeholder={t('res_name_ph')}
           value={name}
           autoFocus={!tier}
           onChange={(e) => setName(e.target.value)}
         />
         <label className="alabel" style={{ marginTop: 14 }}>
-          Discount / margin (%)
+          {t('res_margin_label')}
         </label>
         <input
           className="afield"
@@ -468,12 +478,12 @@ function TierModal({ tier, onClose }: { tier: TierDef | null; onClose: () => voi
           min="0"
           max="100"
           step="0.5"
-          placeholder="e.g. 10"
+          placeholder={t('res_margin_ph')}
           value={margin}
           onChange={(e) => setMargin(e.target.value)}
         />
         <div className="ahint" style={{ marginTop: 8 }}>
-          Resellers on this tier pay this % below retail on every product.
+          {t('res_margin_hint')}
         </div>
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'space-between', alignItems: 'center' }}>

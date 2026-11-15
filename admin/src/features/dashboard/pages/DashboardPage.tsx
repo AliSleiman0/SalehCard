@@ -12,6 +12,7 @@ import { useSuppliersList } from '@/features/suppliers/hooks/useSuppliers'
 import { useCan } from '@/stores/auth'
 import { itemAllowed } from '@/app/nav'
 import { orderNumber } from '@/lib/orderNumber'
+import { chartLabel } from '../lib/chartLabels'
 
 type Range = 'daily' | 'weekly' | 'monthly'
 
@@ -98,6 +99,7 @@ function tileLink(can: (perm: string) => boolean, domain: string, to: string): s
 // mounted when the viewer has bridge.view) means the query never fires for
 // non-bridge admins. Balances come live from the shared 15s-polling bridge query.
 function BridgeBalanceTiles({ to }: { to?: string }) {
+  const { t } = useTranslation()
   const { data } = useBridgeDevices()
   const devices = data?.data ?? []
   const tiles: React.ReactNode[] = []
@@ -112,7 +114,7 @@ function BridgeBalanceTiles({ to }: { to?: string }) {
           key={`${d.id}-${op}`}
           icon={<Icon name="server" size={17} />}
           iconBg="linear-gradient(135deg,#3b5bff,#22e3c8)"
-          label={`${op} balance`}
+          label={t('dash_balance', { name: op })}
           value={`$${bal.toFixed(2)}`}
           since={d.name}
           cls={bal < LOW_BALANCE ? 'alert' : undefined}
@@ -129,6 +131,7 @@ function BridgeBalanceTiles({ to }: { to?: string }) {
 // for admins with suppliers.view (the tiles are gated at the call site), and it
 // shares the 30s-polling supplier-list query with the /suppliers page.
 function SuppliersBalanceTiles({ to }: { to?: string }) {
+  const { t } = useTranslation()
   const { data } = useSuppliersList()
   const suppliers = data?.data?.suppliers ?? []
   const danger = new Set(['auth_error', 'ip_blocked', 'unreachable', 'maintenance'])
@@ -139,9 +142,9 @@ function SuppliersBalanceTiles({ to }: { to?: string }) {
           key={sup.id}
           icon={<Icon name="server" size={17} />}
           iconBg="linear-gradient(135deg,#8a3bff,#3b5bff)"
-          label={`${sup.name} balance`}
+          label={t('dash_balance', { name: sup.name })}
           value={sup.balanceText}
-          since={sup.kind}
+          since={t(`sup_kind_${sup.kind}`, { defaultValue: sup.kind })}
           cls={sup.health === 'low_balance' ? 'alert' : danger.has(sup.health) ? 'crit' : undefined}
           to={to}
         />
@@ -151,7 +154,7 @@ function SuppliersBalanceTiles({ to }: { to?: string }) {
 }
 
 export default function DashboardPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const can = useCan()
   const [range, setRange] = useState<Range>('daily')
@@ -165,13 +168,13 @@ export default function DashboardPage() {
 
   // Revenue area chart — real completed-order revenue for the selected range.
   const rev = revRes?.data?.series ?? []
-  const lab = revRes?.data?.labels ?? []
+  const lab = (revRes?.data?.labels ?? []).map((l) => chartLabel(l, t, i18n.language || 'en'))
   const revTotal = rev.reduce((a, n) => a + n, 0)
 
   // Fulfillment donut — real line-item counts by fulfillment type.
   const ffSlices: DonutDatum[] = (ffRes?.data ?? []).map((d) => ({
     key: d.key,
-    label: d.label,
+    label: t(`ff_${d.key}`, { defaultValue: d.label }),
     value: d.value,
     color: FF_COLOR[d.key] ?? '#888',
   }))
@@ -186,18 +189,18 @@ export default function DashboardPage() {
   // Export the current dashboard view (KPI summary + recent orders) to CSV.
   const handleExport = () => {
     const rows: (string | number)[][] = [
-      ['FlashCash Global dashboard export', formatLongDate()],
+      [t('dash_csv_title'), formatLongDate()],
       [],
-      ['Metric', 'Value'],
-      ["Today's revenue", s ? s.revenueToday : ''],
-      ["Today's orders", s ? s.ordersToday : ''],
-      ['Active users (24h)', s ? s.activeUsers : ''],
-      ['Wallet top-ups (today)', s ? s.walletTopups : ''],
-      ['Pending transfers', s ? s.pendingTransfers : ''],
-      ['Low-stock alerts', s ? s.lowStockCount : ''],
+      [t('dash_csv_metric'), t('dash_csv_value')],
+      [t('dash_kpi_revenue'), s ? s.revenueToday : ''],
+      [t('dash_kpi_orders'), s ? s.ordersToday : ''],
+      [t('dash_csv_active_users'), s ? s.activeUsers : ''],
+      [t('dash_csv_topups'), s ? s.walletTopups : ''],
+      [t('dash_kpi_pending_transfers'), s ? s.pendingTransfers : ''],
+      [t('dash_kpi_low_stock'), s ? s.lowStockCount : ''],
       [],
-      ['Recent orders'],
-      ['Order', 'Customer', 'Type', 'Amount', 'Currency', 'Status', 'Date'],
+      [t('dash_recent_orders')],
+      [t('col_order'), t('dash_col_customer'), t('col_type'), t('col_amount'), t('dash_col_currency'), t('status'), t('col_date')],
       ...recent.map((o) => [o.id, o.customer, o.ff, o.amount, o.cur, o.status, o.date]),
     ]
     downloadCsv(`dashboard-${new Date().toISOString().slice(0, 10)}.csv`, rows)
@@ -208,7 +211,7 @@ export default function DashboardPage() {
       <PageHead
         // crumbs={[t('nav_dashboard')]}
         // title={`${greeting(new Date().getHours())}, ${user?.name ?? 'Admin'}`}
-        sub={`Here's what's happening across FlashCash Global today — ${formatLongDate()}.`} title={undefined}      >
+        sub={t('dash_sub', { date: formatLongDate() })} title={undefined}      >
         <button className="abtn" onClick={handleExport}>
           <Icon name="download" size={15} /> {t('export')}
         </button>
@@ -221,11 +224,11 @@ export default function DashboardPage() {
         <Kpi
           icon={<Icon name="wallet" size={17} />}
           iconBg="var(--grad)"
-          label="Today's revenue"
+          label={t('dash_kpi_revenue')}
           value={s ? money(s.revenueToday) : '—'}
           delta={s ? `${s.revenueDeltaPct}%` : undefined}
           deltaDir={s && s.revenueDeltaPct < 0 ? 'down' : 'up'}
-          since="vs yesterday"
+          since={t('dash_vs_yesterday')}
           spark={s?.revenueSpark}
           sparkColor="#8a3bff"
           to={tileLink(can, 'orders', TODAY_COMPLETED)}
@@ -233,11 +236,11 @@ export default function DashboardPage() {
         <Kpi
           icon={<Icon name="bag" size={17} />}
           iconBg="linear-gradient(135deg,#3b5bff,#22e3c8)"
-          label="Today's orders"
+          label={t('dash_kpi_orders')}
           value={s ? s.ordersToday.toLocaleString() : '—'}
           delta={s ? `${s.ordersDeltaPct}%` : undefined}
           deltaDir={s && s.ordersDeltaPct < 0 ? 'down' : 'up'}
-          since="vs yesterday"
+          since={t('dash_vs_yesterday')}
           spark={s?.ordersSpark}
           sparkColor="#3b5bff"
           to={tileLink(can, 'orders', TODAY_COMPLETED)}
@@ -245,96 +248,96 @@ export default function DashboardPage() {
         <Kpi
           icon={<Icon name="users" size={17} />}
           iconBg="linear-gradient(135deg,#2fd47a,#22e3c8)"
-          label="Active users"
+          label={t('dash_kpi_active_users')}
           value={s ? s.activeUsers.toLocaleString() : '—'}
-          since="last 24h"
+          since={t('dash_last_24h')}
           to={tileLink(can, 'users', '/users')}
         />
         <Kpi
           icon={<Icon name="coins" size={17} />}
           iconBg="linear-gradient(135deg,#8a3bff,#d633ff)"
-          label="Wallet top-ups"
+          label={t('dash_kpi_topups')}
           value={s ? money(s.walletTopups) : '—'}
-          since="today"
+          since={t('dash_today')}
           to={tileLink(can, 'topups', '/topups?status=approved')}
         />
         <Kpi
           icon={<Icon name="send" size={17} />}
           iconBg="rgba(255,155,61,.2)"
-          label="Pending transfers"
+          label={t('dash_kpi_pending_transfers')}
           value={s ? String(s.pendingTransfers) : '—'}
-          since="needs action"
+          since={t('dash_needs_action')}
           cls="alert"
           to={tileLink(can, 'orders', '/orders?status=processing&type=transfer')}
         />
         <Kpi
           icon={<Icon name="coins" size={17} />}
           iconBg="rgba(255,155,61,.2)"
-          label="Pending top-ups"
+          label={t('dash_kpi_pending_topups')}
           value={s ? String(s.pendingTopups) : '—'}
-          since="awaiting approval"
+          since={t('dash_awaiting_approval')}
           cls="alert"
           to={tileLink(can, 'topups', '/topups?status=pending')}
         />
         <Kpi
           icon={<Icon name="id" size={17} />}
           iconBg="rgba(255,155,61,.2)"
-          label="Pending KYC"
+          label={t('dash_kpi_pending_kyc')}
           value={s ? String(s.pendingKyc) : '—'}
-          since="awaiting review"
+          since={t('dash_awaiting_review')}
           cls="alert"
           to={tileLink(can, 'kyc', '/kyc?status=pending')}
         />
         <Kpi
           icon={<Icon name="alert" size={17} />}
           iconBg="rgba(255,77,109,.2)"
-          label="Low-stock alerts"
+          label={t('dash_kpi_low_stock')}
           value={s ? String(s.lowStockCount) : '—'}
-          since="codes running out"
+          since={t('dash_codes_running_out')}
           cls="crit"
           to={tileLink(can, 'inventory', '/inventory?view=below')}
         />
         <Kpi
           icon={<Icon name="bag" size={17} />}
           iconBg="linear-gradient(135deg,#2fd47a,#22e3c8)"
-          label="Completed orders"
+          label={t('dash_kpi_completed')}
           value={s ? s.ordersCompleted.toLocaleString() : '—'}
-          since="all-time"
+          since={t('dash_all_time')}
           to={tileLink(can, 'orders', '/orders?status=completed')}
         />
         <Kpi
           icon={<Icon name="bag" size={17} />}
           iconBg="rgba(255,155,61,.2)"
-          label="Pending orders"
+          label={t('dash_kpi_pending_orders')}
           value={s ? String(s.ordersPending) : '—'}
-          since="all-time"
+          since={t('dash_all_time')}
           cls="alert"
           to={tileLink(can, 'orders', '/orders?status=pending')}
         />
         <Kpi
           icon={<Icon name="alert" size={17} />}
           iconBg="rgba(255,77,109,.2)"
-          label="Failed orders"
+          label={t('dash_kpi_failed')}
           value={s ? String(s.ordersFailed) : '—'}
-          since="all-time"
+          since={t('dash_all_time')}
           cls="crit"
           to={tileLink(can, 'orders', '/orders?status=failed')}
         />
         <Kpi
           icon={<Icon name="coins" size={17} />}
           iconBg="rgba(255,155,61,.2)"
-          label="Refunded orders"
+          label={t('dash_kpi_refunded')}
           value={s ? String(s.ordersRefunded) : '—'}
-          since="all-time"
+          since={t('dash_all_time')}
           cls="alert"
           to={tileLink(can, 'orders', '/orders?status=refunded')}
         />
         <Kpi
           icon={<Icon name="server" size={17} />}
           iconBg="rgba(255,77,109,.2)"
-          label="Stuck upstream"
+          label={t('dash_kpi_stuck')}
           value={s ? String(s.stuckUpstream) : '—'}
-          since="supplier needs attention"
+          since={t('dash_supplier_attention')}
           cls="crit"
           to={tileLink(can, 'orders', '/orders?stuck=1')}
         />
@@ -342,9 +345,9 @@ export default function DashboardPage() {
           <Kpi
             icon={<Icon name="bell" size={17} />}
             iconBg="rgba(255,155,61,.2)"
-            label="Supplier alerts"
+            label={t('dash_kpi_supplier_alerts')}
             value={s ? String(s.supplierAlerts ?? 0) : '—'}
-            since="open — cost, loss, stock"
+            since={t('dash_alerts_open')}
             cls={s && (s.supplierAlerts ?? 0) > 0 ? 'alert' : undefined}
             to="/suppliers?tab=alerts"
           />
@@ -372,7 +375,7 @@ export default function DashboardPage() {
             <div className="row" style={{ gap: 22, marginBottom: 4, paddingInline: 6 }}>
               <div>
                 <div style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 700 }}>
-                  {range === 'daily' ? 'Last 14 days' : range === 'weekly' ? 'Last 12 weeks' : 'Last 12 months'}
+                  {range === 'daily' ? t('dash_last_14_days') : range === 'weekly' ? t('dash_last_12_weeks') : t('dash_last_12_months')}
                 </div>
                 <div className="num" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.02em' }}>
                   {money(revTotal)}
@@ -380,7 +383,7 @@ export default function DashboardPage() {
               </div>
               <div className="spacer" />
               <span className="k-since" style={{ fontSize: 12 }}>
-                Completed orders only
+                {t('dash_completed_only')}
               </span>
             </div>
             <AreaChart data={rev} labels={lab} height={210} />
@@ -390,7 +393,7 @@ export default function DashboardPage() {
         <div className="acard">
           <div className="panelhead">
             <Icon name="pkg" size={18} />
-            <h3>Orders by fulfillment</h3>
+            <h3>{t('dash_by_fulfillment')}</h3>
           </div>
           <div style={{ padding: 22 }}>
             <div className="donut-wrap">
@@ -403,7 +406,7 @@ export default function DashboardPage() {
                     <div className="num" style={{ fontSize: 23, fontWeight: 800 }}>
                       {ffTotal}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>items</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>{t('dash_items')}</div>
                   </div>
                 }
               />
@@ -429,7 +432,7 @@ export default function DashboardPage() {
                 alignItems: 'center',
               }}
             >
-              <Icon name="bolt" size={14} /> Account-credit orders settle instantly — code orders depend on inventory.
+              <Icon name="bolt" size={14} /> {t('dash_ff_note')}
             </div>
           </div>
         </div>
@@ -439,10 +442,10 @@ export default function DashboardPage() {
         <div className="acard">
           <div className="panelhead">
             <Icon name="clock" size={18} />
-            <h3>Recent orders</h3>
+            <h3>{t('dash_recent_orders')}</h3>
             <div className="ph-act">
               <button className="abtn xs" onClick={() => navigate('/orders')}>
-                View all <Icon name="chevright" size={13} />
+                {t('dash_view_all')} <Icon name="chevright" size={13} />
               </button>
             </div>
           </div>
@@ -450,10 +453,10 @@ export default function DashboardPage() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Order</th>
-                  <th>Customer</th>
-                  <th>Type</th>
-                  <th>Amount</th>
+                  <th>{t('col_order')}</th>
+                  <th>{t('dash_col_customer')}</th>
+                  <th>{t('col_type')}</th>
+                  <th>{t('col_amount')}</th>
                   <th>{t('status')}</th>
                   <th></th>
                 </tr>
@@ -500,20 +503,20 @@ export default function DashboardPage() {
           <div className="acard">
             <div className="panelhead">
               <Icon name="alert" size={18} />
-              <h3>Low-stock alerts</h3>
+              <h3>{t('dash_kpi_low_stock')}</h3>
               <span className="sb-badge" style={{ marginInlineStart: 6 }}>
                 {s ? s.lowStockCount : lowStock.length}
               </span>
               <div className="ph-act">
                 <button className="abtn xs" onClick={() => navigate('/inventory?view=below')}>
-                  Manage
+                  {t('dash_manage')}
                 </button>
               </div>
             </div>
             <div>
               {lowStock.length === 0 && (
                 <div className="lsrow" style={{ color: 'var(--text-faint)', fontSize: 13, fontWeight: 600 }}>
-                  All products are above their stock thresholds.
+                  {t('dash_all_above')}
                 </div>
               )}
               {lowStock.slice(0, 4).map((it) => {
@@ -523,10 +526,10 @@ export default function DashboardPage() {
                     <Art art={artForCategory(it.category || it.title)} size={32} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{it.title}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>Threshold {it.threshold} codes</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>{t('dash_threshold', { n: it.threshold })}</div>
                     </div>
                     <div className={'stock ' + it.level} style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                      <span className="num">{it.available} left</span>
+                      <span className="num">{t('dash_left', { n: it.available })}</span>
                       <div className="bar" style={{ width: 60 }}>
                         <i style={{ width: pct + '%' }} />
                       </div>
@@ -540,16 +543,16 @@ export default function DashboardPage() {
           <div className="acard">
             <div className="panelhead">
               <Icon name="server" size={18} />
-              <h3>System health</h3>
+              <h3>{t('dash_health')}</h3>
             </div>
             <div>
               {(
                 [
-                  ['API server', health ? health.api : null, health ? (health.api ? 'Operational' : 'Unreachable') : 'Checking…'],
-                  ['Database', health ? health.db : null, health ? (health.db ? 'Connected' : 'Unavailable') : 'Checking…'],
-                ] as [string, boolean | null, string][]
-              ).map(([name, ok, note]) => (
-                <div className="health" key={name}>
+                  ['api', t('dash_api_server'), health ? health.api : null, health ? (health.api ? t('dash_operational') : t('dash_unreachable')) : t('dash_checking')],
+                  ['db', t('dash_database'), health ? health.db : null, health ? (health.db ? t('dash_connected') : t('dash_unavailable')) : t('dash_checking')],
+                ] as [string, string, boolean | null, string][]
+              ).map(([key, name, ok, note]) => (
+                <div className="health" key={key}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span
                       style={{

@@ -1,3 +1,4 @@
+import i18n from '@/i18n/config'
 import type { InputField, InputFieldType } from '@/types'
 
 // The product editor's working shape for one input-field row. Numeric bounds
@@ -81,9 +82,9 @@ export function rowIssues(rows: InputFieldRow[]): string[] {
   rows.forEach((r, i) => {
     const key = r.key.trim()
     if (!key) {
-      issues.push(`Input field #${i + 1} needs a key.`)
+      issues.push(i18n.t('prod_issue_no_key', { n: i + 1 }))
     } else if (seen.has(key)) {
-      issues.push(`Duplicate field key "${key}" — keys must be unique.`)
+      issues.push(i18n.t('prod_issue_dup_key', { key }))
     } else {
       seen.add(key)
     }
@@ -91,15 +92,15 @@ export function rowIssues(rows: InputFieldRow[]): string[] {
     if (r.type === 'quantity' || r.type === 'amount') {
       const min = num(r.min)
       const max = num(r.max)
-      if (r.min.trim() && min === undefined) issues.push(`Field "${name}": min is not a number.`)
-      if (r.max.trim() && max === undefined) issues.push(`Field "${name}": max is not a number.`)
+      if (r.min.trim() && min === undefined) issues.push(i18n.t('prod_issue_min_nan', { name }))
+      if (r.max.trim() && max === undefined) issues.push(i18n.t('prod_issue_max_nan', { name }))
       if ((min !== undefined && min < 0) || (max !== undefined && max < 0))
-        issues.push(`Field "${name}": min/max cannot be negative.`)
+        issues.push(i18n.t('prod_issue_negative', { name }))
       if (min !== undefined && max !== undefined && min > max)
-        issues.push(`Field "${name}": min cannot exceed max.`)
+        issues.push(i18n.t('prod_issue_min_gt_max', { name }))
     }
     if (r.type === 'select' && r.options.length === 0)
-      issues.push(`Field "${name}": a select needs at least one option.`)
+      issues.push(i18n.t('prod_issue_select_empty', { name }))
   })
   return issues
 }

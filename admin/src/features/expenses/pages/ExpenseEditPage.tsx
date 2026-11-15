@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { Icon, PageHead, LoadingSpinner, ErrorState } from '@/components'
 import { useGoBack } from '@/lib/goBack'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import { useExpense, useCreateExpense, useUpdateExpense } from '../hooks/useExpenses'
 import type { ExpenseInput, ExpenseCategory } from '../api/expenses'
@@ -99,7 +99,7 @@ export default function ExpenseEditPage() {
       note: note.trim() || undefined,
       incurredAt: new Date(`${incurredAt}T00:00:00`).toISOString(),
     }
-    const onError = (e: unknown) => setError(e instanceof ApiError ? e.message : t('exp_save_error'))
+    const onError = (e: unknown) => setError(apiErrorText(e, 'exp_save_error'))
     if (isNew) {
       create.mutate(input, { onSuccess: () => goBack(), onError })
     } else {

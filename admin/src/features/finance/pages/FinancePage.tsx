@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
   Icon,
@@ -18,8 +19,8 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
-import { money, downloadCsv, downloadPdf } from '@/lib/utils'
-import { ApiError } from '@/lib/api-client'
+import { money, downloadCsv, downloadPdf, formatDateTime } from '@/lib/utils'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import { useTransactions, useRevenueSummary } from '../hooks/useFinance'
 import { adaptTx } from '../lib/adaptFinance'
@@ -39,10 +40,10 @@ const TX_COLOR: Record<string, string> = {
 
 // Display metadata for each payment method the revenue donut breaks down by. The
 // API groups by the stored method (card/wallet/usdt); card renders as Visa.
-const METHOD_META: Record<string, { label: string; color: string }> = {
-  wallet: { label: 'Store wallet', color: '#8a3bff' },
-  card: { label: 'Visa / Mastercard', color: '#3b5bff' },
-  usdt: { label: 'USDT', color: '#22e3c8' },
+const METHOD_META: Record<string, { labelKey: string; color: string }> = {
+  wallet: { labelKey: 'fin_method_store_wallet', color: '#8a3bff' },
+  card: { labelKey: 'fin_method_visa', color: '#3b5bff' },
+  usdt: { labelKey: 'fin_method_usdt', color: '#22e3c8' },
 }
 
 export default function FinancePage() {
@@ -69,7 +70,17 @@ export default function FinancePage() {
         p++
       } while (p <= pages)
 
-      const header = ['Transaction ID', 'User', 'Role', 'Type', 'Amount', 'Balance after', 'Method', 'Ref', 'Date']
+      const header = [
+        t('fin_csv_tx_id'),
+        t('fin_user'),
+        t('fin_csv_role'),
+        t('col_type'),
+        t('col_amount'),
+        t('fin_csv_balance_after'),
+        t('col_method'),
+        t('fin_csv_ref'),
+        t('col_date'),
+      ]
       const csvRows = all.map((tx) => [
         tx.id,
         tx.user?.name ?? '',
@@ -92,8 +103,8 @@ export default function FinancePage() {
       <PageHead
         back="/"
         crumbs={[t('grp_finance'), t('nav_wallet')]}
-        title="Wallet & financial management"
-        sub="Money movement across the platform wallet ledger"
+        title={t('fin_title')}
+        sub={t('fin_sub')}
       >
         <button className="abtn" onClick={handleExport} disabled={exporting}>
           <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
@@ -104,9 +115,9 @@ export default function FinancePage() {
         value={tab}
         onChange={setTab}
         items={[
-          { k: 'transactions', label: 'All transactions' },
-          { k: 'revenue', label: 'Revenue summary' },
-          ...(canViewTopups ? [{ k: 'usdt' as const, label: 'USDT queue' }] : []),
+          { k: 'transactions', label: t('fin_tab_transactions') },
+          { k: 'revenue', label: t('fin_tab_revenue') },
+          ...(canViewTopups ? [{ k: 'usdt' as const, label: t('fin_tab_usdt') }] : []),
         ]}
       />
 
@@ -157,7 +168,7 @@ function TransactionsTab() {
         <div className="fsearch">
           <Icon name="search" size={15} />
           <input
-            placeholder="Search by user or transaction ID…"
+            placeholder={t('fin_search_ph')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -170,11 +181,11 @@ function TransactionsTab() {
             setPage(1)
           }}
         >
-          <option value="">All types</option>
-          <option value="topup">Top-up</option>
-          <option value="purchase">Purchase</option>
-          <option value="refund">Refund</option>
-          <option value="adjustment">Adjustment</option>
+          <option value="">{t('fin_all_types')}</option>
+          <option value="topup">{t('fin_type_topup')}</option>
+          <option value="purchase">{t('fin_type_purchase')}</option>
+          <option value="refund">{t('fin_type_refund')}</option>
+          <option value="adjustment">{t('fin_type_adjustment')}</option>
         </select>
         <select
           className="select"
@@ -184,31 +195,31 @@ function TransactionsTab() {
             setPage(1)
           }}
         >
-          <option value="">All methods</option>
-          <option value="wallet">Wallet</option>
-          <option value="card">Card</option>
-          <option value="usdt">USDT</option>
+          <option value="">{t('fin_all_methods')}</option>
+          <option value="wallet">{t('fin_method_wallet')}</option>
+          <option value="card">{t('fin_method_card')}</option>
+          <option value="usdt">{t('fin_method_usdt')}</option>
         </select>
       </div>
 
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Couldn't load transactions." onRetry={() => refetch()} />
+        <ErrorState message={t('fin_load_error')} onRetry={() => refetch()} />
       ) : rows.length === 0 ? (
-        <EmptyState title="No transactions found" />
+        <EmptyState title={t('fin_empty')} />
       ) : (
         <>
           <div className="tablewrap">
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Transaction</th>
-                  <th>User</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                  <th>Method</th>
-                  <th>Date</th>
+                  <th>{t('col_transaction')}</th>
+                  <th>{t('fin_user')}</th>
+                  <th>{t('col_type')}</th>
+                  <th>{t('col_amount')}</th>
+                  <th>{t('col_method')}</th>
+                  <th>{t('col_date')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -217,12 +228,12 @@ function TransactionsTab() {
                     <td className="mono strong">{tx.id.slice(-8)}</td>
                     <td>
                       <div className="cellprod">
-                        <Avatar name={tx.user} />
+                        <Avatar name={tx.raw.user?.name || t('fin_unknown_user')} />
                         <div className="pn">
-                          <b style={{ fontSize: 12.5 }}>{tx.user}</b>
+                          <b style={{ fontSize: 12.5 }}>{tx.raw.user?.name || t('fin_unknown_user')}</b>
                           {tx.role && (
                             <span className={'pill-role role-' + tx.role} style={{ fontSize: 10 }}>
-                              {tx.role}
+                              {t(`fin_role_${tx.role}`, { defaultValue: tx.role })}
                             </span>
                           )}
                         </div>
@@ -240,7 +251,7 @@ function TransactionsTab() {
                         }}
                       >
                         <span style={{ width: 7, height: 7, borderRadius: 99, background: TX_COLOR[tx.type] }} />
-                        {tx.type}
+                        {t(`fin_tx_${tx.type}`, { defaultValue: tx.type })}
                       </span>
                     </td>
                     <td className="num strong" style={{ color: tx.amount < 0 ? 'var(--danger)' : 'var(--ok)' }}>
@@ -272,32 +283,37 @@ function TransactionsTab() {
 }
 
 /** The revenue summary (KPIs + the three breakdown tables) as CSV/PDF rows. */
-function revenueRows(rev: RevenueSummary): (string | number)[][] {
+function revenueRows(rev: RevenueSummary, t: TFunction): (string | number)[][] {
   return [
-    ['Metric', 'Value'],
-    ['Total revenue', rev.totalRevenue.toFixed(2)],
-    ['This month', rev.monthRevenue.toFixed(2)],
-    ['Refund rate %', (rev.refundRate * 100).toFixed(1)],
-    ['Wallet top-ups', rev.walletTopups.toFixed(2)],
+    [t('fin_metric'), t('fin_value')],
+    [t('fin_kpi_total_revenue'), rev.totalRevenue.toFixed(2)],
+    [t('fin_kpi_this_month'), rev.monthRevenue.toFixed(2)],
+    [t('fin_refund_rate_pct'), (rev.refundRate * 100).toFixed(1)],
+    [t('fin_kpi_wallet_topups'), rev.walletTopups.toFixed(2)],
     [],
-    ['By method', 'Amount'],
+    [t('fin_by_method'), t('col_amount')],
     ...rev.byMethod.map((d) => [d.label, d.value.toFixed(2)]),
     [],
-    ['By category', 'Amount'],
+    [t('fin_by_category'), t('col_amount')],
     ...rev.byCategory.map((d) => [d.label, d.value.toFixed(2)]),
     [],
-    ['By currency', 'Amount'],
+    [t('fin_by_currency'), t('col_amount')],
     ...rev.byCurrency.map((d) => [d.label, d.value.toFixed(2)]),
   ]
 }
 
-function exportRevenue(rev: RevenueSummary, range: string): void {
-  downloadCsv(`revenue-${range}-${new Date().toISOString().slice(0, 10)}.csv`, revenueRows(rev))
+function exportRevenue(rev: RevenueSummary, range: string, t: TFunction): void {
+  downloadCsv(`revenue-${range}-${new Date().toISOString().slice(0, 10)}.csv`, revenueRows(rev, t))
 }
 
-function exportRevenuePdf(rev: RevenueSummary, range: string): void {
+function exportRevenuePdf(rev: RevenueSummary, range: string, t: TFunction): void {
   const date = new Date().toISOString().slice(0, 10)
-  void downloadPdf(`revenue-${range}-${date}.pdf`, `Revenue summary (${range}) — ${date}`, ['Metric', 'Value'], revenueRows(rev))
+  void downloadPdf(
+    `revenue-${range}-${date}.pdf`,
+    t('fin_pdf_title', { range: t(`fin_range_${range}`, { defaultValue: range }), date }),
+    [t('fin_metric'), t('fin_value')],
+    revenueRows(rev, t),
+  )
 }
 
 /** Convert absolute revenue buckets to display percentages (whole numbers). */
@@ -314,21 +330,21 @@ function RevenueTab() {
   const rev = data?.data
 
   if (isLoading) return <LoadingSpinner />
-  if (isError || !rev) return <ErrorState message="Couldn't load revenue summary." onRetry={() => refetch()} />
+  if (isError || !rev) return <ErrorState message={t('fin_rev_load_error')} onRetry={() => refetch()} />
 
   const methodData = rev.byMethod.map((d) => {
-    const meta = METHOD_META[d.label] ?? { label: d.label, color: '#888' }
-    return { label: meta.label, value: d.value, color: meta.color }
+    const meta = METHOD_META[d.label]
+    return { label: meta ? t(meta.labelKey) : d.label, value: d.value, color: meta?.color ?? '#888' }
   })
   const methodPct = toPct(rev.byMethod)
   const categoryPct = toPct(rev.byCategory)
   const currencyTotal = rev.byCurrency.reduce((s, d) => s + d.value, 0) || 1
 
   const kpis: [string, string][] = [
-    ['Total revenue', money(rev.totalRevenue)],
-    ['This month', money(rev.monthRevenue)],
-    ['Refund rate', (rev.refundRate * 100).toFixed(1) + '%'],
-    ['Wallet top-ups', money(rev.walletTopups)],
+    [t('fin_kpi_total_revenue'), money(rev.totalRevenue)],
+    [t('fin_kpi_this_month'), money(rev.monthRevenue)],
+    [t('fin_kpi_refund_rate'), (rev.refundRate * 100).toFixed(1) + '%'],
+    [t('fin_kpi_wallet_topups'), money(rev.walletTopups)],
   ]
 
   return (
@@ -352,7 +368,7 @@ function RevenueTab() {
         <div className="acard">
           <div className="panelhead">
             <Icon name="activity" size={17} />
-            <h3>Revenue over time</h3>
+            <h3>{t('fin_rev_over_time')}</h3>
             <div className="ph-act">
               <div className="aseg">
                 {(['daily', 'weekly', 'monthly'] as Range[]).map((k) => (
@@ -370,11 +386,11 @@ function RevenueTab() {
         <div className="acard">
           <div className="panelhead">
             <Icon name="card" size={17} />
-            <h3>By payment method</h3>
+            <h3>{t('fin_by_payment_method')}</h3>
           </div>
           <div style={{ padding: 22 }}>
             {methodData.length === 0 ? (
-              <EmptyState title="No revenue yet" />
+              <EmptyState title={t('fin_no_revenue')} />
             ) : (
               <div className="donut-wrap" style={{ marginBottom: 18 }}>
                 <Donut
@@ -386,7 +402,7 @@ function RevenueTab() {
                       <div className="num" style={{ fontSize: 18, fontWeight: 800 }}>
                         {money(rev.totalRevenue)}
                       </div>
-                      <div style={{ fontSize: 10.5, color: 'var(--text-faint)', fontWeight: 700 }}>all time</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-faint)', fontWeight: 700 }}>{t('fin_all_time')}</div>
                     </div>
                   }
                 />
@@ -406,24 +422,24 @@ function RevenueTab() {
       </div>
       <div className="g2">
         <div className="acard pad">
-          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>Revenue by category</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>{t('fin_rev_by_category')}</h3>
           {categoryPct.length === 0 ? (
-            <EmptyState title="No revenue yet" />
+            <EmptyState title={t('fin_no_revenue')} />
           ) : (
             <Bars data={categoryPct.map((c) => ({ label: c.label, value: c.value, color: 'var(--grad)' }))} />
           )}
         </div>
         <div className="acard pad">
-          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>By currency</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>{t('fin_by_currency')}</h3>
           <div className="deflist">
             {rev.byCurrency.length === 0 ? (
               <div className="faint" style={{ fontSize: 13 }}>
-                No revenue yet
+                {t('fin_no_revenue')}
               </div>
             ) : (
               rev.byCurrency.map((c) => (
                 <div className="defrow" key={c.label}>
-                  <span className="dk">{c.label} revenue</span>
+                  <span className="dk">{t('fin_currency_revenue', { currency: c.label })}</span>
                   <span className="dv num">
                     {money(c.value, c.label === 'TRY' ? 'TRY' : 'USD')} ·{' '}
                     {Math.round((c.value / currencyTotal) * 100)}%
@@ -433,11 +449,11 @@ function RevenueTab() {
             )}
           </div>
           <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
-            <button className="abtn sm" onClick={() => exportRevenue(rev, range)}>
-              <Icon name="download" size={14} /> Export CSV
+            <button className="abtn sm" onClick={() => exportRevenue(rev, range, t)}>
+              <Icon name="download" size={14} /> {t('fin_export_csv')}
             </button>
-            <button className="abtn sm" onClick={() => exportRevenuePdf(rev, range)}>
-              <Icon name="file" size={14} /> Export PDF
+            <button className="abtn sm" onClick={() => exportRevenuePdf(rev, range, t)}>
+              <Icon name="file" size={14} /> {t('fin_export_pdf')}
             </button>
           </div>
         </div>
@@ -453,10 +469,10 @@ const USDT_STATUS_CLASS: Record<TopUpStatus, string> = {
 }
 
 const USDT_FILTERS: [TopUpStatus | '', string][] = [
-  ['pending', 'Pending'],
-  ['approved', 'Approved'],
-  ['rejected', 'Rejected'],
-  ['', 'All'],
+  ['pending', 'top_filter_pending'],
+  ['approved', 'top_filter_approved'],
+  ['rejected', 'top_filter_rejected'],
+  ['', 'all'],
 ]
 
 /** USDT verification queue — the top-up request queue filtered to the `usdt`
@@ -478,7 +494,7 @@ function UsdtQueueTab() {
   const [approveError, setApproveError] = useState('')
   const approve = (id: string) => {
     setApproveError('')
-    approveM.mutate(id, { onError: (e) => setApproveError(e instanceof ApiError ? e.message : 'Approval failed.') })
+    approveM.mutate(id, { onError: (e) => setApproveError(apiErrorText(e, 'top_approve_failed')) })
   }
 
   return (
@@ -494,12 +510,12 @@ function UsdtQueueTab() {
                 setPage(1)
               }}
             >
-              {l}
+              {t(l)}
             </Chip>
           ))}
         </div>
         <button className="abtn" style={{ marginInlineStart: 'auto' }} onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('top_refresh')}
         </button>
       </div>
 
@@ -508,12 +524,9 @@ function UsdtQueueTab() {
       {isLoading ? (
         <LoadingSpinner />
       ) : isError && !data ? (
-        <ErrorState message="Couldn't load the USDT queue." onRetry={() => refetch()} />
+        <ErrorState message={t('fin_usdt_load_error')} onRetry={() => refetch()} />
       ) : rows.length === 0 ? (
-        <EmptyState
-          title="No USDT requests"
-          sub="USDT wallet-funding requests appear here for verification once a customer declares an on-chain payment."
-        />
+        <EmptyState title={t('fin_usdt_empty')} sub={t('fin_usdt_empty_sub')} />
       ) : (
         <>
           <div>
@@ -521,35 +534,35 @@ function UsdtQueueTab() {
               <div key={r.id} style={{ borderBottom: '1px solid var(--border)', padding: '14px 18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <b style={{ fontSize: 15 }}>{money(r.amount)}</b>
-                  <span className="bdg">{r.channel.toUpperCase()}</span>
+                  <span className="bdg">{t(`top_channel_${r.channel}_name`, { defaultValue: r.channel.toUpperCase() })}</span>
                   <span className="faint" style={{ fontSize: 12.5 }}>
                     {r.customerEmail || r.customerPhone || r.userId.slice(-8)}
                   </span>
                   {r.role && <RoleBadge role={r.role} />}
                   <span className="faint" style={{ fontSize: 12 }}>
-                    · {new Date(r.createdAt).toLocaleString()}
+                    · {formatDateTime(r.createdAt)}
                   </span>
                   <span style={{ marginInlineStart: 'auto' }} className={USDT_STATUS_CLASS[r.status]}>
                     <i className="d" />
-                    {r.status}
+                    {t(`top_status_${r.status}`, { defaultValue: r.status })}
                   </span>
                 </div>
                 {r.note && (
-                  <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>Tx reference: {r.note}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>{t('fin_tx_reference', { note: r.note })}</div>
                 )}
                 {r.status === 'rejected' && r.decisionReason && (
-                  <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>Rejected: {r.decisionReason}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>{t('top_rejected_reason', { reason: r.decisionReason })}</div>
                 )}
                 {r.status !== 'pending' && r.decidedBy && (
                   <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
-                    Decided by {r.decidedBy}
-                    {r.decidedAt ? ` · ${new Date(r.decidedAt).toLocaleString()}` : ''}
+                    {t('top_decided_by', { name: r.decidedBy })}
+                    {r.decidedAt ? ` · ${formatDateTime(r.decidedAt)}` : ''}
                   </div>
                 )}
                 {canManage && r.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button className="abtn xs ok" disabled={approveM.isPending} onClick={() => approve(r.id)}>
-                      <Icon name="check" size={13} /> Verify & credit
+                      <Icon name="check" size={13} /> {t('fin_verify_credit')}
                     </button>
                     <button className="abtn xs danger" disabled={approveM.isPending} onClick={() => setToReject(r)}>
                       <Icon name="x" size={13} /> {t('reject')}
@@ -585,28 +598,31 @@ function UsdtRejectModal({ req, onClose }: { req: AdminTopUp; onClose: () => voi
 
   const apply = () => {
     if (!reason.trim()) {
-      setError('A rejection reason is required.')
+      setError(t('top_reason_required'))
       return
     }
     setError('')
     rejectM.mutate(
       { id: req.id, reason: reason.trim() },
-      { onSuccess: onClose, onError: (e) => setError(e instanceof ApiError ? e.message : 'Rejection failed.') },
+      { onSuccess: onClose, onError: (e) => setError(apiErrorText(e, 'top_reject_failed')) },
     )
   }
 
   return (
     <Modal onClose={onClose} maxWidth={440}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Reject USDT request</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('fin_reject_usdt_title')}</h3>
         <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Reject the <b>{money(req.amount)}</b> request from <b>{req.customerEmail || 'customer'}</b>. The reason is
-          shown to the customer.
+          <Trans
+            i18nKey="top_reject_body"
+            values={{ amount: money(req.amount), who: req.customerEmail || t('top_customer') }}
+            components={{ b: <b /> }}
+          />
         </p>
-        <label className="alabel">Reason (required)</label>
+        <label className="alabel">{t('top_reason_label')}</label>
         <input
           className="afield"
-          placeholder="e.g. no matching on-chain payment found…"
+          placeholder={t('fin_reject_ph')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />

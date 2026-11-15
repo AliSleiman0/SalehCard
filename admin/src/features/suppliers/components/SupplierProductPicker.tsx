@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useCan } from '@/stores/auth'
 import { useSupplierCatalog } from '../hooks/useSuppliers'
 import { filterCatalog } from '../lib/filterCatalog'
@@ -25,6 +26,7 @@ interface Props {
  *  (2026-11-13). Falls back to typing the id when the admin lacks
  *  suppliers.view or the catalog can't be loaded. */
 export function SupplierProductPicker({ providerId, value, onChange, qty, amountRange, sends }: Props) {
+  const { t } = useTranslation()
   const can = useCan()
   // A supplier without a catalog (e.g. the dev mock) shows the error state and
   // the admin types the id.
@@ -45,8 +47,8 @@ export function SupplierProductPicker({ providerId, value, onChange, qty, amount
     <div>
       <input
         className="afield mono"
-        aria-label="Supplier product id"
-        placeholder="e.g. 364"
+        aria-label={t('pick_id_aria')}
+        placeholder={t('pick_id_ph')}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -54,27 +56,27 @@ export function SupplierProductPicker({ providerId, value, onChange, qty, amount
         <div style={{ marginTop: 8 }}>
           <input
             className="afield"
-            aria-label="Search the supplier catalog"
-            placeholder="Search this supplier's catalog…"
+            aria-label={t('pick_search_aria')}
+            placeholder={t('pick_search_ph')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <div
             role="listbox"
-            aria-label="Supplier products"
+            aria-label={t('pick_list_aria')}
             style={{ maxHeight: 200, overflowY: 'auto', marginTop: 6, border: '1px solid var(--border)', borderRadius: 8 }}
           >
             {catalog.isLoading ? (
               <div className="faint" style={{ padding: 10, fontSize: 13 }}>
-                Loading catalog…
+                {t('pick_loading')}
               </div>
             ) : catalog.isError ? (
               <div className="faint" style={{ padding: 10, fontSize: 13 }}>
-                Couldn't load this supplier's catalog — type the supplier product id above.
+                {t('pick_error')}
               </div>
             ) : matches.length === 0 ? (
               <div className="faint" style={{ padding: 10, fontSize: 13 }}>
-                No products
+                {t('pick_empty')}
               </div>
             ) : (
               matches.map((p) => {
@@ -107,7 +109,7 @@ export function SupplierProductPicker({ providerId, value, onChange, qty, amount
                     <span className="faint mono" style={{ whiteSpace: 'nowrap' }}>
                       #{p.upstreamId} · {p.price} {p.currency}
                       {hint ? ` · ${hint}` : ''}
-                      {p.available ? '' : ' · unavailable'}
+                      {p.available ? '' : t('pick_unavailable')}
                     </span>
                   </button>
                 )
@@ -118,13 +120,18 @@ export function SupplierProductPicker({ providerId, value, onChange, qty, amount
       )}
       {selected && (
         <div className="ahint" style={{ marginTop: 8 }}>
-          Selected: <b>{selected.name}</b> · {selected.price} {selected.currency} each
+          {t('pick_selected')} <b>{selected.name}</b>
+          {t('pick_each', { price: selected.price, currency: selected.currency })}
           {qtyHint(selected) ? ` · ${qtyHint(selected)}` : ''}
-          {selected.params.length > 0 ? ` · needs ${selected.params.join(', ')}` : ''}
+          {selected.params.length > 0 ? t('pick_needs', { params: selected.params.join(', ') }) : ''}
           {cost != null && qty != null && (
             <>
               {' '}
-              · about <b>{cost} {selected.currency}</b> for {qty.toLocaleString('en-US')}
+              <Trans
+                i18nKey="pick_about"
+                values={{ cost, currency: selected.currency, qty: qty.toLocaleString('en-US') }}
+                components={{ b: <b /> }}
+              />
             </>
           )}
         </div>

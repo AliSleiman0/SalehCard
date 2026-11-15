@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon, PageHead, Toggle, StatusBadge, LoadingSpinner, ErrorState, ffKey, type FfKey } from '@/components'
 import { useGoBack } from '@/lib/goBack'
@@ -37,6 +37,8 @@ import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
 import { SupplierLinksTable } from '../components/SupplierLinksTable'
 import { linkIssues, toLinkRows, toLinksInput, type LinkRow } from '../lib/supplierLinks'
+import { quoted } from '@/lib/quoted'
+import { apiErrorText } from '@/lib/apiErrorText'
 import type { FulfillmentType, Locale, InputFieldType } from '@/types'
 
 const MAX_IMAGE_BYTES = 10 << 20 // 10 MB — server is authoritative; this is UX only.
@@ -53,10 +55,11 @@ interface VariantRow {
   faceValue: string
 }
 
+// [type, class, colour, label key, description key] — labels are looked up at render.
 const FF_OPTIONS: [FfKey, string, string, string, string][] = [
-  ['code', 'ff-code', 'var(--ff-code)', 'Code / PIN', 'Gift cards, keys, vouchers — delivered instantly from inventory.'],
-  ['credit', 'ff-credit', 'var(--ff-credit)', 'Account credit', 'Game / app top-ups credited to a player ID — no code.'],
-  ['transfer', 'ff-transfer', 'var(--ff-transfer)', 'Money transfer', 'Service flow with a status timeline & manual steps.'],
+  ['code', 'ff-code', 'var(--ff-code)', 'ff_code', 'prod_ff_code_desc'],
+  ['credit', 'ff-credit', 'var(--ff-credit)', 'ff_credit', 'prod_ff_credit_desc'],
+  ['transfer', 'ff-transfer', 'var(--ff-transfer)', 'ff_transfer', 'prod_ff_transfer_desc'],
 ]
 
 function toFulfillment(ff: FfKey): FulfillmentType {
@@ -267,9 +270,7 @@ export default function ProductEditPage() {
     const driver = driverRow(unit, rows)
     setUnit((u) => ({ ...u, enabled: true, fieldKey: driver?.key ?? '' }))
     if (removed.length)
-      setUnitNotice(
-        `Removed the quantity field${removed.length > 1 ? 's' : ''} ${removed.map((k) => `"${k}"`).join(', ')} — per-unit products are bought by amount.`,
-      )
+      setUnitNotice(t('prod_unit_removed_qty', { count: removed.length, fields: quoted(removed) }))
   }
   // The amount range customers may type on a per-unit supplier product — the
   // picker checks it against the supplier's accepted quantities.
@@ -300,11 +301,10 @@ export default function ProductEditPage() {
             if (e.target.checked) setBridgeOn(false)
           }}
         />
-        <b style={{ fontSize: 13.5 }}>Fulfill via supplier API</b>
+        <b style={{ fontSize: 13.5 }}>{t('prod_api_toggle')}</b>
       </label>
       <div className="ahint" style={{ margin: '6px 0 0' }}>
-        Orders are placed automatically at the selected wholesale supplier and paid from its
-        prepaid balance. Input-field keys must match the supplier's parameter names.
+        {t('prod_api_hint')}
       </div>
       {apiOn && providerOptions.length > 0 && (
         <div style={{ marginTop: 12 }}>
@@ -326,26 +326,21 @@ export default function ProductEditPage() {
               checked={fallbackOn}
               onChange={(e) => setFallbackOn(e.target.checked)}
             />
-            <b style={{ fontSize: 13.5 }}>Automatic fallback to next supplier</b>
+            <b style={{ fontSize: 13.5 }}>{t('prod_fallback_toggle')}</b>
           </label>
           <div className="ahint" style={{ margin: '6px 0 0' }}>
-            When the active supplier refuses an order for sure (no balance, product withdrawn, throttled,
-            maintenance…), the order goes to the next switched-on supplier in this list by itself. It never
-            moves an order a supplier may still deliver, or one an admin sent by hand.
+            {t('prod_fallback_hint')}
           </div>
         </div>
       )}
       {apiOn && ff === 'credit' && !perUnit && ignoredAmounts.length > 0 && (
         <div className="ahint" style={{ margin: '10px 0 0', color: 'var(--warn)' }}>
-          This product asks for an amount but has a fixed price. Turn on per-unit pricing so the price and the quantity
-          sent to the supplier follow the amount — the server refuses to save it otherwise.
+          {t('prod_api_amount_warn')}
         </div>
       )}
       {apiOn && providerOptions.length === 0 && (
         <div className="ahint" style={{ margin: '10px 0 0' }}>
-          No suppliers configured — set <code>SUPPLIER_*_TOKEN</code> on the API (or{' '}
-          <code>FULFILLMENT_MOCK=true</code> in dev). Orders will park for manual completion
-          until one is.
+          <Trans i18nKey="prod_no_suppliers" components={{ c: <code /> }} />
         </div>
       )}
     </div>
@@ -479,11 +474,11 @@ export default function ProductEditPage() {
   const onImageFile = (file: File) => {
     setImageError('')
     if (file.size > MAX_IMAGE_BYTES) {
-      setImageError('Image must be 10 MB or smaller.')
+      setImageError(t('prod_img_too_big'))
       return
     }
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setImageError('Image must be JPEG, PNG, or WebP.')
+      setImageError(t('prod_img_bad_type'))
       return
     }
     uploadImage.mutate(file, {
@@ -492,7 +487,7 @@ export default function ProductEditPage() {
         setImages([res.data.imageUrl])
         setThumbnail(res.data.thumbnailUrl)
       },
-      onError: (err) => setImageError((err as Error).message),
+      onError: (err) => setImageError(apiErrorText(err, 'prod_img_upload_failed')),
     })
   }
 
@@ -511,16 +506,16 @@ export default function ProductEditPage() {
       mt.base.trim() || mt.quote.trim() || mt.buy.trim() || mt.sell.trim() || mt.min.trim() || mt.max.trim()
     )
     if (!hasContent) return ''
-    if (!mt.base.trim() || !mt.quote.trim()) return 'Exchange rates need both a base and a quote currency.'
+    if (!mt.base.trim() || !mt.quote.trim()) return t('prod_mt_need_currencies')
     const buy = parseFloat(mt.buy)
     const sell = parseFloat(mt.sell)
-    if ((mt.buy.trim() && buy < 0) || (mt.sell.trim() && sell < 0)) return 'Exchange rates cannot be negative.'
+    if ((mt.buy.trim() && buy < 0) || (mt.sell.trim() && sell < 0)) return t('prod_mt_negative')
     const hasBuy = mt.buy.trim() !== '' && buy > 0
     const hasSell = mt.sell.trim() !== '' && sell > 0
-    if (!hasBuy && !hasSell) return 'Set at least one of the buy or sell rate.'
+    if (!hasBuy && !hasSell) return t('prod_mt_need_rate')
     const min = parseFloat(mt.min)
     const max = parseFloat(mt.max)
-    if (mt.min.trim() && mt.max.trim() && min > 0 && max > 0 && min > max) return 'Minimum amount cannot exceed the maximum.'
+    if (mt.min.trim() && mt.max.trim() && min > 0 && max > 0 && min > max) return t('prod_mt_min_max')
     return ''
   }
 
@@ -553,14 +548,14 @@ export default function ProductEditPage() {
     return Math.round((1 - r / c) * 100)
   }
 
-  const headTitle = useMemo(() => (isNew ? t('new_product') : data?.data?.title.en || 'Edit product'), [isNew, data, t])
+  const headTitle = useMemo(() => (isNew ? t('new_product') : data?.data?.title.en || t('prod_edit_title')), [isNew, data, t])
 
   if (!isNew && isLoading) return <div className="page"><LoadingSpinner /></div>
   if (!isNew && isError)
     return (
       <div className="page">
         <PageHead back="/products" title={t('nav_products')} />
-        <ErrorState message="Could not load product" onRetry={() => refetch()} />
+        <ErrorState message={t('prod_load_error')} onRetry={() => refetch()} />
       </div>
     )
 
@@ -569,12 +564,12 @@ export default function ProductEditPage() {
       <PageHead
         back="/products"
         crumbs={[t('nav_products'), isNew ? t('new_product') : headTitle]}
-        title={isNew ? t('new_product') : 'Edit product'}
-        sub={isNew ? 'Create a new product listing' : id}
+        title={isNew ? t('new_product') : t('prod_edit_title')}
+        sub={isNew ? t('prod_new_sub') : id}
       >
         {canManage && (
           <button className="abtn primary" onClick={onSave} disabled={pending}>
-            <Icon name="check" size={15} /> {pending ? 'Saving…' : t('save')}
+            <Icon name="check" size={15} /> {pending ? t('prod_saving') : t('save')}
           </button>
         )}
       </PageHead>
@@ -597,7 +592,7 @@ export default function ProductEditPage() {
         >
           <Icon name="trash" size={15} />
           <span style={{ flex: 1 }}>
-            In trash: customers can&apos;t see or buy this product. You can still edit it; restore it to put it back.
+            {t('prod_trash_banner')}
           </span>
           {canManage && (
             <button
@@ -605,12 +600,12 @@ export default function ProductEditPage() {
               disabled={restore.isPending}
               onClick={() =>
                 restore.mutate(id!, {
-                  onSuccess: () => toast.success('Product restored.'),
-                  onError: () => toast.error('Could not restore the product.'),
+                  onSuccess: () => toast.success(t('prod_restored')),
+                  onError: () => toast.error(t('prod_restore_failed')),
                 })
               }
             >
-              <Icon name="refresh" size={13} /> Restore
+              <Icon name="refresh" size={13} /> {t('prod_restore')}
             </button>
           )}
         </div>
@@ -628,7 +623,7 @@ export default function ProductEditPage() {
             fontWeight: 700,
           }}
         >
-          {(error as Error).message}
+          {apiErrorText(error, 'prod_save_failed')}
         </div>
       )}
 
@@ -654,7 +649,7 @@ export default function ProductEditPage() {
         <div className="fieldset">
           {/* Basics */}
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>Basics</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>{t('prod_basics')}</h3>
             <div className="langtab">
               {(['en', 'ar', 'tr'] as Locale[]).map((l) => (
                 <button key={l} className={langTab === l ? 'on' : ''} onClick={() => setLangTab(l)}>
@@ -662,7 +657,7 @@ export default function ProductEditPage() {
                 </button>
               ))}
             </div>
-            <label className="alabel">Title ({langTab.toUpperCase()})</label>
+            <label className="alabel">{t('prod_title_label', { lang: langTab.toUpperCase() })}</label>
             <input
               className="afield"
               value={title[langTab]}
@@ -670,23 +665,23 @@ export default function ProductEditPage() {
               placeholder={langTab === 'ar' ? 'اسم المنتج بالعربية' : langTab === 'tr' ? 'Ürün adı' : 'Product title'}
               dir={langTab === 'ar' ? 'rtl' : 'ltr'}
             />
-            <div className="ahint">Localized titles shown to customers in each language.</div>
+            <div className="ahint">{t('prod_title_hint')}</div>
             <div style={{ marginTop: 16 }}>
-              <label className="alabel">Description ({langTab.toUpperCase()})</label>
+              <label className="alabel">{t('prod_desc_label', { lang: langTab.toUpperCase() })}</label>
               <textarea
                 className="afield"
                 value={description[langTab]}
                 onChange={(e) => setDescription({ ...description, [langTab]: e.target.value })}
-                placeholder="Describe the product, redemption steps, region…"
+                placeholder={t('prod_desc_ph')}
                 dir={langTab === 'ar' ? 'rtl' : 'ltr'}
               />
-              <div className="ahint">Localized description shown to customers in each language.</div>
+              <div className="ahint">{t('prod_desc_hint')}</div>
             </div>
             <div style={{ marginTop: 16 }}>
-              <label className="alabel">Category</label>
+              <label className="alabel">{t('prod_category')}</label>
               {hasTree ? (
                 <select className="select" style={{ width: '100%' }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                  <option value="">— None —</option>
+                  <option value="">{t('prod_cat_none')}</option>
                   {catTreeOptions.map((n) => (
                     <option key={n.id} value={n.id}>
                       {pathLabel(n, catTreeById)}
@@ -702,21 +697,18 @@ export default function ProductEditPage() {
                   ))}
                 </select>
               )}
-              <div className="ahint">
-                Assign this product to a category so it appears in the app's browse tree (manage the
-                tree under Categories).
-              </div>
+              <div className="ahint">{t('prod_cat_hint')}</div>
             </div>
           </div>
 
           {/* Fulfillment selector */}
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Fulfillment type</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>{t('prod_ff_title')}</h3>
             <div className="ahint" style={{ marginTop: 0, marginBottom: 14 }}>
-              Determines how the product is delivered — this changes the fields below.
+              {t('prod_ff_hint')}
             </div>
             <div className="g3">
-              {FF_OPTIONS.map(([k, , color, label, desc]) => {
+              {FF_OPTIONS.map(([k, , color, labelKey, descKey]) => {
                 // A mobile-recharge bridge product must stay account_credit — the
                 // bridge spec is a sub-mode of credit. Lock the other types while
                 // the bridge is on so a stray click can't flip it to Code/PIN and
@@ -728,11 +720,7 @@ export default function ProductEditPage() {
                     onClick={() => {
                       if (!locked) setFf(k)
                     }}
-                    title={
-                      locked
-                        ? 'Turn off the mobile-recharge bridge below to change the fulfillment type.'
-                        : undefined
-                    }
+                    title={locked ? t('prod_ff_locked') : undefined}
                     style={{
                       cursor: locked ? 'not-allowed' : 'pointer',
                       opacity: locked ? 0.45 : 1,
@@ -745,10 +733,10 @@ export default function ProductEditPage() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 99, background: color }} />
-                      <b style={{ fontSize: 13.5 }}>{label}</b>
+                      <b style={{ fontSize: 13.5 }}>{t(labelKey)}</b>
                       {ff === k && <Icon name="checkc" size={16} />}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}>{desc}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}>{t(descKey)}</div>
                   </div>
                 )
               })}
@@ -759,14 +747,14 @@ export default function ProductEditPage() {
           <div className="acard">
             <div className="panelhead">
               <Icon name="layers" size={17} />
-              <h3>Variants &amp; pricing</h3>
+              <h3>{t('prod_variants_title')}</h3>
               {!perUnit && (
                 <div className="ph-act">
                   <button
                     className="abtn xs"
                     onClick={() => setVariants([...variants, { denomination: '', price: '', resellerPrice: '', faceValue: '' }])}
                   >
-                    <Icon name="plus" size={13} /> Add variant
+                    <Icon name="plus" size={13} /> {t('prod_add_variant')}
                   </button>
                 </div>
               )}
@@ -775,25 +763,25 @@ export default function ProductEditPage() {
               <div style={{ padding: '0 18px 12px' }}>
                 <div className="aseg">
                   <button className={!perUnit ? 'on' : ''} onClick={() => setPricingMode(false)}>
-                    Fixed packages
+                    {t('prod_mode_fixed')}
                   </button>
                   <button className={perUnit ? 'on' : ''} onClick={() => setPricingMode(true)}>
-                    Per unit (customer enters amount)
+                    {t('prod_mode_unit')}
                   </button>
                 </div>
                 <div className="ahint" style={{ margin: '6px 0 0' }}>
                   {perUnit
                     ? ff === 'transfer'
-                      ? 'For transfers sold by amount: the customer types how much to send and pays the price below pro-rata (e.g. 1 unit at $1.00 → sending 1,000 costs $1,000).'
-                      : 'For coin/diamond recharges sold by amount: the customer types how many units they want and pays the price below pro-rata.'
-                    : 'The customer picks one of the packages below.'}
+                      ? t('prod_mode_unit_hint_transfer')
+                      : t('prod_mode_unit_hint_credit')
+                    : t('prod_mode_fixed_hint')}
                 </div>
                 {unitNotice && (
                   <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{unitNotice}</div>
                 )}
                 {droppedPkgs.length > 0 && (
                   <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>
-                    {`Saving will delete ${droppedPkgs.length} other package${droppedPkgs.length > 1 ? 's' : ''} (${droppedPkgs.map((d) => `"${d}"`).join(', ')}) — per-unit products keep a single price. Switch back to Fixed packages to keep ${droppedPkgs.length > 1 ? 'them' : 'it'}.`}
+                    {t('prod_dropped_pkgs', { count: droppedPkgs.length, list: quoted(droppedPkgs) })}
                   </div>
                 )}
               </div>
@@ -803,10 +791,8 @@ export default function ProductEditPage() {
                 style={{ padding: '0 18px 12px', color: 'var(--warn)', fontSize: 12.5, fontWeight: 600 }}
                 role="alert"
               >
-                {`Customers type ${ignoredAmounts.map((l) => `"${l}"`).join(', ')} at checkout but pay the package price — `}
-                {unitEligible
-                  ? 'switch to Per unit, or change the field type in Input fields below.'
-                  : 'change the field type in Input fields below (Per unit isn’t available with the bridge or a supplier API).'}
+                {t('prod_ignored_amounts', { fields: quoted(ignoredAmounts) })}
+                {unitEligible ? t('prod_ignored_fix_unit') : t('prod_ignored_fix_type')}
               </div>
             )}
             {perUnit ? (
@@ -821,7 +807,7 @@ export default function ProductEditPage() {
                     <>
                       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                         <div>
-                          <label className="alabel">Customer price</label>
+                          <label className="alabel">{t('prod_customer_price')}</label>
                           <input
                             className="afield"
                             style={{ width: 110 }}
@@ -831,7 +817,7 @@ export default function ProductEditPage() {
                           />
                         </div>
                         <div>
-                          <label className="alabel">Reseller price</label>
+                          <label className="alabel">{t('prod_reseller_price')}</label>
                           <input
                             className="afield"
                             style={{ width: 110 }}
@@ -841,7 +827,7 @@ export default function ProductEditPage() {
                           />
                         </div>
                         <div>
-                          <label className="alabel">Per … units</label>
+                          <label className="alabel">{t('prod_per_units')}</label>
                           <input
                             className="afield"
                             style={{ width: 110 }}
@@ -852,16 +838,16 @@ export default function ProductEditPage() {
                           />
                         </div>
                         <div>
-                          <label className="alabel">Amount field</label>
+                          <label className="alabel">{t('prod_amount_field')}</label>
                           <select
                             className="select"
                             value={driver?.key ?? ''}
                             onChange={(e) => setUnit((u) => ({ ...u, fieldKey: e.target.value }))}
                           >
-                            {amounts.length === 0 && <option value="">— add an amount field —</option>}
+                            {amounts.length === 0 && <option value="">{t('prod_add_amount_field_opt')}</option>}
                             {amounts.map((f, i) => (
                               <option key={i} value={f.key}>
-                                {f.label.en || f.key || `field #${i + 1}`}
+                                {f.label.en || f.key || t('prod_field_n', { n: i + 1 })}
                               </option>
                             ))}
                           </select>
@@ -873,8 +859,7 @@ export default function ProductEditPage() {
                         </div>
                       </div>
                       <div className="ahint" style={{ margin: '10px 0 0' }}>
-                        {line ||
-                          'Set the price, the units it buys, and the amount field’s min/max (Input fields below) to see a preview.'}
+                        {line || t('prod_preview_hint')}
                       </div>
                     </>
                   )
@@ -885,13 +870,13 @@ export default function ProductEditPage() {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>{ff === 'credit' ? 'Denomination' : 'Face value'}</th>
-                    <th>Customer price</th>
-                    <th>Reseller price</th>
+                    <th>{ff === 'credit' ? t('prod_denomination') : t('prod_face_value')}</th>
+                    <th>{t('prod_customer_price')}</th>
+                    <th>{t('prod_reseller_price')}</th>
                     {ff === 'credit' && bridgeOn && bridgeMethod === 'transfer_credit' && (
-                      <th>Transfer amount</th>
+                      <th>{t('prod_transfer_amount')}</th>
                     )}
-                    <th>Margin</th>
+                    <th>{t('prod_margin')}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -974,7 +959,7 @@ export default function ProductEditPage() {
           <div className="acard">
             <div className="panelhead">
               <Icon name="layers" size={17} />
-              <h3>Input fields</h3>
+              <h3>{t('prod_fields_title')}</h3>
               <div className="ph-act">
                 <button
                   className="abtn xs"
@@ -985,34 +970,28 @@ export default function ProductEditPage() {
                     ])
                   }
                 >
-                  <Icon name="plus" size={13} /> Add field
+                  <Icon name="plus" size={13} /> {t('prod_add_field')}
                 </button>
               </div>
             </div>
             <div className="ahint" style={{ margin: '0 0 10px' }}>
-              Fields the customer fills at checkout (e.g. Account ID, Zone ID, Email). Values are
-              attached to the order for fulfillment. Keys must be unique. <b>Sensitive</b> fields
-              are masked and never stored on the order. <b>Constraints</b>: <code>quantity</code>/
-              <code>amount</code> take an optional min–max range; <code>select</code> takes the
-              choices shown to the customer. <b>quantity</b> = how many packages the customer buys;{' '}
-              <b>amount</b> = a number the customer types (it drives the price when <b>Per unit</b>{' '}
-              pricing is on).
+              <Trans i18nKey="prod_fields_hint" components={{ b: <b />, c: <code /> }} />
             </div>
             {inputFields.length === 0 ? (
               <div className="ahint" style={{ margin: 0 }}>
-                No input fields — the customer enters nothing at checkout.
+                {t('prod_fields_empty')}
               </div>
             ) : (
               <div className="tablewrap">
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <th>Key</th>
-                      <th>Type</th>
-                      <th>Label (EN)</th>
-                      <th>Label (AR)</th>
-                      <th>Constraints</th>
-                      <th>Sensitive</th>
+                      <th>{t('prod_col_key')}</th>
+                      <th>{t('col_type')}</th>
+                      <th>{t('prod_col_label_en')}</th>
+                      <th>{t('prod_col_label_ar')}</th>
+                      <th>{t('prod_col_constraints')}</th>
+                      <th>{t('prod_col_sensitive')}</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -1044,14 +1023,10 @@ export default function ProductEditPage() {
                               {(['text', 'select', 'amount', 'quantity', 'file'] as const)
                                 // Per-unit products are bought by amount — no pack
                                 // count (kept only so a stray row still renders).
-                                .filter((t) => t !== 'quantity' || !perUnit || f.type === 'quantity')
-                                .map((t) => (
-                                  <option key={t} value={t}>
-                                    {t === 'quantity'
-                                      ? 'quantity (number of packs)'
-                                      : t === 'file'
-                                        ? 'file (photo: QR / barcode)'
-                                        : t}
+                                .filter((ft) => ft !== 'quantity' || !perUnit || f.type === 'quantity')
+                                .map((ft) => (
+                                  <option key={ft} value={ft}>
+                                    {t(`prod_ftype_${ft}`)}
                                   </option>
                                 ))}
                             </select>
@@ -1081,7 +1056,7 @@ export default function ProductEditPage() {
                                   className="afield"
                                   style={{ padding: '7px 10px', width: 70 }}
                                   inputMode="decimal"
-                                  placeholder="Min"
+                                  placeholder={t('prod_min')}
                                   value={f.min}
                                   onChange={(e) => patch({ min: e.target.value })}
                                 />
@@ -1090,7 +1065,7 @@ export default function ProductEditPage() {
                                   className="afield"
                                   style={{ padding: '7px 10px', width: 70 }}
                                   inputMode="decimal"
-                                  placeholder="Max"
+                                  placeholder={t('prod_max')}
                                   value={f.max}
                                   onChange={(e) => patch({ max: e.target.value })}
                                 />
@@ -1131,22 +1106,22 @@ export default function ProductEditPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                 <span className="bdg ff-code">
                   <i className="d" />
-                  Code inventory
+                  {t('prod_code_inventory')}
                 </span>
-                <h3 style={{ fontSize: 15, fontWeight: 800 }}>{stock} codes available</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 800 }}>{t('prod_codes_available', { n: stock })}</h3>
                 <div style={{ marginInlineStart: 'auto' }}>
                   <button
                     className="abtn sm primary"
                     disabled={isNew}
-                    title={isNew ? 'Save the product first' : undefined}
+                    title={isNew ? t('prod_save_first') : undefined}
                     onClick={() => id && navigate(`/inventory?upload=${id}`)}
                   >
-                    <Icon name="upload" size={14} /> Upload codes
+                    <Icon name="upload" size={14} /> {t('prod_upload_codes')}
                   </button>
                 </div>
               </div>
               <div className="ahint" style={{ marginTop: 0 }}>
-                Manage the code pool that fulfills this product in Inventory. Low-stock alert fires below the threshold.
+                {t('prod_code_hint')}
               </div>
               {/* Supplier-API delivery: codes come from the upstream supplier
                   instead of this product's inventory pool. */}
@@ -1158,13 +1133,12 @@ export default function ProductEditPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                 <span className="bdg ff-credit">
                   <i className="d" />
-                  Account credit
+                  {t('ff_credit')}
                 </span>
-                <h3 style={{ fontSize: 15, fontWeight: 800 }}>Player ID field</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 800 }}>{t('prod_player_id_title')}</h3>
               </div>
               <div className="ahint" style={{ marginTop: 0 }}>
-                Customers enter their player/account ID at checkout; top-ups are credited
-                automatically via the provider API.
+                {t('prod_credit_hint')}
               </div>
 
               {/* Mobile-recharge (bridge) delivery */}
@@ -1186,17 +1160,15 @@ export default function ProductEditPage() {
                       if (e.target.checked) setApiOn(false)
                     }}
                   />
-                  <b style={{ fontSize: 13.5 }}>Deliver via mobile-recharge bridge (Lebanon)</b>
+                  <b style={{ fontSize: 13.5 }}>{t('prod_bridge_toggle')}</b>
                 </label>
                 <div className="ahint" style={{ margin: '6px 0 0' }}>
-                  Fulfill this top-up automatically on a dual-SIM bridge phone (MTC Touch / Alfa)
-                  instead of the manual queue. Adds a <code>phone</code> field at checkout. Manage
-                  devices under <b>Bridge</b>.
+                  <Trans i18nKey="prod_bridge_hint" components={{ b: <b />, c: <code /> }} />
                 </div>
                 {bridgeOn && (
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
                     <div>
-                      <label className="alabel">Operator</label>
+                      <label className="alabel">{t('prod_operator')}</label>
                       <select
                         className="select"
                         value={bridgeProvider}
@@ -1207,7 +1179,7 @@ export default function ProductEditPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="alabel">Method</label>
+                      <label className="alabel">{t('col_method')}</label>
                       <select
                         className="select"
                         value={bridgeMethod}
@@ -1215,22 +1187,20 @@ export default function ProductEditPage() {
                           setBridgeMethod(e.target.value as 'transfer_credit' | 'recharge_line')
                         }
                       >
-                        <option value="transfer_credit">Credit transfer (by amount)</option>
-                        <option value="recharge_line">Scratch card (from inventory)</option>
+                        <option value="transfer_credit">{t('prod_bridge_transfer')}</option>
+                        <option value="recharge_line">{t('prod_bridge_scratch')}</option>
                       </select>
                     </div>
                   </div>
                 )}
                 {bridgeOn && bridgeMethod === 'transfer_credit' && (
                   <div className="ahint" style={{ margin: '10px 0 0' }}>
-                    Set each variant's <b>Transfer amount</b> above — the credit sent to the
-                    customer's line (distinct from the price they pay).
+                    <Trans i18nKey="prod_bridge_transfer_hint" components={{ b: <b /> }} />
                   </div>
                 )}
                 {bridgeOn && bridgeMethod === 'recharge_line' && (
                   <div className="ahint" style={{ margin: '10px 0 0' }}>
-                    Scratch-card codes are claimed from this product's code <b>Inventory</b> — upload
-                    codes there, one applied per order.
+                    <Trans i18nKey="prod_bridge_scratch_hint" components={{ b: <b /> }} />
                   </div>
                 )}
               </div>
@@ -1244,13 +1214,12 @@ export default function ProductEditPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                 <span className="bdg ff-transfer">
                   <i className="d" />
-                  Money transfer
+                  {t('ff_transfer')}
                 </span>
-                <h3 style={{ fontSize: 15, fontWeight: 800 }}>Service settings</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 800 }}>{t('prod_service_settings')}</h3>
               </div>
               <div className="ahint" style={{ marginTop: 0 }}>
-                Transfer orders use a manual status timeline (Submitted → Processing → Completed). No inventory or code
-                pool is attached.
+                {t('prod_transfer_hint')}
               </div>
 
               {/* Buy/sell exchange-rate board — shown as a rate board + live
@@ -1258,29 +1227,28 @@ export default function ProductEditPage() {
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                   <Icon name="coins" size={17} />
-                  <h3 style={{ fontSize: 15, fontWeight: 800 }}>Exchange rates (buy / sell)</h3>
+                  <h3 style={{ fontSize: 15, fontWeight: 800 }}>{t('prod_rates_title')}</h3>
                 </div>
                 <div className="ahint" style={{ marginTop: 0 }}>
-                  Rates are quote-currency units per 1 base unit (e.g. 89,500 LBP per $1). Fill buy, sell, or both;
-                  leave everything blank for no rate board.
+                  {t('prod_rates_hint')}
                 </div>
                 <div className="g2" style={{ marginTop: 12 }}>
                   <div>
-                    <label className="alabel">Base currency</label>
+                    <label className="alabel">{t('prod_base_currency')}</label>
                     <input
                       className="afield"
                       maxLength={8}
-                      placeholder="e.g. USD"
+                      placeholder={t('prod_eg', { v: 'USD' })}
                       value={mt.base}
                       onChange={(e) => setMt((s) => ({ ...s, base: e.target.value }))}
                     />
                   </div>
                   <div>
-                    <label className="alabel">Quote currency</label>
+                    <label className="alabel">{t('prod_quote_currency')}</label>
                     <input
                       className="afield"
                       maxLength={8}
-                      placeholder="e.g. LBP"
+                      placeholder={t('prod_eg', { v: 'LBP' })}
                       value={mt.quote}
                       onChange={(e) => setMt((s) => ({ ...s, quote: e.target.value }))}
                     />
@@ -1288,23 +1256,23 @@ export default function ProductEditPage() {
                 </div>
                 <div className="g2" style={{ marginTop: 12 }}>
                   <div>
-                    <label className="alabel">Buy rate</label>
+                    <label className="alabel">{t('prod_buy_rate')}</label>
                     <input
                       className="afield"
                       type="number"
                       min={0}
-                      placeholder="e.g. 89000"
+                      placeholder={t('prod_eg', { v: '89000' })}
                       value={mt.buy}
                       onChange={(e) => setMt((s) => ({ ...s, buy: e.target.value }))}
                     />
                   </div>
                   <div>
-                    <label className="alabel">Sell rate</label>
+                    <label className="alabel">{t('prod_sell_rate')}</label>
                     <input
                       className="afield"
                       type="number"
                       min={0}
-                      placeholder="e.g. 89500"
+                      placeholder={t('prod_eg', { v: '89500' })}
                       value={mt.sell}
                       onChange={(e) => setMt((s) => ({ ...s, sell: e.target.value }))}
                     />
@@ -1312,23 +1280,23 @@ export default function ProductEditPage() {
                 </div>
                 <div className="g2" style={{ marginTop: 12 }}>
                   <div>
-                    <label className="alabel">Min amount (optional)</label>
+                    <label className="alabel">{t('prod_min_amount')}</label>
                     <input
                       className="afield"
                       type="number"
                       min={0}
-                      placeholder="e.g. 1"
+                      placeholder={t('prod_eg', { v: '1' })}
                       value={mt.min}
                       onChange={(e) => setMt((s) => ({ ...s, min: e.target.value }))}
                     />
                   </div>
                   <div>
-                    <label className="alabel">Max amount (optional)</label>
+                    <label className="alabel">{t('prod_max_amount')}</label>
                     <input
                       className="afield"
                       type="number"
                       min={0}
-                      placeholder="e.g. 5000"
+                      placeholder={t('prod_eg', { v: '5000' })}
                       value={mt.max}
                       onChange={(e) => setMt((s) => ({ ...s, max: e.target.value }))}
                     />
@@ -1348,24 +1316,22 @@ export default function ProductEditPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Icon name="shield" size={17} />
-                <h3 style={{ fontSize: 15, fontWeight: 800 }}>Purchase-time ID verification</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 800 }}>{t('prod_verify_title')}</h3>
               </div>
               <Toggle on={verifyEnabled} onClick={() => setVerifyEnabled(!verifyEnabled)} />
             </div>
             <div className="ahint" style={{ marginTop: 0 }}>
-              When on, customers enter their game ID on the product page and must see the resolved
-              nickname before they can buy — catching wrong IDs before payment. Best for
-              account-credit top-ups (PUBG, Delta Force, …).
+              {t('prod_verify_hint')}
             </div>
             {verifyEnabled && (
               <div style={{ marginTop: 14 }}>
-                <label className="alabel">Game (provider slug)</label>
+                <label className="alabel">{t('prod_verify_game')}</label>
                 <input
                   className="afield"
                   list="game-slugs"
                   value={verifyApp}
                   onChange={(e) => setVerifyApp(e.target.value)}
-                  placeholder="e.g. pubgm-global"
+                  placeholder={t('prod_eg', { v: 'pubgm-global' })}
                 />
                 <datalist id="game-slugs">
                   {KNOWN_GAME_SLUGS.map((s) => (
@@ -1373,12 +1339,11 @@ export default function ProductEditPage() {
                   ))}
                 </datalist>
                 <div className="ahint">
-                  Must exactly match the ID Game Checker slug for this game (e.g. <b>pubgm-global</b>,{' '}
-                  <b>dfm-garena</b>). Add a text input field for the player ID too, so it shows at checkout.
+                  <Trans i18nKey="prod_verify_slug_hint" components={{ b: <b /> }} />
                 </div>
                 {!verifyApp.trim() && (
                   <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>
-                    Enter a game slug, or turn verification off.
+                    {t('prod_verify_need_slug')}
                   </div>
                 )}
               </div>
@@ -1390,17 +1355,17 @@ export default function ProductEditPage() {
         <div className="fieldset">
           <div className="acard pad">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 800 }}>Status</h3>
+              <h3 style={{ fontSize: 15, fontWeight: 800 }}>{t('status')}</h3>
               <Toggle on={active} onClick={() => setActive(!active)} />
             </div>
             <StatusBadge s={active ? 'active' : 'draft'} />
             <div className="ahint">
-              {active ? 'Visible in the storefront and purchasable.' : 'Hidden from customers until published.'}
+              {active ? t('prod_status_on_hint') : t('prod_status_off_hint')}
             </div>
           </div>
 
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Image</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{t('prod_image')}</h3>
             <input
               ref={imageFileRef}
               type="file"
@@ -1429,10 +1394,10 @@ export default function ProductEditPage() {
                         disabled={uploadImage.isPending || !canManage}
                         onClick={() => imageFileRef.current?.click()}
                       >
-                        <Icon name="upload" size={13} /> Replace
+                        <Icon name="upload" size={13} /> {t('prod_img_replace')}
                       </button>
                       <button className="abtn sm danger" disabled={uploadImage.isPending || !canManage} onClick={onRemoveImage}>
-                        <Icon name="x" size={13} /> Remove
+                        <Icon name="x" size={13} /> {t('prod_img_remove')}
                       </button>
                     </div>
                   </>
@@ -1445,11 +1410,11 @@ export default function ProductEditPage() {
                   disabled={uploadImage.isPending || !canManage}
                   onClick={() => imageFileRef.current?.click()}
                 >
-                  <Icon name="upload" size={13} /> {uploadImage.isPending ? 'Uploading…' : 'Choose image'}
+                  <Icon name="upload" size={13} /> {uploadImage.isPending ? t('prod_uploading') : t('prod_img_choose')}
                 </button>
               )
             })()}
-            <div className="ahint">JPEG, PNG, or WebP · max 10 MB · compressed to 1024px + 256px thumbnail.</div>
+            <div className="ahint">{t('prod_img_hint')}</div>
             {imageError && (
               <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{imageError}</div>
             )}
@@ -1457,21 +1422,21 @@ export default function ProductEditPage() {
 
           {ff === 'code' && (
             <div className="acard pad">
-              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Stock</h3>
-              <label className="alabel">Codes available (stock)</label>
+              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{t('prod_stock')}</h3>
+              <label className="alabel">{t('prod_codes_stock')}</label>
               <input
                 className="afield"
                 type="number"
                 value={stock}
                 onChange={(e) => setStock(parseInt(e.target.value, 10) || 0)}
               />
-              <div className="ahint">Bulk-upload codes in Inventory to grow the pool.</div>
+              <div className="ahint">{t('prod_stock_hint')}</div>
             </div>
           )}
 
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Cost</h3>
-            <label className="alabel">Unit price (cost)</label>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{t('prod_cost')}</h3>
+            <label className="alabel">{t('prod_unit_cost')}</label>
             <input
               className="afield"
               type="number"
@@ -1481,7 +1446,7 @@ export default function ProductEditPage() {
               onChange={(e) => setCost(e.target.value)}
               placeholder="—"
             />
-            <div className="ahint">Your cost per unit — used for inventory value, not shown to customers.</div>
+            <div className="ahint">{t('prod_cost_hint')}</div>
           </div>
 
         </div>
@@ -1495,6 +1460,7 @@ export default function ProductEditPage() {
 // duplicates ignored), and the box also commits on blur so a typed-but-not-
 // entered option isn't silently lost on save.
 function OptionsEditor({ value, onChange }: { value: string[]; onChange: (options: string[]) => void }) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState('')
 
   const commit = () => {
@@ -1521,7 +1487,7 @@ function OptionsEditor({ value, onChange }: { value: string[]; onChange: (option
       <input
         className="afield"
         style={{ padding: '5px 8px', width: 90, fontSize: 12 }}
-        placeholder="Add…"
+        placeholder={t('prod_opt_add')}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}

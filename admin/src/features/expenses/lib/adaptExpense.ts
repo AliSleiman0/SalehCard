@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/utils'
 import type { AdminExpense, ExpenseCategory } from '../api/expenses'
 
 /** The flat shape the expense list renders. */
@@ -28,9 +29,7 @@ export function amountLabel(amount: number, currency: string): string {
 /** "Mon D, YYYY" label for an ISO date, or '—' when absent/unparseable. */
 export function dateLabel(iso?: string): string {
   if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return formatDate(iso)
 }
 
 /** Map an admin expense to the flat view the list/table renders. */

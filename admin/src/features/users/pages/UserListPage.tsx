@@ -21,17 +21,17 @@ import { useBulk } from '@/hooks/useBulk'
 import { money, downloadCsv } from '@/lib/utils'
 import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useUsers, useBulkUserAction, useBulkSms, useBulkPush } from '../hooks/useUsers'
-import { adaptUser } from '../lib/adaptUser'
+import { adaptUser, joinedLabel } from '../lib/adaptUser'
 import { listUsers, type UserStatus, type BulkUserAction, type AdminUser } from '../api/users'
 import type { UserRole } from '@/types'
 
 const ROLES: [string, string][] = [
-  ['all', 'All'],
-  ['customer', 'Customers'],
-  ['reseller', 'Resellers'],
-  ['admin', 'Admins'],
+  ['all', 'all'],
+  ['customer', 'usr_role_customers'],
+  ['reseller', 'usr_role_resellers'],
+  ['admin', 'usr_role_admins'],
 ]
 
 export default function UserListPage() {
@@ -92,8 +92,8 @@ export default function UserListPage() {
   }
 
   const runBulk = (action: BulkUserAction) => {
-    const verb = action === 'suspend' ? 'Suspend' : 'Activate'
-    if (!window.confirm(`${verb} ${bulk.sel.length} user(s)?`)) return
+    const key = action === 'suspend' ? 'usr_bulk_suspend_confirm' : 'usr_bulk_activate_confirm'
+    if (!window.confirm(t(key, { n: bulk.sel.length }))) return
     bulkAction.mutate({ ids: bulk.sel, action }, { onSuccess: () => bulk.clear() })
   }
 
@@ -113,7 +113,18 @@ export default function UserListPage() {
         p++
       } while (p <= pages)
 
-      const header = ['ID', 'Email', 'Phone', 'Role', 'Status', 'Wallet', 'Orders', 'Total spent', 'Points', 'Joined']
+      const header = [
+        t('usr_csv_id'),
+        t('login_email'),
+        t('rd_phone'),
+        t('usr_col_role'),
+        t('status'),
+        t('usr_col_wallet'),
+        t('usr_col_orders'),
+        t('usr_col_spent'),
+        t('usr_col_points'),
+        t('usr_col_joined'),
+      ]
       const csvRows = all.map((u) => {
         const v = adaptUser(u)
         return [v.id, v.email, v.phone, v.role, v.status, v.balance.toFixed(2), v.orders, v.spent.toFixed(2), v.loyalty, v.joined]
@@ -130,10 +141,10 @@ export default function UserListPage() {
         back="/"
         crumbs={[t('grp_operations'), t('nav_users')]}
         title={t('nav_users')}
-        sub={meta ? `${meta.total.toLocaleString()} registered users` : ''}
+        sub={meta ? t('usr_sub', { n: meta.total.toLocaleString() }) : ''}
       >
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('exp_refresh')}
         </button>
         <button className="abtn" onClick={handleExport} disabled={exporting}>
           <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
@@ -145,7 +156,7 @@ export default function UserListPage() {
           <div className="fsearch">
             <Icon name="search" size={15} />
             <input
-              placeholder="Search email or phone…"
+              placeholder={t('usr_search_ph')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -153,7 +164,7 @@ export default function UserListPage() {
           <div className="chiprow">
             {ROLES.map(([k, l]) => (
               <Chip key={k} on={role === k} onClick={() => onFilter(setRole)(k as 'all' | UserRole)}>
-                {l}
+                {t(l)}
               </Chip>
             ))}
           </div>
@@ -162,9 +173,9 @@ export default function UserListPage() {
             value={status}
             onChange={(e) => onFilter(setStatus)(e.target.value as 'all' | UserStatus)}
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
+            <option value="all">{t('usr_all_statuses')}</option>
+            <option value="active">{t('active')}</option>
+            <option value="suspended">{t('usr_status_suspended')}</option>
           </select>
         </div>
 
@@ -182,10 +193,10 @@ export default function UserListPage() {
                 <Icon name="x" size={13} /> {t('suspend')}
               </button>
               <button className="abtn xs" onClick={() => setSmsIds(bulk.sel)}>
-                <Icon name="send" size={13} /> SMS
+                <Icon name="send" size={13} /> {t('usr_sms')}
               </button>
               <button className="abtn xs" onClick={() => setPushIds(bulk.sel)}>
-                <Icon name="bell" size={13} /> Push
+                <Icon name="bell" size={13} /> {t('usr_push')}
               </button>
             </div>
           </div>
@@ -194,9 +205,9 @@ export default function UserListPage() {
         {isLoading ? (
           <LoadingSpinner />
         ) : isError && !data ? (
-          <ErrorState message="Couldn't load users." onRetry={() => refetch()} />
+          <ErrorState message={t('usr_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No users found" />
+          <EmptyState title={t('usr_empty')} />
         ) : (
           <>
             <div className="tablewrap">
@@ -206,13 +217,13 @@ export default function UserListPage() {
                     <th style={{ width: 36 }}>
                       <Checkbox on={bulk.all} onClick={bulk.toggleAll} />
                     </th>
-                    <SortTh label="User" k="name" sort={sort} setSort={setSort} />
-                    <th>Role</th>
-                    <SortTh label="Wallet" k="wallet" sort={sort} setSort={setSort} />
-                    <th>Orders</th>
-                    <th>Total spent</th>
-                    <SortTh label="Points" k="points" sort={sort} setSort={setSort} />
-                    <SortTh label="Joined" k="joined" sort={sort} setSort={setSort} />
+                    <SortTh label={t('usr_col_user')} k="name" sort={sort} setSort={setSort} />
+                    <th>{t('usr_col_role')}</th>
+                    <SortTh label={t('usr_col_wallet')} k="wallet" sort={sort} setSort={setSort} />
+                    <th>{t('usr_col_orders')}</th>
+                    <th>{t('usr_col_spent')}</th>
+                    <SortTh label={t('usr_col_points')} k="points" sort={sort} setSort={setSort} />
+                    <SortTh label={t('usr_col_joined')} k="joined" sort={sort} setSort={setSort} />
                     <th>{t('status')}</th>
                     <th></th>
                   </tr>
@@ -240,7 +251,7 @@ export default function UserListPage() {
                       <td className="num">{money(u.spent, u.cur)}</td>
                       <td className="num muted">{u.loyalty.toLocaleString()}</td>
                       <td className="muted" style={{ fontSize: 12.5 }}>
-                        {u.joined}
+                        {joinedLabel(u.raw.createdAt)}
                       </td>
                       <td>
                         <StatusBadge s={u.status} />
@@ -307,19 +318,19 @@ function BulkSMSModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => 
 
   const submit = () => {
     if (!message.trim()) {
-      setError('Message is required.')
+      setError(t('usr_sms_required'))
       return
     }
-    if (!window.confirm(`Send SMS to ${ids.length} user(s)? This sends real messages.`)) return
+    if (!window.confirm(t('usr_sms_confirm', { n: ids.length }))) return
     setError('')
     send.mutate(
       { ids, message: message.trim() },
       {
         onSuccess: (res) => {
-          toast.success(`SMS queued to ${res.data?.queued ?? 0} recipient(s).`)
+          toast.success(t('usr_sms_queued', { n: res.data?.queued ?? 0 }))
           onSent()
         },
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Send failed.'),
+        onError: (e) => setError(apiErrorText(e, 'usr_send_failed')),
       },
     )
   }
@@ -327,11 +338,11 @@ function BulkSMSModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => 
   return (
     <Modal onClose={onClose} maxWidth={520}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>SMS {ids.length} user(s)</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('usr_sms_title', { n: ids.length })}</h3>
         <p style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Users without a phone number are skipped automatically.
+          {t('usr_sms_no_phone')}
         </p>
-        <label className="alabel">Message</label>
+        <label className="alabel">{t('usr_message')}</label>
         <textarea
           className="afield"
           style={{ minHeight: 120 }}
@@ -340,7 +351,7 @@ function BulkSMSModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => 
           onChange={(e) => setMessage(e.target.value)}
         />
         <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, textAlign: 'right' }}>
-          {message.length} / 160
+          {t('usr_sms_count', { n: message.length, max: 160 })}
         </div>
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
@@ -348,7 +359,7 @@ function BulkSMSModal({ ids, onClose, onSent }: { ids: string[]; onClose: () => 
             {t('cancel')}
           </button>
           <button className="abtn primary" onClick={submit} disabled={send.isPending}>
-            <Icon name="send" size={15} /> {send.isPending ? 'Sending…' : 'Send'}
+            <Icon name="send" size={15} /> {send.isPending ? t('usr_sending') : t('usr_send')}
           </button>
         </div>
       </div>
@@ -369,19 +380,19 @@ function BulkPushModal({ ids, onClose, onSent }: { ids: string[]; onClose: () =>
 
   const submit = () => {
     if (!title.trim() || !body.trim()) {
-      setError('Title and body are required.')
+      setError(t('usr_push_required'))
       return
     }
-    if (!window.confirm(`Send push to ${ids.length} user(s)?`)) return
+    if (!window.confirm(t('usr_push_confirm', { n: ids.length }))) return
     setError('')
     send.mutate(
       { ids, title: title.trim(), body: body.trim() },
       {
         onSuccess: (res) => {
-          toast.success(`Push queued to ${res.data?.queued ?? 0} recipient(s).`)
+          toast.success(t('usr_push_queued', { n: res.data?.queued ?? 0 }))
           onSent()
         },
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Send failed.'),
+        onError: (e) => setError(apiErrorText(e, 'usr_send_failed')),
       },
     )
   }
@@ -389,11 +400,11 @@ function BulkPushModal({ ids, onClose, onSent }: { ids: string[]; onClose: () =>
   return (
     <Modal onClose={onClose} maxWidth={520}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Push {ids.length} user(s)</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('usr_push_title', { n: ids.length })}</h3>
         <p style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Users with no registered device are skipped automatically.
+          {t('usr_push_no_device')}
         </p>
-        <label className="alabel">Title</label>
+        <label className="alabel">{t('usr_title')}</label>
         <input
           className="afield"
           maxLength={80}
@@ -401,10 +412,10 @@ function BulkPushModal({ ids, onClose, onSent }: { ids: string[]; onClose: () =>
           onChange={(e) => setTitle(e.target.value)}
         />
         <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, textAlign: 'right' }}>
-          {title.length} / 80
+          {t('usr_sms_count', { n: title.length, max: 80 })}
         </div>
         <label className="alabel" style={{ marginTop: 12, display: 'block' }}>
-          Message
+          {t('usr_message')}
         </label>
         <textarea
           className="afield"
@@ -414,7 +425,7 @@ function BulkPushModal({ ids, onClose, onSent }: { ids: string[]; onClose: () =>
           onChange={(e) => setBody(e.target.value)}
         />
         <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, textAlign: 'right' }}>
-          {body.length} / 240
+          {t('usr_sms_count', { n: body.length, max: 240 })}
         </div>
         {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
@@ -422,7 +433,7 @@ function BulkPushModal({ ids, onClose, onSent }: { ids: string[]; onClose: () =>
             {t('cancel')}
           </button>
           <button className="abtn primary" onClick={submit} disabled={send.isPending}>
-            <Icon name="bell" size={15} /> {send.isPending ? 'Sending…' : 'Send'}
+            <Icon name="bell" size={15} /> {send.isPending ? t('usr_sending') : t('usr_send')}
           </button>
         </div>
       </div>

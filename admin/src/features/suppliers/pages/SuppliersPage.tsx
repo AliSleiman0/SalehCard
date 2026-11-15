@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { filterCatalog } from '../lib/filterCatalog'
 import { syncSummary } from '../lib/syncSummary'
+import { alertText } from '../lib/alertText'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { PageHead, Icon, Modal, Pagination, LoadingSpinner, EmptyState, ErrorState, Tabs } from '@/components'
 import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
@@ -37,15 +39,6 @@ const HEALTH_CLASS: Record<SupplierHealth, string> = {
   maintenance: 'st-danger',
   not_probed: 'st-mute',
 }
-const HEALTH_LABEL: Record<SupplierHealth, string> = {
-  ok: 'OK',
-  low_balance: 'Low balance',
-  auth_error: 'Auth error',
-  ip_blocked: 'IP blocked',
-  unreachable: 'Unreachable',
-  maintenance: 'Maintenance',
-  not_probed: 'Not probed',
-}
 
 export default function SuppliersPage() {
   const { t } = useTranslation()
@@ -60,9 +53,9 @@ export default function SuppliersPage() {
   const [settings, setSettings] = useState<SupplierView | null>(null)
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') === 'alerts' ? 'alerts' : 'suppliers'
-  const setTab = (t: 'suppliers' | 'alerts') => {
+  const setTab = (k: 'suppliers' | 'alerts') => {
     const next = new URLSearchParams(params)
-    if (t === 'alerts') next.set('tab', 'alerts')
+    if (k === 'alerts') next.set('tab', 'alerts')
     else next.delete('tab')
     setParams(next, { replace: true })
   }
@@ -73,7 +66,7 @@ export default function SuppliersPage() {
   const runSync = (s: SupplierView) => {
     sync.mutate(s.id, {
       onSuccess: (res) => {
-        if (res.data) toast.success(`${s.name}: ${syncSummary(res.data)}`)
+        if (res.data) toast.success(`${s.name}: ${syncSummary(res.data, t)}`)
       },
     })
   }
@@ -84,15 +77,15 @@ export default function SuppliersPage() {
         back="/"
         crumbs={[t('grp_operations'), t('nav_suppliers')]}
         title={t('nav_suppliers')}
-        sub="Upstream fulfillment suppliers — balance, health, mapped products, and catalog import."
+        sub={t('sup_sub')}
       />
 
       <SyncStatusStrip />
 
       <Tabs
         items={[
-          { k: 'suppliers' as const, label: 'Suppliers' },
-          { k: 'alerts' as const, label: openCount > 0 ? `Alerts (${openCount})` : 'Alerts' },
+          { k: 'suppliers' as const, label: t('sup_tab_suppliers') },
+          { k: 'alerts' as const, label: openCount > 0 ? t('sup_tab_alerts_n', { n: openCount }) : t('sup_tab_alerts') },
         ]}
         value={tab}
         onChange={setTab}
@@ -104,12 +97,9 @@ export default function SuppliersPage() {
       ) : isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Could not load suppliers." onRetry={() => refetch()} />
+        <ErrorState message={t('sup_load_error')} onRetry={() => refetch()} />
       ) : suppliers.length === 0 ? (
-        <EmptyState
-          title="No suppliers configured"
-          sub="Set a supplier credential (SUPPLIER_*_TOKEN / SUPPLIER_UMANAGE_KEY) to enable a supplier."
-        />
+        <EmptyState title={t('sup_none_title')} sub={t('sup_none_sub')} />
       ) : (
         <div className="acard-grid">
           {suppliers.map((s) => (
@@ -117,9 +107,9 @@ export default function SuppliersPage() {
               <div className="panelhead">
                 <Icon name={s.kind === 'telecom' ? 'globe' : 'box'} size={16} />
                 <h3>{s.name}</h3>
-                <span className="bdg">{s.kind}</span>
+                <span className="bdg">{t(`sup_kind_${s.kind}`, { defaultValue: s.kind })}</span>
                 <span className={`st ${HEALTH_CLASS[s.health] ?? 'st-mute'}`} style={{ marginLeft: 'auto' }}>
-                  <i className="d" /> {HEALTH_LABEL[s.health] ?? s.health}
+                  <i className="d" /> {t(`sup_health_${s.health}`, { defaultValue: s.health })}
                 </span>
               </div>
 
@@ -127,47 +117,49 @@ export default function SuppliersPage() {
                 <div>
                   <div style={{ fontSize: 24, fontWeight: 800 }}>{s.balanceText}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>
-                    balance ({s.currency})
+                    {t('sup_balance', { currency: s.currency })}
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 24, fontWeight: 800 }}>{s.mappedProducts}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>mapped products</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>{t('sup_mapped')}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 24, fontWeight: 800 }}>{s.markupPercent}%</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>default markup</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>{t('sup_markup')}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 24, fontWeight: 800 }}>
                     {s.lowBalanceThreshold > 0 ? s.lowBalanceThreshold.toLocaleString() : '—'}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>low-balance alert</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>
+                    {t('sup_low_balance_alert')}
+                  </div>
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {canManage && (
                   <button className="abtn sm primary" onClick={() => setBrowse(s)}>
-                    <Icon name="download" size={14} /> Browse &amp; import
+                    <Icon name="download" size={14} /> {t('sup_browse')}
                   </button>
                 )}
                 {canManage && (
                   <button
                     className="abtn sm"
                     disabled={sync.isPending}
-                    title="Check every product linked to this supplier now: record its costs, pause links that sell at a loss, hide / re-show products with its stock. Never changes a selling price."
+                    title={t('sup_check_now_tip')}
                     onClick={() => runSync(s)}
                   >
-                    <Icon name="refresh" size={14} /> Check now
+                    <Icon name="refresh" size={14} /> {t('sup_check_now')}
                   </button>
                 )}
                 <button className="abtn sm" onClick={() => setOrders(s)}>
-                  <Icon name="bag" size={14} /> Recent orders
+                  <Icon name="bag" size={14} /> {t('sup_recent_orders')}
                 </button>
                 {canManage && (
                   <button className="abtn sm ghost" onClick={() => setSettings(s)}>
-                    <Icon name="settings" size={14} /> Settings
+                    <Icon name="settings" size={14} /> {t('sup_settings')}
                   </button>
                 )}
               </div>
@@ -186,6 +178,7 @@ export default function SuppliersPage() {
 // --- Scheduled sync status ---
 
 function SyncStatusStrip() {
+  const { t } = useTranslation()
   const { data } = useSyncStatus()
   const st = data?.data
   if (!st) return null
@@ -197,60 +190,56 @@ function SyncStatusStrip() {
       {st.enabled ? (
         st.dryRun ? (
           <span>
-            <b>Automatic supplier check is on</b> (every {mins} min) and{' '}
-            <span className="st st-warn">only warns you</span> under Alerts — it doesn&apos;t change any product yet.
-            Pausing a supplier that sells at a loss, switching to the next supplier, and taking out-of-stock products
-            off sale are not turned on yet.
+            <b>{t('sup_auto_on')}</b> {t('sup_every', { n: mins })} —{' '}
+            <span className="st st-warn">{t('sup_warn_badge')}</span> {t('sup_warn_body')}
           </span>
         ) : (
           <span>
-            <b>Automatic supplier check is on</b> (every {mins} min). It pauses a supplier that would sell at a loss,
-            sends orders to the next supplier, and takes a product off sale when no supplier has it (and back on when
-            one does). It never changes your prices.
+            <b>{t('sup_auto_on')}</b> {t('sup_every', { n: mins })}. {t('sup_live_body')}
           </span>
         )
       ) : (
         <span>
-          <b>Automatic supplier check is off.</b> &ldquo;Check now&rdquo; on a supplier checks its products once
-          {st.dryRun ? ' (warnings only)' : ''}.
+          <b>{t('sup_auto_off')}</b> {t('sup_off_body')}
+          {st.dryRun ? ` ${t('sup_warnings_only_paren')}` : ''}
         </span>
       )}
       {last && (
         <span className="faint">
-          Last check {relativeTimeInline(last.finishedAt)}: {syncSummary(last)}
+          {t('sup_last_check', { when: relativeTimeInline(last.finishedAt), summary: syncSummary(last, t) })}
         </span>
       )}
-      {st.running && <span className="st st-mute">running…</span>}
+      {st.running && <span className="st st-mute">{t('sup_running')}</span>}
     </div>
   )
 }
 
 // --- Alerts ---
 
-const ALERT_LABEL: Record<SupplierAlertKind, { label: string; cls: string }> = {
-  cost_changed: { label: 'Cost changed', cls: 'st-warn' },
-  loss_paused: { label: 'Selling at a loss', cls: 'st-danger' },
-  loss_recovered: { label: 'Profitable again', cls: 'st-ok' },
-  product_hidden: { label: 'Taken off sale', cls: 'st-danger' },
-  product_shown: { label: 'Back on sale', cls: 'st-ok' },
-  fx_missing: { label: 'Rate missing', cls: 'st-warn' },
-  fallback_exhausted: { label: 'No supplier left', cls: 'st-danger' },
+const ALERT_CLASS: Record<SupplierAlertKind, string> = {
+  cost_changed: 'st-warn',
+  loss_paused: 'st-danger',
+  loss_recovered: 'st-ok',
+  product_hidden: 'st-danger',
+  product_shown: 'st-ok',
+  fx_missing: 'st-warn',
+  fallback_exhausted: 'st-danger',
 }
 
-// Warning-only mode: nothing was done, so name what WOULD happen.
-const ALERT_LABEL_WOULD: Partial<Record<SupplierAlertKind, string>> = {
-  product_hidden: 'Would go off sale',
-  product_shown: 'Would go back on sale',
-  loss_recovered: 'Would be profitable again',
+// Warning-only mode: nothing was done, so these name what WOULD happen.
+const ALERT_WOULD: Partial<Record<SupplierAlertKind, true>> = {
+  product_hidden: true,
+  product_shown: true,
+  loss_recovered: true,
 }
 
-function alertLabel(a: SupplierAlert): { label: string; cls: string } {
-  const k = ALERT_LABEL[a.kind] ?? { label: a.kind, cls: 'st-mute' }
-  const would = a.dryRun ? ALERT_LABEL_WOULD[a.kind] : undefined
-  return would ? { ...k, label: would } : k
+function alertLabel(a: SupplierAlert, t: TFunction): { label: string; cls: string } {
+  const key = a.dryRun && ALERT_WOULD[a.kind] ? `sup_alert_would_${a.kind}` : `sup_alert_${a.kind}`
+  return { label: t(key, { defaultValue: a.kind }), cls: ALERT_CLASS[a.kind] ?? 'st-mute' }
 }
 
 function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: SupplierView[] }) {
+  const { t, i18n } = useTranslation()
   const [show, setShow] = useState<'open' | 'all'>('open')
   const { data, isLoading, isError, refetch } = useSupplierAlerts(show)
   const alerts = data?.data?.alerts ?? []
@@ -262,17 +251,17 @@ function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: 
     <div className="acard pad">
       <div className="panelhead">
         <Icon name="bell" size={16} />
-        <h3>Supplier alerts</h3>
+        <h3>{t('sup_alerts_title')}</h3>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button className={`abtn sm ${show === 'open' ? 'primary' : 'ghost'}`} onClick={() => setShow('open')}>
-            Open
+            {t('sup_show_open')}
           </button>
           <button className={`abtn sm ${show === 'all' ? 'primary' : 'ghost'}`} onClick={() => setShow('all')}>
-            All
+            {t('sup_show_all')}
           </button>
           {canManage && show === 'open' && alerts.length > 1 && (
             <button className="abtn sm" disabled={ackAll.isPending} onClick={() => ackAll.mutate()}>
-              Acknowledge all
+              {t('sup_ack_all')}
             </button>
           )}
         </div>
@@ -280,26 +269,26 @@ function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: 
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Could not load alerts." onRetry={() => refetch()} />
+        <ErrorState message={t('sup_alerts_error')} onRetry={() => refetch()} />
       ) : alerts.length === 0 ? (
         <EmptyState
-          title={show === 'open' ? 'Nothing needs your attention' : 'No alerts yet'}
-          sub="You don't add alerts here — they appear by themselves when a supplier changes its price, a product would sell at a loss, a product runs out at every supplier, or an order can't be sent to any supplier."
+          title={show === 'open' ? t('sup_alerts_empty_open') : t('sup_alerts_empty_all')}
+          sub={t('sup_alerts_empty_sub')}
         />
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table className="tbl" aria-label="Supplier alerts">
+          <table className="tbl" aria-label={t('sup_alerts_title')}>
             <thead>
               <tr>
-                <th>Kind</th>
-                <th>What happened</th>
-                <th>Last seen</th>
+                <th>{t('sup_col_kind')}</th>
+                <th>{t('sup_col_what')}</th>
+                <th>{t('sup_col_last_seen')}</th>
                 <th style={{ textAlign: 'right' }} />
               </tr>
             </thead>
             <tbody>
               {alerts.map((a) => {
-                const k = alertLabel(a)
+                const k = alertLabel(a, t)
                 return (
                   <tr key={a.id} style={{ opacity: a.open ? 1 : 0.6 }}>
                     <td style={{ whiteSpace: 'nowrap' }}>
@@ -308,24 +297,22 @@ function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: 
                       </span>
                       {a.dryRun && (
                         <div>
-                          <span
-                            className="bdg"
-                            style={{ marginTop: 4 }}
-                            title="Nothing was changed: automatic changes are not turned on yet."
-                          >
-                            warning only
+                          <span className="bdg" style={{ marginTop: 4 }} title={t('sup_warning_only_tip')}>
+                            {t('sup_warning_only')}
                           </span>
                         </div>
                       )}
                     </td>
                     <td style={{ fontSize: 13 }}>
-                      {a.message}
+                      {alertText(a, t, i18n.language)}
                       <div className="faint" style={{ fontSize: 12, marginTop: 2 }}>
-                        {a.productId && <Link to={`/products/${a.productId}/edit`}>Open product</Link>}
-                        {a.orderId && <Link to={`/orders/${a.orderId}`}>Open order {orderNumber(a.orderId)}</Link>}
+                        {a.productId && <Link to={`/products/${a.productId}/edit`}>{t('sup_open_product')}</Link>}
+                        {a.orderId && (
+                          <Link to={`/orders/${a.orderId}`}>{t('sup_open_order', { n: orderNumber(a.orderId) })}</Link>
+                        )}
                         {a.provider && !a.productId && !a.orderId ? provName(a.provider) : ''}
-                        {a.count > 1 ? ` · seen ${a.count}×` : ''}
-                        {!a.open && a.ackBy ? ` · closed by ${a.ackBy}` : ''}
+                        {a.count > 1 ? ` · ${t('sup_seen_n', { n: a.count })}` : ''}
+                        {!a.open && a.ackBy ? ` · ${t('sup_closed_by', { who: a.ackBy })}` : ''}
                       </div>
                     </td>
                     <td className="muted" style={{ whiteSpace: 'nowrap' }}>
@@ -334,7 +321,7 @@ function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: 
                     <td style={{ textAlign: 'right' }}>
                       {canManage && a.open && (
                         <button className="abtn xs" disabled={ack.isPending} onClick={() => ack.mutate(a.id)}>
-                          Acknowledge
+                          {t('sup_ack')}
                         </button>
                       )}
                     </td>
@@ -352,6 +339,7 @@ function AlertsPanel({ canManage, suppliers }: { canManage: boolean; suppliers: 
 // --- Browse & import ---
 
 function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: () => void }) {
+  const { t } = useTranslation()
   const { data, isLoading, isError, refetch } = useSupplierCatalog(supplier.id)
   const products = useMemo<CatalogProductView[]>(() => data?.data?.products ?? [], [data])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -378,7 +366,10 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
         onSuccess: (res) => {
           const r = res.data
           if (r) {
-            toast.success(`Imported ${r.created} product(s)${r.skipped.length ? `, ${r.skipped.length} skipped` : ''}`)
+            toast.success(
+              t('sup_imported', { created: r.created }) +
+                (r.skipped.length ? t('sup_imported_skipped', { n: r.skipped.length }) : ''),
+            )
             setSelected(new Set())
           }
         },
@@ -390,20 +381,20 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
     <Modal onClose={onClose} maxWidth={880}>
       <div className="panelhead">
         <Icon name="download" size={16} />
-        <h3>Browse &amp; import — {supplier.name}</h3>
+        <h3>{t('sup_browse_title', { name: supplier.name })}</h3>
       </div>
 
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="The supplier catalog is unavailable (check balance/health)." onRetry={() => refetch()} />
+        <ErrorState message={t('sup_catalog_error')} onRetry={() => refetch()} />
       ) : products.length === 0 ? (
-        <EmptyState title="No upstream products" />
+        <EmptyState title={t('sup_no_upstream')} />
       ) : (
         <>
           <div style={{ display: 'flex', gap: 10, alignItems: 'end', margin: '10px 0' }}>
             <div>
-              <label className="alabel">Markup %</label>
+              <label className="alabel">{t('sup_markup_pct')}</label>
               <input
                 className="afield"
                 style={{ width: 120 }}
@@ -414,12 +405,12 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
               />
             </div>
             <div style={{ flex: 1, minWidth: 180 }}>
-              <label className="alabel">Search</label>
+              <label className="alabel">{t('sup_search')}</label>
               <input
                 className="afield"
                 type="search"
-                aria-label="Search supplier products"
-                placeholder="Product, category or ID…"
+                aria-label={t('sup_search_aria')}
+                placeholder={t('sup_search_ph')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -435,18 +426,18 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
                 })
               }
             >
-              Select all shown
+              {t('sup_select_all_shown')}
             </button>
             <div style={{ fontSize: 12, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
-              {search.trim() ? `${shown.length} of ${products.length} · ` : ''}
-              {selected.size} selected
+              {search.trim() ? t('sup_shown_of', { shown: shown.length, total: products.length }) : ''}
+              {t('sup_selected_n', { n: selected.size })}
             </div>
             <button
               className="abtn primary"
               disabled={selected.size === 0 || importer.isPending}
               onClick={doImport}
             >
-              <Icon name="plus" size={14} /> Import selected (hidden)
+              <Icon name="plus" size={14} /> {t('sup_import_selected')}
             </button>
           </div>
 
@@ -455,18 +446,18 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
               <thead>
                 <tr>
                   <th style={{ width: 34 }} />
-                  <th>Product</th>
-                  <th>Category</th>
-                  <th className="num">Base price</th>
-                  <th>Type</th>
-                  <th>Status</th>
+                  <th>{t('sup_col_product')}</th>
+                  <th>{t('sup_col_category')}</th>
+                  <th className="num">{t('sup_col_base_price')}</th>
+                  <th>{t('sup_col_type')}</th>
+                  <th>{t('sup_col_status')}</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.length === 0 && (
                   <tr>
                     <td colSpan={6} className="muted" style={{ padding: 16 }}>
-                      No products match “{search.trim()}”.
+                      {t('sup_no_match', { q: search.trim() })}
                     </td>
                   </tr>
                 )}
@@ -489,15 +480,15 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
                     <td>
                       {p.mapped ? (
                         <span className="st st-ok">
-                          <i className="d" /> mapped
+                          <i className="d" /> {t('sup_st_mapped')}
                         </span>
                       ) : p.available ? (
                         <span className="st st-mute">
-                          <i className="d" /> available
+                          <i className="d" /> {t('sup_st_available')}
                         </span>
                       ) : (
                         <span className="st st-warn">
-                          <i className="d" /> unavailable
+                          <i className="d" /> {t('sup_st_unavailable')}
                         </span>
                       )}
                     </td>
@@ -517,6 +508,7 @@ function BrowseModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
 const ORDERS_PAGE_SIZE = 20
 
 function OrdersModal({ supplier, onClose }: { supplier: SupplierView; onClose: () => void }) {
+  const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const { data, isLoading, isError, refetch } = useSupplierOrders(supplier.id, {
     limit: ORDERS_PAGE_SIZE,
@@ -529,26 +521,26 @@ function OrdersModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
     <Modal onClose={onClose} maxWidth={860}>
       <div className="panelhead">
         <Icon name="bag" size={16} />
-        <h3>Recent orders — {supplier.name}</h3>
+        <h3>{t('sup_orders_title', { name: supplier.name })}</h3>
       </div>
 
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Could not load orders." onRetry={() => refetch()} />
+        <ErrorState message={t('sup_orders_error')} onRetry={() => refetch()} />
       ) : orders.length === 0 ? (
-        <EmptyState title="No orders yet" sub="Orders fulfilled through this supplier will appear here." />
+        <EmptyState title={t('sup_orders_empty')} sub={t('sup_orders_empty_sub')} />
       ) : (
         <>
           <div style={{ maxHeight: 440, overflow: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Order</th>
-                  <th>Status</th>
-                  <th className="num">Total</th>
-                  <th>Upstream ref</th>
-                  <th>Created</th>
+                  <th>{t('sup_col_order')}</th>
+                  <th>{t('sup_col_status')}</th>
+                  <th className="num">{t('sup_col_total')}</th>
+                  <th>{t('sup_col_upstream_ref')}</th>
+                  <th>{t('sup_col_created')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -559,7 +551,8 @@ function OrdersModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
                     </td>
                     <td>
                       <span className={`st ${o.stuckAt ? 'st-danger' : o.status === 'completed' ? 'st-ok' : o.status === 'refunded' || o.status === 'failed' ? 'st-warn' : 'st-mute'}`}>
-                        <i className="d" /> {o.stuckAt ? 'stuck' : o.status}
+                        <i className="d" />{' '}
+                        {o.stuckAt ? t('sup_order_st_stuck') : t(`sup_order_st_${o.status}`, { defaultValue: o.status })}
                       </span>
                     </td>
                     <td className="num mono">
@@ -589,6 +582,7 @@ function OrdersModal({ supplier, onClose }: { supplier: SupplierView; onClose: (
 // --- Settings ---
 
 function SettingsModal({ supplier, onClose }: { supplier: SupplierView; onClose: () => void }) {
+  const { t } = useTranslation()
   const [threshold, setThreshold] = useState(String(supplier.lowBalanceThreshold || ''))
   const [markup, setMarkup] = useState(String(supplier.markupPercent || ''))
   const [fx, setFx] = useState(supplier.fxToUsd ? String(supplier.fxToUsd) : '')
@@ -613,21 +607,21 @@ function SettingsModal({ supplier, onClose }: { supplier: SupplierView; onClose:
     <Modal onClose={onClose} maxWidth={420}>
       <div className="panelhead">
         <Icon name="settings" size={16} />
-        <h3>Settings — {supplier.name}</h3>
+        <h3>{t('sup_settings_title', { name: supplier.name })}</h3>
       </div>
       <div style={{ display: 'grid', gap: 12, margin: '12px 0' }}>
         <div>
-          <label className="alabel">Low-balance alert threshold ({supplier.currency})</label>
+          <label className="alabel">{t('sup_threshold_label', { currency: supplier.currency })}</label>
           <input
             className="afield"
             type="number"
             value={threshold}
             onChange={(e) => setThreshold(e.target.value)}
-            placeholder="0 = no alert"
+            placeholder={t('sup_threshold_ph')}
           />
         </div>
         <div>
-          <label className="alabel">Default import markup %</label>
+          <label className="alabel">{t('sup_default_markup_label')}</label>
           <input
             className="afield"
             type="number"
@@ -638,29 +632,27 @@ function SettingsModal({ supplier, onClose }: { supplier: SupplierView; onClose:
         </div>
         {!usd && (
           <div>
-            <label className="alabel">USD per 1 {supplier.currency}</label>
+            <label className="alabel">{t('sup_fx_label', { currency: supplier.currency })}</label>
             <input
               className="afield"
               type="number"
               step="any"
               value={fx}
               onChange={(e) => setFx(e.target.value)}
-              placeholder="e.g. 0.0000112 (1 / 89,500)"
+              placeholder={t('sup_fx_ph')}
             />
             <div className="ahint" style={{ margin: '4px 0 0' }}>
-              The automatic supplier check uses this rate to compare this supplier&apos;s prices with yours (to spot
-              selling at a loss).
-              Empty = no loss check for {supplier.name}.
+              {t('sup_fx_hint', { name: supplier.name })}
             </div>
           </div>
         )}
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button className="abtn" onClick={onClose}>
-          Cancel
+          {t('cancel')}
         </button>
         <button className="abtn primary" disabled={save.isPending} onClick={submit}>
-          Save
+          {t('sup_save')}
         </button>
       </div>
     </Modal>

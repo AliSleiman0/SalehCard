@@ -16,7 +16,7 @@ import {
   EmptyState,
 } from '@/components'
 import { money, formatDateTime } from '@/lib/utils'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
 import { useProducts } from '@/features/products/hooks/useProducts'
@@ -228,7 +228,7 @@ function BalanceTab({
           setAmount('')
           setReason('')
         },
-        onError: (e) => setError(e instanceof ApiError ? e.message : t('rd_adjust_failed')),
+        onError: (e) => setError(apiErrorText(e, 'rd_adjust_failed')),
       },
     )
   }
@@ -259,7 +259,7 @@ function BalanceTab({
                   <tr key={tx.id}>
                     <td className="mono strong">{tx.id.slice(-8)}</td>
                     <td className="muted" style={{ textTransform: 'capitalize' }}>
-                      {tx.type}
+                      {t(`usr_tx_${tx.type}`, { defaultValue: tx.type })}
                     </td>
                     <td className="num strong" style={{ color: tx.amount < 0 ? 'var(--danger)' : 'var(--ok)' }}>
                       {tx.amount < 0 ? '−' : '+'}
@@ -340,7 +340,7 @@ function PricingTab({ id, margin }: { id: string; margin: number }) {
     setEdit(null)
     setError('')
   }
-  const fail = (e: unknown) => setError(e instanceof ApiError ? e.message : t('rd_update_failed'))
+  const fail = (e: unknown) => setError(apiErrorText(e, 'rd_update_failed'))
 
   const startEdit = (v: Variant) => {
     setEdit({ variantId: v.id })

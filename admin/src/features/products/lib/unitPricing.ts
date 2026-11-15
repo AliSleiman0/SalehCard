@@ -1,3 +1,4 @@
+import i18n from '@/i18n/config'
 import type { Product, UnitPricing } from '@/types'
 import type { InputFieldRow } from './fieldRows'
 
@@ -85,21 +86,21 @@ export function issues(
   if (!form.enabled) return []
   const out: string[] = []
   const b = num(form.blockUnits)
-  if (b === undefined || b <= 0) out.push('Per-unit pricing: set how many units the price is for (above 0).')
+  if (b === undefined || b <= 0) out.push(i18n.t('prod_unit_issue_block'))
   const price = num(variants[0]?.price ?? '')
-  if (price === undefined || price <= 0) out.push('Per-unit pricing: set a customer price above 0.')
+  if (price === undefined || price <= 0) out.push(i18n.t('prod_unit_issue_price'))
   const driver = driverRow(form, rows)
   if (!driver) {
-    out.push('Per-unit pricing: add an input field of type "amount" for the customer to type the amount.')
+    out.push(i18n.t('prod_unit_issue_no_amount'))
   } else {
     const min = num(driver.min)
     const max = num(driver.max)
     if (min === undefined || min <= 0 || max === undefined || max < min)
-      out.push(`Per-unit pricing: the amount field "${driver.key.trim() || '?'}" needs a min above 0 and a max ≥ min.`)
+      out.push(i18n.t('prod_unit_issue_range', { key: driver.key.trim() || '?' }))
   }
   for (const r of rows) {
     if (r.type === 'quantity')
-      out.push(`Per-unit pricing: remove the quantity field "${r.key.trim() || '?'}" — per-unit products are bought by amount.`)
+      out.push(i18n.t('prod_unit_issue_qty', { key: r.key.trim() || '?' }))
   }
   return out
 }
@@ -183,6 +184,9 @@ export function preview(form: UnitPricingForm, rows: InputFieldRow[], price: str
   const max = driver ? num(driver.max) : undefined
   if (!b || b <= 0 || !p || p <= 0 || !min || min <= 0) return ''
   const line = Math.round(((p * min) / b) * 100) / 100
-  const range = max !== undefined && max >= min ? `${formatUnits(min)} – ${formatUnits(max)}` : `at least ${formatUnits(min)}`
-  return `Customer enters ${range} · e.g. ${formatUnits(min)} = $${line.toFixed(2)}`
+  const range =
+    max !== undefined && max >= min
+      ? `${formatUnits(min)} – ${formatUnits(max)}`
+      : i18n.t('prod_preview_at_least', { n: formatUnits(min) })
+  return i18n.t('prod_preview', { range, min: formatUnits(min), price: line.toFixed(2) })
 }

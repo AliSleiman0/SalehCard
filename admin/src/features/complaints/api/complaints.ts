@@ -7,11 +7,12 @@ export type ComplaintCategory = 'order' | 'topup' | 'account' | 'other'
 export const COMPLAINT_STATUSES: ComplaintStatus[] = ['open', 'in_progress', 'resolved', 'closed']
 export const COMPLAINT_CATEGORIES: ComplaintCategory[] = ['order', 'topup', 'account', 'other']
 
+/** Translation keys for each status (look up with `t`). */
 export const STATUS_LABEL: Record<ComplaintStatus, string> = {
-  open: 'Open',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
-  closed: 'Closed',
+  open: 'cmp_status_open',
+  in_progress: 'cmp_status_in_progress',
+  resolved: 'cmp_status_resolved',
+  closed: 'cmp_status_closed',
 }
 
 export const STATUS_CLASS: Record<ComplaintStatus, string> = {
@@ -21,11 +22,12 @@ export const STATUS_CLASS: Record<ComplaintStatus, string> = {
   closed: 'st st-mute',
 }
 
+/** Translation keys for each category (look up with `t`). */
 export const CATEGORY_LABEL: Record<ComplaintCategory, string> = {
-  order: 'Order',
-  topup: 'Top-up',
-  account: 'Account',
-  other: 'Other',
+  order: 'cmp_cat_order',
+  topup: 'cmp_cat_topup',
+  account: 'cmp_cat_account',
+  other: 'cmp_cat_other',
 }
 
 /** A customer / admin identity as the complaint endpoints return it. */

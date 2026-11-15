@@ -19,7 +19,7 @@ import {
 } from '@/components'
 import { useGoBack } from '@/lib/goBack'
 import { money, formatDateTime } from '@/lib/utils'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan, useIsSuperAdmin } from '@/stores/auth'
 import { useOrders } from '@/features/orders/hooks/useOrders'
 import { adaptOrder } from '@/features/orders/lib/adaptOrder'
@@ -55,7 +55,7 @@ export default function UserDetailPage() {
     return (
       <div className="page">
         <PageHead back="/users" title={t('nav_users')} />
-        <ErrorState message="Couldn't load this user." onRetry={() => refetch()} />
+        <ErrorState message={t('usr_load_one_error')} onRetry={() => refetch()} />
       </div>
     )
   }
@@ -70,7 +70,7 @@ export default function UserDetailPage() {
       <PageHead back="/users" crumbs={[t('nav_users'), view.name]} title={view.name} sub={view.email || view.phone}>
         {view.status === 'suspended' ? (
           <button className="abtn ok" onClick={toggleStatus} disabled={updateStatus.isPending}>
-            <Icon name="check" size={15} /> Reactivate
+            <Icon name="check" size={15} /> {t('usr_reactivate')}
           </button>
         ) : (
           <button className="abtn danger" onClick={toggleStatus} disabled={updateStatus.isPending}>
@@ -82,10 +82,10 @@ export default function UserDetailPage() {
       <div className="g3" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 18 }}>
         {(
           [
-            ['Wallet balance', money(view.balance, view.cur), 'wallet'],
-            ['Total orders', String(view.orders), 'bag'],
-            ['Total spent', money(view.spent, view.cur), 'coins'],
-            ['Loyalty points', view.loyalty.toLocaleString(), 'star'],
+            [t('usr_kpi_wallet'), money(view.balance, view.cur), 'wallet'],
+            [t('rd_kpi_total_orders'), String(view.orders), 'bag'],
+            [t('usr_col_spent'), money(view.spent, view.cur), 'coins'],
+            [t('usr_loyalty_points'), view.loyalty.toLocaleString(), 'star'],
           ] as [string, string, 'wallet' | 'bag' | 'coins' | 'star'][]
         ).map(([l, v, ic]) => (
           <div className="kpi" key={l}>
@@ -106,29 +106,29 @@ export default function UserDetailPage() {
         value={tab}
         onChange={setTab}
         items={[
-          { k: 'overview', label: 'Overview' },
-          ...(canViewOrders ? [{ k: 'orders' as const, label: 'Order history' }] : []),
-          { k: 'wallet', label: 'Wallet & cashback' },
-          { k: 'ids', label: 'Saved IDs' },
-          { k: 'role', label: 'Role & access' },
+          { k: 'overview', label: t('grp_overview') },
+          ...(canViewOrders ? [{ k: 'orders' as const, label: t('rd_tab_orders') }] : []),
+          { k: 'wallet', label: t('usr_tab_wallet') },
+          { k: 'ids', label: t('usr_tab_ids') },
+          { k: 'role', label: t('usr_tab_role') },
         ]}
       />
 
       {tab === 'overview' && (
         <div className="formgrid">
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Profile</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('rd_profile')}</h3>
             <div className="deflist">
               {(
                 [
-                  ['Display name', view.name],
-                  ['Email', view.email || '—'],
-                  ['Phone', view.phone || '—'],
-                  ['User ID', view.id],
-                  ['Role', <RoleBadge key="r" role={view.role} />],
-                  ['Status', <StatusBadge key="s" s={view.status} />],
-                  ['Currency', view.cur],
-                  ['Registered', view.joined],
+                  [t('rd_display_name'), view.name],
+                  [t('login_email'), view.email || '—'],
+                  [t('rd_phone'), view.phone || '—'],
+                  [t('usr_user_id'), view.id],
+                  [t('usr_col_role'), <RoleBadge key="r" role={view.role} />],
+                  [t('status'), <StatusBadge key="s" s={view.status} />],
+                  [t('exp_currency'), view.cur],
+                  [t('usr_registered'), view.joined],
                 ] as [string, React.ReactNode][]
               ).map(([k, v]) => (
                 <div className="defrow" key={k}>
@@ -148,7 +148,7 @@ export default function UserDetailPage() {
                 color: '#fff',
               }}
             >
-              <div style={{ fontSize: 12.5, opacity: 0.8, fontWeight: 700 }}>Current balance</div>
+              <div style={{ fontSize: 12.5, opacity: 0.8, fontWeight: 700 }}>{t('usr_current_balance')}</div>
               <div className="num" style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-.02em', margin: '4px 0 14px' }}>
                 {money(view.balance, view.cur)}
               </div>
@@ -157,21 +157,21 @@ export default function UserDetailPage() {
                 style={{ background: 'rgba(255,255,255,.16)', border: 0, color: '#fff' }}
                 onClick={() => setAdjOpen(true)}
               >
-                <Icon name="edit" size={14} /> Adjust balance
+                <Icon name="edit" size={14} /> {t('usr_adjust_balance')}
               </button>
             </div>
             {can('users.manage') && view.status !== 'deleted' && (view.role !== 'admin' || isSuper) && (
               <AccountEditCard id={view.id} name={view.name} />
             )}
             <div className="acard pad">
-              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Loyalty</h3>
+              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{t('usr_loyalty')}</h3>
               <div className="deflist">
                 <div className="defrow">
-                  <span className="dk">Loyalty points</span>
+                  <span className="dk">{t('usr_loyalty_points')}</span>
                   <span className="dv num">{view.loyalty.toLocaleString()}</span>
                 </div>
                 <div className="defrow">
-                  <span className="dk">Saved game IDs</span>
+                  <span className="dk">{t('usr_saved_game_ids')}</span>
                   <span className="dv num">{detail.savedPlayerIds.length}</span>
                 </div>
               </div>
@@ -186,7 +186,7 @@ export default function UserDetailPage() {
         <div className="acard">
           <div className="panelhead">
             <Icon name="wallet" size={17} />
-            <h3>Wallet transactions</h3>
+            <h3>{t('usr_wallet_tx')}</h3>
             <div className="ph-act">
               <button className="abtn xs primary" onClick={() => setAdjOpen(true)}>
                 <Icon name="edit" size={13} /> {t('adjust')}
@@ -194,17 +194,17 @@ export default function UserDetailPage() {
             </div>
           </div>
           {detail.transactions.length === 0 ? (
-            <EmptyState title="No wallet activity yet" />
+            <EmptyState title={t('usr_no_wallet_activity')} />
           ) : (
             <div className="tablewrap">
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Transaction</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Method</th>
-                    <th>Date</th>
+                    <th>{t('col_transaction')}</th>
+                    <th>{t('col_type')}</th>
+                    <th>{t('col_amount')}</th>
+                    <th>{t('col_method')}</th>
+                    <th>{t('col_date')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -212,7 +212,7 @@ export default function UserDetailPage() {
                     <tr key={tx.id}>
                       <td className="mono strong">{tx.id.slice(-8)}</td>
                       <td className="muted" style={{ textTransform: 'capitalize' }}>
-                        {tx.type}
+                        {t(`usr_tx_${tx.type}`, { defaultValue: tx.type })}
                       </td>
                       <td className="num strong" style={{ color: tx.amount < 0 ? 'var(--danger)' : 'var(--ok)' }}>
                         {tx.amount < 0 ? '−' : '+'}
@@ -234,7 +234,7 @@ export default function UserDetailPage() {
       {tab === 'ids' && (
         <div className="g2">
           {detail.savedPlayerIds.length === 0 ? (
-            <EmptyState title="No saved game IDs" />
+            <EmptyState title={t('usr_no_saved_ids')} />
           ) : (
             detail.savedPlayerIds.map((pid, i) => (
               <div
@@ -287,6 +287,7 @@ export default function UserDetailPage() {
 /** Order history for the user — reuses the wired admin orders endpoint, searched
  *  by the customer's email (the list backend resolves email → their orders). */
 function OrdersTab({ email, total }: { email: string; total: number }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { data, isLoading, isError } = useOrders({ q: email, limit: 5 })
   const rows = (data?.data ?? []).map(adaptOrder)
@@ -295,28 +296,28 @@ function OrdersTab({ email, total }: { email: string; total: number }) {
     <div className="acard">
       <div className="panelhead">
         <Icon name="bag" size={17} />
-        <h3>Order history</h3>
+        <h3>{t('rd_tab_orders')}</h3>
         <span className="faint" style={{ fontSize: 12.5, marginInlineStart: 6 }}>
-          {total} completed
+          {t('rd_completed_count', { total })}
         </span>
       </div>
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Couldn't load orders." />
+        <ErrorState message={t('rd_load_orders_error')} />
       ) : rows.length === 0 ? (
-        <EmptyState title="No orders yet" />
+        <EmptyState title={t('rd_no_orders')} />
       ) : (
         <div className="tablewrap">
           <table className="tbl">
             <thead>
               <tr>
-                <th>Order</th>
-                <th>Product</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Date</th>
+                <th>{t('col_order')}</th>
+                <th>{t('col_product')}</th>
+                <th>{t('col_type')}</th>
+                <th>{t('col_amount')}</th>
+                <th>{t('status')}</th>
+                <th>{t('col_date')}</th>
               </tr>
             </thead>
             <tbody>
@@ -386,9 +387,7 @@ function RoleTab({
 
   const remove = () => {
     if (
-      !window.confirm(
-        'Delete this account? It is anonymized — email/phone are freed and it can no longer sign in, but its orders and ledger are kept. This cannot be undone.',
-      )
+      !window.confirm(t('usr_delete_confirm'))
     )
       return
     del.mutate(undefined, { onSuccess: goBack })
@@ -399,13 +398,13 @@ function RoleTab({
   // between customer and reseller only needs users.manage.
   const roles: [UserRole, string][] = isSuperAdmin
     ? [
-        ['customer', 'Customer'],
-        ['reseller', 'Reseller'],
-        ['admin', 'Admin'],
+        ['customer', t('usr_role_customer')],
+        ['reseller', t('usr_role_reseller')],
+        ['admin', t('usr_role_admin')],
       ]
     : [
-        ['customer', 'Customer'],
-        ['reseller', 'Reseller'],
+        ['customer', t('usr_role_customer')],
+        ['reseller', t('usr_role_reseller')],
       ]
 
   const dirty = pending !== role || (pending === 'admin' && pendingRoleId !== (adminRoleId ?? ''))
@@ -418,8 +417,8 @@ function RoleTab({
   return (
     <div className="formgrid">
       <div className="acard pad">
-        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Role management</h3>
-        <label className="alabel">Account role</label>
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('usr_role_mgmt')}</h3>
+        <label className="alabel">{t('usr_account_role')}</label>
         <div className="g3">
           {roles.map(([k, l]) => (
             <Chip key={k} on={pending === k} onClick={() => setPending(k)} style={{ justifyContent: 'center', padding: 12 }}>
@@ -429,14 +428,14 @@ function RoleTab({
         </div>
         {pending === 'admin' && isSuperAdmin && (
           <div style={{ marginTop: 14 }}>
-            <label className="alabel">Admin role (permissions)</label>
+            <label className="alabel">{t('usr_admin_role_label')}</label>
             <select
               className="select"
               style={{ width: '100%' }}
               value={pendingRoleId}
               onChange={(e) => setPendingRoleId(e.target.value)}
             >
-              <option value="">Super Admin — full access, manages roles &amp; admins</option>
+              <option value="">{t('usr_super_admin_option')}</option>
               {customRoles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -444,14 +443,11 @@ function RoleTab({
                 </option>
               ))}
             </select>
-            <div className="ahint">
-              Define roles under System → Roles. A permission change applies on the admin's next
-              sign-in or session refresh.
-            </div>
+            <div className="ahint">{t('usr_roles_hint')}</div>
           </div>
         )}
         {!isSuperAdmin && (
-          <div className="ahint">Only a super admin can grant or change admin access.</div>
+          <div className="ahint">{t('usr_only_super')}</div>
         )}
         <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
           <button
@@ -463,16 +459,16 @@ function RoleTab({
           </button>
           {updateRole.isError && (
             <span style={{ color: 'var(--danger)', fontSize: 12.5 }}>
-              {updateRole.error instanceof ApiError ? updateRole.error.message : "Couldn't update role."}
+              {apiErrorText(updateRole.error, 'usr_role_update_error')}
             </span>
           )}
         </div>
       </div>
       <div className="acard pad">
-        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Danger zone</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{t('usr_danger_zone')}</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button className="abtn danger" style={{ justifyContent: 'flex-start' }} onClick={onSuspend} disabled={suspending}>
-            <Icon name="x" size={14} /> Suspend account
+            <Icon name="x" size={14} /> {t('usr_suspend_account')}
           </button>
           <button
             className="abtn danger"
@@ -480,7 +476,7 @@ function RoleTab({
             onClick={remove}
             disabled={del.isPending}
           >
-            <Icon name="trash" size={14} /> Delete account &amp; data
+            <Icon name="trash" size={14} /> {t('usr_delete_account')}
           </button>
         </div>
       </div>
@@ -499,11 +495,11 @@ function AdjustModal({ user, onClose }: { user: AdminUserDetail; onClose: () => 
   const apply = () => {
     const amt = Number(amount)
     if (!Number.isFinite(amt) || amt <= 0) {
-      setError('Enter an amount greater than zero.')
+      setError(t('rd_err_amount_positive'))
       return
     }
     if (!reason.trim()) {
-      setError('A reason is required.')
+      setError(t('usr_err_reason_required'))
       return
     }
     setError('')
@@ -511,7 +507,7 @@ function AdjustModal({ user, onClose }: { user: AdminUserDetail; onClose: () => 
       { direction: dir, amount: amt, reason: reason.trim() },
       {
         onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Adjustment failed.'),
+        onError: (e) => setError(apiErrorText(e, 'rd_adjust_failed')),
       },
     )
   }
@@ -519,21 +515,21 @@ function AdjustModal({ user, onClose }: { user: AdminUserDetail; onClose: () => 
   return (
     <Modal onClose={onClose} maxWidth={420}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>Adjust wallet balance</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>{t('usr_adjust_title')}</h3>
         <div className="faint" style={{ fontSize: 12.5, marginBottom: 16 }}>
-          {user.email || user.phone} · current {money(user.walletBalance)}
+          {user.email || user.phone} · {t('usr_current', { amount: money(user.walletBalance) })}
         </div>
         <Segmented<'credit' | 'debit'>
           block
           value={dir}
           onChange={setDir}
           items={[
-            { k: 'credit', label: 'Credit (+)' },
-            { k: 'debit', label: 'Debit (−)' },
+            { k: 'credit', label: t('usr_credit') },
+            { k: 'debit', label: t('usr_debit') },
           ]}
         />
         <label className="alabel" style={{ marginTop: 14 }}>
-          Amount (USD)
+          {t('rd_amount_usd')}
         </label>
         <input
           className="afield"
@@ -545,11 +541,11 @@ function AdjustModal({ user, onClose }: { user: AdminUserDetail; onClose: () => 
           onChange={(e) => setAmount(e.target.value)}
         />
         <label className="alabel" style={{ marginTop: 14 }}>
-          Reason (required)
+          {t('usr_reason_required_label')}
         </label>
         <textarea
           className="afield"
-          placeholder="Goodwill credit, manual refund, correction…"
+          placeholder={t('usr_reason_ph')}
           style={{ minHeight: 64 }}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
@@ -562,7 +558,7 @@ function AdjustModal({ user, onClose }: { user: AdminUserDetail; onClose: () => 
             {t('cancel')}
           </button>
           <button className="abtn primary" onClick={apply} disabled={adjust.isPending}>
-            <Icon name="check" size={15} /> Apply adjustment
+            <Icon name="check" size={15} /> {t('usr_apply_adjustment')}
           </button>
         </div>
       </div>

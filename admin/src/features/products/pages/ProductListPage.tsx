@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
   Icon,
@@ -39,6 +39,7 @@ import { listProducts, type BulkAction, type ProductListParams } from '../api/pr
 import { productStatus, priceRange } from '../lib/view'
 import { bulkActionsFor, bulkConfirmText, bulkDoneText, canSelectAllMatching } from '../lib/trash'
 import { amountIgnoredByPrice } from '../lib/unitPricing'
+import { quoted } from '@/lib/quoted'
 import type { FulfillmentType, Product } from '@/types'
 
 const FF_DOT: Record<FfKey, string> = {
@@ -52,12 +53,13 @@ const FF_DOT: Record<FfKey, string> = {
 type StatusFilter = 'all' | 'active' | 'draft' | 'out' | 'deleted'
 
 // Bulk-bar button per action (assign-category opens the category modal instead).
+// `label` is a translation key, looked up at render.
 const BULK_BUTTONS: Record<Exclude<BulkAction, 'assign-category'>, { label: string; icon: IconName; cls: string }> = {
-  activate: { label: 'Activate', icon: 'check', cls: 'abtn xs ok' },
-  deactivate: { label: 'Deactivate', icon: 'eyeoff', cls: 'abtn xs' },
-  delete: { label: 'Move to trash', icon: 'trash', cls: 'abtn xs danger' },
-  restore: { label: 'Restore', icon: 'refresh', cls: 'abtn xs ok' },
-  purge: { label: 'Delete permanently', icon: 'trash', cls: 'abtn xs danger' },
+  activate: { label: 'activate', icon: 'check', cls: 'abtn xs ok' },
+  deactivate: { label: 'deactivate', icon: 'eyeoff', cls: 'abtn xs' },
+  delete: { label: 'prod_move_to_trash', icon: 'trash', cls: 'abtn xs danger' },
+  restore: { label: 'prod_restore', icon: 'refresh', cls: 'abtn xs ok' },
+  purge: { label: 'prod_delete_forever', icon: 'trash', cls: 'abtn xs danger' },
 }
 
 // Prefers the compressed thumbnail, falling back to the display image, then to
@@ -156,12 +158,12 @@ export default function ProductListPage() {
 
   const stockCell = (p: Product) => {
     const ff = ffKey(p.fulfillmentType)
-    if (ff === 'transfer') return <span className="faint">— service —</span>
+    if (ff === 'transfer') return <span className="faint">{t('prod_stock_service')}</span>
     if (ff === 'credit')
       return (
         <span className="st st-ok" style={{ fontSize: 11 }}>
           <i className="d" />
-          Unlimited
+          {t('prod_unlimited')}
         </span>
       )
     const lvl = p.stock === 0 ? 'lo' : p.stock < 50 ? 'mid' : 'hi'
@@ -189,35 +191,35 @@ export default function ProductListPage() {
           toast.success(
             action === 'assign-category'
               ? categoryId
-                ? `Moved ${n} product(s).`
-                : `Unassigned ${n} product(s).`
+                ? t('prod_bulk_moved', { n })
+                : t('prod_bulk_unassigned', { n })
               : bulkDoneText(action, n),
           )
           clearSelection()
           onDone?.()
         },
-        onError: () => toast.error('Could not update the products.'),
+        onError: () => toast.error(t('prod_bulk_failed')),
       },
     )
   }
 
   const trashOne = (p: Product) => {
-    if (!window.confirm(`Move "${p.title.en}" to the trash? You can restore it from the Deleted view.`)) return
+    if (!window.confirm(t('prod_confirm_trash_single', { name: p.title.en }))) return
     del.mutate(p.id, {
-      onSuccess: () => toast.success('Moved to the trash.'),
-      onError: () => toast.error('Could not move the product to the trash.'),
+      onSuccess: () => toast.success(t('prod_trashed')),
+      onError: () => toast.error(t('prod_trash_failed')),
     })
   }
   const restoreOne = (p: Product) =>
     restore.mutate(p.id, {
-      onSuccess: () => toast.success(`Restored "${p.title.en}".`),
-      onError: () => toast.error('Could not restore the product.'),
+      onSuccess: () => toast.success(t('prod_restored_name', { name: p.title.en })),
+      onError: () => toast.error(t('prod_restore_failed')),
     })
   const purgeOne = (p: Product) => {
-    if (!window.confirm(`Permanently delete "${p.title.en}"? This cannot be undone.`)) return
+    if (!window.confirm(t('prod_confirm_purge_single', { name: p.title.en }))) return
     purge.mutate(p.id, {
-      onSuccess: () => toast.success('Permanently deleted.'),
-      onError: () => toast.error('Could not delete the product permanently.'),
+      onSuccess: () => toast.success(t('prod_purged')),
+      onError: () => toast.error(t('prod_purge_failed')),
     })
   }
 
@@ -239,8 +241,18 @@ export default function ProductListPage() {
 
       // Omit the Sold column entirely without orders.view, rather than exporting a
       // misleading 0 for every product (the sold data would have 403'd).
-      const header = ['Name', 'ID', 'Category', 'Type', 'Variants', 'Stock', 'Price min', 'Price max',
-        ...(canViewSold ? ['Sold'] : []), 'Status']
+      const header = [
+        t('prod_csv_name'),
+        t('prod_csv_id'),
+        t('prod_category'),
+        t('col_type'),
+        t('prod_variants'),
+        t('prod_stock'),
+        t('prod_csv_price_min'),
+        t('prod_csv_price_max'),
+        ...(canViewSold ? [t('prod_sold')] : []),
+        t('status'),
+      ]
       const csvRows = all.map((pr) => {
         const prices = pr.variants.map((v) => v.price)
         const min = prices.length ? Math.min(...prices) : 0
@@ -270,8 +282,8 @@ export default function ProductListPage() {
         back="/"
         crumbs={[t('grp_catalog'), t('nav_products')]}
         title={t('nav_products')}
-        sub={`${(meta?.total ?? 0).toLocaleString()} ${trashView ? 'products in the trash' : 'products'}${
-          cat !== 'all' || ff !== 'all' || (status !== 'all' && !trashView) || debouncedSearch ? ' (filtered)' : ''
+        sub={`${t(trashView ? 'prod_sub_trash' : 'prod_sub_count', { n: (meta?.total ?? 0).toLocaleString() })}${
+          cat !== 'all' || ff !== 'all' || (status !== 'all' && !trashView) || debouncedSearch ? t('prod_sub_filtered') : ''
         }`}
       >
         <button className="abtn" onClick={handleExport} disabled={exporting}>
@@ -289,13 +301,13 @@ export default function ProductListPage() {
           <div className="fsearch">
             <Icon name="search" size={15} />
             <input
-              placeholder="Search products…"
+              placeholder={t('prod_search_ph')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <select className="select" value={cat} onChange={(e) => onFilter(setCat)(e.target.value)}>
-            <option value="all">All categories</option>
+            <option value="all">{t('exp_all_categories')}</option>
             {cats.map((c) => (
               <option key={c.value} value={c.value}>
                 {categoryLabel(c.value)}
@@ -316,7 +328,7 @@ export default function ProductListPage() {
             <option value="active">{t('active')}</option>
             <option value="draft">{t('draft')}</option>
             <option value="out">{t('out_of_stock')}</option>
-            <option value="deleted">Deleted (trash)</option>
+            <option value="deleted">{t('prod_filter_deleted')}</option>
           </select>
           <div className="chiprow">
             {(
@@ -343,25 +355,25 @@ export default function ProductListPage() {
           <div className="bulkbar">
             <Checkbox on onClick={clearSelection} />
             <span>
-              {matchAll ? `All ${total.toLocaleString()} matching` : bulk.sel.length} {t('selected')}
+              {matchAll ? t('prod_all_matching', { n: total.toLocaleString() }) : bulk.sel.length} {t('selected')}
             </span>
             {/* "Select all matching" reaches past this page — the owner's
                 one-click way to trash (or restore / move) the whole filtered catalog. */}
             {canSelectAllMatching(bulk.all, rows.length, total) &&
               (matchAll ? (
                 <button className="abtn xs ghost" onClick={() => setMatchAll(false)}>
-                  Only this page
+                  {t('prod_only_this_page')}
                 </button>
               ) : (
                 <button className="abtn xs ghost" onClick={() => setMatchAll(true)}>
-                  Select all {total.toLocaleString()} matching
+                  {t('prod_select_all_matching', { n: total.toLocaleString() })}
                 </button>
               ))}
             <div className="ba-act">
               {bulkActionsFor(trashView, isSuperAdmin, matchAll).map((action) =>
                 action === 'assign-category' ? (
                   <button key={action} className="abtn xs" onClick={() => setAssignOpen(true)}>
-                    <Icon name="layers" size={13} /> Move to category
+                    <Icon name="layers" size={13} /> {t('prod_move_to_category')}
                   </button>
                 ) : (
                   <button
@@ -370,7 +382,7 @@ export default function ProductListPage() {
                     disabled={bulkAction.isPending}
                     onClick={() => runBulk(action)}
                   >
-                    <Icon name={BULK_BUTTONS[action].icon} size={13} /> {BULK_BUTTONS[action].label}
+                    <Icon name={BULK_BUTTONS[action].icon} size={13} /> {t(BULK_BUTTONS[action].label)}
                   </button>
                 ),
               )}
@@ -381,9 +393,9 @@ export default function ProductListPage() {
         {isLoading ? (
           <LoadingSpinner />
         ) : isError ? (
-          <ErrorState message="Could not load products" onRetry={() => refetch()} />
+          <ErrorState message={t('prod_list_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No products found" sub="Try clearing filters or create a new product." />
+          <EmptyState title={t('prod_empty')} sub={t('prod_empty_sub')} />
         ) : (
           <div className="tablewrap">
             <table className="tbl">
@@ -392,13 +404,13 @@ export default function ProductListPage() {
                   <th style={{ width: 36 }}>
                     <Checkbox on={bulk.all} onClick={bulk.toggleAll} />
                   </th>
-                  <th>Product</th>
-                  <th>Category</th>
-                  <th>Type</th>
-                  <th>Variants</th>
-                  <th>Stock / codes</th>
-                  <th>Price (USD)</th>
-                  {canViewSold && <th>Sold</th>}
+                  <th>{t('col_product')}</th>
+                  <th>{t('prod_category')}</th>
+                  <th>{t('col_type')}</th>
+                  <th>{t('prod_variants')}</th>
+                  <th>{t('prod_col_stock')}</th>
+                  <th>{t('prod_col_price')}</th>
+                  {canViewSold && <th>{t('prod_sold')}</th>}
                   <th>{t('status')}</th>
                   <th></th>
                 </tr>
@@ -419,10 +431,10 @@ export default function ProductListPage() {
                             <span
                               className="st st-warn"
                               style={{ fontSize: 11, marginTop: 2, width: 'fit-content' }}
-                              title={`Customers type "${amountIgnoredByPrice(p).join('", "')}" but pay the fixed package price — open the product and switch to Per unit, or change the field type.`}
+                              title={t('prod_ignored_badge_tip', { fields: quoted(amountIgnoredByPrice(p)) })}
                             >
                               <i className="d" />
-                              Price ignores amount
+                              {t('prod_ignored_badge')}
                             </span>
                           )}
                         </div>
@@ -447,17 +459,17 @@ export default function ProductListPage() {
                           <Icon name="edit" size={15} />
                         </span>
                         {canManage && !p.deletedAt && (
-                          <span className="iact danger" title="Move to trash" onClick={() => trashOne(p)}>
+                          <span className="iact danger" title={t('prod_move_to_trash')} onClick={() => trashOne(p)}>
                             <Icon name="trash" size={15} />
                           </span>
                         )}
                         {canManage && p.deletedAt && (
-                          <span className="iact" title="Restore" onClick={() => restoreOne(p)}>
+                          <span className="iact" title={t('prod_restore')} onClick={() => restoreOne(p)}>
                             <Icon name="refresh" size={15} />
                           </span>
                         )}
                         {isSuperAdmin && p.deletedAt && (
-                          <span className="iact danger" title="Delete permanently" onClick={() => purgeOne(p)}>
+                          <span className="iact danger" title={t('prod_delete_forever')} onClick={() => purgeOne(p)}>
                             <Icon name="xc" size={15} />
                           </span>
                         )}
@@ -512,24 +524,23 @@ function AssignCategoryModal({
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const [categoryId, setCategoryId] = useState('')
 
-  const target = categoryId ? pathLabel(byId.get(categoryId)!, byId) : 'no category (unassign)'
+  const target = categoryId ? pathLabel(byId.get(categoryId)!, byId) : t('prod_assign_none_target')
 
   return (
     <Modal onClose={onClose} maxWidth={480}>
       <div className="pad">
-        <h3 style={{ marginTop: 0 }}>Move to category</h3>
+        <h3 style={{ marginTop: 0 }}>{t('prod_move_to_category')}</h3>
         <p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
-          Reassign {count} selected product{count === 1 ? '' : 's'} to{' '}
-          <b>{target}</b>.
+          <Trans i18nKey="prod_assign_body" count={count} values={{ target }} components={{ b: <b /> }} />
         </p>
-        <label className="alabel">Category</label>
+        <label className="alabel">{t('prod_category')}</label>
         <select
           className="select"
           style={{ width: '100%', marginBottom: 14 }}
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
         >
-          <option value="">— None (unassign) —</option>
+          <option value="">{t('prod_assign_none_opt')}</option>
           {ordered.map((n) => (
             <option key={n.id} value={n.id}>
               {pathLabel(n, byId)}
@@ -541,7 +552,7 @@ function AssignCategoryModal({
             {t('cancel')}
           </button>
           <button className="abtn primary" disabled={pending} onClick={() => onConfirm(categoryId)}>
-            <Icon name="layers" size={14} /> {pending ? '…' : 'Move'}
+            <Icon name="layers" size={14} /> {pending ? '…' : t('prod_move')}
           </button>
         </div>
       </div>

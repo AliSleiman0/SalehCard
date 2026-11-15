@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listTopUps, approveTopUp, rejectTopUp, type TopUpListParams } from '../api/topups'
 import { toast } from '@/stores/toast'
+import i18n from '@/i18n/config'
 import { LIVE_REFETCH_MS } from '@/lib/query-client'
 
 export function useTopUps(params: TopUpListParams, opts?: { enabled?: boolean }) {
@@ -20,9 +21,9 @@ export function useApproveTopUp() {
     mutationFn: (id: string) => approveTopUp(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'topups'] })
-      toast.success('Top-up approved & credited')
+      toast.success(i18n.t('top_approved_toast'))
     },
-    onError: () => toast.error('Could not approve top-up'),
+    onError: () => toast.error(i18n.t('top_approve_toast_failed')),
   })
 }
 
@@ -32,8 +33,8 @@ export function useRejectTopUp() {
     mutationFn: ({ id, reason }: { id: string; reason: string }) => rejectTopUp(id, reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'topups'] })
-      toast.info('Top-up rejected')
+      toast.info(i18n.t('top_rejected_toast'))
     },
-    onError: () => toast.error('Could not reject top-up'),
+    onError: () => toast.error(i18n.t('top_reject_toast_failed')),
   })
 }

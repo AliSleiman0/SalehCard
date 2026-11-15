@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -129,7 +129,8 @@ export default function OrderListPage() {
 
   const { data, isLoading, isError, refetch } = useOrders({ page, ...filters })
 
-  const rows = useMemo(() => (data?.data ?? []).map(adaptOrder), [data])
+  // Not memoised: the rows' labels follow the admin's language on every render.
+  const rows = (data?.data ?? []).map(adaptOrder)
   const meta = data?.meta
   const bulk = useBulk(rows.map((r) => r.id))
   const refundBulk = useRefundBulk()
@@ -138,8 +139,7 @@ export default function OrderListPage() {
   // Bulk refund: each order refunds independently (its own atomic lock + ledger),
   // so the result is a per-order summary — some may be skipped as not-refundable.
   const runBulkRefund = () => {
-    if (!window.confirm(`Refund ${bulk.sel.length} order(s)? Wallet-paid orders are credited back — this cannot be undone.`))
-      return
+    if (!window.confirm(t('ord_bulk_refund_confirm', { n: bulk.sel.length }))) return
     refundBulk.mutate(
       { ids: bulk.sel },
       {
@@ -149,11 +149,9 @@ export default function OrderListPage() {
           const atSupplier = results.filter((x) => x.status === 'at_supplier').length
           const skipped = results.filter((x) => x.status !== 'refunded' && x.status !== 'at_supplier').length
           const msg =
-            `Refunded ${r?.refunded ?? 0} of ${r?.total ?? 0}.` +
-            (skipped ? ` ${skipped} skipped (not refundable).` : '') +
-            (atSupplier
-              ? ` ${atSupplier} skipped because a supplier may still deliver them — refund those from their own page.`
-              : '')
+            t('ord_bulk_refunded', { refunded: r?.refunded ?? 0, total: r?.total ?? 0 }) +
+            (skipped ? t('ord_bulk_skipped', { n: skipped }) : '') +
+            (atSupplier ? t('ord_bulk_at_supplier', { n: atSupplier }) : '')
           const skippedAll = skipped + atSupplier
           if (skippedAll) toast.info(msg)
           else toast.success(msg)
@@ -181,11 +179,22 @@ export default function OrderListPage() {
 
       let view = all.map(adaptOrder)
       if (selectedOnly) view = view.filter((o) => bulk.sel.includes(o.id))
-      const header = ['Order ID', 'Customer', 'Email', 'Product', 'Qty', 'Amount', 'Currency', 'Payment', 'Status', 'Date']
+      const header = [
+        t('ord_col_id'),
+        t('ord_col_customer'),
+        t('ord_col_email'),
+        t('col_product'),
+        t('ord_col_qty'),
+        t('col_amount'),
+        t('ord_col_currency'),
+        t('ord_col_payment'),
+        t('status'),
+        t('col_date'),
+      ]
       const dataRows = view.map((o) => [o.id, o.customer, o.email, o.product, o.qty, o.amount.toFixed(2), o.cur, o.pay, o.status, o.date])
       const date = new Date().toISOString().slice(0, 10)
       if (format === 'pdf') {
-        await downloadPdf(`orders-${date}.pdf`, `Orders — ${date}`, header, dataRows)
+        await downloadPdf(`orders-${date}.pdf`, t('ord_pdf_title', { date }), header, dataRows)
       } else {
         downloadCsv(`orders-${date}.csv`, [header, ...dataRows])
       }
@@ -200,7 +209,7 @@ export default function OrderListPage() {
         back="/"
         crumbs={[t('grp_operations'), t('nav_orders')]}
         title={t('nav_orders')}
-        sub={meta ? `${meta.total.toLocaleString()} orders` : ''}
+        sub={meta ? t('ord_list_sub', { n: meta.total.toLocaleString() }) : ''}
       >
         <button className="abtn" onClick={() => handleExport('csv')} disabled={exporting}>
           <Icon name="download" size={15} /> {exporting ? '…' : t('export')}
@@ -209,7 +218,7 @@ export default function OrderListPage() {
           <Icon name="file" size={15} /> PDF
         </button>
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('ord_refresh')}
         </button>
       </PageHead>
 
@@ -218,7 +227,7 @@ export default function OrderListPage() {
           <div className="fsearch">
             <Icon name="search" size={15} />
             <input
-              placeholder="Order ID, player ID, phone, email, name or code…"
+              placeholder={t('ord_search_ph')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -230,26 +239,26 @@ export default function OrderListPage() {
           >
             {/* Shown only in the stuck view, so picking plain "Processing" is a
                 real change that leaves it. */}
-            {stuck && <option value="stuck">Processing · supplier stuck</option>}
-            <option value="all">All statuses</option>
-            <option value="completed">Completed</option>
-            <option value="processing">Processing</option>
-            <option value="pending">Pending</option>
-            <option value="refunded">Refunded</option>
-            <option value="failed">Failed</option>
+            {stuck && <option value="stuck">{t('ord_f_stuck')}</option>}
+            <option value="all">{t('ord_f_all_statuses')}</option>
+            <option value="completed">{t('ord_status_completed')}</option>
+            <option value="processing">{t('ord_status_processing')}</option>
+            <option value="pending">{t('ord_status_pending')}</option>
+            <option value="refunded">{t('ord_status_refunded')}</option>
+            <option value="failed">{t('ord_status_failed')}</option>
           </select>
           <select
             className="select"
             value={today ? 'today' : 'any'}
             onChange={(e) => setParams({ date: e.target.value === 'today' ? 'today' : null })}
           >
-            <option value="any">Any date</option>
-            <option value="today">Today</option>
+            <option value="any">{t('ord_f_any_date')}</option>
+            <option value="today">{t('today')}</option>
           </select>
           <select className="select" value={pay} onChange={(e) => setPay(e.target.value as PaymentMethod | 'all')}>
-            <option value="all">All payment</option>
-            <option value="wallet">Wallet</option>
-            <option value="card">Card</option>
+            <option value="all">{t('ord_f_all_payment')}</option>
+            <option value="wallet">{t('ord_pay_wallet')}</option>
+            <option value="card">{t('ord_pay_card')}</option>
             <option value="usdt">USDT</option>
           </select>
           <div className="chiprow">
@@ -271,7 +280,7 @@ export default function OrderListPage() {
               </Chip>
             ))}
             <Chip on={stuck} onClick={() => setParams({ stuck: stuck ? null : '1', status: null })} dotColor="var(--danger)">
-              Supplier stuck
+              {t('ord_chip_stuck')}
             </Chip>
           </div>
         </div>
@@ -293,11 +302,11 @@ export default function OrderListPage() {
                   disabled={bulk.sel.length > MAX_BULK_RESEND}
                   title={
                     bulk.sel.length > MAX_BULK_RESEND
-                      ? `Re-send at most ${MAX_BULK_RESEND} orders at once`
-                      : 'Send the selected orders to a supplier again'
+                      ? t('ord_resend_max', { n: MAX_BULK_RESEND })
+                      : t('ord_resend_tip')
                   }
                 >
-                  <Icon name="send" size={13} /> Re-send ({bulk.sel.length})
+                  <Icon name="send" size={13} /> {t('ord_resend_btn', { n: bulk.sel.length })}
                 </button>
               )}
               {canManage && (
@@ -323,9 +332,9 @@ export default function OrderListPage() {
         {isLoading ? (
           <LoadingSpinner />
         ) : isError && !data ? (
-          <ErrorState message="Couldn't load orders." onRetry={() => refetch()} />
+          <ErrorState message={t('ord_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No orders found" />
+          <EmptyState title={t('ord_empty')} />
         ) : (
           <>
             <div className="tablewrap">
@@ -335,14 +344,14 @@ export default function OrderListPage() {
                     <th style={{ width: 36 }}>
                       <Checkbox on={bulk.all} onClick={bulk.toggleAll} />
                     </th>
-                    <th>Order ID</th>
-                    <th>Customer</th>
-                    <th>Product</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Payment</th>
+                    <th>{t('ord_col_id')}</th>
+                    <th>{t('ord_col_customer')}</th>
+                    <th>{t('col_product')}</th>
+                    <th>{t('col_type')}</th>
+                    <th>{t('col_amount')}</th>
+                    <th>{t('ord_col_payment')}</th>
                     <th>{t('status')}</th>
-                    <th>Date</th>
+                    <th>{t('col_date')}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -379,7 +388,7 @@ export default function OrderListPage() {
                                     <Link
                                       to={productHref}
                                       className="prodlink"
-                                      title="Open product"
+                                      title={t('sup_open_product')}
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       {o.productTitle}

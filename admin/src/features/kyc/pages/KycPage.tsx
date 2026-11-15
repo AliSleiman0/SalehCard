@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
   Icon,
@@ -12,18 +12,19 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import { useKeyedPage } from '@/hooks/useKeyedPage'
 import { useKyc, useSetKycStatus } from '../hooks/useKyc'
 import { adaptKyc, type KycView } from '../lib/adaptKyc'
 import type { KycStatus } from '../api/kyc'
 
+// [status, translation key]
 const FILTERS: [KycStatus | '', string][] = [
-  ['pending', 'Pending'],
-  ['approved', 'Verified'],
-  ['rejected', 'Rejected'],
-  ['', 'All'],
+  ['pending', 'pending'],
+  ['approved', 'kyc_filter_approved'],
+  ['rejected', 'kyc_filter_rejected'],
+  ['', 'all'],
 ]
 
 function statusFromParam(raw: string | null): KycStatus | '' {
@@ -78,7 +79,8 @@ export default function KycPage() {
     q: debouncedSearch.trim(),
   })
 
-  const rows = useMemo(() => (data?.data ?? []).map(adaptKyc), [data])
+  // Adapted on every render (cheap) so labels and dates follow a language switch.
+  const rows = (data?.data ?? []).map(adaptKyc)
   const meta = data?.meta
 
   const setStatusM = useSetKycStatus()
@@ -89,11 +91,11 @@ export default function KycPage() {
       <PageHead
         back="/"
         crumbs={[t('grp_operations'), t('nav_kyc')]}
-        title="KYC verification"
-        sub={meta ? `${meta.total.toLocaleString()} submissions` : ''}
+        title={t('kyc_title')}
+        sub={meta ? t('kyc_sub', { n: meta.total.toLocaleString() }) : ''}
       >
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('exp_refresh')}
         </button>
       </PageHead>
 
@@ -106,7 +108,7 @@ export default function KycPage() {
                 on={status === k}
                 onClick={() => setStatus(k)}
               >
-                {l}
+                {t(l)}
               </Chip>
             ))}
           </div>
@@ -114,7 +116,7 @@ export default function KycPage() {
           <div className="fsearch">
             <Icon name="search" size={15} />
             <input
-              placeholder="Search name or document…"
+              placeholder={t('kyc_search_ph')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -124,9 +126,9 @@ export default function KycPage() {
         {isLoading ? (
           <LoadingSpinner />
         ) : isError && !data ? (
-          <ErrorState message="Couldn't load KYC submissions." onRetry={() => refetch()} />
+          <ErrorState message={t('kyc_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No submissions found" />
+          <EmptyState title={t('kyc_empty')} />
         ) : (
           <>
             <div>
@@ -137,16 +139,16 @@ export default function KycPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
                         <b style={{ fontSize: 14 }}>{k.fullName}</b>
                         <span className="faint" style={{ fontSize: 12 }}>
-                          {k.contact} · submitted {k.submitted}
+                          {k.contact} · {t('kyc_submitted', { date: k.submitted })}
                         </span>
                         <span style={{ marginInlineStart: 'auto' }}>
                           <StatusBadge s={k.status} />
                         </span>
                       </div>
                       <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-                        <span>Born {k.dateOfBirth} · {k.placeOfBirth}</span>
+                        <span>{t('kyc_born', { date: k.dateOfBirth, place: k.placeOfBirth })}</span>
                         {' · '}
-                        <span>Lives in {k.placeOfResidence}</span>
+                        <span>{t('kyc_lives_in', { place: k.placeOfResidence })}</span>
                         {' · '}
                         <span>
                           {k.documentLabel} <b className="mono">{k.documentNumber}</b>
@@ -154,13 +156,13 @@ export default function KycPage() {
                       </div>
                       {(k.documentFrontUrl || k.documentBackUrl) && (
                         <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-                          {k.documentFrontUrl && <DocThumb url={k.documentFrontUrl} label="Front" />}
-                          {k.documentBackUrl && <DocThumb url={k.documentBackUrl} label="Back" />}
+                          {k.documentFrontUrl && <DocThumb url={k.documentFrontUrl} label={t('kyc_front')} />}
+                          {k.documentBackUrl && <DocThumb url={k.documentBackUrl} label={t('kyc_back')} />}
                         </div>
                       )}
                       {k.status === 'rejected' && k.rejectionReason && (
                         <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>
-                          Rejected: {k.rejectionReason}
+                          {t('kyc_rejected_reason', { reason: k.rejectionReason })}
                         </div>
                       )}
                       <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
@@ -208,11 +210,12 @@ export default function KycPage() {
 
 /** Labeled document-photo thumbnail; clicking opens the full image in a new tab. */
 function DocThumb({ url, label }: { url: string; label: string }) {
+  const { t } = useTranslation()
   return (
     <a href={url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
       <img
         src={url}
-        alt={`${label} of document`}
+        alt={t('kyc_doc_alt', { side: label })}
         style={{
           width: 72,
           height: 48,
@@ -238,7 +241,7 @@ function RejectModal({ kyc, onClose }: { kyc: KycView; onClose: () => void }) {
 
   const apply = () => {
     if (!reason.trim()) {
-      setError('A rejection reason is required.')
+      setError(t('kyc_err_reason'))
       return
     }
     setError('')
@@ -246,7 +249,7 @@ function RejectModal({ kyc, onClose }: { kyc: KycView; onClose: () => void }) {
       { id: kyc.id, status: 'rejected', reason: reason.trim() },
       {
         onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Rejection failed.'),
+        onError: (e) => setError(apiErrorText(e, 'kyc_reject_failed')),
       },
     )
   }
@@ -254,14 +257,14 @@ function RejectModal({ kyc, onClose }: { kyc: KycView; onClose: () => void }) {
   return (
     <Modal onClose={onClose} maxWidth={440}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Reject KYC submission</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('kyc_reject_title')}</h3>
         <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Reject <b>{kyc.fullName}</b>'s verification. The reason is shown to the customer.
+          <Trans i18nKey="kyc_reject_body" values={{ name: kyc.fullName }} components={{ b: <b /> }} />
         </p>
-        <label className="alabel">Reason (required)</label>
+        <label className="alabel">{t('usr_reason_required_label')}</label>
         <input
           className="afield"
-          placeholder="e.g. Date of birth doesn't match the document…"
+          placeholder={t('kyc_reason_ph')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />

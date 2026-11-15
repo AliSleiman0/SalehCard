@@ -193,6 +193,10 @@ func (s *OrderService) alertFallbackExhausted(ctx context.Context, o *Order, p *
 		ProductName: name,
 		Message: fmt.Sprintf("Order %s (%s): supplier %s refused it and no other linked supplier can take it (%s). It keeps retrying — send it to another supplier or fulfil it by hand.",
 			strings.ToUpper(o.ID.Hex()[len(o.ID.Hex())-8:]), name, from, fallbackReason(cause)),
+		Args: map[string]string{
+			"order": strings.ToUpper(o.ID.Hex()[len(o.ID.Hex())-8:]), "product": name,
+			"from": from, "reason": fallbackReason(cause),
+		},
 	})
 	if err != nil {
 		slog.Warn("order: fallback-exhausted alert", "order", o.ID.Hex(), "error", err)

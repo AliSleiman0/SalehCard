@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Icon,
   PageHead,
@@ -8,7 +9,7 @@ import {
   ErrorState,
   EmptyState,
 } from '@/components'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import {
   useTopupMethods,
@@ -19,12 +20,10 @@ import {
 import { METHOD_KINDS } from '../api/methods'
 import type { MethodField, MethodFieldType, MethodInput, MethodKind, TopUpMethod } from '../api/methods'
 
-const FIELD_TYPES: [MethodFieldType, string][] = [
-  ['text', 'Text'],
-  ['number', 'Number'],
-  ['select', 'Dropdown'],
-  ['file', 'File / image upload'],
-]
+const FIELD_TYPES: MethodFieldType[] = ['text', 'number', 'select', 'file']
+
+/** Translation key for a method kind ('' = not classified yet). */
+const kindKey = (k: string) => `top_kind_${k || 'none'}_name`
 
 /** slugify turns a label into a stable field key (lowercase, alnum + underscore). */
 function slugify(s: string): string {
@@ -36,6 +35,7 @@ function slugify(s: string): string {
 }
 
 export default function TopupMethodsPage() {
+  const { t } = useTranslation()
   const canManage = useCan()('topups.manage')
   const { data, isLoading, isError, refetch } = useTopupMethods()
   const methods = data?.data ?? []
@@ -46,13 +46,13 @@ export default function TopupMethodsPage() {
     <div className="page page-wide">
       <PageHead
         back="/topups"
-        crumbs={['Finance', 'Payment methods']}
-        title="Manual payment methods"
-        sub="Customer-facing wallet top-up options. Each is informational — a customer submits the inputs you define, then you approve the request in the Top-up queue to credit their wallet."
+        crumbs={[t('grp_finance'), t('nav_topup_methods')]}
+        title={t('top_methods_title')}
+        sub={t('top_methods_sub')}
       >
         {canManage && (
           <button className="abtn primary" onClick={() => setEditing('new')}>
-            <Icon name="plus" size={15} /> New method
+            <Icon name="plus" size={15} /> {t('top_new_method')}
           </button>
         )}
       </PageHead>
@@ -61,12 +61,9 @@ export default function TopupMethodsPage() {
         {isLoading ? (
           <LoadingSpinner />
         ) : isError ? (
-          <ErrorState message="Couldn't load payment methods." onRetry={() => refetch()} />
+          <ErrorState message={t('top_methods_load_error')} onRetry={() => refetch()} />
         ) : methods.length === 0 ? (
-          <EmptyState
-            title="No payment methods yet"
-            sub="Add one (e.g. Bank Transfer) with instructions and the inputs customers should submit."
-          />
+          <EmptyState title={t('top_methods_empty')} sub={t('top_methods_empty_sub')} />
         ) : (
           <div>
             {methods.map((m) => (
@@ -79,30 +76,32 @@ export default function TopupMethodsPage() {
                   {m.enabled ? (
                     <span className="st st-ok">
                       <i className="d" />
-                      Enabled
+                      {t('top_enabled')}
                     </span>
                   ) : (
-                    <span className="bdg">Disabled</span>
+                    <span className="bdg">{t('top_disabled')}</span>
                   )}
-                  <span className="bdg">{METHOD_KINDS.find((k) => k.value === (m.kind ?? ''))?.label ?? m.kind}</span>
+                  <span className="bdg">
+                    {METHOD_KINDS.some((k) => k.value === (m.kind ?? '')) ? t(kindKey(m.kind ?? '')) : m.kind}
+                  </span>
                   <span className="faint" style={{ fontSize: 12.5 }}>
-                    {m.fields.length} input{m.fields.length === 1 ? '' : 's'}
+                    {t('top_inputs', { count: m.fields.length })}
                   </span>
                   {canManage && (
                     <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
                       <button className="abtn xs" onClick={() => setEditing(m)}>
-                        <Icon name="edit" size={13} /> Edit
+                        <Icon name="edit" size={13} /> {t('edit')}
                       </button>
                       <button
                         className="abtn xs danger"
                         disabled={delM.isPending}
                         onClick={() => {
-                          if (confirm(`Delete "${m.name}"? Existing requests keep their record.`)) {
+                          if (confirm(t('top_method_delete_confirm', { name: m.name }))) {
                             delM.mutate(m.id)
                           }
                         }}
                       >
-                        <Icon name="trash" size={13} /> Delete
+                        <Icon name="trash" size={13} /> {t('delete')}
                       </button>
                     </div>
                   )}
@@ -135,6 +134,7 @@ function blankField(): MethodField {
 
 /** MethodEditor is the create/edit modal with a repeatable field builder. */
 function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose: () => void }) {
+  const { t } = useTranslation()
   const [name, setName] = useState(method?.name ?? '')
   const [kind, setKind] = useState<MethodKind>(method?.kind ?? '')
   const [instructions, setInstructions] = useState(method?.instructions ?? '')
@@ -152,7 +152,7 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
 
   const save = () => {
     if (!name.trim()) {
-      setError('A method name is required.')
+      setError(t('top_err_name_required'))
       return
     }
     // Derive missing keys from labels and enforce uniqueness client-side (the
@@ -162,23 +162,23 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
     for (const f of fields) {
       const label = f.label.trim()
       if (!label) {
-        setError('Every input needs a label.')
+        setError(t('top_err_label_required'))
         return
       }
       const key = slugify(f.key || label)
       if (!key) {
-        setError(`Couldn't derive a key for "${label}". Give it a manual key.`)
+        setError(t('top_err_no_key', { label }))
         return
       }
       if (seen.has(key)) {
-        setError(`Duplicate input key "${key}". Keys must be unique.`)
+        setError(t('top_err_dup_key', { key }))
         return
       }
       seen.add(key)
       const options =
         f.type === 'select' ? (f.options ?? []).map((o) => o.trim()).filter(Boolean) : undefined
       if (f.type === 'select' && (!options || options.length === 0)) {
-        setError(`Dropdown "${label}" needs at least one option.`)
+        setError(t('top_err_no_options', { label }))
         return
       }
       cleaned.push({ key, label, type: f.type, required: f.required, options })
@@ -193,8 +193,7 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
       fields: cleaned,
     }
     setError('')
-    const onErr = (e: unknown) =>
-      setError(e instanceof ApiError ? e.message : 'Could not save the method.')
+    const onErr = (e: unknown) => setError(apiErrorText(e, 'top_method_save_failed'))
     if (method) {
       updateM.mutate({ id: method.id, input }, { onSuccess: onClose, onError: onErr })
     } else {
@@ -206,39 +205,38 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
     <Modal onClose={onClose} maxWidth={640}>
       <div style={{ padding: 22, maxHeight: '82vh', overflowY: 'auto' }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>
-          {method ? 'Edit payment method' : 'New payment method'}
+          {method ? t('top_edit_method') : t('top_new_method_title')}
         </h3>
 
-        <label className="alabel">Name</label>
+        <label className="alabel">{t('top_name')}</label>
         <input
           className="afield"
-          placeholder="e.g. Bank Transfer"
+          placeholder={t('top_name_ph')}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
         <label className="alabel" style={{ marginTop: 12 }}>
-          Type
+          {t('col_type')}
         </label>
         <select className="afield" value={kind} onChange={(e) => setKind(e.target.value as MethodKind)}>
           {METHOD_KINDS.map((k) => (
             <option key={k.value} value={k.value}>
-              {k.label}
+              {t(kindKey(k.value), { defaultValue: k.label })}
             </option>
           ))}
         </select>
         <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
-          Controls where the method is offered: some app-store builds only show bank, cash and other
-          methods, so set crypto and payment-app methods correctly.
+          {t('top_kind_hint')}
         </div>
 
         <label className="alabel" style={{ marginTop: 12 }}>
-          Instructions (how the customer pays — e.g. the account to send to)
+          {t('top_instructions')}
         </label>
         <textarea
           className="afield"
           rows={3}
-          placeholder="Transfer to IBAN … then upload your receipt below."
+          placeholder={t('top_instructions_ph')}
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
         />
@@ -246,11 +244,11 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
         <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginTop: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Toggle on={enabled} onClick={() => setEnabled((v) => !v)} />
-            <span style={{ fontSize: 13.5 }}>Shown to customers</span>
+            <span style={{ fontSize: 13.5 }}>{t('top_shown_to_customers')}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="alabel" style={{ margin: 0 }}>
-              Sort order
+              {t('top_sort_order')}
             </span>
             <input
               className="afield"
@@ -263,19 +261,19 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', marginTop: 20, marginBottom: 8 }}>
-          <b style={{ fontSize: 14 }}>Customer inputs</b>
+          <b style={{ fontSize: 14 }}>{t('top_customer_inputs')}</b>
           <button
             className="abtn xs"
             style={{ marginInlineStart: 'auto' }}
             onClick={() => setFields((fs) => [...fs, blankField()])}
           >
-            <Icon name="plus" size={13} /> Add input
+            <Icon name="plus" size={13} /> {t('top_add_input')}
           </button>
         </div>
 
         {fields.length === 0 && (
           <div className="faint" style={{ fontSize: 13, padding: '4px 0 8px' }}>
-            No inputs — the customer just sees the instructions and submits the amount.
+            {t('top_no_inputs')}
           </div>
         )}
 
@@ -291,24 +289,24 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
           >
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <div style={{ flex: '1 1 180px' }}>
-                <label className="alabel">Label</label>
+                <label className="alabel">{t('top_label')}</label>
                 <input
                   className="afield"
-                  placeholder="e.g. Transfer receipt"
+                  placeholder={t('top_label_ph')}
                   value={f.label}
                   onChange={(e) => setField(i, { label: e.target.value })}
                 />
               </div>
               <div style={{ flex: '0 1 160px' }}>
-                <label className="alabel">Type</label>
+                <label className="alabel">{t('col_type')}</label>
                 <select
                   className="afield"
                   value={f.type}
                   onChange={(e) => setField(i, { type: e.target.value as MethodFieldType })}
                 >
-                  {FIELD_TYPES.map(([v, l]) => (
+                  {FIELD_TYPES.map((v) => (
                     <option key={v} value={v}>
-                      {l}
+                      {t(`top_ft_${v}`)}
                     </option>
                   ))}
                 </select>
@@ -321,7 +319,7 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
                   checked={f.required}
                   onChange={(e) => setField(i, { required: e.target.checked })}
                 />
-                Required
+                {t('top_required')}
               </label>
               <button
                 className="abtn xs danger"
@@ -333,7 +331,7 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
             </div>
             {f.type === 'select' && (
               <div style={{ marginTop: 8 }}>
-                <label className="alabel">Options (comma-separated)</label>
+                <label className="alabel">{t('top_options')}</label>
                 <input
                   className="afield"
                   placeholder="BLOM, Bankmed, Fransabank"
@@ -349,10 +347,10 @@ function MethodEditor({ method, onClose }: { method: TopUpMethod | null; onClose
 
         <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
           <button className="abtn" onClick={onClose} disabled={saving}>
-            Cancel
+            {t('cancel')}
           </button>
           <button className="abtn primary" onClick={save} disabled={saving}>
-            <Icon name="check" size={15} /> {method ? 'Save' : 'Create'}
+            <Icon name="check" size={15} /> {method ? t('top_save') : t('top_create')}
           </button>
         </div>
       </div>

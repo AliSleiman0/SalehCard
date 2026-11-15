@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
   Icon,
@@ -21,11 +21,12 @@ import { useReviews, useSetReviewStatus, useDeleteReview } from '../hooks/useRev
 import { adaptReview, type ReviewView } from '../lib/adaptReview'
 import type { ReviewStatus } from '../api/reviews'
 
+/** Labels are translation keys (looked up at render time). */
 const FILTERS: [ReviewStatus | '', string][] = [
-  ['pending', 'Pending'],
-  ['approved', 'Approved'],
-  ['rejected', 'Rejected'],
-  ['', 'All'],
+  ['pending', 'pending'],
+  ['approved', 'cmn_st_approved'],
+  ['rejected', 'cmn_st_rejected'],
+  ['', 'all'],
 ]
 
 export default function ReviewsPage() {
@@ -76,11 +77,11 @@ export default function ReviewsPage() {
       <PageHead
         back="/"
         crumbs={[t('grp_content'), t('nav_reviews')]}
-        title="Review moderation"
-        sub={meta ? `${meta.total.toLocaleString()} reviews` : ''}
+        title={t('rev_title')}
+        sub={meta ? t('rev_sub', { n: meta.total.toLocaleString() }) : ''}
       >
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('exp_refresh')}
         </button>
       </PageHead>
 
@@ -96,14 +97,14 @@ export default function ReviewsPage() {
                   setPage(1)
                 }}
               >
-                {l}
+                {t(l)}
               </Chip>
             ))}
           </div>
           <div className="tb-spacer" />
           <div className="fsearch">
             <Icon name="search" size={15} />
-            <input placeholder="Search reviews…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder={t('rev_search_ph')} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
 
@@ -127,9 +128,9 @@ export default function ReviewsPage() {
         {isLoading ? (
           <LoadingSpinner />
         ) : isError ? (
-          <ErrorState message="Couldn't load reviews." onRetry={() => refetch()} />
+          <ErrorState message={t('rev_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No reviews found" />
+          <EmptyState title={t('rev_empty')} />
         ) : (
           <>
             <div>
@@ -145,12 +146,12 @@ export default function ReviewsPage() {
                         <b style={{ fontSize: 13.5 }}>{r.product}</b>
                         <Stars n={r.rating} size={13} />
                         <span className="faint" style={{ fontSize: 12 }}>
-                          by {r.user} · {r.date}
+                          {t('rev_by', { user: r.user, date: r.date })}
                         </span>
                         {r.verified && (
                           <span className="st st-ok" style={{ fontSize: 11 }}>
                             <i className="d" />
-                            Verified
+                            {t('rev_verified')}
                           </span>
                         )}
                         <span style={{ marginInlineStart: 'auto' }}>
@@ -177,7 +178,7 @@ export default function ReviewsPage() {
                         {r.flagged && (
                           <span className="st st-danger" style={{ fontSize: 11 }}>
                             <i className="d" />
-                            Flagged · possible spam
+                            {t('rev_flagged')}
                           </span>
                         )}
                       </div>
@@ -212,12 +213,16 @@ function DeleteModal({ review, onClose }: { review: ReviewView; onClose: () => v
   return (
     <Modal onClose={onClose} maxWidth={420}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10 }}>Delete review</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10 }}>{t('rev_delete_title')}</h3>
         <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 18 }}>
-          Delete this review by <b>{review.user}</b> on <b>{review.product}</b>? This cannot be undone.
+          <Trans
+            i18nKey="rev_delete_body"
+            values={{ user: review.user, product: review.product }}
+            components={{ b: <b /> }}
+          />
         </p>
         {del.isError && (
-          <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 12 }}>Couldn't delete this review.</div>
+          <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 12 }}>{t('rev_delete_error')}</div>
         )}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button className="abtn" onClick={onClose} disabled={del.isPending}>

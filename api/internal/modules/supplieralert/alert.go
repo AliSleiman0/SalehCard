@@ -45,6 +45,11 @@ type Alert struct {
 	LinkID      string         `bson:"linkId,omitempty"      json:"linkId,omitempty"`
 	OrderID     string         `bson:"orderId,omitempty"     json:"orderId,omitempty"`
 	Data        map[string]any `bson:"data,omitempty"        json:"data,omitempty"`
+	// Args are the values in Message (product, supplier, amounts…), so the
+	// admin console can write the alert in the admin's language; Message
+	// stays the English text. Which sentence they fill is set by Kind (and
+	// DryRun), plus args["outcome"] for a loss alert.
+	Args map[string]string `bson:"args,omitempty" json:"args,omitempty"`
 	// DryRun: raised by a dry-run sync pass (nothing was changed).
 	DryRun  bool       `bson:"dryRun,omitempty"  json:"dryRun,omitempty"`
 	Count   int        `bson:"count"             json:"count"`
@@ -103,6 +108,9 @@ func (r *Repo) Raise(ctx context.Context, a Alert) error {
 	}
 	if a.Data != nil {
 		set = append(set, bson.E{Key: "data", Value: a.Data})
+	}
+	if a.Args != nil {
+		set = append(set, bson.E{Key: "args", Value: a.Args})
 	}
 	if a.ProductName != "" {
 		set = append(set, bson.E{Key: "productName", Value: a.ProductName})

@@ -1,36 +1,25 @@
+import type { TFunction } from 'i18next'
 import type { SyncReport } from '../api/suppliers'
 
 /** One line summing up a supplier check: "12 products checked · 1 hidden ·
- *  2 cost changes" (+ "warnings only, nothing changed" / supplier problems).
- *  Plain words: the admin is non-technical. */
-export function syncSummary(r: SyncReport): string {
-  const parts = [`${r.checked} product${r.checked === 1 ? '' : 's'} checked`]
-  const add = (n: number, one: string, many = one) => {
-    if (n > 0) parts.push(`${n} ${n === 1 ? one : many}`)
-  }
+ *  2 cost changes" (+ "warnings only, nothing changed" / supplier problems),
+ *  in the admin's language. Plain words: the admin is non-technical. */
+export function syncSummary(r: SyncReport, t: TFunction): string {
+  const parts = [t('sup_sum_checked', { count: r.checked })]
   const w = r.dryRun // warning-only: nothing happened, say what would
-  add(r.costChanges, 'cost change', 'cost changes')
-  add(
-    r.paused,
-    w ? 'supplier would be paused (loss)' : 'supplier paused (loss)',
-    w ? 'suppliers would be paused (loss)' : 'suppliers paused (loss)'
-  )
-  add(
-    r.recovered,
-    w ? 'supplier would be unpaused' : 'supplier profitable again',
-    w ? 'suppliers would be unpaused' : 'suppliers profitable again'
-  )
-  add(
-    r.promoted,
-    w ? 'product would switch supplier' : 'product switched supplier',
-    w ? 'products would switch supplier' : 'products switched supplier'
-  )
-  add(r.hidden, w ? 'would go off sale' : 'taken off sale')
-  add(r.shown, w ? 'would go back on sale' : 'back on sale')
-  add(r.conflicts, 'skipped (edited meanwhile)')
-  add(r.errors, 'error', 'errors')
+  const add = (n: number, key: string, would = false) => {
+    if (n > 0) parts.push(t(would && w ? `${key}_would` : key, { count: n }))
+  }
+  add(r.costChanges, 'sup_sum_cost')
+  add(r.paused, 'sup_sum_paused', true)
+  add(r.recovered, 'sup_sum_recovered', true)
+  add(r.promoted, 'sup_sum_promoted', true)
+  add(r.hidden, 'sup_sum_hidden', true)
+  add(r.shown, 'sup_sum_shown', true)
+  add(r.conflicts, 'sup_sum_conflicts')
+  add(r.errors, 'sup_sum_errors')
   const down = r.suppliers.filter((s) => s.status === 'unavailable' || s.status === 'stale')
-  if (down.length > 0) parts.push(`couldn't reach ${down.map((s) => s.name).join(', ')}`)
-  if (parts.length === 1 && r.checked > 0) parts.push('no changes')
-  return (r.dryRun ? 'warnings only, nothing changed — ' : '') + parts.join(' · ')
+  if (down.length > 0) parts.push(t('sup_sum_down', { names: down.map((s) => s.name).join(', ') }))
+  if (parts.length === 1 && r.checked > 0) parts.push(t('sup_sum_none'))
+  return (r.dryRun ? t('sup_sum_warn_prefix') : '') + parts.join(' · ')
 }

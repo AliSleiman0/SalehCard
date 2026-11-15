@@ -7,6 +7,7 @@ import {
   type MethodInput,
 } from '../api/methods'
 import { toast } from '@/stores/toast'
+import i18n from '@/i18n/config'
 
 const KEY = ['admin', 'topup-methods']
 
@@ -24,9 +25,9 @@ export function useCreateMethod() {
     mutationFn: (input: MethodInput) => createMethod(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY })
-      toast.success('Payment method created')
+      toast.success(i18n.t('top_method_created'))
     },
-    onError: () => toast.error('Could not create payment method'),
+    onError: () => toast.error(i18n.t('top_method_create_failed')),
   })
 }
 
@@ -36,9 +37,9 @@ export function useUpdateMethod() {
     mutationFn: ({ id, input }: { id: string; input: MethodInput }) => updateMethod(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY })
-      toast.success('Payment method saved')
+      toast.success(i18n.t('top_method_saved'))
     },
-    onError: () => toast.error('Could not save payment method'),
+    onError: () => toast.error(i18n.t('top_method_save_toast_failed')),
   })
 }
 
@@ -48,8 +49,8 @@ export function useDeleteMethod() {
     mutationFn: (id: string) => deleteMethod(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY })
-      toast.info('Payment method deleted')
+      toast.info(i18n.t('top_method_deleted'))
     },
-    onError: () => toast.error('Could not delete payment method'),
+    onError: () => toast.error(i18n.t('top_method_delete_failed')),
   })
 }

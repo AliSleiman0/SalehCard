@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getDashboardStats } from '@/features/dashboard/api/dashboard'
 import { useCan } from '@/stores/auth'
 import { toast } from '@/stores/toast'
+import i18n from '@/i18n/config'
 import { isNewTopUp, playChime, titleWithCount } from '../lib/topupAlert'
 
 /**
@@ -40,12 +41,12 @@ export function useNewTopUpAlert(): void {
     if (pending === undefined) return
     document.title = titleWithCount(document.title, pending)
     if (isNewTopUp(prev.current, pending)) {
-      const msg = 'New top-up request waiting for approval'
+      const msg = i18n.t('top_alert_new')
       toast.info(msg)
       playChime()
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        const n = new Notification('FlashCash — new top-up request', {
-          body: `${pending} pending top-up request${pending > 1 ? 's' : ''}`,
+        const n = new Notification(i18n.t('top_alert_notif_title'), {
+          body: i18n.t('top_alert_notif_body', { count: pending }),
           tag: 'topup-pending',
         })
         n.onclick = () => {

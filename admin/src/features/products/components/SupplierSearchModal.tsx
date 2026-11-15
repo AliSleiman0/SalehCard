@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Icon, Modal } from '@/components'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { searchSuppliers, type SupplierSearchHit } from '../api/products'
 import { fmtCost } from '../lib/supplierLinks'
 
-function qtyText(h: SupplierSearchHit): string {
-  if (h.qtyValues && h.qtyValues.length > 0) return `qty ${h.qtyValues.join(' / ')}`
+function qtyText(h: SupplierSearchHit, t: TFunction): string {
+  const qty = (v: string) => t('prod_qty', { v })
+  if (h.qtyValues && h.qtyValues.length > 0) return qty(h.qtyValues.join(' / '))
   const n = (v: number) => v.toLocaleString('en-US')
-  if (h.qtyMin != null && h.qtyMax != null) return `qty ${n(h.qtyMin)}–${n(h.qtyMax)}`
-  if (h.qtyMin != null) return `qty ≥ ${n(h.qtyMin)}`
-  if (h.qtyMax != null) return `qty ≤ ${n(h.qtyMax)}`
+  if (h.qtyMin != null && h.qtyMax != null) return qty(`${n(h.qtyMin)}–${n(h.qtyMax)}`)
+  if (h.qtyMin != null) return qty(`≥ ${n(h.qtyMin)}`)
+  if (h.qtyMax != null) return qty(`≤ ${n(h.qtyMax)}`)
   return ''
 }
 
@@ -28,12 +31,13 @@ export function SupplierSearchModal({
   onLink: (hit: SupplierSearchHit) => void
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [text, setText] = useState(initialQuery)
   const [q, setQ] = useState(initialQuery.trim())
   // Debounce typing so each keystroke doesn't search every supplier.
   useEffect(() => {
-    const t = setTimeout(() => setQ(text.trim()), 350)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setQ(text.trim()), 350)
+    return () => clearTimeout(timer)
   }, [text])
 
   const search = useQuery({
@@ -52,15 +56,14 @@ export function SupplierSearchModal({
   return (
     <Modal onClose={onClose} maxWidth={720}>
       <div style={{ padding: 22, maxHeight: '84vh', overflowY: 'auto' }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Find at all suppliers</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('prod_find_all')}</h3>
         <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-          Searches every connected supplier's product list. Link the same product at several suppliers — the
-          order of the links is the order they're tried in.
+          {t('prod_search_desc')}
         </p>
         <input
           className="afield"
-          aria-label="Search all suppliers"
-          placeholder="Product name or supplier id…"
+          aria-label={t('prod_search_all_aria')}
+          placeholder={t('prod_search_all_ph')}
           value={text}
           autoFocus
           onChange={(e) => setText(e.target.value)}
@@ -68,27 +71,27 @@ export function SupplierSearchModal({
 
         {q.length < 2 ? (
           <div className="faint" style={{ marginTop: 14, fontSize: 13 }}>
-            Type at least 2 characters.
+            {t('prod_search_min')}
           </div>
         ) : search.isLoading ? (
           <div className="faint" style={{ marginTop: 14, fontSize: 13 }}>
-            Searching suppliers…
+            {t('prod_searching')}
           </div>
         ) : search.isError ? (
           <div role="alert" style={{ marginTop: 14, fontSize: 13, color: 'var(--danger)' }}>
-            {search.error instanceof ApiError ? search.error.message : "Couldn't search the suppliers."}
+            {apiErrorText(search.error, 'prod_search_failed')}
           </div>
         ) : (
           <>
             {(res?.unavailable ?? []).map((m) => (
               <div key={m.provider} className="ahint" style={{ marginTop: 10, color: 'var(--warn)' }}>
                 {m.providerName}:{' '}
-                {m.reason === 'unavailable' ? "couldn't load its product list right now" : "can't list its products"}
+                {m.reason === 'unavailable' ? t('prod_search_unavailable') : t('prod_search_unsupported')}
               </div>
             ))}
             {groups.size === 0 ? (
               <div className="faint" style={{ marginTop: 14, fontSize: 13 }}>
-                No supplier sells a product matching “{q}”.
+                {t('prod_search_none', { q })}
               </div>
             ) : (
               [...groups.entries()].map(([name, hits]) => (
@@ -110,7 +113,7 @@ export function SupplierSearchModal({
                           }}
                         >
                           <span
-                            title={h.available ? 'available at the supplier' : 'unavailable at the supplier'}
+                            title={h.available ? t('prod_q_available') : t('prod_q_unavailable')}
                             style={{
                               width: 8,
                               height: 8,
@@ -123,22 +126,22 @@ export function SupplierSearchModal({
                             {h.name}
                             {h.category && <span className="faint"> · {h.category}</span>}
                             <div className="faint mono" style={{ fontSize: 12 }}>
-                              #{h.upstreamId} · {fmtCost(h.price, h.currency)} each
-                              {qtyText(h) ? ` · ${qtyText(h)}` : ''}
+                              #{h.upstreamId} · {t('prod_each', { v: fmtCost(h.price, h.currency) })}
+                              {qtyText(h, t) ? ` · ${qtyText(h, t)}` : ''}
                             </div>
                           </span>
                           <button
                             type="button"
                             className="abtn xs"
                             disabled={linked}
-                            aria-label={`Link ${h.name} at ${h.providerName}`}
+                            aria-label={t('prod_link_aria', { name: h.name, provider: h.providerName })}
                             onClick={() => onLink(h)}
                           >
                             {linked ? (
-                              'Linked'
+                              t('prod_linked')
                             ) : (
                               <>
-                                <Icon name="plus" size={12} /> Link
+                                <Icon name="plus" size={12} /> {t('prod_link')}
                               </>
                             )}
                           </button>
@@ -154,7 +157,7 @@ export function SupplierSearchModal({
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
           <button className="abtn" onClick={onClose}>
-            Done
+            {t('prod_done')}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import '@/i18n/config'
 
 // Permissions the mocked useCan grants; '*' = super admin.
 let perms: string[] = []

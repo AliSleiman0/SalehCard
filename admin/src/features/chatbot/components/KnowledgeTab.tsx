@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ErrorState, Icon, LoadingSpinner } from '@/components'
 import { toast } from '@/stores/toast'
+import { apiErrorText } from '@/lib/apiErrorText'
+import { formatDateTime } from '@/lib/utils'
 import {
   getKnowledge,
   knowledgeChars,
@@ -17,6 +20,7 @@ const KEY = ['admin', 'chatbot', 'knowledge']
  *  app never gets. Paragraphs separated by a blank line are what an answer
  *  cites, so one topic per paragraph works best. */
 export function KnowledgeTab({ canManage }: { canManage: boolean }) {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const q = useQuery({
     queryKey: KEY,
@@ -42,14 +46,14 @@ export function KnowledgeTab({ canManage }: { canManage: boolean }) {
     onSuccess: (data) => {
       qc.setQueryData(KEY, data)
       setError('')
-      toast.success('Knowledge saved — the assistant uses it from the next question')
+      toast.success(t('bot_toast_saved'))
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'Could not save the knowledge.'),
+    onError: (e) => setError(apiErrorText(e, 'bot_save_failed')),
   })
 
   if (q.isLoading) return <LoadingSpinner />
   if (q.isError || !q.data)
-    return <ErrorState message="Could not load the knowledge." onRetry={() => q.refetch()} />
+    return <ErrorState message={t('bot_load_error')} onRetry={() => q.refetch()} />
 
   const max = q.data.maxChars
   const used = knowledgeChars(draft)
@@ -70,7 +74,7 @@ export function KnowledgeTab({ canManage }: { canManage: boolean }) {
           {label}
         </label>
         <span className="faint" style={{ fontSize: 12 }}>
-          {paragraphCount(draft[key])} paragraphs
+          {t('bot_paragraphs', { n: paragraphCount(draft[key]) })}
         </span>
       </div>
       <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
@@ -94,25 +98,22 @@ export function KnowledgeTab({ canManage }: { canManage: boolean }) {
     <div className="acard">
       <div className="pad">
         <div className="muted" style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 16, maxWidth: 760 }}>
-          Write what the assistant should know about the app, in plain words and in any language — it answers
-          customers in their own language (English or Arabic). Leave a blank line between topics. It answers{' '}
-          <b>only</b> from this text: anything not written here gets “contact support”, so never write prices or
-          promises you don’t want repeated. See what customers ask in <b>Conversations</b> to find gaps.
+          <Trans i18nKey="bot_intro" components={{ b: <b /> }} />
         </div>
 
         {box(
           'general',
-          'Knowledge',
-          'Shown to every customer, on Android and iOS.',
+          t('bot_knowledge'),
+          t('bot_knowledge_hint'),
           18,
-          'How to buy: 1. Verify your identity once… 2. Top up your wallet…\n\nTopping up the wallet: go to Wallet → Top up…'
+          t('bot_knowledge_ph')
         )}
         {box(
           'androidOnly',
-          'Android only — hidden on iOS',
-          'For game top-ups, player IDs, gift cards, crypto or money transfer. The iOS app sells phone recharges only (App Store rules), so it never gets this part.',
+          t('bot_android'),
+          t('bot_android_hint'),
           7,
-          'Game top-ups and player IDs: …'
+          t('bot_android_ph')
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
@@ -137,12 +138,14 @@ export function KnowledgeTab({ canManage }: { canManage: boolean }) {
               className={over ? undefined : 'faint'}
               style={{ fontSize: 12, marginTop: 6, color: over ? 'var(--danger)' : undefined }}
             >
-              {used.toLocaleString()} / {max.toLocaleString()} characters
-              {over && ' — shorten the text to save'}
+              {t('bot_chars', { used: used.toLocaleString(), max: max.toLocaleString() })}
+              {over && t('bot_over')}
               {q.data.updatedAt && !q.data.updatedAt.startsWith('0001') && (
                 <>
-                  {' · '}last saved {new Date(q.data.updatedAt).toLocaleString()}
-                  {q.data.updatedBy && ` by ${q.data.updatedBy}`}
+                  {' · '}
+                  {q.data.updatedBy
+                    ? t('bot_last_saved_by', { when: formatDateTime(q.data.updatedAt), who: q.data.updatedBy })
+                    : t('bot_last_saved', { when: formatDateTime(q.data.updatedAt) })}
                 </>
               )}
             </div>
@@ -157,14 +160,14 @@ export function KnowledgeTab({ canManage }: { canManage: boolean }) {
                   setError('')
                 }}
               >
-                Discard changes
+                {t('bot_discard')}
               </button>
               <button
                 className="abtn primary"
                 disabled={!dirty || over || save.isPending}
                 onClick={() => save.mutate(draft)}
               >
-                <Icon name="check" size={15} /> {save.isPending ? 'Saving…' : 'Save'}
+                <Icon name="check" size={15} /> {save.isPending ? t('bot_saving') : t('sup_save')}
               </button>
             </div>
           )}

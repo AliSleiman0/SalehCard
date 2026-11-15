@@ -13,6 +13,7 @@ import {
   EmptyState,
 } from '@/components'
 import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import {
   useProducts,
   useUploadProductImage,
@@ -26,8 +27,19 @@ import { priceRange, productStatus } from '@/features/products/lib/view'
 import { useCategoryTree, useCreateCategory, useUpdateCategory, useDeleteCategory } from '../hooks/useCategories'
 import { orderedTree, pathLabel, subtreeIds, type AdminCategory } from '../api/categories'
 import { moveItem } from '../lib/moveItem'
+import { serverErrorText } from '../lib/serverErrorText'
 
 const MAX_DEPTH = 2 // Collection(0) → Category(1) → Subcategory(2)
+
+// Fixed server sentences sent as BAD_REQUEST, translated for non-English admins.
+const CAT_SERVER_MESSAGES: Record<string, string> = {
+  'this category has subcategories — move or delete them first': 'cat_srv_has_children',
+  'products are assigned to this category — reassign them first': 'cat_srv_has_products',
+  'maximum category depth reached (3 tiers)': 'cat_srv_max_depth',
+  'move would exceed the maximum category depth (3 tiers)': 'cat_srv_move_depth',
+  'cannot move a category under one of its own descendants': 'cat_srv_own_descendant',
+  'this category has more than 1000 products; split it into subcategories to arrange them': 'cat_srv_too_many',
+}
 
 // Category tree manager: the catalog taxonomy the app browses (Collections →
 // Categories → Subcategories) and products are assigned to. A super admin or a
@@ -126,7 +138,7 @@ export default function CategoriesPage() {
     setDeleteError(null)
     del.mutate(node.id, {
       onSuccess: () => setConfirmDelete(null),
-      onError: (e) => setDeleteError(e instanceof ApiError ? e.message : 'Could not delete the category.'),
+      onError: (e) => setDeleteError(serverErrorText(e, 'cat_delete_failed', CAT_SERVER_MESSAGES)),
     })
   }
 
@@ -136,48 +148,48 @@ export default function CategoriesPage() {
         back="/"
         crumbs={[t('grp_catalog'), t('nav_categories')]}
         title={t('nav_categories')}
-        sub="Collections, categories and subcategories the app browses"
+        sub={t('cat_sub')}
       >
         <button className="abtn primary" onClick={() => setEditing({ mode: 'new' })}>
-          <Icon name="plus" size={15} /> New collection
+          <Icon name="plus" size={15} /> {t('cat_new_collection')}
         </button>
       </PageHead>
 
       <div className="acard">
         <div className="panelhead">
           <Icon name="layers" size={17} />
-          <h3>Catalog taxonomy</h3>
+          <h3>{t('cat_taxonomy')}</h3>
         </div>
         {!isLoading && !isError && (
           <div className="toolbar">
             <div className="fsearch">
               <Icon name="search" size={15} />
               <input
-                placeholder="Search collections & categories…"
+                placeholder={t('cat_search_ph')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button className="abtn sm" onClick={expandAll}>
-                <Icon name="chevdown" size={13} /> Expand all
+                <Icon name="chevdown" size={13} /> {t('cat_expand_all')}
               </button>
               <button className="abtn sm" onClick={collapseAll}>
-                <Icon name="chevright" size={13} /> Collapse all
+                <Icon name="chevright" size={13} /> {t('cat_collapse_all')}
               </button>
             </div>
           </div>
         )}
         {isLoading && <LoadingSpinner />}
-        {isError && <ErrorState message="Couldn't load categories." onRetry={() => void refetch()} />}
+        {isError && <ErrorState message={t('cat_load_error')} onRetry={() => void refetch()} />}
         {!isLoading && !isError && (
           <div className="tablewrap">
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th style={{ width: 120 }}>Products</th>
-                  <th style={{ width: 90, textAlign: 'center' }}>Visible</th>
+                  <th>{t('cat_col_name')}</th>
+                  <th style={{ width: 120 }}>{t('cat_col_products')}</th>
+                  <th style={{ width: 90, textAlign: 'center' }}>{t('cat_col_visible')}</th>
                   <th style={{ width: 200 }}></th>
                 </tr>
               </thead>
@@ -195,7 +207,7 @@ export default function CategoriesPage() {
                               <button
                                 type="button"
                                 className="treecaret"
-                                aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                                aria-label={isCollapsed ? t('cat_expand') : t('cat_collapse')}
                                 onClick={() => toggleSet(setCollapsed, n.id)}
                                 style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'inline-flex' }}
                               >
@@ -208,9 +220,7 @@ export default function CategoriesPage() {
                               <b>{n.name.en || n.slug}</b>
                               <div className="muted" style={{ fontSize: 12 }}>
                                 {n.slug}
-                                {n.depth === 0 && ' · Collection'}
-                                {n.depth === 1 && ' · Category'}
-                                {n.depth === 2 && ' · Subcategory'}
+                                {n.depth >= 0 && n.depth <= MAX_DEPTH && ` · ${t(`cat_depth_${n.depth}`)}`}
                               </div>
                             </div>
                           </div>
@@ -241,7 +251,7 @@ export default function CategoriesPage() {
                           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                             {n.depth < MAX_DEPTH && (
                               <button className="abtn sm" onClick={() => setEditing({ mode: 'new', parentId: n.id })}>
-                                <Icon name="plus" size={13} /> Child
+                                <Icon name="plus" size={13} /> {t('cat_child')}
                               </button>
                             )}
                             <button className="abtn sm" onClick={() => setEditing({ mode: 'edit', node: n })}>
@@ -272,9 +282,7 @@ export default function CategoriesPage() {
                 {visible.length === 0 && (
                   <tr>
                     <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                      {q
-                        ? 'No collections or categories match your search.'
-                        : 'No categories yet — create a Collection to get started.'}
+                      {q ? t('cat_no_match') : t('cat_empty')}
                     </td>
                   </tr>
                 )}
@@ -297,10 +305,11 @@ export default function CategoriesPage() {
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)}>
           <div className="pad">
-            <h3 style={{ marginTop: 0 }}>Delete “{confirmDelete.name.en || confirmDelete.slug}”?</h3>
+            <h3 style={{ marginTop: 0 }}>
+              {t('cat_delete_title', { name: confirmDelete.name.en || confirmDelete.slug })}
+            </h3>
             <p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
-              A category with subcategories or assigned products can't be deleted — move or reassign
-              them first.
+              {t('cat_delete_body')}
             </p>
             {deleteError && (
               <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
@@ -358,13 +367,13 @@ function CategoryEditorModal({
   function save() {
     setError(null)
     if (!name.en.trim()) {
-      setError('An English name is required.')
+      setError(t('cat_err_name_en'))
       return
     }
     const order = Number(sortOrder) || 0
     const opts = {
       onSuccess: onClose,
-      onError: (e: Error) => setError(e instanceof ApiError ? e.message : 'Could not save the category.'),
+      onError: (e: Error) => setError(serverErrorText(e, 'cat_save_failed', CAT_SERVER_MESSAGES)),
     }
     if (node) {
       const input: Parameters<typeof update.mutate>[0]['input'] = {
@@ -394,34 +403,34 @@ function CategoryEditorModal({
   function onFile(file: File) {
     setError(null)
     if (file.size > 10 * 1024 * 1024) {
-      setError('Image must be 10 MB or smaller.')
+      setError(t('cat_err_image_size'))
       return
     }
     uploadImage.mutate(file, {
       onSuccess: (res) => res.data && setImage(res.data.imageUrl),
-      onError: (e) => setError((e as Error).message),
+      onError: (e) => setError(apiErrorText(e, 'cat_upload_failed')),
     })
   }
 
   const title = node
-    ? `Edit “${node.name.en || node.slug}”`
+    ? t('cat_edit_title', { name: node.name.en || node.slug })
     : editing.mode === 'new' && editing.parentId
-      ? 'New subcategory'
-      : 'New collection'
+      ? t('cat_new_sub')
+      : t('cat_new_collection')
 
   return (
     <Modal onClose={onClose} maxWidth={560}>
       <div className="pad">
         <h3 style={{ marginTop: 0 }}>{title}</h3>
 
-        <label className="alabel">Parent</label>
+        <label className="alabel">{t('cat_parent')}</label>
         <select
           className="select"
           style={{ width: '100%', marginBottom: 14 }}
           value={parentId}
           onChange={(e) => setParentId(e.target.value)}
         >
-          <option value="">— Top-level Collection —</option>
+          <option value="">{t('cat_top_level')}</option>
           {parentOptions.map((p) => (
             <option key={p.id} value={p.id}>
               {pathLabel(p, byId)}
@@ -431,19 +440,19 @@ function CategoryEditorModal({
 
         <div className="g2" style={{ marginBottom: 14 }}>
           <div>
-            <label className="alabel">Name (English)</label>
+            <label className="alabel">{t('cat_name_en')}</label>
             <input className="afield" value={name.en} onChange={(e) => setName({ ...name, en: e.target.value })} />
           </div>
           <div>
-            <label className="alabel">Name (العربية)</label>
+            <label className="alabel">{t('cat_name_ar')}</label>
             <input className="afield" value={name.ar} onChange={(e) => setName({ ...name, ar: e.target.value })} />
           </div>
           <div>
-            <label className="alabel">Name (Türkçe)</label>
+            <label className="alabel">{t('cat_name_tr')}</label>
             <input className="afield" value={name.tr} onChange={(e) => setName({ ...name, tr: e.target.value })} />
           </div>
           <div>
-            <label className="alabel">Sort order</label>
+            <label className="alabel">{t('cat_sort_order')}</label>
             <input
               className="afield"
               type="number"
@@ -453,7 +462,7 @@ function CategoryEditorModal({
           </div>
         </div>
 
-        <label className="alabel">Image</label>
+        <label className="alabel">{t('cat_image')}</label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           {image ? (
             <img src={image} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
@@ -463,7 +472,7 @@ function CategoryEditorModal({
             </div>
           )}
           <label className="abtn sm" style={{ cursor: 'pointer' }}>
-            <Icon name="upload" size={13} /> {uploadImage.isPending ? 'Uploading…' : 'Choose image'}
+            <Icon name="upload" size={13} /> {uploadImage.isPending ? t('cat_uploading') : t('cat_choose_image')}
             <input
               type="file"
               accept="image/*"
@@ -476,13 +485,13 @@ function CategoryEditorModal({
           </label>
           {image && (
             <button className="abtn sm danger" onClick={() => setImage('')}>
-              <Icon name="x" size={13} /> Remove
+              <Icon name="x" size={13} /> {t('cat_remove')}
             </button>
           )}
         </div>
 
         <label className="alabel" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Toggle on={visible} onClick={() => setVisible(!visible)} /> Visible to customers
+          <Toggle on={visible} onClick={() => setVisible(!visible)} /> {t('cat_visible_customers')}
         </label>
 
         {error && (
@@ -506,6 +515,7 @@ function CategoryEditorModal({
  *  customers see them, with its own search + pagination. Rows link to the
  *  product editor. "Arrange order" switches to the reorder list. */
 function CategoryProductsPanel({ node }: { node: AdminCategory }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const can = useCan()
   const canArrange = can('products.manage')
@@ -548,32 +558,28 @@ function CategoryProductsPanel({ node }: { node: AdminCategory }) {
         <div className="fsearch" style={{ maxWidth: 340, flex: '1 1 220px' }}>
           <Icon name="search" size={14} />
           <input
-            placeholder="Search products in this category…"
+            placeholder={t('cat_search_products_ph')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         {canArrange && (
           <button className="abtn sm" style={{ marginLeft: 'auto' }} onClick={() => setArranging(true)}>
-            <Icon name="sort" size={13} /> Arrange order
+            <Icon name="sort" size={13} /> {t('cat_arrange')}
           </button>
         )}
       </div>
       <div className="ahint" style={{ marginTop: 0, marginBottom: 10 }}>
-        {node.hasChildren
-          ? 'Includes subcategories, listed A to Z. “Arrange order” sets the order of the products placed directly in this category; arrange each subcategory on its own row.'
-          : 'Listed in the order customers see.'}{' '}
-        The count reflects available products; drafts are listed here too. Assign products from the
-        Products page (select rows → Move to category).
+        {node.hasChildren ? t('cat_hint_with_children') : t('cat_hint_leaf')} {t('cat_hint_count')}
       </div>
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Could not load products." onRetry={() => void refetch()} />
+        <ErrorState message={t('cat_products_load_error')} onRetry={() => void refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No products here yet."
-          sub={debounced ? 'Try a different search.' : 'Assign products from the Products page.'}
+          title={t('cat_no_products')}
+          sub={debounced ? t('cat_try_other_search') : t('cat_assign_hint')}
         />
       ) : (
         <>
@@ -581,10 +587,10 @@ function CategoryProductsPanel({ node }: { node: AdminCategory }) {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Product</th>
-                  <th>Category</th>
-                  <th>Price (USD)</th>
-                  <th>Status</th>
+                  <th>{t('col_product')}</th>
+                  <th>{t('cat_col_category')}</th>
+                  <th>{t('cat_col_price_usd')}</th>
+                  <th>{t('status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -630,6 +636,7 @@ function CategoryProductsPanel({ node }: { node: AdminCategory }) {
  *  order is per node — products in subcategories are arranged on their own
  *  subcategory. Products never arranged sit after the arranged ones, A to Z. */
 function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: () => void }) {
+  const { t } = useTranslation()
   const { data, isLoading, isError, refetch, isFetching } = useCategoryProductOrder(node.id)
   const save = useSaveCategoryProductOrder()
   // null = untouched: follow the server order (also after a reload).
@@ -668,7 +675,7 @@ function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: (
         onSuccess: onDone,
         onError: (e) => {
           if (e instanceof ApiError && e.code === 'STALE_ORDER') setStale(true)
-          setError(e instanceof ApiError ? e.message : 'Could not save the order.')
+          setError(serverErrorText(e, 'cat_order_save_failed', CAT_SERVER_MESSAGES))
         },
       },
     )
@@ -684,25 +691,22 @@ function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: (
   return (
     <div style={{ padding: '12px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <b style={{ fontSize: 13.5 }}>Arrange products in “{name}”</b>
+        <b style={{ fontSize: 13.5 }}>{t('cat_arrange_title', { name })}</b>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button className="abtn sm" onClick={onDone} disabled={save.isPending}>
-            {dirty ? 'Cancel' : 'Done'}
+            {dirty ? t('cancel') : t('cat_done')}
           </button>
           <button
             className="abtn sm primary"
             onClick={runSave}
             disabled={!dirty || save.isPending || isFetching || list.length === 0}
           >
-            <Icon name="check" size={13} /> {save.isPending ? 'Saving…' : 'Save order'}
+            <Icon name="check" size={13} /> {save.isPending ? t('cat_saving') : t('cat_save_order')}
           </button>
         </div>
       </div>
       <div className="ahint" style={{ marginTop: 0, marginBottom: 10 }}>
-        Customers see these products in this order, in the app and on the web. Drag a row by its
-        handle or use the arrows. This arranges only the products placed directly in “{name}” —
-        products in its subcategories are arranged on each subcategory. Products added later appear
-        after the arranged ones, A to Z.
+        {t('cat_arrange_hint', { name })}
       </div>
       {error && (
         <div
@@ -712,7 +716,7 @@ function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: (
           {error}
           {stale && (
             <button className="abtn sm" onClick={reload}>
-              <Icon name="refresh" size={13} /> Reload
+              <Icon name="refresh" size={13} /> {t('cat_reload')}
             </button>
           )}
         </div>
@@ -720,15 +724,11 @@ function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: (
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState message="Could not load products." onRetry={() => void refetch()} />
+        <ErrorState message={t('cat_products_load_error')} onRetry={() => void refetch()} />
       ) : list.length === 0 ? (
         <EmptyState
-          title="No products placed directly in this category."
-          sub={
-            node.hasChildren
-              ? 'Open a subcategory and arrange its products there.'
-              : 'Assign products from the Products page.'
-          }
+          title={t('cat_none_direct')}
+          sub={node.hasChildren ? t('cat_open_sub_hint') : t('cat_assign_hint')}
         />
       ) : (
         <div className="tablewrap">
@@ -736,9 +736,9 @@ function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: (
             <thead>
               <tr>
                 <th style={{ width: 44 }}>#</th>
-                <th>Product</th>
-                <th>Status</th>
-                <th style={{ width: 170, textAlign: 'right' }}>Move</th>
+                <th>{t('col_product')}</th>
+                <th>{t('status')}</th>
+                <th style={{ width: 170, textAlign: 'right' }}>{t('cat_col_move')}</th>
               </tr>
             </thead>
             <tbody>
@@ -770,7 +770,7 @@ function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: (
                       <div className="cellprod">
                         <span
                           draggable
-                          title="Drag to reorder"
+                          title={t('cat_drag')}
                           aria-hidden="true"
                           onDragStart={(e) => {
                             dragRef.current = i
@@ -796,16 +796,16 @@ function ArrangeProductsPanel({ node, onDone }: { node: AdminCategory; onDone: (
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                        <button className="abtn sm" aria-label={`Move ${label} to top`} title="Move to top" disabled={i === 0} onClick={() => move(i, 0)}>
+                        <button className="abtn sm" aria-label={t('cat_move_top_aria', { name: label })} title={t('cat_move_top')} disabled={i === 0} onClick={() => move(i, 0)}>
                           <Icon name="arrowup" size={13} />
                         </button>
-                        <button className="abtn sm" aria-label={`Move ${label} up`} title="Move up" disabled={i === 0} onClick={() => move(i, i - 1)}>
+                        <button className="abtn sm" aria-label={t('cat_move_up_aria', { name: label })} title={t('cat_move_up')} disabled={i === 0} onClick={() => move(i, i - 1)}>
                           <Icon name="chevup" size={13} />
                         </button>
-                        <button className="abtn sm" aria-label={`Move ${label} down`} title="Move down" disabled={i === list.length - 1} onClick={() => move(i, i + 1)}>
+                        <button className="abtn sm" aria-label={t('cat_move_down_aria', { name: label })} title={t('cat_move_down')} disabled={i === list.length - 1} onClick={() => move(i, i + 1)}>
                           <Icon name="chevdown" size={13} />
                         </button>
-                        <button className="abtn sm" aria-label={`Move ${label} to bottom`} title="Move to bottom" disabled={i === list.length - 1} onClick={() => move(i, list.length - 1)}>
+                        <button className="abtn sm" aria-label={t('cat_move_bottom_aria', { name: label })} title={t('cat_move_bottom')} disabled={i === list.length - 1} onClick={() => move(i, list.length - 1)}>
                           <Icon name="arrowdown" size={13} />
                         </button>
                       </div>

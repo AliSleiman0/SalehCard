@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import { money, stockLevel, isRTL } from './utils'
+import { describe, it, expect, afterEach } from 'vitest'
+import i18n from '@/i18n/config'
+import { money, stockLevel, isRTL, formatDateTime, formatDate } from './utils'
 
 describe('money', () => {
   it('formats USD with a dollar sign', () => {
@@ -31,5 +32,24 @@ describe('isRTL', () => {
     expect(isRTL('ar')).toBe(true)
     expect(isRTL('en')).toBe(false)
     expect(isRTL('tr')).toBe(false)
+  })
+})
+
+describe('dates follow the admin language', () => {
+  afterEach(() => i18n.changeLanguage('en'))
+  const at = new Date(2026, 10, 12, 15, 5)
+
+  it('keeps the English shape', async () => {
+    await i18n.changeLanguage('en')
+    expect(formatDateTime(at)).toBe('Nov 12, 2026 · 3:05 PM')
+    expect(formatDate(at)).toBe('Nov 12, 2026')
+  })
+
+  it('writes Arabic month names with Western digits', async () => {
+    await i18n.changeLanguage('ar')
+    const s = formatDateTime(at)
+    expect(s).toContain('نوفمبر')
+    expect(s).toContain('2026')
+    expect(s).not.toMatch(/[٠-٩]/)
   })
 })

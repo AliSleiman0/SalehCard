@@ -1,3 +1,5 @@
+import i18n from '@/i18n/config'
+import { formatDate } from '@/lib/utils'
 import type { UserRole } from '@/types'
 import type { AdminUser } from '../api/users'
 
@@ -23,14 +25,12 @@ export interface UserView {
 export function userName(u: Pick<AdminUser, 'email' | 'phone'>): string {
   if (u.email) return u.email.split('@')[0]
   if (u.phone) return u.phone
-  return 'Unknown'
+  return i18n.t('usr_unknown', { defaultValue: 'Unknown' })
 }
 
-/** Format a join date as a compact "Mon YYYY" (matches the prior mock display). */
+/** Format a join date as a compact "Mon YYYY" in the admin's language. */
 export function joinedLabel(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  return formatDate(iso, { month: 'short', year: 'numeric' })
 }
 
 /** Map an enriched API user to the flat view the admin pages render. The User

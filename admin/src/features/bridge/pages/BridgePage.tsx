@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   Icon,
   PageHead,
@@ -25,15 +25,11 @@ import {
 import { useCan } from '@/stores/auth'
 import type { BridgeCommandStatus, BridgeDevice } from '../api/bridge'
 import { orderNumber } from '@/lib/orderNumber'
+import { formatDateTime } from '@/lib/utils'
+import { timelineNote } from '@/features/orders/lib/timelineText'
 
-const STATUS_FILTERS: [BridgeCommandStatus | '', string][] = [
-  ['', 'All'],
-  ['queued', 'Queued'],
-  ['leased', 'In progress'],
-  ['succeeded', 'Succeeded'],
-  ['failed', 'Failed'],
-  ['cancelled', 'Cancelled'],
-]
+// Filter chips; '' = all. Each label is the `brg_f_<status>` key.
+const STATUS_FILTERS: (BridgeCommandStatus | '')[] = ['', 'queued', 'leased', 'succeeded', 'failed', 'cancelled']
 
 const STATUS_CLASS: Record<BridgeCommandStatus, string> = {
   queued: 'st st-warn',
@@ -48,7 +44,7 @@ const isOnline = (d: BridgeDevice) =>
   !!d.lastSeenAt && Date.now() - new Date(d.lastSeenAt).getTime() < 2 * 60_000
 
 export default function BridgePage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const can = useCan()
   const canManage = can('bridge.manage')
   const [status, setStatus] = useState<BridgeCommandStatus | ''>('')
@@ -88,11 +84,11 @@ export default function BridgePage() {
         back="/"
         crumbs={[t('grp_operations'), t('nav_bridge')]}
         title={t('nav_bridge')}
-        sub={`${devices.length} device${devices.length === 1 ? '' : 's'}`}
+        sub={t('brg_sub', { count: devices.length })}
       >
         {canManage && (
           <button className="abtn primary" onClick={() => setRegistering(true)}>
-            <Icon name="plus" size={15} /> Register device
+            <Icon name="plus" size={15} /> {t('brg_register')}
           </button>
         )}
       </PageHead>
@@ -101,17 +97,14 @@ export default function BridgePage() {
       <div className="acard">
         <div className="panelhead">
           <Icon name="box" size={17} />
-          <h3>Devices</h3>
+          <h3>{t('brg_devices')}</h3>
         </div>
         {devicesQ.isLoading ? (
           <LoadingSpinner />
         ) : devicesQ.isError ? (
-          <ErrorState message="Couldn't load devices." onRetry={() => devicesQ.refetch()} />
+          <ErrorState message={t('brg_devices_error')} onRetry={() => devicesQ.refetch()} />
         ) : devices.length === 0 ? (
-          <EmptyState
-            title="No bridge devices"
-            sub="Register the dual-SIM phone that fulfills mobile recharges, then enter its token in the bridge app."
-          />
+          <EmptyState title={t('brg_empty')} sub={t('brg_empty_sub')} />
         ) : (
           <div>
             {devices.map((d) => (
@@ -122,7 +115,7 @@ export default function BridgePage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <span className={isOnline(d) ? 'st st-ok' : 'st st-mute'}>
                     <i className="d" />
-                    {isOnline(d) ? 'online' : 'offline'}
+                    {isOnline(d) ? t('brg_online') : t('brg_offline')}
                   </span>
                   <b style={{ fontSize: 15 }}>{d.name}</b>
                   {d.providers.map((p) => (
@@ -145,7 +138,7 @@ export default function BridgePage() {
                     {canManage && (
                       <>
                         <button className="abtn xs" onClick={() => checkBalance.mutate(d.id)}>
-                          Check balance
+                          {t('brg_check_balance')}
                         </button>
                         <button
                           className="abtn xs"
@@ -155,13 +148,13 @@ export default function BridgePage() {
                             })
                           }
                         >
-                          Rotate token
+                          {t('brg_rotate')}
                         </button>
                         <span
                           className="iact danger"
-                          title="Remove device"
+                          title={t('brg_remove')}
                           onClick={() => {
-                            if (confirm(`Remove ${d.name}? Its token stops working immediately.`)) {
+                            if (confirm(t('brg_remove_confirm', { name: d.name }))) {
                               deleteDevice.mutate(d.id)
                             }
                           }}
@@ -174,12 +167,12 @@ export default function BridgePage() {
                 </div>
                 <div className="faint" style={{ fontSize: 12.5, marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   {d.touchBalance != null && (
-                    <span>Touch ${d.touchBalance.toFixed(2)} {d.touchValidity && `(exp ${d.touchValidity})`}</span>
+                    <span>Touch ${d.touchBalance.toFixed(2)} {d.touchValidity && t('brg_exp', { date: d.touchValidity })}</span>
                   )}
                   {d.alfaBalance != null && (
-                    <span>Alfa ${d.alfaBalance.toFixed(2)} {d.alfaValidity && `(exp ${d.alfaValidity})`}</span>
+                    <span>Alfa ${d.alfaBalance.toFixed(2)} {d.alfaValidity && t('brg_exp', { date: d.alfaValidity })}</span>
                   )}
-                  {d.lastSeenAt && <span>· last seen {new Date(d.lastSeenAt).toLocaleString()}</span>}
+                  {d.lastSeenAt && <span>{t('brg_last_seen', { when: formatDateTime(d.lastSeenAt) })}</span>}
                 </div>
               </div>
             ))}
@@ -191,11 +184,11 @@ export default function BridgePage() {
       <div className="acard" style={{ marginTop: 18 }}>
         <div className="panelhead">
           <Icon name="bag" size={17} />
-          <h3>Recharge commands</h3>
+          <h3>{t('brg_commands')}</h3>
         </div>
         <div className="toolbar" style={{ gap: 16, flexWrap: 'wrap' }}>
           <div className="chiprow">
-            {STATUS_FILTERS.map(([k, l]) => (
+            {STATUS_FILTERS.map((k) => (
               <Chip
                 key={k || 'all'}
                 on={status === k}
@@ -204,7 +197,7 @@ export default function BridgePage() {
                   setPage(1)
                 }}
               >
-                {l}
+                {k ? t(`brg_f_${k}`) : t('all')}
               </Chip>
             ))}
           </div>
@@ -213,9 +206,9 @@ export default function BridgePage() {
         {commandsQ.isLoading ? (
           <LoadingSpinner />
         ) : commandsQ.isError ? (
-          <ErrorState message="Couldn't load commands." onRetry={() => commandsQ.refetch()} />
+          <ErrorState message={t('brg_commands_error')} onRetry={() => commandsQ.refetch()} />
         ) : commands.length === 0 ? (
-          <EmptyState title="No commands" sub="Recharge orders enqueue commands here for the bridge device." />
+          <EmptyState title={t('brg_cmd_empty')} sub={t('brg_cmd_empty_sub')} />
         ) : (
           <>
             <div>
@@ -223,34 +216,36 @@ export default function BridgePage() {
                 <div key={c.id} style={{ borderBottom: '1px solid var(--border)', padding: '14px 18px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <span className="bdg">{c.provider}</span>
-                    <b style={{ fontSize: 14 }}>{c.type}</b>
+                    <b style={{ fontSize: 14 }}>{t(`brg_type_${c.type.toLowerCase()}`, { defaultValue: c.type })}</b>
                     {c.recipientNumber && <span className="faint" style={{ fontSize: 13 }}>→ {c.recipientNumber}</span>}
                     {c.amount != null && <span style={{ fontSize: 13 }}>${c.amount.toFixed(2)}</span>}
                     {c.cardCodeMasked && <span className="faint" style={{ fontSize: 12.5 }}>{c.cardCodeMasked}</span>}
                     <span style={{ marginInlineStart: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
                       <span className={STATUS_CLASS[c.status]}>
                         <i className="d" />
-                        {c.status}
+                        {t(`brg_status_${c.status}`, { defaultValue: c.status })}
                       </span>
                       {canManage && (c.status === 'failed' || c.status === 'cancelled') && (
                         <button className="abtn xs" onClick={() => retry.mutate(c.id)}>
-                          Retry
+                          {t('brg_retry')}
                         </button>
                       )}
                       {canManage && (c.status === 'queued' || c.status === 'leased') && (
                         <button className="abtn xs" onClick={() => cancel.mutate(c.id)}>
-                          Cancel
+                          {t('cancel')}
                         </button>
                       )}
                     </span>
                   </div>
                   <div className="faint" style={{ fontSize: 12.5, marginTop: 8, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                    <span>attempt {c.attempts}</span>
-                    {c.statusCode != null && <span>· code {c.statusCode}</span>}
-                    {c.orderId && <span>· order {orderNumber(c.orderId)}</span>}
-                    {c.failReason && <span style={{ color: 'var(--danger)' }}>· {c.failReason}</span>}
-                    {c.rawReply && <span title={c.rawReply}>· reply: {c.rawReply.slice(0, 48)}</span>}
-                    <span>· {new Date(c.createdAt).toLocaleString()}</span>
+                    <span>{t('brg_attempt', { n: c.attempts })}</span>
+                    {c.statusCode != null && <span>{t('brg_code', { n: c.statusCode })}</span>}
+                    {c.orderId && <span>{t('brg_order', { n: orderNumber(c.orderId) })}</span>}
+                    {c.failReason && (
+                      <span style={{ color: 'var(--danger)' }}>· {timelineNote(c.failReason, t, i18n.language)}</span>
+                    )}
+                    {c.rawReply && <span title={c.rawReply}>{t('brg_reply', { text: c.rawReply.slice(0, 48) })}</span>}
+                    <span>· {formatDateTime(c.createdAt)}</span>
                   </div>
                 </div>
               ))}
@@ -289,6 +284,7 @@ function RegisterModal({
   onSubmit: (name: string, providers: string[]) => void
   pending: boolean
 }) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [touch, setTouch] = useState(true)
   const [alfa, setAlfa] = useState(true)
@@ -296,16 +292,16 @@ function RegisterModal({
   return (
     <Modal onClose={onClose} maxWidth={420}>
       <div style={{ padding: 20 }}>
-        <h3 style={{ marginBottom: 12 }}>Register bridge device</h3>
-        <label className="alabel">Name</label>
+        <h3 style={{ marginBottom: 12 }}>{t('brg_register_title')}</h3>
+        <label className="alabel">{t('brg_name')}</label>
         <input
           className="afield"
           value={name}
-          placeholder="Shop phone 1"
+          placeholder={t('brg_name_ph')}
           onChange={(e) => setName(e.target.value)}
         />
         <label className="alabel" style={{ marginTop: 14 }}>
-          Operators
+          {t('brg_operators')}
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
           <input type="checkbox" checked={touch} onChange={(e) => setTouch(e.target.checked)} /> MTC Touch
@@ -315,14 +311,14 @@ function RegisterModal({
         </label>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
           <button className="abtn" onClick={onClose}>
-            Cancel
+            {t('cancel')}
           </button>
           <button
             className="abtn primary"
             disabled={pending || !name.trim() || providers.length === 0}
             onClick={() => onSubmit(name.trim(), providers)}
           >
-            Register
+            {t('brg_register_btn')}
           </button>
         </div>
       </div>
@@ -331,13 +327,13 @@ function RegisterModal({
 }
 
 function TokenModal({ token, onClose }: { token: string; onClose: () => void }) {
+  const { t } = useTranslation()
   return (
     <Modal onClose={onClose} maxWidth={480}>
       <div style={{ padding: 20 }}>
-        <h3 style={{ marginBottom: 8 }}>Device token</h3>
+        <h3 style={{ marginBottom: 8 }}>{t('brg_token_title')}</h3>
         <div className="ahint" style={{ margin: '0 0 12px' }}>
-          Copy this now — it's shown <b>once</b> and can't be retrieved later. Enter it in the bridge
-          app on the device. To replace it, rotate the token.
+          <Trans i18nKey="brg_token_hint" components={{ b: <b /> }} />
         </div>
         <code
           style={{
@@ -353,10 +349,10 @@ function TokenModal({ token, onClose }: { token: string; onClose: () => void }) 
         </code>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="abtn" onClick={() => navigator.clipboard?.writeText(token)}>
-            Copy
+            {t('brg_copy')}
           </button>
           <button className="abtn primary" onClick={onClose}>
-            Done
+            {t('brg_done')}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { ffKey, artForCategory, type FfKey } from '@/components'
+import i18n from '@/i18n/config'
 import { formatDateTime } from '@/lib/utils'
 import type { AdminOrder, AdminOrderItem, OrderCustomer } from '../api/orders'
 
@@ -28,7 +29,7 @@ export interface OrderView {
 export function customerName(c: OrderCustomer | null): string {
   if (c?.email) return c.email.split('@')[0]
   if (c?.phone) return c.phone
-  return 'Unknown'
+  return i18n.t('ord_unknown_customer')
 }
 
 const unitsFmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
@@ -37,7 +38,9 @@ const unitsFmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
  *  the customer typed ("45,000 units", qty is always 1 there); a package line
  *  shows "Qty N". */
 export function itemQtyLabel(it: Pick<AdminOrderItem, 'qty' | 'amount'>): string {
-  return it.amount != null && it.amount > 0 ? `${unitsFmt.format(it.amount)} units` : `Qty ${it.qty}`
+  return it.amount != null && it.amount > 0
+    ? i18n.t('ord_units', { n: unitsFmt.format(it.amount) })
+    : i18n.t('ord_qty', { n: it.qty })
 }
 
 /** One account-credit line the operator has to credit by hand. */
@@ -111,7 +114,7 @@ export function adaptOrder(o: AdminOrder): OrderView {
   const first = o.items[0]
   const extra = o.items.length - 1
   const productTitle = first ? first.title.en : '—'
-  const productMore = extra > 0 ? ` +${extra} more` : ''
+  const productMore = extra > 0 ? i18n.t('ord_more', { n: extra }) : ''
   const qty = o.items.reduce((sum, it) => sum + it.qty, 0)
 
   return {

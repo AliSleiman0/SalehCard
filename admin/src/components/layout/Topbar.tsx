@@ -30,7 +30,7 @@ export function Topbar() {
   }, [menu])
   const stop = (e: React.MouseEvent) => e.stopPropagation()
 
-  const initials = (user?.name ?? 'Admin')
+  const initials = (user?.name ?? t('cmn_admin'))
     .split(' ')
     .map((w) => w[0])
     .slice(0, 2)
@@ -114,8 +114,8 @@ export function Topbar() {
           <div className="tb-admin" onClick={() => setMenu(menu === 'admin' ? null : 'admin')}>
             <div className="tb-ava">{initials}</div>
             <div className="desktop-only" style={{ lineHeight: 1.15 }}>
-              <div style={{ fontWeight: 800, fontSize: 13 }}>{user?.name ?? 'Admin'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{user?.email ?? 'Admin'}</div>
+              <div style={{ fontWeight: 800, fontSize: 13 }}>{user?.name ?? t('cmn_admin')}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{user?.email ?? t('cmn_admin')}</div>
             </div>
             <Icon name="chevdown" size={15} />
           </div>
