@@ -48,6 +48,10 @@ type Settings struct {
 	// dev seed admin is unaffected; enabling it fails admin logins closed when an
 	// admin has no phone on file.
 	AdminSmsTwoFactorEnabled bool `bson:"adminSmsTwoFactorEnabled" json:"adminSmsTwoFactorEnabled"`
+	// ChatbotAIEnabled turns on the AI help assistant: free-typed help-bot
+	// questions are answered by the LLM from the knowledge-base docs (billed per
+	// call). Off by default; the predefined quick questions work either way.
+	ChatbotAIEnabled bool `bson:"chatbotAiEnabled" json:"chatbotAiEnabled"`
 	// ExchangeRates is the admin-maintained list of currency rates surfaced on the
 	// customer top-up screen (global, shown for any manual payment method).
 	ExchangeRates []ExchangeRate `bson:"exchangeRates,omitempty" json:"exchangeRates"`
@@ -84,6 +88,8 @@ type UpdateInput struct {
 	LoyaltyEarnUsdPerPoint *float64 `json:"loyaltyEarnUsdPerPoint"`
 
 	AdminSmsTwoFactorEnabled *bool `json:"adminSmsTwoFactorEnabled"`
+
+	ChatbotAIEnabled *bool `json:"chatbotAiEnabled"`
 
 	ExchangeRates *[]ExchangeRate `json:"exchangeRates"`
 }
@@ -122,12 +128,13 @@ type Integration struct {
 
 // integrationsView derives the read-only integration status from runtime config.
 // A provider is "configured" when it is set to something other than the inert
-// `log` dev adapter.
-func integrationsView(smsProvider, pushProvider string) map[string]Integration {
+// `log` (sms/push) or `stub` (ai) dev adapter.
+func integrationsView(smsProvider, pushProvider, aiProvider string) map[string]Integration {
 	live := func(p string) bool { return p != "" && p != "log" }
 	return map[string]Integration{
 		"sms":  {Provider: smsProvider, Configured: live(smsProvider)},
 		"push": {Provider: pushProvider, Configured: live(pushProvider)},
+		"ai":   {Provider: aiProvider, Configured: aiProvider != "" && aiProvider != "stub"},
 	}
 }
 

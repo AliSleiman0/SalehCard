@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupEntries, type ChatEntry } from './chatbot'
+import { groupEntries, kbDocChars, type ChatEntry } from './chatbot'
 
 const e = (id: string, sortOrder: number, parentId?: string): ChatEntry => ({
   id,
@@ -18,5 +18,11 @@ describe('groupEntries', () => {
     expect(g.map((x) => x.top.id)).toEqual(['a', 'b', 'x'])
     expect(g[0].children.map((c) => c.id)).toEqual(['a1', 'a2'])
     expect(g[1].children).toEqual([])
+  })
+})
+
+describe('kbDocChars', () => {
+  it('counts code points across both languages like the server', () => {
+    expect(kbDocChars({ title: { en: 'ab', ar: 'شحن' }, body: { en: '😀', ar: '' } })).toBe(2 + 3 + 1)
   })
 })

@@ -125,6 +125,24 @@ type Config struct {
 	RateLimitComplaintMax    int
 	RateLimitComplaintWindow time.Duration
 
+	// AI help assistant (help-bot free-text answers from the knowledge base).
+	// LLMProvider selects the adapter: "azureopenai" or "stub" (default — dev
+	// needs no Azure config; the assistant reports itself unavailable outside
+	// development). The Azure key is server-side only — never in a client bundle.
+	LLMProvider           string
+	AzureOpenAIEndpoint   string // e.g. https://salehcard-openai.openai.azure.com
+	AzureOpenAIAPIKey     string
+	AzureOpenAIDeployment string // the model deployment name (default "chat")
+	// Every assistant call is billed, so it is capped per user, per IP, and
+	// globally (the global cap is the daily spending ceiling). These checks fail
+	// CLOSED on a limiter error, unlike the other (fail-open) limits.
+	ChatbotAIUserMax      int
+	ChatbotAIUserWindow   time.Duration
+	ChatbotAIIPMax        int
+	ChatbotAIIPWindow     time.Duration
+	ChatbotAIGlobalMax    int
+	ChatbotAIGlobalWindow time.Duration
+
 	// Storage (product image uploads). StorageProvider selects the active blob
 	// adapter: "azure" or "local" (default — dev works with zero Azure config).
 	StorageProvider              string
@@ -361,6 +379,17 @@ func Load() *Config {
 		RateLimitKycUploadWindow: getDuration("RATE_LIMIT_KYC_UPLOAD_WINDOW", time.Minute),
 		RateLimitComplaintMax:    getInt("RATE_LIMIT_COMPLAINT_MAX", 10),
 		RateLimitComplaintWindow: getDuration("RATE_LIMIT_COMPLAINT_WINDOW", time.Hour),
+
+		LLMProvider:           getEnv("LLM_PROVIDER", "stub"),
+		AzureOpenAIEndpoint:   os.Getenv("AZURE_OPENAI_ENDPOINT"),
+		AzureOpenAIAPIKey:     os.Getenv("AZURE_OPENAI_API_KEY"),
+		AzureOpenAIDeployment: getEnv("AZURE_OPENAI_DEPLOYMENT", "chat"),
+		ChatbotAIUserMax:      getInt("CHATBOT_AI_USER_MAX", 20),
+		ChatbotAIUserWindow:   getDuration("CHATBOT_AI_USER_WINDOW", 24*time.Hour),
+		ChatbotAIIPMax:        getInt("CHATBOT_AI_IP_MAX", 40),
+		ChatbotAIIPWindow:     getDuration("CHATBOT_AI_IP_WINDOW", time.Hour),
+		ChatbotAIGlobalMax:    getInt("CHATBOT_AI_GLOBAL_MAX", 500),
+		ChatbotAIGlobalWindow: getDuration("CHATBOT_AI_GLOBAL_WINDOW", 24*time.Hour),
 
 		StorageProvider:              getEnv("STORAGE_PROVIDER", "local"),
 		AzureStorageConnectionString: os.Getenv("AZURE_STORAGE_CONNECTION_STRING"),

@@ -604,3 +604,33 @@ Still open:
   the `deploy-prod` concurrency group. The replacement run's path filter sees only its own push, so an
   earlier merge's components can be skipped. After back-to-back merges, check each component deployed, or
   run **Deploy (prod)** manually (`workflow_dispatch` deploys everything).
+
+## 25. AI help assistant — Azure OpenAI (2026-11-15)
+
+Created with `az` (no Terraform yet): Azure OpenAI account **`salehcard-openai`** (rg `salehcard-prod`, West
+Europe, S0, endpoint `https://salehcard-openai.openai.azure.com`), deployment **`chat`** = `gpt-5-mini`
+2025-08-07, GlobalStandard, capacity 100 (100K tokens/min, 100 req/min), content filter `Microsoft.DefaultV2`
+(includes the jailbreak Prompt Shield). Pay-per-token only — **$0 when idle**. Measured ≈ $0.0002 per question
+(≈3k prompt tokens, ~97% cached, ~100 output tokens).
+
+Remaining:
+1. **Prod app settings** (after the PR deploys; restarts the API): `LLM_PROVIDER=azureopenai`,
+   `AZURE_OPENAI_ENDPOINT=https://salehcard-openai.openai.azure.com`, `AZURE_OPENAI_DEPLOYMENT=chat`,
+   `AZURE_OPENAI_API_KEY=<az cognitiveservices account keys list -g salehcard-prod -n salehcard-openai --query key1 -o tsv>`.
+   Optional caps (defaults): `CHATBOT_AI_USER_MAX=20`/24h, `CHATBOT_AI_IP_MAX=40`/1h, `CHATBOT_AI_GLOBAL_MAX=500`/24h.
+2. **Seed the knowledge base on prod** (insert-only, by slug; `--kb-only` so starter quick questions the client
+   deleted are not re-created): `go run ./cmd/chatbotseed --kb-only` (dry run) → `--apply --confirm-prod`, via
+   the direct-DB firewall recipe.
+3. ~~**Budget alert**~~ — DONE 2026-11-15: subscription budget **`salehcard-openai-monthly`**, $10/month,
+   filtered to the `salehcard-openai` resource, alerts at 50% + 100% actual and 100% forecast to the
+   subscription **Owner** role (no hard-coded email; add `contactEmails` in portal → Cost Management →
+   Budgets if someone else should get them). A budget only alerts — the hard spend cap is
+   `CHATBOT_AI_GLOBAL_MAX`.
+4. **Switch to managed identity, then turn off key auth**: the App Service has no managed identity today. Enable a
+   system-assigned identity, grant it *Cognitive Services OpenAI User* on `salehcard-openai`, add an Entra-token
+   path to `platform/llm/azureopenai.go`, then `--disable-local-auth`. Until then, rotate the key with
+   `az cognitiveservices account keys regenerate` if it is ever exposed.
+5. **Terraform later**: when infra-as-code lands, import `salehcard-openai` + the `chat` deployment (and the
+   role assignment) instead of recreating them.
+6. **Kill switch**: admin → Settings → AI help assistant (off by default). Turning it off makes the apps fall
+   back to the keyword bot immediately.

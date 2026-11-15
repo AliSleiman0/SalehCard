@@ -1,6 +1,7 @@
 // Command chatbotseed loads the help bot's starter questions and answers
 // (chatbot.StarterContent, English + Arabic) so the help button appears for
-// customers. Admins then edit or remove any of it in admin → Help bot.
+// customers, and the AI assistant's starter knowledge base (chatbot.StarterKB,
+// matched on slug). Admins then edit or remove any of it in admin → Help bot.
 //
 // It is a DRY RUN unless --apply is passed, and refuses to write to prod
 // without --confirm-prod. It never overwrites or deletes: a question whose
@@ -13,6 +14,7 @@
 //
 //	MONGO_URI=... go run ./cmd/chatbotseed [--whatsapp "+961 70 123 456"]
 //	MONGO_URI=... go run ./cmd/chatbotseed --apply [--confirm-prod] [--whatsapp ...]
+//	MONGO_URI=... go run ./cmd/chatbotseed --kb-only [--apply [--confirm-prod]]   (prod, once admins curated the quick questions)
 package main
 
 import (
@@ -39,6 +41,7 @@ func main() {
 	apply := flag.Bool("apply", false, "write the entries (default: dry run)")
 	confirmProd := flag.Bool("confirm-prod", false, "required together with --apply against the prod cluster")
 	whatsapp := flag.String("whatsapp", "", "also set the support WhatsApp number in app settings")
+	kbOnly := flag.Bool("kb-only", false, "seed only the AI knowledge base (skip the quick questions, so starter questions an admin deleted are not re-created)")
 	flag.Parse()
 
 	_ = godotenv.Load()
@@ -59,6 +62,9 @@ func main() {
 	if err := chatbot.EnsureIndexes(ctx, db); err != nil {
 		log.Printf("warning: ensure indexes: %v", err)
 	}
+	if err := chatbot.EnsureKBIndexes(ctx, db); err != nil {
+		log.Printf("warning: ensure kb indexes: %v", err)
+	}
 
 	target := "local"
 	if prod {
@@ -70,21 +76,38 @@ func main() {
 	}
 	fmt.Printf("chatbotseed: %s against %s (db %s)\n\n", mode, target, cfg.DBName)
 
-	res, err := chatbot.Seed(ctx, chatbot.NewMongoRepository(db), chatbot.StarterContent, *apply, time.Now().UTC())
-	if err != nil {
-		log.Fatalf("seed: %v", err)
-	}
 	verb := "would create"
 	if *apply {
 		verb = "created"
 	}
-	fmt.Printf("%s %d:\n", verb, len(res.Created))
-	for _, q := range res.Created {
-		fmt.Println("  " + q)
+	if *kbOnly {
+		fmt.Println("quick questions: skipped (--kb-only)")
+	} else {
+		res, err := chatbot.Seed(ctx, chatbot.NewMongoRepository(db), chatbot.StarterContent, *apply, time.Now().UTC())
+		if err != nil {
+			log.Fatalf("seed: %v", err)
+		}
+		fmt.Printf("%s %d:\n", verb, len(res.Created))
+		for _, q := range res.Created {
+			fmt.Println("  " + q)
+		}
+		fmt.Printf("\nskipped %d (already present):\n", len(res.Skipped))
+		for _, q := range res.Skipped {
+			fmt.Println("  " + q)
+		}
 	}
-	fmt.Printf("\nskipped %d (already present):\n", len(res.Skipped))
-	for _, q := range res.Skipped {
-		fmt.Println("  " + q)
+
+	kb, err := chatbot.SeedKB(ctx, chatbot.NewMongoKBRepository(db), chatbot.StarterKB, *apply, time.Now().UTC())
+	if err != nil {
+		log.Fatalf("seed knowledge base: %v", err)
+	}
+	fmt.Printf("\nknowledge base — %s %d:\n", verb, len(kb.Created))
+	for _, slug := range kb.Created {
+		fmt.Println("  " + slug)
+	}
+	fmt.Printf("knowledge base — skipped %d (slug already present):\n", len(kb.Skipped))
+	for _, slug := range kb.Skipped {
+		fmt.Println("  " + slug)
 	}
 
 	if w := strings.TrimSpace(*whatsapp); w != "" {

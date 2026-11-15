@@ -54,6 +54,10 @@ export default function SettingsPage() {
   const [twoFAEnabled, setTwoFAEnabled] = useState(false)
   const [twoFAError, setTwoFAError] = useState<string | null>(null)
 
+  // --- AI help assistant ----------------------------------------------------
+  const [aiEnabled, setAiEnabled] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
   // --- Exchange rates -------------------------------------------------------
   const [rates, setRates] = useState<ExchangeRate[]>([])
   const [ratesError, setRatesError] = useState<string | null>(null)
@@ -68,6 +72,7 @@ export default function SettingsPage() {
     setLoyaltyEnabled(s.loyaltyEnabled)
     setEarnRate(String(s.loyaltyEarnUsdPerPoint))
     setTwoFAEnabled(s.adminSmsTwoFactorEnabled)
+    setAiEnabled(!!s.chatbotAiEnabled)
     setRates(s.exchangeRates ?? [])
   }, [settingsRes])
 
@@ -85,6 +90,23 @@ export default function SettingsPage() {
         onError: (e) => {
           setTwoFAEnabled(!next)
           setTwoFAError(e instanceof ApiError ? e.message : 'Could not update the two-factor setting.')
+        },
+      },
+    )
+  }
+
+  // Toggle the AI help assistant. Saves immediately (optimistic), reverting on error.
+  function toggleAi() {
+    if (update.isPending) return
+    const next = !aiEnabled
+    setAiError(null)
+    setAiEnabled(next)
+    update.mutate(
+      { chatbotAiEnabled: next },
+      {
+        onError: (e) => {
+          setAiEnabled(!next)
+          setAiError(e instanceof ApiError ? e.message : 'Could not update the AI assistant setting.')
         },
       },
     )
@@ -391,6 +413,34 @@ export default function SettingsPage() {
               <span className="muted" style={{ fontSize: 12.5 }}>Saved.</span>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="acard" style={{ marginBottom: 18 }}>
+        <div className="panelhead">
+          <Icon name="send" size={17} />
+          <h3>AI help assistant</h3>
+        </div>
+        <div className="pad">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>Answer typed questions with AI</div>
+              <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, maxWidth: 520 }}>
+                When on, questions customers type in the help bot are answered by AI, using only the articles in
+                Help bot → Knowledge base. Each question is a small paid call, capped per customer and per day. The
+                quick questions keep working either way.
+              </div>
+              {settingsRes?.data?.integrations?.ai && !settingsRes.data.integrations.ai.configured && (
+                <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginTop: 8 }}>
+                  No AI provider is configured on the server, so the assistant stays off for customers.
+                </div>
+              )}
+            </div>
+            <Toggle on={aiEnabled} onClick={() => canManage && toggleAi()} />
+          </div>
+          {aiError && (
+            <div style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 12 }}>{aiError}</div>
+          )}
         </div>
       </div>
 
