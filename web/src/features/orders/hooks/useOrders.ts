@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
+import { LIVE_REFETCH_MS } from '@/lib/live'
 import { fetchOrders } from '../api/orders'
 
-export function useOrders() {
+/** `live`: re-check every 30s while the page is visible (order history / dashboard). */
+export function useOrders(live = false) {
   return useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
@@ -11,5 +13,6 @@ export function useOrders() {
       }
       return res.data
     },
+    refetchInterval: live ? LIVE_REFETCH_MS : false,
   })
 }

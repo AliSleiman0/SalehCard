@@ -9,6 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_spinner.dart';
+import '../../../../core/widgets/live_refresh.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/product_chip.dart';
 import '../../../../core/widgets/status_badge.dart';
@@ -59,84 +60,87 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     final ordersAsync = ref.watch(ordersProvider);
     final localeCode = ref.watch(localeControllerProvider).languageCode;
 
-    return Scaffold(
-      backgroundColor: colors.bg,
-      appBar: AppBar(
-        backgroundColor: colors.topbar,
-        // Normally pushed from the Menu tab, but order detail's fallback reaches
-        // it via go (order-success → "View order" → back) as the stack root,
-        // which would leave no back arrow at all.
-        leading: const AppBackButton(fallback: '/account'),
-        title: Text(l10n.ordersTitle),
-      ),
-      body: ordersAsync.when(
-        loading: () => const LoadingView(),
-        error: (_, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(l10n.loadFailed, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => ref.invalidate(ordersProvider),
-                  child: Text(l10n.retry),
-                ),
-              ],
+    return LiveRefresh(
+      onRefresh: () => ref.invalidate(ordersProvider),
+      child: Scaffold(
+        backgroundColor: colors.bg,
+        appBar: AppBar(
+          backgroundColor: colors.topbar,
+          // Normally pushed from the Menu tab, but order detail's fallback reaches
+          // it via go (order-success → "View order" → back) as the stack root,
+          // which would leave no back arrow at all.
+          leading: const AppBackButton(fallback: '/account'),
+          title: Text(l10n.ordersTitle),
+        ),
+        body: ordersAsync.when(
+          loading: () => const LoadingView(),
+          error: (_, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(l10n.loadFailed, textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => ref.invalidate(ordersProvider),
+                    child: Text(l10n.retry),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        data: (orders) {
-          final filtered = orders.where(_matches).toList();
-          return Column(
-            children: [
-              _FilterTabs(
-                selected: _filter,
-                onSelected: (f) => setState(() => _filter = f),
-                l10n: l10n,
-              ),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _refresh,
-                  // Keep the empty state pullable: a user with no matching
-                  // orders should still be able to pull to check for new ones.
-                  child: filtered.isEmpty
-                      ? LayoutBuilder(
-                          builder: (context, constraints) =>
-                              SingleChildScrollView(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: constraints.maxHeight,
-                                  ),
-                                  child: EmptyState(
-                                    icon: Icons.receipt_long_rounded,
-                                    title: l10n.ordersEmptyTitle,
-                                    message: l10n.ordersEmptySub,
-                                    actionLabel: l10n.browseCatalog,
-                                    onAction: () => context.go('/browse'),
+          data: (orders) {
+            final filtered = orders.where(_matches).toList();
+            return Column(
+              children: [
+                _FilterTabs(
+                  selected: _filter,
+                  onSelected: (f) => setState(() => _filter = f),
+                  l10n: l10n,
+                ),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refresh,
+                    // Keep the empty state pullable: a user with no matching
+                    // orders should still be able to pull to check for new ones.
+                    child: filtered.isEmpty
+                        ? LayoutBuilder(
+                            builder: (context, constraints) =>
+                                SingleChildScrollView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minHeight: constraints.maxHeight,
+                                    ),
+                                    child: EmptyState(
+                                      icon: Icons.receipt_long_rounded,
+                                      title: l10n.ordersEmptyTitle,
+                                      message: l10n.ordersEmptySub,
+                                      actionLabel: l10n.browseCatalog,
+                                      onAction: () => context.go('/browse'),
+                                    ),
                                   ),
                                 ),
-                              ),
-                        )
-                      : ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, i) => _OrderRow(
-                            order: filtered[i],
-                            localeCode: localeCode,
-                            l10n: l10n,
+                          )
+                        : ListView.separated(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, i) => _OrderRow(
+                              order: filtered[i],
+                              localeCode: localeCode,
+                              l10n: l10n,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

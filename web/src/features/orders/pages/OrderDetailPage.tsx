@@ -11,7 +11,7 @@ export default function OrderDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams()
   const locale = useLocaleStore((s) => s.locale)
-  const query = useOrder(id ?? '')
+  const query = useOrder(id ?? '', true)
 
   if (query.isLoading) return <LoadingSpinner />
   if (query.isError || !query.data) {
