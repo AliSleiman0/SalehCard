@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { refundOrder, refundBulkOrders, completeOrder, failOrder } from '../api/orders'
 import { toast } from '@/stores/toast'
 import { ApiError } from '@/lib/api-client'
+import i18n from '@/i18n/config'
 
 /** Invalidates the order detail + list queries after a mutation. */
 function useInvalidateOrders() {
@@ -19,11 +20,11 @@ export function useRefundOrder() {
       refundOrder(id, reason ?? '', acknowledgeSupplier ?? false),
     onSuccess: (_, { id }) => {
       invalidate(id)
-      toast.success('Order refunded')
+      toast.success(i18n.t('ord_t_refunded'))
     },
     // ORDER_AT_SUPPLIER is a confirm step the dialog handles, not a failure.
     onError: (e) => {
-      if (!(e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER')) toast.error('Refund failed')
+      if (!(e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER')) toast.error(i18n.t('ord_t_refund_failed'))
     },
   })
 }
@@ -33,7 +34,7 @@ export function useRefundBulk() {
   return useMutation({
     mutationFn: ({ ids, reason }: { ids: string[]; reason?: string }) => refundBulkOrders(ids, reason ?? ''),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'orders'] }),
-    onError: () => toast.error('Bulk refund request failed'),
+    onError: () => toast.error(i18n.t('ord_t_bulk_refund_failed')),
   })
 }
 
@@ -53,11 +54,11 @@ export function useCompleteOrder() {
     }) => completeOrder(id, { note, transferRef, acknowledgeSupplier }),
     onSuccess: (_, { id }) => {
       invalidate(id)
-      toast.success('Order completed')
+      toast.success(i18n.t('ord_t_completed'))
     },
     // ORDER_AT_SUPPLIER is a confirm step the dialog handles, not a failure.
     onError: (e) => {
-      if (!(e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER')) toast.error('Could not complete order')
+      if (!(e instanceof ApiError && e.code === 'ORDER_AT_SUPPLIER')) toast.error(i18n.t('ord_t_complete_failed'))
     },
   })
 }
@@ -68,8 +69,8 @@ export function useFailOrder() {
     mutationFn: ({ id, reason }: { id: string; reason?: string }) => failOrder(id, reason ?? ''),
     onSuccess: (_, { id }) => {
       invalidate(id)
-      toast.info('Order marked failed')
+      toast.info(i18n.t('ord_t_marked_failed'))
     },
-    onError: () => toast.error('Could not mark order failed'),
+    onError: () => toast.error(i18n.t('ord_t_mark_failed_failed')),
   })
 }

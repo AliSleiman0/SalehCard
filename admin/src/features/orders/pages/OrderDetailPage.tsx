@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   Icon,
@@ -15,11 +15,13 @@ import {
 } from '@/components'
 import { money } from '@/lib/utils'
 import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import { useOrder } from '../hooks/useOrders'
 import { useRefundOrder, useCompleteOrder, useFailOrder } from '../hooks/useOrderMutations'
 import { adaptOrder, codeLines, creditLines, itemQtyLabel, productEditPath } from '../lib/adaptOrder'
-import type { AdminOrder } from '../api/orders'
+import { timelineNote, timelineStatus } from '../lib/timelineText'
+import type { AdminOrder, AdminOrderItem } from '../api/orders'
 import { SupplierPanel } from '../components/SupplierPanel'
 import { orderNumber } from '@/lib/orderNumber'
 
@@ -30,7 +32,7 @@ function isOrderFileUrl(v: string): boolean {
 }
 
 export default function OrderDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const can = useCan()
@@ -51,7 +53,7 @@ export default function OrderDetailPage() {
     return (
       <div className="page">
         <PageHead back="/orders" title={t('nav_orders')} />
-        <ErrorState message="Couldn't load this order." onRetry={() => refetch()} />
+        <ErrorState message={t('ord_d_load_error')} onRetry={() => refetch()} />
       </div>
     )
   }
@@ -90,10 +92,10 @@ export default function OrderDetailPage() {
         crumbs={[t('nav_orders'), orderNumber(v.id)]}
         title={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-            Order {orderNumber(v.id)} <StatusBadge s={v.status} />
+            {t('ord_d_title', { n: orderNumber(v.id) })} <StatusBadge s={v.status} />
           </span>
         }
-        sub={`Placed ${v.date} · ${v.customer}`}
+        sub={t('ord_d_sub', { date: v.date, customer: v.customer })}
       >
         {refundable && (
           <button className="abtn danger" onClick={() => setRefundOpen(true)}>
@@ -109,7 +111,7 @@ export default function OrderDetailPage() {
           <div className="acard">
             <div className="panelhead">
               <Icon name="bag" size={17} />
-              <h3>Items</h3>
+              <h3>{t('ord_d_items')}</h3>
               <div className="ph-act">
                 <FfBadge ff={v.ff} />
               </div>
@@ -123,7 +125,7 @@ export default function OrderDetailPage() {
                     {href ? (
                       // Same target as the name link: out of the tab order (one stop per
                       // line), but labelled rather than aria-hidden — it can still take focus on click.
-                      <Link to={href} className="prodlink art" tabIndex={-1} aria-label={`Open product ${it.title.en}`}>
+                      <Link to={href} className="prodlink art" tabIndex={-1} aria-label={t('ord_d_open_product_aria', { name: it.title.en })}>
                         <Art art={v.art} size={56} radius={12} />
                       </Link>
                     ) : (
@@ -132,7 +134,7 @@ export default function OrderDetailPage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 800, fontSize: 15 }}>
                         {href ? (
-                          <Link to={href} className="prodlink" title="Open product">
+                          <Link to={href} className="prodlink" title={t('sup_open_product')}>
                             {it.title.en}
                           </Link>
                         ) : (
@@ -186,7 +188,7 @@ export default function OrderDetailPage() {
               <div className="panelhead">
                 <span className="bdg ff-code">
                   <i className="d" />
-                  Code delivery
+                  {t('ord_d_code_delivery')}
                 </span>
                 <div className="ph-act">
                   {refunded ? (
@@ -197,7 +199,11 @@ export default function OrderDetailPage() {
                   ) : (
                     <span className={codeCount > 0 ? 'st st-ok' : 'st st-warn'}>
                       <i className="d" />
-                      {codeCount > 0 ? (codeCount > 1 ? `${codeCount} delivered` : 'Delivered') : 'Pending'}
+                      {codeCount > 0
+                        ? codeCount > 1
+                          ? t('ord_d_n_delivered', { n: codeCount })
+                          : t('ord_d_delivered')
+                        : t('pending')}
                     </span>
                   )}
                 </div>
@@ -206,9 +212,9 @@ export default function OrderDetailPage() {
                 {refunded && <RefundedNotice order={o} />}
                 {codes.length === 0 ? (
                   <>
-                    <label className="alabel">Delivered code (admin view)</label>
+                    <label className="alabel">{t('ord_d_code_admin')}</label>
                     <div className="avault masked">
-                      <span className="vc">— not yet delivered —</span>
+                      <span className="vc">{t('ord_d_not_delivered')}</span>
                     </div>
                   </>
                 ) : (
@@ -216,8 +222,8 @@ export default function OrderDetailPage() {
                     <div key={li} style={{ marginTop: li > 0 ? 14 : 0 }}>
                       <label className="alabel">
                         {codes.length > 1 || line.codes.length > 1
-                          ? `${line.title} · ${line.codes.length} code${line.codes.length > 1 ? 's' : ''} (admin view)`
-                          : 'Delivered code (admin view)'}
+                          ? t('ord_d_codes_admin', { title: line.title, count: line.codes.length })
+                          : t('ord_d_code_admin')}
                       </label>
                       {line.codes.map((code, ci) => {
                         const key = `${li}-${ci}`
@@ -231,7 +237,7 @@ export default function OrderDetailPage() {
                             <span className="vc">{code}</span>
                             <div style={{ display: 'flex', gap: 6 }}>
                               <button className="abtn xs" onClick={() => toggleCode(key)}>
-                                <Icon name={masked ? 'eye' : 'eyeoff'} size={13} /> {masked ? 'Reveal' : 'Hide'}
+                                <Icon name={masked ? 'eye' : 'eyeoff'} size={13} /> {masked ? t('ord_d_reveal') : t('ord_d_hide')}
                               </button>
                             </div>
                           </div>
@@ -249,7 +255,7 @@ export default function OrderDetailPage() {
               <div className="panelhead">
                 <span className="bdg ff-credit">
                   <i className="d" />
-                  Account credit
+                  {t('ff_credit')}
                 </span>
                 <div className="ph-act">
                   {refunded ? (
@@ -260,7 +266,7 @@ export default function OrderDetailPage() {
                   ) : (
                     <span className={o.status === 'completed' ? 'st st-ok' : 'st st-warn'}>
                       <i className="d" />
-                      {o.status === 'completed' ? 'Credited' : 'Processing'}
+                      {o.status === 'completed' ? t('ord_d_credited') : t('ord_status_processing')}
                     </span>
                   )}
                 </div>
@@ -269,15 +275,15 @@ export default function OrderDetailPage() {
                 {refunded && <RefundedNotice order={o} />}
                 {credit.distinctIds > 1 && o.status === 'processing' && (
                   <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
-                    This order credits {credit.distinctIds} different accounts — credit every line below before
-                    completing.
+                    {t('ord_d_multi_accounts', { n: credit.distinctIds })}
                   </div>
                 )}
                 <div className="deflist">
                   {credit.lines.map((l, i) => (
                     <div className="defrow" key={i}>
                       <span className="dk">
-                        {credit.lines.length > 1 ? `${l.title} · ` : 'Player / Account ID · '}
+                        {credit.lines.length > 1 ? l.title : t('ord_d_player_id')}
+                        {' · '}
                         {l.qtyLabel}
                       </span>
                       <span className="dv">
@@ -287,15 +293,15 @@ export default function OrderDetailPage() {
                     </div>
                   ))}
                   <div className="defrow">
-                    <span className="dk">Order total</span>
+                    <span className="dk">{t('ord_d_order_total')}</span>
                     <span className="dv">{money(o.total, v.cur)}</span>
                   </div>
                 </div>
                 {completable && (
                   <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                    <label className="alabel">Manually complete this credit</label>
+                    <label className="alabel">{t('ord_d_manual_credit')}</label>
                     <button className="abtn sm ok" onClick={() => setCompleteOpen(true)}>
-                      <Icon name="check" size={14} /> Mark credit as completed
+                      <Icon name="check" size={14} /> {t('ord_d_mark_credit')}
                     </button>
                   </div>
                 )}
@@ -308,7 +314,7 @@ export default function OrderDetailPage() {
               <div className="panelhead">
                 <span className="bdg ff-transfer">
                   <i className="d" />
-                  Money transfer
+                  {t('ff_transfer')}
                 </span>
                 <div className="ph-act">
                   <StatusBadge s={v.status} />
@@ -318,23 +324,23 @@ export default function OrderDetailPage() {
                 {refunded && <RefundedNotice order={o} />}
                 <div className="deflist">
                   <div className="defrow">
-                    <span className="dk">Reference</span>
+                    <span className="dk">{t('ord_col_reference')}</span>
                     <span className="dv mono">{o.fulfillment.transferRef || '—'}</span>
                   </div>
                   <div className="defrow">
-                    <span className="dk">Recipient</span>
+                    <span className="dk">{t('ord_d_recipient')}</span>
                     <span className="dv">{(transferItem ?? item)?.recipient?.name || '—'}</span>
                   </div>
                   <div className="defrow">
-                    <span className="dk">Country</span>
+                    <span className="dk">{t('ord_d_country')}</span>
                     <span className="dv">{(transferItem ?? item)?.recipient?.country || '—'}</span>
                   </div>
                 </div>
                 {completable && (
                   <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                    <label className="alabel">Manually update transfer status</label>
+                    <label className="alabel">{t('ord_d_manual_transfer')}</label>
                     <button className="abtn sm ok" onClick={() => setCompleteOpen(true)}>
-                      <Icon name="check" size={14} /> Mark transfer as completed
+                      <Icon name="check" size={14} /> {t('ord_d_mark_transfer')}
                     </button>
                   </div>
                 )}
@@ -345,17 +351,28 @@ export default function OrderDetailPage() {
           <div className="acard">
             <div className="panelhead">
               <Icon name="activity" size={17} />
-              <h3>Order activity</h3>
+              <h3>{t('ord_d_activity')}</h3>
             </div>
             <div style={{ padding: 18 }}>
               <div className="timeline">
                 {(o.fulfillment.statusTimeline?.length
-                  ? o.fulfillment.statusTimeline.map((e) => [e.status, e.note || v.date, 'done'] as [string, string, string])
+                  ? o.fulfillment.statusTimeline.map(
+                      (e) =>
+                        [
+                          timelineStatus(e.status, t),
+                          (e.note && timelineNote(e.note, t, i18n.language)) || v.date,
+                          'done',
+                        ] as [string, string, string],
+                    )
                   : ([
-                      ['Order placed', v.date, 'done'],
-                      ['Payment captured', v.date, 'done'],
+                      [t('tl_placed'), v.date, 'done'],
+                      [t('tl_payment_captured'), v.date, 'done'],
                       [
-                        o.status === 'refunded' ? 'Refund issued' : o.status === 'completed' ? 'Fulfilled' : 'In progress',
+                        o.status === 'refunded'
+                          ? t('tl_refund_issued')
+                          : o.status === 'completed'
+                            ? t('tl_fulfilled')
+                            : t('tl_in_progress'),
                         v.date,
                         o.status === 'failed' ? 'todo' : 'done',
                       ],
@@ -378,7 +395,7 @@ export default function OrderDetailPage() {
 
         <div className="fieldset">
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Customer</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('ord_col_customer')}</h3>
             <div style={{ display: 'flex', gap: 11, alignItems: 'center', marginBottom: 14 }}>
               <div style={{ transform: 'scale(1.3)', transformOrigin: 'left center' }}>
                 <Avatar name={v.customer} />
@@ -391,26 +408,26 @@ export default function OrderDetailPage() {
               </div>
             </div>
             <button className="abtn sm" style={{ width: '100%' }} onClick={() => navigate(`/users/${o.userId}`)}>
-              <Icon name="users" size={14} /> View customer profile
+              <Icon name="users" size={14} /> {t('ord_d_view_customer')}
             </button>
           </div>
 
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Payment summary</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('ord_d_payment_summary')}</h3>
             <div className="deflist">
               <div className="defrow">
-                <span className="dk">Subtotal</span>
+                <span className="dk">{t('ord_d_subtotal')}</span>
                 <span className="dv num">{money(o.subtotal, v.cur)}</span>
               </div>
               <div className="defrow">
-                <span className="dk">Method</span>
+                <span className="dk">{t('col_method')}</span>
                 <span className="dv">
                   <PayChip p={v.pay} />
                 </span>
               </div>
               <div className="defrow">
                 <span className="dk strong" style={{ color: 'var(--text)', fontWeight: 800 }}>
-                  Total
+                  {t('ord_d_total')}
                 </span>
                 <span className="dv num" style={{ fontSize: 17 }}>
                   {money(o.total, v.cur)}
@@ -420,31 +437,30 @@ export default function OrderDetailPage() {
           </div>
 
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Quick actions</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{t('ord_d_quick_actions')}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {completable && (
                 <button className="abtn sm ok" style={{ justifyContent: 'flex-start' }} onClick={() => setCompleteOpen(true)}>
-                  <Icon name="check" size={14} /> Mark as completed
+                  <Icon name="check" size={14} /> {t('ord_d_mark_completed')}
                 </button>
               )}
               {refundable && (
                 <button className="abtn sm danger" style={{ justifyContent: 'flex-start' }} onClick={() => setRefundOpen(true)}>
-                  <Icon name="refresh" size={14} /> Initiate refund
+                  <Icon name="refresh" size={14} /> {t('ord_d_initiate_refund')}
                 </button>
               )}
               {failable && (
                 <>
                   <button className="abtn sm danger" style={{ justifyContent: 'flex-start' }} onClick={() => setFailOpen(true)}>
-                    <Icon name="x" size={14} /> Mark as failed
+                    <Icon name="x" size={14} /> {t('ord_d_mark_failed')}
                   </button>
                   <div className="faint" style={{ fontSize: 12 }}>
-                    Stuck in pending (crashed mid-placement). Marking it failed moves no money — reverse any
-                    charge via the customer's wallet adjust.
+                    {t('ord_d_fail_hint')}
                   </div>
                 </>
               )}
               {!completable && !refundable && !failable && (
-                <div className="faint" style={{ fontSize: 12.5 }}>No actions available for this order.</div>
+                <div className="faint" style={{ fontSize: 12.5 }}>{t('ord_d_no_actions')}</div>
               )}
             </div>
           </div>
@@ -464,9 +480,11 @@ export default function OrderDetailPage() {
  * intentionally not re-pooled.
  */
 function RefundedNotice({ order }: { order: AdminOrder }) {
-  const reason = [...(order.fulfillment.statusTimeline ?? [])]
+  const { t, i18n } = useTranslation()
+  const note = [...(order.fulfillment.statusTimeline ?? [])]
     .reverse()
     .find((e) => e.status === 'refunded')?.note
+  const reason = note ? timelineNote(note, t, i18n.language) : note
 
   return (
     <div
@@ -483,8 +501,8 @@ function RefundedNotice({ order }: { order: AdminOrder }) {
     >
       <Icon name="refresh" size={16} />
       <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-        <b>This order was refunded.</b>
-        {reason ? ` ${reason}.` : ''} Delivered codes are not returned to inventory.
+        <b>{t('ord_d_refunded_title')}</b>
+        {reason ? ` ${reason}.` : ''} {t('ord_d_codes_not_returned')}
       </div>
     </div>
   )
@@ -523,7 +541,7 @@ function RefundModal({
             setAtSupplier(true)
             return
           }
-          setError(e instanceof ApiError ? e.message : 'Refund failed.')
+          setError(apiErrorText(e, 'ord_d_refund_failed'))
         },
       },
     )
@@ -549,22 +567,20 @@ function RefundModal({
             <Icon name="refresh" size={20} />
           </div>
           <div>
-            <h3 style={{ fontSize: 17, fontWeight: 800 }}>Refund order {orderNumber(order.id)}</h3>
+            <h3 style={{ fontSize: 17, fontWeight: 800 }}>{t('ord_d_refund_title', { n: orderNumber(order.id) })}</h3>
             <div className="faint" style={{ fontSize: 12.5 }}>
               {money(order.total, cur)} · {label}
             </div>
           </div>
         </div>
         <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: '14px 0 12px' }}>
-          {restoresWallet
-            ? `Restores ${money(order.total, cur)} to the customer's wallet.`
-            : 'No wallet charge to reverse — this marks the order refunded.'}{' '}
-          Delivered codes are not returned to inventory. This can't be undone.
+          {restoresWallet ? t('ord_d_restores', { amount: money(order.total, cur) }) : t('ord_d_no_wallet')}{' '}
+          {t('ord_d_refund_irreversible')}
         </p>
-        <label className="alabel">Reason (optional)</label>
+        <label className="alabel">{t('ord_d_reason_opt')}</label>
         <input
           className="afield"
-          placeholder="e.g. customer request, failed delivery…"
+          placeholder={t('ord_d_refund_ph')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
@@ -580,11 +596,10 @@ function RefundModal({
               fontSize: 13,
             }}
           >
-            <b>A supplier may still deliver this order.</b> If it does after the refund, the customer keeps both the
-            money and the goods, and the supplier still charges us. Check the supplier's panel first.
+            <b>{t('ord_d_at_supplier_title')}</b> {t('ord_d_at_supplier_refund')}
             <label style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', color: 'var(--danger)' }}>
               <input type="checkbox" checked={supplierAck} onChange={(e) => setSupplierAck(e.target.checked)} />
-              Refund it anyway
+              {t('ord_d_refund_anyway')}
             </label>
           </div>
         )}
@@ -594,12 +609,17 @@ function RefundModal({
             {t('cancel')}
           </button>
           <button className="abtn danger" onClick={apply} disabled={refundM.isPending || (atSupplier && !supplierAck)}>
-            <Icon name="check" size={15} /> {refundM.isPending ? 'Refunding…' : 'Confirm refund'}
+            <Icon name="check" size={15} /> {refundM.isPending ? t('ord_d_refunding') : t('ord_d_confirm_refund')}
           </button>
         </div>
       </div>
     </Modal>
   )
+}
+
+/** The amount in a checklist line: the typed units, or "× N" for a package line. */
+function creditedQty(it: AdminOrderItem | undefined, qtyLabel: string): string {
+  return it && !(it.amount != null && it.amount > 0) ? `× ${it.qty}` : qtyLabel
 }
 
 /** Dialog for manually completing a processing order (credit / transfer / parked). */
@@ -612,6 +632,7 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
   // Completion is order-level, so with several credit lines the operator ticks
   // each one off before the order can be marked done (local only — not sent).
   const { lines } = creditLines(order.items)
+  const creditItems = order.items.filter((it) => it.fulfillmentType === 'account_credit')
   const needsChecklist = lines.length > 1
   const [ticked, setTicked] = useState<boolean[]>(() => lines.map(() => false))
   const allTicked = !needsChecklist || ticked.every(Boolean)
@@ -633,7 +654,7 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
             setAtSupplier(true)
             return
           }
-          setError(e instanceof ApiError ? e.message : 'Completion failed.')
+          setError(apiErrorText(e, 'ord_d_complete_failed'))
         },
       },
     )
@@ -643,43 +664,45 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
     <Modal onClose={onClose} maxWidth={440}>
       <div style={{ padding: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-          Complete order {orderNumber(order.id)}
+          {t('ord_d_complete_title', { n: orderNumber(order.id) })}
         </h3>
         <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Confirm the credit/transfer was delivered outside the platform. The order moves to
-          <b> completed</b> and the customer sees it immediately.
+          <Trans i18nKey="ord_d_complete_body" components={{ b: <b /> }} />
         </p>
         {needsChecklist && (
           <div style={{ marginBottom: 16 }}>
-            <label className="alabel">Tick each account you credited</label>
+            <label className="alabel">{t('ord_d_tick_each')}</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {lines.map((l, i) => (
                 <label key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={ticked[i]}
-                    onChange={(e) => setTicked((t) => t.map((x, j) => (j === i ? e.target.checked : x)))}
+                    onChange={(e) => setTicked((prev) => prev.map((x, j) => (j === i ? e.target.checked : x)))}
                   />
                   <span>
-                    Credited {l.qtyLabel.replace(/^Qty /, '× ')} of {l.title} to{' '}
-                    <b className="mono">{l.playerId || '—'}</b>
+                    <Trans
+                      i18nKey="ord_d_credited_line"
+                      values={{ qty: creditedQty(creditItems[i], l.qtyLabel), title: l.title, id: l.playerId || '—' }}
+                      components={{ b: <b className="mono" /> }}
+                    />
                   </span>
                 </label>
               ))}
             </div>
           </div>
         )}
-        <label className="alabel">Reference (optional)</label>
+        <label className="alabel">{t('ord_d_ref_opt')}</label>
         <input
           className="afield"
-          placeholder="e.g. provider transaction id…"
+          placeholder={t('ord_d_ref_ph')}
           value={transferRef}
           onChange={(e) => setTransferRef(e.target.value)}
         />
-        <label className="alabel" style={{ marginTop: 12 }}>Note (optional)</label>
+        <label className="alabel" style={{ marginTop: 12 }}>{t('ord_d_note_opt')}</label>
         <input
           className="afield"
-          placeholder="e.g. credited via partner portal…"
+          placeholder={t('ord_d_note_ph')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
@@ -695,11 +718,10 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
               fontSize: 13,
             }}
           >
-            <b>A supplier may still deliver this order.</b> It was sent to a supplier that hasn't finished with it.
-            Completing it by hand can deliver it twice — check the supplier's panel first.
+            <b>{t('ord_d_at_supplier_title')}</b> {t('ord_d_at_supplier_complete')}
             <label style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', color: 'var(--danger)' }}>
               <input type="checkbox" checked={supplierAck} onChange={(e) => setSupplierAck(e.target.checked)} />
-              Complete it anyway
+              {t('ord_d_complete_anyway')}
             </label>
           </div>
         )}
@@ -712,9 +734,9 @@ function CompleteModal({ order, onClose }: { order: AdminOrder; onClose: () => v
             className="abtn ok"
             onClick={apply}
             disabled={completeM.isPending || !ready}
-            title={allTicked ? undefined : 'Tick every credited account first'}
+            title={allTicked ? undefined : t('ord_d_tick_first')}
           >
-            <Icon name="check" size={15} /> {completeM.isPending ? 'Completing…' : 'Mark completed'}
+            <Icon name="check" size={15} /> {completeM.isPending ? t('ord_d_completing') : t('ord_d_mark_completed_btn')}
           </button>
         </div>
       </div>
@@ -739,7 +761,7 @@ function FailModal({ order, onClose }: { order: AdminOrder; onClose: () => void 
       { id: order.id, reason: reason.trim() },
       {
         onSuccess: onClose,
-        onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not mark failed.'),
+        onError: (e) => setError(apiErrorText(e, 'ord_d_fail_failed')),
       },
     )
   }
@@ -748,17 +770,15 @@ function FailModal({ order, onClose }: { order: AdminOrder; onClose: () => void 
     <Modal onClose={onClose} maxWidth={440}>
       <div style={{ padding: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-          Mark order {orderNumber(order.id)} as failed
+          {t('ord_d_fail_title', { n: orderNumber(order.id) })}
         </h3>
         <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 16 }}>
-          Clears a stuck <b>pending</b> order (crashed mid-placement). This moves the order to
-          <b> failed</b> and does <b>not</b> move any money. If the wallet was charged, reverse it
-          via the customer's wallet adjustment.
+          <Trans i18nKey="ord_d_fail_body" components={{ b: <b /> }} />
         </p>
-        <label className="alabel">Reason (optional)</label>
+        <label className="alabel">{t('ord_d_reason_opt')}</label>
         <input
           className="afield"
-          placeholder="e.g. stuck pending, never fulfilled…"
+          placeholder={t('ord_d_fail_ph')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
@@ -768,7 +788,7 @@ function FailModal({ order, onClose }: { order: AdminOrder; onClose: () => void 
             {t('cancel')}
           </button>
           <button className="abtn danger" onClick={apply} disabled={failM.isPending}>
-            <Icon name="x" size={15} /> {failM.isPending ? 'Marking…' : 'Mark as failed'}
+            <Icon name="x" size={15} /> {failM.isPending ? t('ord_d_marking') : t('ord_d_mark_failed')}
           </button>
         </div>
       </div>

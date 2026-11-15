@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Icon, Modal } from '@/components'
 import { ApiError } from '@/lib/api-client'
+import { formatDateTime } from '@/lib/utils'
 import { toast } from '@/stores/toast'
 import { SupplierProductPicker } from '@/features/suppliers/components/SupplierProductPicker'
 import { fmtCost } from '@/features/products/lib/supplierLinks'
@@ -15,11 +17,11 @@ import {
   type SupplierOption,
 } from '../api/orders'
 import { orderMargin, rerouteState, supplierQty } from '../lib/reroute'
+import { supplierErrorText, supplierText } from '../lib/supplierText'
 
 function fmt(iso?: string): string {
   if (!iso) return ''
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+  return Number.isNaN(new Date(iso).getTime()) ? '' : formatDateTime(iso)
 }
 
 /** SupplierPanel shows where a supplier-fulfilled order was sent (supplier,
@@ -29,6 +31,7 @@ function fmt(iso?: string): string {
  *  supplier list). For a pending manual account-credit order it offers "Send
  *  via supplier", like the old admin's "إعادة الطلب API" button. */
 export function SupplierPanel({ order, canManage }: { order: AdminOrder; canManage: boolean }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const { eligible, fromManual } = rerouteState(order)
   const apiLine = order.items.find((it) => it.fulfillmentMode === 'api')
@@ -52,16 +55,15 @@ export function SupplierPanel({ order, canManage }: { order: AdminOrder; canMana
       <div className="acard" style={{ marginBottom: 16 }}>
         <div className="panelhead">
           <Icon name="server" size={17} />
-          <h3>Supplier</h3>
+          <h3>{t('ord_sp_supplier')}</h3>
           <div className="ph-act">
             <button className="abtn xs primary" onClick={() => setOpen(true)}>
-              <Icon name="send" size={13} /> Send via supplier
+              <Icon name="send" size={13} /> {t('ord_sp_send_via')}
             </button>
           </div>
         </div>
         <div className="muted" style={{ padding: '12px 18px 16px', fontSize: 13 }}>
-          This order is fulfilled by hand. You can send it to a connected supplier instead — they deliver it
-          automatically and charge their prepaid balance.
+          {t('ord_sp_manual_body')}
         </div>
         {open && <SendViaSupplierModal order={order} line={line} providers={providers} onClose={() => setOpen(false)} />}
       </div>
@@ -72,46 +74,48 @@ export function SupplierPanel({ order, canManage }: { order: AdminOrder; canMana
     <div className="acard" style={{ marginBottom: 16 }}>
       <div className="panelhead">
         <Icon name="server" size={17} />
-        <h3>Supplier</h3>
+        <h3>{t('ord_sp_supplier')}</h3>
         <div className="ph-act" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {f.supplierStuckAt && (
             <span className="st st-danger">
               <i className="d" />
-              Stuck since {fmt(f.supplierStuckAt)}
+              {t('ord_sp_stuck_since', { when: fmt(f.supplierStuckAt) })}
             </span>
           )}
           {canManage && eligible && providers.length > 0 && (
             <button className="abtn xs primary" onClick={() => setOpen(true)}>
-              <Icon name="send" size={13} /> Send to a supplier
+              <Icon name="send" size={13} /> {t('ord_sp_send_to')}
             </button>
           )}
         </div>
       </div>
       <div style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <div>
-          <div className="faint" style={{ fontSize: 12 }}>Supplier</div>
+          <div className="faint" style={{ fontSize: 12 }}>{t('ord_sp_supplier')}</div>
           <b>{name(apiLine.fulfillmentProvider)}</b>
         </div>
         <div>
-          <div className="faint" style={{ fontSize: 12 }}>Supplier product</div>
+          <div className="faint" style={{ fontSize: 12 }}>{t('ord_sp_supplier_product')}</div>
           <b className="mono">{apiLine.upstreamProductId || '—'}</b>
         </div>
         <div>
-          <div className="faint" style={{ fontSize: 12 }}>Quantity sent</div>
+          <div className="faint" style={{ fontSize: 12 }}>{t('ord_sp_qty_sent')}</div>
           <b>{supplierQty(apiLine).toLocaleString('en-US')}</b>
         </div>
         <div>
-          <div className="faint" style={{ fontSize: 12 }}>Supplier reference</div>
+          <div className="faint" style={{ fontSize: 12 }}>{t('ord_sp_supplier_ref')}</div>
           <b className="mono" style={{ overflowWrap: 'anywhere' }}>
             {f.providerRef || '—'}
           </b>
         </div>
         {!!f.supplierAttempt && (
           <div>
-            <div className="faint" style={{ fontSize: 12 }}>Attempt</div>
+            <div className="faint" style={{ fontSize: 12 }}>{t('ord_sp_attempt')}</div>
             <b>
               #{f.supplierAttempt + 1}
-              {f.supplierAttemptAuto ? ' · automatic fallback' : ` · since ${fmt(f.supplierAttemptAt)}`}
+              {f.supplierAttemptAuto
+                ? t('ord_sp_auto_fallback')
+                : t('ord_sp_since', { when: fmt(f.supplierAttemptAt) })}
             </b>
           </div>
         )}
@@ -119,15 +123,15 @@ export function SupplierPanel({ order, canManage }: { order: AdminOrder; canMana
       {f.supplierAttempts && f.supplierAttempts.length > 0 && (
         <div style={{ padding: '0 18px 16px' }}>
           <div className="faint" style={{ fontSize: 12, marginBottom: 6 }}>
-            Earlier attempts — if one of these suppliers still delivers, reconcile it manually.
+            {t('ord_sp_earlier')}
           </div>
           <table className="tbl">
             <thead>
               <tr>
-                <th>Supplier</th>
-                <th>Product</th>
-                <th>Reference</th>
-                <th>Moved on</th>
+                <th>{t('ord_sp_supplier')}</th>
+                <th>{t('col_product')}</th>
+                <th>{t('ord_col_reference')}</th>
+                <th>{t('ord_sp_moved_on')}</th>
               </tr>
             </thead>
             <tbody>
@@ -142,7 +146,7 @@ export function SupplierPanel({ order, canManage }: { order: AdminOrder; canMana
                       <>
                         {' '}
                         <span className="bdg" title={a.reason}>
-                          auto
+                          {t('ord_sp_auto')}
                         </span>
                         {a.reason && (
                           <div className="faint" style={{ fontSize: 12, overflowWrap: 'anywhere' }}>
@@ -187,6 +191,7 @@ export function SendViaSupplierModal({
   providers: { id: number; name: string }[]
   onClose: () => void
 }) {
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { fromManual } = rerouteState(order)
   const opts = useQuery({
@@ -220,19 +225,17 @@ export function SendViaSupplierModal({
       qc.invalidateQueries({ queryKey: ['admin', 'orders'] })
       const st = res.data?.status
       const stuck = !!res.data?.fulfillment.supplierStuckAt
-      if (st === 'completed') toast.success('Delivered by the supplier')
-      else if (stuck) toast.error('The supplier refused it — try another supplier or refund')
-      else toast.success('Sent to the supplier')
+      if (st === 'completed') toast.success(t('ord_sp_t_delivered'))
+      else if (stuck) toast.error(t('ord_sp_t_refused'))
+      else toast.success(t('ord_sp_t_sent'))
       onClose()
     },
     onError: (e) => {
       setSendingKey('')
+      setError(supplierErrorText(e, 'ord_sp_send_failed', t, i18n.language))
       if (e instanceof ApiError) {
-        setError(e.message)
         if (e.code === 'REROUTE_LOW_BALANCE') setLowBalanceAsked(true)
         if (e.code === 'REROUTE_NEEDS_ACK' || e.code === 'REROUTE_CONFLICT') opts.refetch()
-      } else {
-        setError('Could not send the order.')
       }
     },
   })
@@ -249,24 +252,23 @@ export function SendViaSupplierModal({
     <Modal onClose={onClose} maxWidth={820}>
       <div style={{ padding: 22, maxHeight: '86vh', overflowY: 'auto' }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-          {fromManual ? 'Send via supplier' : 'Send to a supplier'}
+          {fromManual ? t('ord_sp_send_via') : t('ord_sp_send_to')}
         </h3>
         <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-          {fromManual
-            ? 'The order is sent to the supplier you pick right away and completes automatically when they deliver.'
-            : "The order is sent to the supplier you pick right away, as a new order there. The current supplier is no longer checked; its reference stays in the history."}
+          {fromManual ? t('ord_sp_via_body') : t('ord_sp_to_body')}
         </p>
 
         <div style={{ fontSize: 13, marginBottom: 12 }}>
-          Quantity <b>{qty.toLocaleString('en-US')}</b>
-          {line.amount != null ? ' (the units the customer asked for)' : ''}
+          {t('ord_sp_quantity')} <b>{qty.toLocaleString('en-US')}</b>
+          {line.amount != null ? t('ord_sp_units_note') : ''}
           {line.playerId ? (
             <>
               {' '}
-              · player <b className="mono">{line.playerId}</b>
+              · {t('ord_sp_player')} <b className="mono">{line.playerId}</b>
             </>
           ) : null}
-          {' · '}customer paid <b>${(data?.linePrice ?? order.total).toFixed(2)}</b>
+          {' · '}
+          {t('ord_sp_customer_paid')} <b>${(data?.linePrice ?? order.total).toFixed(2)}</b>
           {(line.fields ?? []).length > 0 && (
             <div className="faint" style={{ marginTop: 2 }}>
               {(line.fields ?? []).map((f) => `${f.key}=${f.value}`).join(' · ')}
@@ -276,32 +278,30 @@ export function SendViaSupplierModal({
 
         {opts.isLoading ? (
           <div className="faint" style={{ fontSize: 13 }}>
-            Checking the product's suppliers…
+            {t('ord_sp_checking')}
           </div>
         ) : opts.isError ? (
           <div role="alert" style={{ color: 'var(--danger)', fontSize: 13 }}>
-            Couldn't load this order's suppliers.
+            {t('ord_sp_options_error')}
           </div>
         ) : data && !data.canSend ? (
           <div role="alert" style={{ color: 'var(--danger)', fontSize: 13 }}>
-            {data.message || "This order can't be sent to a supplier."}
+            {data.message ? supplierText(data.message, t, i18n.language, data.reason) : t('ord_sp_cannot_send')}
           </div>
         ) : options.length === 0 ? (
           <div className="faint" style={{ fontSize: 13 }}>
-            {data?.productMissing
-              ? 'The product was deleted, so there is no supplier list — pick a supplier product below.'
-              : 'No supplier is linked to this product yet — link them in the product editor, or pick a supplier product below.'}
+            {data?.productMissing ? t('ord_sp_product_missing') : t('ord_sp_no_links')}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table className="tbl" aria-label="Linked suppliers" style={{ width: '100%', fontSize: 13 }}>
+            <table className="tbl" aria-label={t('ord_sp_linked_aria')} style={{ width: '100%', fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th>Supplier</th>
-                  <th>Supplier product</th>
-                  <th>Cost of this order</th>
-                  <th>Margin</th>
-                  <th>Status</th>
+                  <th>{t('ord_sp_supplier')}</th>
+                  <th>{t('ord_sp_supplier_product')}</th>
+                  <th>{t('ord_sp_cost')}</th>
+                  <th>{t('ord_sp_margin')}</th>
+                  <th>{t('status')}</th>
                   <th style={{ textAlign: 'right' }} />
                 </tr>
               </thead>
@@ -332,30 +332,27 @@ export function SendViaSupplierModal({
             fontSize: 13,
           }}
         >
-          <b>Double-delivery risk.</b>{' '}
-          {fromManual
-            ? 'Make sure nobody has already credited this order by hand — otherwise the customer receives it twice and the supplier charges us.'
-            : "If the previous supplier still completes this order, the customer may receive it twice and both suppliers may charge us. Check the previous supplier's panel first when you can."}
+          <b>{t('ord_sp_risk')}</b> {fromManual ? t('ord_sp_risk_manual') : t('ord_sp_risk_reroute')}
           <label style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-            <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} /> I
-            understand
+            <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />{' '}
+            {t('ord_sp_understand')}
           </label>
           {needsAck && (
             <label style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', color: 'var(--danger)' }}>
-              <input type="checkbox" checked={ackAtSupplier} onChange={(e) => setAckAtSupplier(e.target.checked)} /> The
-              current supplier may still deliver this order — send it again anyway
+              <input type="checkbox" checked={ackAtSupplier} onChange={(e) => setAckAtSupplier(e.target.checked)} />{' '}
+              {t('ord_sp_ack_at_supplier')}
             </label>
           )}
           {ambiguous && (
             <label style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', color: 'var(--danger)' }}>
-              <input type="checkbox" checked={ackAmbiguous} onChange={(e) => setAckAmbiguous(e.target.checked)} /> The
-              previous supplier's result is unknown — send anyway
+              <input type="checkbox" checked={ackAmbiguous} onChange={(e) => setAckAmbiguous(e.target.checked)} />{' '}
+              {t('ord_sp_ack_ambiguous')}
             </label>
           )}
           {anyLowBalance && (
             <label style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
-              <input type="checkbox" checked={sendAnyway} onChange={(e) => setSendAnyway(e.target.checked)} /> Send even
-              if a supplier's balance looks too low (the account allows credit)
+              <input type="checkbox" checked={sendAnyway} onChange={(e) => setSendAnyway(e.target.checked)} />{' '}
+              {t('ord_sp_low_balance_ok')}
             </label>
           )}
         </div>
@@ -374,7 +371,7 @@ export function SendViaSupplierModal({
               aria-expanded={showOther}
               onClick={() => setShowOther((v) => !v)}
             >
-              <Icon name={showOther ? 'chevup' : 'chevdown'} size={12} /> Other supplier product…
+              <Icon name={showOther ? 'chevup' : 'chevdown'} size={12} /> {t('ord_sp_other_product')}
             </button>
             {showOther && (
               <OtherSupplierProduct
@@ -396,7 +393,7 @@ export function SendViaSupplierModal({
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
           <button className="abtn" onClick={onClose}>
-            Close
+            {t('ord_close')}
           </button>
         </div>
       </div>
@@ -419,17 +416,18 @@ function OptionRow({
   sending: boolean
   onSend: () => void
 }) {
+  const { t, i18n } = useTranslation()
   const margin = orderMargin(linePrice, o.cost, o.currency, currency)
   const dot =
     o.catalogStatus === 'ok' ? (o.available ? 'var(--ok)' : 'var(--danger)') : o.catalogStatus === 'unknown' ? 'var(--danger)' : 'var(--border-strong)'
-  const label = o.providerName || `supplier #${o.provider}`
+  const label = o.providerName || t('ord_sp_supplier_n', { n: o.provider })
   return (
     <tr style={{ opacity: o.blocked ? 0.6 : 1 }}>
       <td style={{ fontWeight: 600 }}>
         {label}
         {o.balance != null && (
           <div className="faint mono" style={{ fontSize: 12, fontWeight: 400 }}>
-            balance {fmtCost(o.balance, o.balanceCurrency)}
+            {t('ord_sp_balance', { amount: fmtCost(o.balance, o.balanceCurrency) })}
           </div>
         )}
       </td>
@@ -446,15 +444,15 @@ function OptionRow({
       <td>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ width: 9, height: 9, borderRadius: 5, background: dot, flex: 'none' }} />
-          {o.active && <span className="st st-ok">Active</span>}
-          {o.current && <span className="st st-mute">Current</span>}
-          {o.tried && <span className="st st-mute">Tried</span>}
-          {o.lowBalance && <span className="st st-warn">Low balance</span>}
-          {o.stale && <span className="st st-mute">Old data</span>}
+          {o.active && <span className="st st-ok">{t('active')}</span>}
+          {o.current && <span className="st st-mute">{t('ord_sp_current')}</span>}
+          {o.tried && <span className="st st-mute">{t('ord_sp_tried')}</span>}
+          {o.lowBalance && <span className="st st-warn">{t('sup_health_low_balance')}</span>}
+          {o.stale && <span className="st st-mute">{t('ord_sp_old_data')}</span>}
         </div>
         {o.blocked && (
           <div className="faint" style={{ fontSize: 12, marginTop: 2 }}>
-            {o.blocked}
+            {supplierText(o.blocked, t, i18n.language)}
           </div>
         )}
       </td>
@@ -462,11 +460,11 @@ function OptionRow({
         <button
           type="button"
           className="abtn xs primary"
-          aria-label={`Send to ${label}`}
+          aria-label={t('ord_sp_send_to_aria', { name: label })}
           disabled={disabled || !!o.blocked}
           onClick={onSend}
         >
-          <Icon name="send" size={12} /> {sending ? 'Sending…' : o.current ? 'Send again' : 'Send'}
+          <Icon name="send" size={12} /> {sending ? t('ord_sending') : o.current ? t('ord_sp_send_again') : t('ord_sp_send')}
         </button>
       </td>
     </tr>
@@ -494,6 +492,7 @@ function OtherSupplierProduct({
   onSend: (providerId: number, upstream: string) => void
   onEdit: () => void
 }) {
+  const { t } = useTranslation()
   const [providerId, setProviderId] = useState<number>(
     providers.find((p) => p.id !== current)?.id ?? providers[0]?.id ?? 0,
   )
@@ -508,17 +507,17 @@ function OtherSupplierProduct({
   }
   return (
     <div style={{ marginTop: 10, padding: 12, border: '1px solid var(--border)', borderRadius: 10 }}>
-      <label className="alabel">Supplier</label>
-      <select className="afield" aria-label="Supplier" value={providerId} onChange={(e) => changeProvider(Number(e.target.value))}>
+      <label className="alabel">{t('ord_sp_supplier')}</label>
+      <select className="afield" aria-label={t('ord_sp_supplier')} value={providerId} onChange={(e) => changeProvider(Number(e.target.value))}>
         {providers.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
-            {p.id === current ? ' (current)' : ''}
+            {p.id === current ? t('ord_sp_current_suffix') : ''}
           </option>
         ))}
       </select>
       <label className="alabel" style={{ marginTop: 12 }}>
-        Supplier product
+        {t('ord_sp_supplier_product')}
       </label>
       <SupplierProductPicker
         providerId={providerId}
@@ -537,7 +536,7 @@ function OtherSupplierProduct({
           disabled={disabled || providerId <= 0 || upstream.trim() === ''}
           onClick={() => onSend(providerId, upstream.trim())}
         >
-          <Icon name="send" size={14} /> {sending ? 'Sending…' : 'Send now'}
+          <Icon name="send" size={14} /> {sending ? t('ord_sending') : t('ord_sp_send_now')}
         </button>
       </div>
     </div>

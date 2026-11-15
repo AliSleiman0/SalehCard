@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Trans, useTranslation } from 'react-i18next'
 import { Icon, Modal } from '@/components'
-import { ApiError } from '@/lib/api-client'
 import { orderNumber } from '@/lib/orderNumber'
+import { supplierErrorText, supplierText } from '../lib/supplierText'
 import {
   listRerouteProviders,
   rerouteBulkOrders,
@@ -10,15 +11,16 @@ import {
   type BulkRerouteOutcome,
 } from '../api/orders'
 
-const STATUS_LABEL: Record<BulkRerouteOutcome['status'], { text: string; cls: string }> = {
-  completed: { text: 'Delivered', cls: 'st-ok' },
-  sent: { text: 'Sent', cls: 'st-ok' },
-  refused: { text: 'Refused by supplier', cls: 'st-danger' },
-  needs_ack: { text: 'Needs confirmation', cls: 'st-warn' },
-  no_link: { text: 'No supplier', cls: 'st-warn' },
-  not_eligible: { text: 'Skipped', cls: 'st-mute' },
-  conflict: { text: 'Changed — skipped', cls: 'st-mute' },
-  error: { text: 'Error', cls: 'st-danger' },
+// Each outcome's badge colour; its label is the `ord_br_st_<status>` key.
+const STATUS_CLASS: Record<BulkRerouteOutcome['status'], string> = {
+  completed: 'st-ok',
+  sent: 'st-ok',
+  refused: 'st-danger',
+  needs_ack: 'st-warn',
+  no_link: 'st-warn',
+  not_eligible: 'st-mute',
+  conflict: 'st-mute',
+  error: 'st-danger',
 }
 
 /** BulkResendModal re-sends up to MAX_BULK_RESEND selected orders to a supplier
@@ -26,6 +28,7 @@ const STATUS_LABEL: Record<BulkRerouteOutcome['status'], { text: string; cls: st
  *  product's first usable linked supplier — or to its link at one chosen
  *  supplier — and the per-order outcome is listed. */
 export function BulkResendModal({ ids, onClose, onDone }: { ids: string[]; onClose: () => void; onDone: () => void }) {
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { data: provRes } = useQuery({
     queryKey: ['admin', 'orders', 'reroute-providers'],
@@ -53,7 +56,7 @@ export function BulkResendModal({ ids, onClose, onDone }: { ids: string[]; onClo
       qc.invalidateQueries({ queryKey: ['admin', 'orders'] })
       qc.invalidateQueries({ queryKey: ['admin', 'order'] })
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not re-send the orders.'),
+    onError: (e) => setError(supplierErrorText(e, 'ord_br_failed', t, i18n.language)),
   })
   const result = run.data?.data
   const tooMany = ids.length > MAX_BULK_RESEND
@@ -62,32 +65,31 @@ export function BulkResendModal({ ids, onClose, onDone }: { ids: string[]; onClo
     <Modal onClose={result ? onDone : onClose} maxWidth={680}>
       <div style={{ padding: 22, maxHeight: '86vh', overflowY: 'auto' }}>
         <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-          Re-send {ids.length} order{ids.length === 1 ? '' : 's'} to a supplier
+          {t('ord_br_title', { count: ids.length })}
         </h3>
         {!result ? (
           <>
             <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-              Each order is placed again as a new supplier order, right away. Orders that are completed, refunded or
-              not sendable are skipped.
+              {t('ord_br_body')}
             </p>
-            <label className="alabel">Supplier</label>
+            <label className="alabel">{t('ord_sp_supplier')}</label>
             <select
               className="afield"
-              aria-label="Supplier"
+              aria-label={t('ord_sp_supplier')}
               value={providerId}
               onChange={(e) => setProviderId(Number(e.target.value))}
             >
-              <option value={0}>Each order's first linked supplier (Active first, then the backup order)</option>
+              <option value={0}>{t('ord_br_first_linked')}</option>
               {providers.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} — only orders whose product is linked there
+                  {t('ord_br_only_linked', { name: p.name })}
                 </option>
               ))}
             </select>
             <div className="ahint" style={{ marginTop: 6 }}>
               {providerId
-                ? 'Orders go to their product’s link at this supplier, even if it is the one they were sent to before.'
-                : 'Skips the supplier product each order was already sent to.'}
+                ? t('ord_br_hint_provider')
+                : t('ord_br_hint_first')}
             </div>
 
             <div
@@ -100,24 +102,23 @@ export function BulkResendModal({ ids, onClose, onDone }: { ids: string[]; onClo
                 fontSize: 13,
               }}
             >
-              <b>Double-delivery risk.</b> If a previous supplier still completes one of these orders, the customer may
-              receive it twice and both suppliers may charge us.
+              <b>{t('ord_sp_risk')}</b> {t('ord_br_risk_body')}
               <label style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-                <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} /> I
-                understand
+                <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />{' '}
+                {t('ord_sp_understand')}
               </label>
               <label style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', color: 'var(--danger)' }}>
                 <input type="checkbox" checked={ackAtSupplier} onChange={(e) => setAckAtSupplier(e.target.checked)} />{' '}
-                Also re-send orders a supplier may still deliver (otherwise they are skipped)
+                {t('ord_br_also_resend')}
               </label>
               <label style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
-                <input type="checkbox" checked={sendAnyway} onChange={(e) => setSendAnyway(e.target.checked)} /> Send
-                even if a supplier's balance looks too low (the account allows credit)
+                <input type="checkbox" checked={sendAnyway} onChange={(e) => setSendAnyway(e.target.checked)} />{' '}
+                {t('ord_sp_low_balance_ok')}
               </label>
             </div>
             {tooMany && (
               <div role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>
-                Select at most {MAX_BULK_RESEND} orders — each one is a new, billed supplier order.
+                {t('ord_br_too_many', { n: MAX_BULK_RESEND })}
               </div>
             )}
             {error && (
@@ -127,7 +128,7 @@ export function BulkResendModal({ ids, onClose, onDone }: { ids: string[]; onClo
             )}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
               <button className="abtn" onClick={onClose}>
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 className="abtn primary"
@@ -137,31 +138,35 @@ export function BulkResendModal({ ids, onClose, onDone }: { ids: string[]; onClo
                   run.mutate()
                 }}
               >
-                <Icon name="send" size={14} /> {run.isPending ? 'Sending…' : `Re-send ${ids.length}`}
+                <Icon name="send" size={14} /> {run.isPending ? t('ord_sending') : t('ord_br_go', { n: ids.length })}
               </button>
             </div>
           </>
         ) : (
           <>
             <p style={{ fontSize: 13, marginBottom: 10 }}>
-              Sent <b>{result.sent}</b> of {result.total}.
+              <Trans
+                i18nKey="ord_br_sent_of"
+                values={{ sent: result.sent, total: result.total }}
+                components={{ b: <b /> }}
+              />
             </p>
-            <table className="tbl" aria-label="Re-send results" style={{ width: '100%', fontSize: 13 }}>
+            <table className="tbl" aria-label={t('ord_br_results_aria')} style={{ width: '100%', fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th>Order</th>
-                  <th>Result</th>
-                  <th>Details</th>
+                  <th>{t('col_order')}</th>
+                  <th>{t('ord_br_result')}</th>
+                  <th>{t('ord_br_details')}</th>
                 </tr>
               </thead>
               <tbody>
                 {result.results.map((r) => {
-                  const s = STATUS_LABEL[r.status] ?? STATUS_LABEL.error
+                  const status = STATUS_CLASS[r.status] ? r.status : 'error'
                   return (
                     <tr key={r.id}>
                       <td className="mono">{orderNumber(r.id)}</td>
                       <td>
-                        <span className={`st ${s.cls}`}>{s.text}</span>
+                        <span className={`st ${STATUS_CLASS[status]}`}>{t(`ord_br_st_${status}`)}</span>
                       </td>
                       <td>
                         {r.provider ? (
@@ -170,7 +175,7 @@ export function BulkResendModal({ ids, onClose, onDone }: { ids: string[]; onClo
                             {r.message ? ' — ' : ''}
                           </span>
                         ) : null}
-                        {r.message}
+                        {r.message ? supplierText(r.message, t, i18n.language) : null}
                       </td>
                     </tr>
                   )
@@ -179,7 +184,7 @@ export function BulkResendModal({ ids, onClose, onDone }: { ids: string[]; onClo
             </table>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
               <button className="abtn primary" onClick={onDone}>
-                Done
+                {t('ord_done')}
               </button>
             </div>
           </>

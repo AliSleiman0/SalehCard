@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/stores/toast'
+import i18n from '@/i18n/config'
 import {
   listDevices,
   createDevice,
@@ -45,7 +46,7 @@ export function useCreateDevice() {
     mutationFn: ({ name, providers }: { name: string; providers: string[] }) =>
       createDevice(name, providers),
     onSuccess: () => invalidate(),
-    onError: () => toast.error('Could not register device'),
+    onError: () => toast.error(i18n.t('brg_t_register_failed')),
   })
 }
 
@@ -55,14 +56,14 @@ export function useUpdateDevice() {
     mutationFn: ({ id, patch }: { id: string; patch: { name?: string; enabled?: boolean; providers?: string[] } }) =>
       updateDevice(id, patch),
     onSuccess: () => invalidate(),
-    onError: () => toast.error('Could not update device'),
+    onError: () => toast.error(i18n.t('brg_t_update_failed')),
   })
 }
 
 export function useRotateToken() {
   return useMutation({
     mutationFn: (id: string) => rotateToken(id),
-    onError: () => toast.error('Could not rotate token'),
+    onError: () => toast.error(i18n.t('brg_t_rotate_failed')),
   })
 }
 
@@ -72,17 +73,17 @@ export function useDeleteDevice() {
     mutationFn: (id: string) => deleteDevice(id),
     onSuccess: () => {
       invalidate()
-      toast.success('Device removed')
+      toast.success(i18n.t('brg_t_removed'))
     },
-    onError: () => toast.error('Could not remove device'),
+    onError: () => toast.error(i18n.t('brg_t_remove_failed')),
   })
 }
 
 export function useCheckBalance() {
   return useMutation({
     mutationFn: (id: string) => checkBalance(id),
-    onSuccess: () => toast.success('Balance check queued'),
-    onError: () => toast.error('Could not queue balance check'),
+    onSuccess: () => toast.success(i18n.t('brg_t_balance_queued')),
+    onError: () => toast.error(i18n.t('brg_t_balance_failed')),
   })
 }
 
@@ -92,9 +93,9 @@ export function useRetryCommand() {
     mutationFn: (id: string) => retryCommand(id),
     onSuccess: () => {
       invalidate()
-      toast.success('Command re-queued')
+      toast.success(i18n.t('brg_t_requeued'))
     },
-    onError: () => toast.error('Could not retry command'),
+    onError: () => toast.error(i18n.t('brg_t_retry_failed')),
   })
 }
 
@@ -104,8 +105,8 @@ export function useCancelCommand() {
     mutationFn: (id: string) => cancelCommand(id),
     onSuccess: () => {
       invalidate()
-      toast.success('Command cancelled')
+      toast.success(i18n.t('brg_t_cancelled'))
     },
-    onError: () => toast.error('Could not cancel command'),
+    onError: () => toast.error(i18n.t('brg_t_cancel_failed')),
   })
 }
