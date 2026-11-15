@@ -153,6 +153,14 @@ export interface Recipient {
   detail: string
 }
 
+// OrderField is one labeled checkout input on an order line (Account ID, Zone
+// ID…). A photo field's value is its stored image URL.
+export interface OrderField {
+  key: string
+  label: Partial<I18nString>
+  value: string
+}
+
 export interface OrderItem {
   productId: string
   variantId: string
@@ -164,6 +172,7 @@ export interface OrderItem {
   fulfillmentType: FulfillmentType
   playerId?: string
   recipient?: Recipient
+  fields?: OrderField[]
   // Customer-entered amount on a unit-priced line (denomination echoes it, e.g. "45,000").
   amount?: number
   // Delivered codes for an inventory/code line, one per unit (omitted when none).

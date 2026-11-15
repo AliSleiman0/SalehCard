@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Icon, Card, Button, LoadingSpinner, ErrorState } from '@/components'
 import { OrderHead, CreditConfirm, TransferDetail, StatusNotice, OrderCodes } from '@/features/orders/components/OrderParts'
 import { useLocaleStore } from '@/stores/locale'
@@ -10,6 +10,10 @@ export default function OrderDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { id } = useParams()
+  const location = useLocation()
+  // Back to the order list the customer came from, keeping its ?q= search.
+  const from = (location.state as { from?: unknown } | null)?.from
+  const backTo = typeof from === 'string' && from.startsWith('/orders') ? from : '/orders'
   const locale = useLocaleStore((s) => s.locale)
   const query = useOrder(id ?? '', true)
 
@@ -33,7 +37,7 @@ export default function OrderDetailPage() {
     <div className="wrap" style={{ padding: '26px 0 50px', maxWidth: 720 }}>
       <a
         className="small clickable faint"
-        onClick={() => navigate('/orders')}
+        onClick={() => navigate(backTo)}
         style={{ display: 'inline-block', marginBottom: 16 }}
       >
         ← {t('order_history')}

@@ -189,6 +189,10 @@
   "filterAll": "الكل",
   "ordersEmptyTitle": "لا توجد طلبات بعد",
   "ordersEmptySub": "ستظهر مشترياتك هنا بمجرد إتمام أول طلب.",
+  "ordersSearchHint": "ابحث برقم الطلب أو معرّف اللاعب أو المنتج",
+  "ordersSearchClear": "مسح البحث",
+  "ordersSearchNoneTitle": "لا توجد طلبات تطابق «{query}»",
+  "ordersSearchNoneSub": "تحقق من رقم الطلب أو المعرّف، أو امسح البحث لعرض كل طلباتك.",
   "orderRefundedNote": "تم استرداد هذا الطلب. أُعيد المبلغ إلى محفظتك.",
   "orderTimelineLabel": "المسار",
 

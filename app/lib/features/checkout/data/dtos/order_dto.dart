@@ -22,6 +22,25 @@ class RecipientDto {
       OrderRecipient(name: name, country: country, detail: detail);
 }
 
+/// One labeled checkout input stored on an order line (`OrderItem.Fields` in
+/// the API). A photo field's value is its stored image URL.
+@JsonSerializable()
+class OrderFieldDto {
+  const OrderFieldDto({this.key = '', this.label, this.value = ''});
+
+  final String key;
+  final Map<String, dynamic>? label;
+  final String value;
+
+  factory OrderFieldDto.fromJson(Map<String, dynamic> json) =>
+      _$OrderFieldDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$OrderFieldDtoToJson(this);
+
+  OrderLineField toEntity() =>
+      OrderLineField(key: key, label: I18nString.fromJson(label), value: value);
+}
+
 @JsonSerializable(explicitToJson: true)
 class OrderItemDto {
   const OrderItemDto({
@@ -35,6 +54,7 @@ class OrderItemDto {
     this.fulfillmentType = 'code',
     this.playerId,
     this.recipient,
+    this.fields,
     this.amount,
     this.codes,
   });
@@ -49,6 +69,9 @@ class OrderItemDto {
   final String fulfillmentType;
   final String? playerId;
   final RecipientDto? recipient;
+
+  /// Labeled checkout inputs (Account ID, Zone ID…); omitted when none.
+  final List<OrderFieldDto>? fields;
   final double? amount;
 
   /// One delivered code per unit on code lines; omitted by the API when none.
@@ -70,6 +93,7 @@ class OrderItemDto {
         fulfillmentType: fulfillmentType,
         playerId: playerId,
         recipient: recipient?.toEntity(),
+        fields: (fields ?? const []).map((f) => f.toEntity()).toList(),
         amount: amount,
         codes: codes ?? const [],
       );

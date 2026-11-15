@@ -466,6 +466,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get ordersEmptySub => 'ستظهر مشترياتك هنا بمجرد إتمام أول طلب.';
 
   @override
+  String get ordersSearchHint => 'ابحث برقم الطلب أو معرّف اللاعب أو المنتج';
+
+  @override
+  String get ordersSearchClear => 'مسح البحث';
+
+  @override
+  String ordersSearchNoneTitle(String query) {
+    return 'لا توجد طلبات تطابق «$query»';
+  }
+
+  @override
+  String get ordersSearchNoneSub =>
+      'تحقق من رقم الطلب أو المعرّف، أو امسح البحث لعرض كل طلباتك.';
+
+  @override
   String get orderRefundedNote =>
       'تم استرداد هذا الطلب. أُعيد المبلغ إلى محفظتك.';
 
