@@ -111,6 +111,9 @@ func NewProbes(reg *Registry, cfg ProbesConfig) *Probes {
 // Registry is the provider registry the cache reads through.
 func (p *Probes) Registry() *Registry { return p.reg }
 
+// Has reports whether a real adapter is registered for supplier id.
+func (p *Probes) Has(id int) bool { return p.reg.Has(id) }
+
 func (p *Probes) cataloger(id int) (Cataloger, bool) {
 	if !p.reg.Has(id) {
 		return nil, false
