@@ -552,3 +552,6 @@ textarea.afield { resize: vertical; min-height: 84px; line-height: 1.5; }
 @media (max-width: 900px) { .todo-add { grid-template-columns: 1fr !important; } }
 /* Page-header Back: the chevron points toward the reading start, so mirror it in RTL. */
 [dir="rtl"] .back-btn svg { transform: scaleX(-1); }
+
+/* Arabic letters join, so spacing them apart breaks the words (codes keep theirs). */
+:lang(ar) :not(.avault, .vault, .mono, code, kbd) { letter-spacing: normal !important; }

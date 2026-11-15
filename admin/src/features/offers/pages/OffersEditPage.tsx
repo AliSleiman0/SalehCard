@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { Icon, PageHead, Chip, LoadingSpinner, ErrorState } from '@/components'
 import { useGoBack } from '@/lib/goBack'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 import { useCan } from '@/stores/auth'
 import { useProducts } from '@/features/products/hooks/useProducts'
 import { useOffer, useCreateOffer, useUpdateOffer } from '../hooks/useOffers'
@@ -79,7 +79,7 @@ export default function OffersEditPage() {
     return (
       <div className="page">
         <PageHead back="/offers" title={t('nav_offers')} />
-        <ErrorState message="Couldn't load this offer." onRetry={() => refetch()} />
+        <ErrorState message={t('off_load_one_error')} onRetry={() => refetch()} />
       </div>
     )
   }
@@ -89,19 +89,19 @@ export default function OffersEditPage() {
   const save = () => {
     const v = Number(value)
     if (!productId) {
-      setError('Pick a product.')
+      setError(t('off_err_product'))
       return
     }
     if (!Number.isFinite(v) || v <= 0) {
-      setError('Discount value must be greater than zero.')
+      setError(t('off_err_value'))
       return
     }
     if (discountType === 'percent' && v > 100) {
-      setError('Percent value must be between 0 and 100.')
+      setError(t('promo_err_percent'))
       return
     }
     if (startsAt && endsAt && endsAt < startsAt) {
-      setError('End date must be after the start date.')
+      setError(t('promo_err_dates'))
       return
     }
     setError('')
@@ -114,7 +114,7 @@ export default function OffersEditPage() {
       sortOrder: Number(sortOrder) || 0,
       active,
     }
-    const onError = (e: unknown) => setError(e instanceof ApiError ? e.message : 'Save failed.')
+    const onError = (e: unknown) => setError(apiErrorText(e, 'exp_save_error'))
     if (isNew) {
       create.mutate(input, { onSuccess: () => goBack(), onError })
     } else {
@@ -128,9 +128,9 @@ export default function OffersEditPage() {
     <div className="page">
       <PageHead
         back="/offers"
-        crumbs={[t('nav_offers'), isNew ? 'New offer' : productName || 'Edit']}
-        title={isNew ? 'New offer' : 'Edit offer'}
-        sub={isNew ? 'Put a product on a time-boxed sale price' : productName}
+        crumbs={[t('nav_offers'), isNew ? t('off_new') : productName || t('edit')]}
+        title={isNew ? t('off_new') : t('off_edit')}
+        sub={isNew ? t('off_new_sub') : productName}
       >
         {canManage && (
           <button className="abtn primary" onClick={save} disabled={saving}>
@@ -146,12 +146,11 @@ export default function OffersEditPage() {
       <div className="formgrid">
         <div className="fieldset">
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Product &amp; discount</h3>
-            <label className="alabel">Product</label>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('off_section')}</h3>
+            <label className="alabel">{t('col_product')}</label>
             {!canViewProducts ? (
               <div className="ahint" style={{ color: 'var(--danger)' }}>
-                Choosing a product needs Products access — ask a super admin to add
-                Products (view) to your role.
+                {t('off_need_products')}
               </div>
             ) : (
               <select
@@ -161,7 +160,7 @@ export default function OffersEditPage() {
                 disabled={products.isLoading}
                 onChange={(e) => setProductId(e.target.value)}
               >
-                <option value="">{products.isLoading ? 'Loading products…' : 'Select a product…'}</option>
+                <option value="">{products.isLoading ? t('off_loading_products') : t('off_select_product')}</option>
                 {productList.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.title.en} — ${fromPrice(p.variants).toFixed(2)}
@@ -175,13 +174,13 @@ export default function OffersEditPage() {
             )}
 
             <label className="alabel" style={{ marginTop: 16 }}>
-              Discount type
+              {t('promo_discount_type')}
             </label>
             <div className="g2">
               {(
                 [
-                  ['percent', 'Percent %'],
-                  ['fixed', 'Fixed $ off'],
+                  ['percent', t('promo_chip_percent')],
+                  ['fixed', t('off_chip_fixed')],
                 ] as [DiscountType, string][]
               ).map(([k, l]) => (
                 <Chip
@@ -196,7 +195,9 @@ export default function OffersEditPage() {
             </div>
             <div className="g2" style={{ marginTop: 16 }}>
               <div>
-                <label className="alabel">Value {discountType === 'percent' ? '(%)' : '($)'}</label>
+                <label className="alabel">
+                  {t('promo_col_value')} {discountType === 'percent' ? '(%)' : '($)'}
+                </label>
                 <input
                   className="afield"
                   type="number"
@@ -207,7 +208,7 @@ export default function OffersEditPage() {
                 />
               </div>
               <div>
-                <label className="alabel">Sort order</label>
+                <label className="alabel">{t('cat_sort_order')}</label>
                 <input
                   className="afield"
                   type="number"
@@ -219,44 +220,44 @@ export default function OffersEditPage() {
               </div>
             </div>
             <div className="ahint" style={{ marginTop: 8 }}>
-              Lower sort order shows first and wins when a product has more than one live offer.
+              {t('off_sort_hint')}
             </div>
           </div>
         </div>
 
         <div className="fieldset">
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Validity</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('promo_validity')}</h3>
             <div className="g2">
               <div>
-                <label className="alabel">Status</label>
+                <label className="alabel">{t('status')}</label>
                 <select
                   className="select"
                   style={{ width: '100%' }}
                   value={active ? 'active' : 'paused'}
                   onChange={(e) => setActive(e.target.value === 'active')}
                 >
-                  <option value="active">Active</option>
-                  <option value="paused">Paused</option>
+                  <option value="active">{t('promo_status_active')}</option>
+                  <option value="paused">{t('promo_status_paused')}</option>
                 </select>
               </div>
               <div />
             </div>
             <label className="alabel" style={{ marginTop: 12 }}>
-              Start date
+              {t('promo_start')}
             </label>
             <input className="afield" type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             <label className="alabel" style={{ marginTop: 12 }}>
-              End date
+              {t('promo_end')}
             </label>
             <input className="afield" type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
             <div className="ahint" style={{ marginTop: 8 }}>
-              Leave a date empty for no bound.
+              {t('promo_no_bound')}
             </div>
           </div>
 
           <div className="acard pad">
-            <div className="alabel">Customer preview</div>
+            <div className="alabel">{t('promo_preview')}</div>
             <div
               style={{
                 padding: 20,
@@ -266,7 +267,7 @@ export default function OffersEditPage() {
                 textAlign: 'center',
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{productName || 'Select a product'}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{productName || t('off_select_product_plain')}</div>
               {original > 0 ? (
                 <div>
                   <span style={{ textDecoration: 'line-through', color: 'var(--text-dim)', marginInlineEnd: 8 }}>
@@ -278,7 +279,7 @@ export default function OffersEditPage() {
                 </div>
               ) : (
                 <div className="muted" style={{ fontSize: 13 }}>
-                  Pick a product to preview the sale price.
+                  {t('off_pick_preview')}
                 </div>
               )}
             </div>

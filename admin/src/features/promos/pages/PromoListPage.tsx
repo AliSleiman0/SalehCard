@@ -16,14 +16,17 @@ import { usePromos, useDeletePromo } from '../hooks/usePromos'
 import { adaptPromo, type PromoView } from '../lib/adaptPromo'
 import type { PromoStatus, PromoType } from '../api/promos'
 
-const TYPE_BADGE: Record<string, [string, string]> = {
-  percent: ['st-info', 'Percent'],
-  fixed: ['st-ok', 'Fixed'],
-  cashback: ['st-warn', 'Cashback'],
+const TYPE_CLASS: Record<string, string> = {
+  percent: 'st-info',
+  fixed: 'st-ok',
+  cashback: 'st-warn',
 }
 
+const TYPES: PromoType[] = ['percent', 'fixed', 'cashback']
+const STATUSES: PromoStatus[] = ['active', 'paused', 'expired', 'depleted']
+
 export default function PromoListPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const can = useCan()
   const canManage = can('promos.manage')
@@ -57,7 +60,9 @@ export default function PromoListPage() {
     q: debouncedSearch.trim(),
   })
 
-  const rows = useMemo(() => (data?.data ?? []).map(adaptPromo), [data])
+  // The labels (period, value) follow the language, so re-adapt when it changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => (data?.data ?? []).map(adaptPromo), [data, i18n.language])
   const meta = data?.meta
 
   return (
@@ -65,15 +70,15 @@ export default function PromoListPage() {
       <PageHead
         back="/"
         crumbs={[t('grp_finance'), t('nav_promos')]}
-        title="Promo codes"
-        sub={meta ? `${meta.total.toLocaleString()} campaigns` : ''}
+        title={t('nav_promos')}
+        sub={meta ? t('promo_campaigns', { n: meta.total.toLocaleString() }) : ''}
       >
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('exp_refresh')}
         </button>
         {canManage && (
           <button className="abtn primary" onClick={() => navigate('/promos/new')}>
-            <Icon name="plus" size={15} /> New promo
+            <Icon name="plus" size={15} /> {t('promo_new')}
           </button>
         )}
       </PageHead>
@@ -82,7 +87,7 @@ export default function PromoListPage() {
         <div className="toolbar">
           <div className="fsearch">
             <Icon name="search" size={15} />
-            <input placeholder="Search codes…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder={t('promo_search_ph')} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select
             className="select"
@@ -92,10 +97,12 @@ export default function PromoListPage() {
               setPage(1)
             }}
           >
-            <option value="">All types</option>
-            <option value="percent">Percent</option>
-            <option value="fixed">Fixed</option>
-            <option value="cashback">Cashback</option>
+            <option value="">{t('promo_all_types')}</option>
+            {TYPES.map((k) => (
+              <option key={k} value={k}>
+                {t(`promo_type_${k}`)}
+              </option>
+            ))}
           </select>
           <select
             className="select"
@@ -105,38 +112,40 @@ export default function PromoListPage() {
               setPage(1)
             }}
           >
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="paused">Paused</option>
-            <option value="expired">Expired</option>
-            <option value="depleted">Depleted</option>
+            <option value="">{t('promo_all_statuses')}</option>
+            {STATUSES.map((k) => (
+              <option key={k} value={k}>
+                {t(`promo_status_${k}`)}
+              </option>
+            ))}
           </select>
         </div>
 
         {isLoading ? (
           <LoadingSpinner />
         ) : isError ? (
-          <ErrorState message="Couldn't load promo codes." onRetry={() => refetch()} />
+          <ErrorState message={t('promo_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No promo codes found" />
+          <EmptyState title={t('promo_empty')} />
         ) : (
           <>
             <div className="tablewrap">
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Type</th>
-                    <th>Value</th>
-                    <th>Usage</th>
-                    <th>Valid period</th>
+                    <th>{t('promo_col_code')}</th>
+                    <th>{t('col_type')}</th>
+                    <th>{t('promo_col_value')}</th>
+                    <th>{t('promo_col_usage')}</th>
+                    <th>{t('promo_col_period')}</th>
                     <th>{t('status')}</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((p) => {
-                    const [cls, label] = TYPE_BADGE[p.type] ?? ['st-mute', p.type]
+                    const cls = TYPE_CLASS[p.type] ?? 'st-mute'
+                    const label = t(`promo_type_${p.type}`, { defaultValue: p.type })
                     return (
                       <tr key={p.id} className="clickable" onClick={() => navigate(`/promos/${p.id}/edit`)}>
                         <td>
@@ -225,12 +234,13 @@ function DeleteModal({ promo, onClose }: { promo: PromoView; onClose: () => void
   return (
     <Modal onClose={onClose} maxWidth={420}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10 }}>Delete promo</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10 }}>{t('promo_delete_title')}</h3>
         <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 18 }}>
-          Delete <b className="mono">{promo.code}</b>? This cannot be undone.
+          {t('promo_delete_pre')} <b className="mono">{promo.code}</b>
+          {t('promo_delete_post')}
         </p>
         {del.isError && (
-          <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 12 }}>Couldn't delete this promo.</div>
+          <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 12 }}>{t('promo_delete_error')}</div>
         )}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button className="abtn" onClick={onClose} disabled={del.isPending}>

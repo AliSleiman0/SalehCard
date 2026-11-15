@@ -55,16 +55,19 @@ const STATUS_MAP: Record<string, [string, string]> = {
   deleted: ['st-mute', 'Deleted'],
 }
 
+/** English labels double as the fallback; each status has a `cmn_st_<status>` key. */
 export function StatusBadge({ s }: { s: string }) {
+  const { t } = useTranslation()
   const [cls, label] = STATUS_MAP[s] || ['st-mute', s]
   return (
     <span className={'st ' + cls}>
       <i className="d" />
-      {label}
+      {STATUS_MAP[s] ? t(`cmn_st_${s}`, { defaultValue: label }) : label}
     </span>
   )
 }
 
 export function RoleBadge({ role }: { role: string }) {
-  return <span className={'pill-role role-' + role}>{role}</span>
+  const { t } = useTranslation()
+  return <span className={'pill-role role-' + role}>{t(`fin_role_${role}`, { defaultValue: role })}</span>
 }

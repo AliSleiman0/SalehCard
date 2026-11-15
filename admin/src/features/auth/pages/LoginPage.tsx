@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Icon } from '@/components'
 import { useAuthStore } from '@/stores/auth'
+import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
 
 export default function LoginPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const login = useAuthStore((s) => s.login)
@@ -22,6 +24,13 @@ export default function LoginPage() {
 
   const from = (location.state as { from?: string })?.from ?? '/'
 
+  // A wrong password comes back as the generic UNAUTHORIZED code, which other
+  // screens also use — so it is worded for the sign-in form here.
+  const errorText = (ex: unknown, fallbackKey: string) =>
+    ex instanceof ApiError && ex.code === 'UNAUTHORIZED' && !i18n.language.startsWith('en')
+      ? t('login_bad_credentials')
+      : apiErrorText(ex, fallbackKey)
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
@@ -33,7 +42,7 @@ export default function LoginPage() {
       }
       // result === '2fa' → the store now holds a challenge; the code step renders.
     } catch (ex) {
-      setError(ex instanceof Error ? ex.message : 'Login failed. Check your credentials.')
+      setError(errorText(ex, 'login_failed'))
     } finally {
       setBusy(false)
     }
@@ -47,7 +56,7 @@ export default function LoginPage() {
       await verifyTwoFactor(code)
       navigate(from, { replace: true })
     } catch (ex) {
-      setError(ex instanceof Error ? ex.message : 'Verification failed. Check the code.')
+      setError(errorText(ex, 'login_verify_failed'))
     } finally {
       setBusy(false)
     }
@@ -58,9 +67,9 @@ export default function LoginPage() {
     setNotice('')
     try {
       await resendTwoFactor()
-      setNotice('A new code has been sent.')
+      setNotice(t('login_code_resent'))
     } catch (ex) {
-      setError(ex instanceof Error ? ex.message : 'Could not resend the code.')
+      setError(errorText(ex, 'login_resend_failed'))
     }
   }
 
@@ -100,15 +109,15 @@ export default function LoginPage() {
         </div>
 
         <h2 className="h3" style={{ marginBottom: 4 }}>
-          {twoFactor ? 'Two-step verification' : t('login_sub')}
+          {twoFactor ? t('login_2fa_title') : t('login_sub')}
         </h2>
 
         {twoFactor ? (
           <form onSubmit={submitCode} style={{ marginTop: 18 }}>
             <p className="faint" style={{ fontSize: 12.5, marginBottom: 14, lineHeight: 1.5 }}>
-              Enter the 6-digit code sent by SMS to <b>{twoFactor.phoneHint}</b>.
+              <Trans i18nKey="login_2fa_body" values={{ phone: twoFactor.phoneHint }} components={{ b: <b dir="ltr" /> }} />
             </p>
-            <label className="label">Verification code</label>
+            <label className="label">{t('login_code_label')}</label>
             <input
               className="field"
               type="text"
@@ -136,7 +145,7 @@ export default function LoginPage() {
               </div>
             )}
             <button className="btn btn-primary btn-block" type="submit" disabled={busy || code.length < 6}>
-              <Icon name="check" size={16} /> Verify &amp; sign in
+              <Icon name="check" size={16} /> {t('login_verify_submit')}
             </button>
             <div
               style={{
@@ -153,7 +162,7 @@ export default function LoginPage() {
                 disabled={busy}
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
               >
-                ← Back
+                {t('login_back')}
               </button>
               <button
                 type="button"
@@ -162,7 +171,7 @@ export default function LoginPage() {
                 disabled={busy}
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
               >
-                Resend code
+                {t('login_resend')}
               </button>
             </div>
           </form>

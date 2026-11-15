@@ -14,7 +14,8 @@ export function LoadingSpinner({ label }: { label?: string }) {
   )
 }
 
-export function EmptyState({ icon = 'box', title, sub }: { icon?: IconName; title: string; sub?: string }) {
+export function EmptyState({ icon = 'box', title, sub }: { icon?: IconName; title?: string; sub?: string }) {
+  const { t } = useTranslation()
   return (
     <div style={{ display: 'grid', placeItems: 'center', padding: 48, textAlign: 'center', gap: 8 }}>
       <div
@@ -30,13 +31,14 @@ export function EmptyState({ icon = 'box', title, sub }: { icon?: IconName; titl
       >
         <Icon name={icon} size={22} />
       </div>
-      <div style={{ fontWeight: 800, fontSize: 15 }}>{title}</div>
+      <div style={{ fontWeight: 800, fontSize: 15 }}>{title ?? t('cmn_no_results')}</div>
       {sub && <div className="faint" style={{ fontSize: 13 }}>{sub}</div>}
     </div>
   )
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
+  const { t } = useTranslation()
   return (
     <div style={{ display: 'grid', placeItems: 'center', padding: 48, textAlign: 'center', gap: 10 }}>
       <div
@@ -52,10 +54,10 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
       >
         <Icon name="alert" size={22} />
       </div>
-      <div style={{ fontWeight: 800, fontSize: 15 }}>{message}</div>
+      <div style={{ fontWeight: 800, fontSize: 15 }}>{message ?? t('cmn_something_wrong')}</div>
       {onRetry && (
         <button className="abtn sm" onClick={onRetry}>
-          <Icon name="refresh" size={14} /> Retry
+          <Icon name="refresh" size={14} /> {t('cmn_retry')}
         </button>
       )}
     </div>

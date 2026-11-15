@@ -1,3 +1,5 @@
+import i18n from '@/i18n/config'
+import { formatDate } from '@/lib/utils'
 import type { AdminPromo } from '../api/promos'
 
 /** The flat shape the promo list renders. */
@@ -24,7 +26,7 @@ function shortDate(iso?: string): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return formatDate(d, { month: 'short', day: 'numeric' })
 }
 
 /** Build the valid-period label from optional start/expiry bounds. */
@@ -32,15 +34,15 @@ export function periodLabel(startsAt?: string, expiresAt?: string): string {
   const s = shortDate(startsAt)
   const e = shortDate(expiresAt)
   if (s && e) return `${s} – ${e}`
-  if (s) return `From ${s}`
-  if (e) return `Until ${e}`
-  return 'Always'
+  if (s) return i18n.t('promo_period_from', { date: s })
+  if (e) return i18n.t('promo_period_until', { date: e })
+  return i18n.t('promo_period_always')
 }
 
 /** Display label for a promo's value, keyed on its type. */
 export function valueLabel(type: AdminPromo['type'], value: number): string {
   if (type === 'percent') return `${value}%`
-  if (type === 'cashback') return `$${value} back`
+  if (type === 'cashback') return i18n.t('promo_value_back', { value })
   return `$${value}`
 }
 

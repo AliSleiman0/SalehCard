@@ -13,6 +13,7 @@ import {
 } from '../api/complaints'
 import { LIVE_REFETCH_MS } from '@/lib/query-client'
 import { toast } from '@/stores/toast'
+import i18n from '@/i18n/config'
 import type { ApiResponse } from '@/types'
 
 export function useComplaints(params: ComplaintListParams) {
@@ -71,7 +72,7 @@ export function useReplyComplaint(id: string) {
     mutationFn: ({ body, internal }: { body: string; internal: boolean }) => replyComplaint(id, body, internal),
     onSuccess: (res, vars) => {
       apply(res)
-      toast.success(vars.internal ? 'Internal note added' : 'Reply sent — the customer was notified')
+      toast.success(i18n.t(vars.internal ? 'cmp_toast_note_added' : 'cmp_toast_reply_sent'))
     },
   })
 }
@@ -82,9 +83,9 @@ export function useSetComplaintStatus(id: string) {
     mutationFn: (status: ComplaintStatus) => setComplaintStatus(id, status),
     onSuccess: (res) => {
       apply(res)
-      toast.success('Status updated')
+      toast.success(i18n.t('cmp_toast_status_updated'))
     },
-    onError: () => toast.error('Could not update the status'),
+    onError: () => toast.error(i18n.t('cmp_toast_status_failed')),
   })
 }
 
@@ -94,8 +95,8 @@ export function useSetComplaintAssignee(id: string) {
     mutationFn: (adminId: string | null) => setComplaintAssignee(id, adminId),
     onSuccess: (res) => {
       apply(res)
-      toast.success('Assignee updated')
+      toast.success(i18n.t('cmp_toast_assignee_updated'))
     },
-    onError: () => toast.error('Could not update the assignee'),
+    onError: () => toast.error(i18n.t('cmp_toast_assignee_failed')),
   })
 }

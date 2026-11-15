@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Checkbox, EmptyState, ErrorState, Icon, LoadingSpinner, Modal, PageHead } from '@/components'
-import { ApiError } from '@/lib/api-client'
+import { apiErrorText } from '@/lib/apiErrorText'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { toast } from '@/stores/toast'
 import { createTodo, deleteTodo, listTodos, updateTodo, type Todo, type TodoInput } from '../api/todos'
 import { dateInputToIso, dueState } from '../lib/due'
@@ -10,18 +11,11 @@ import { dateInputToIso, dueState } from '../lib/due'
 const KEY = ['admin', 'todos']
 
 // Due badge per state, using the theme's .st-* status classes (they follow
-// light/dark mode). Upcoming dates are neutral.
+// light/dark mode). Upcoming dates are neutral. Labels are translation keys.
 const DUE_CLASS: Record<string, { cls: string; label: string }> = {
-  overdue: { cls: 'st st-danger', label: 'Overdue' },
-  today: { cls: 'st st-warn', label: 'Today' },
+  overdue: { cls: 'st st-danger', label: 'todo_overdue' },
+  today: { cls: 'st st-warn', label: 'today' },
   upcoming: { cls: 'st st-mute', label: '' },
-}
-
-function fmtDate(iso: string, withTime = false): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  return withTime ? `${date} · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : date
 }
 
 /** Shared team to-do list (client feedback 2026-11-12 #18). Every admin can
@@ -53,7 +47,7 @@ export default function TodosPage() {
     },
     refetchInterval: 30_000, // a shared list: pick up teammates' changes
   })
-  const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : 'Something went wrong')
+  const onErr = (e: unknown) => toast.error(apiErrorText(e, 'cmn_something_wrong'))
   const refresh = () => void qc.invalidateQueries({ queryKey: KEY })
 
   const add = useMutation({
@@ -131,19 +125,23 @@ export default function TodosPage() {
           )}
           <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
             {x.done && x.doneAt
-              ? `Done ${fmtDate(x.doneAt, true)}${x.doneBy ? ` by ${x.doneBy}` : ''}`
-              : `Added ${fmtDate(x.createdAt, true)}${x.createdBy ? ` by ${x.createdBy}` : ''}`}
+              ? x.doneBy
+                ? t('todo_done_by', { when: formatDateTime(x.doneAt), who: x.doneBy })
+                : t('todo_done_at', { when: formatDateTime(x.doneAt) })
+              : x.createdBy
+                ? t('todo_added_by', { when: formatDateTime(x.createdAt), who: x.createdBy })
+                : t('todo_added_at', { when: formatDateTime(x.createdAt) })}
           </div>
         </div>
         {x.dueAt && !x.done && badge && (
-          <span className={badge.cls} style={{ whiteSpace: 'nowrap' }} title={fmtDate(x.dueAt)}>
-            <i className="d" /> {badge.label ? `${badge.label} · ` : ''}
-            {fmtDate(x.dueAt)}
+          <span className={badge.cls} style={{ whiteSpace: 'nowrap' }} title={formatDate(x.dueAt)}>
+            <i className="d" /> {badge.label ? `${t(badge.label)} · ` : ''}
+            {formatDate(x.dueAt)}
           </span>
         )}
         <button
           className="abtn xs ghost"
-          aria-label="Delete to-do"
+          aria-label={t('todo_delete_aria')}
           onClick={() => setConfirmDelete(x)}
           disabled={rowBusy}
         >
@@ -159,15 +157,15 @@ export default function TodosPage() {
         back="/"
         crumbs={[t('grp_overview'), t('nav_todos')]}
         title={t('nav_todos')}
-        sub={`${open.length} open · shared with every admin`}
+        sub={t('todo_sub', { n: open.length })}
       />
 
       <div className="acard pad" style={{ marginBottom: 18 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,2fr) 170px auto', gap: 10 }} className="todo-add">
           <input
             className="afield"
-            placeholder="What needs doing?"
-            aria-label="To-do"
+            placeholder={t('todo_title_ph')}
+            aria-label={t('todo_title_aria')}
             value={title}
             maxLength={200}
             onChange={(e) => setTitle(e.target.value)}
@@ -175,16 +173,16 @@ export default function TodosPage() {
           />
           <input
             className="afield"
-            placeholder="Note (optional)"
-            aria-label="Note"
+            placeholder={t('todo_note_ph')}
+            aria-label={t('exp_note')}
             value={note}
             maxLength={1000}
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
           />
-          <input className="afield" type="date" aria-label="Due date" value={due} onChange={(e) => setDue(e.target.value)} />
+          <input className="afield" type="date" aria-label={t('todo_due_aria')} value={due} onChange={(e) => setDue(e.target.value)} />
           <button className="abtn primary" onClick={submit} disabled={!title.trim() || add.isPending}>
-            <Icon name="plus" size={15} /> Add
+            <Icon name="plus" size={15} /> {t('add')}
           </button>
         </div>
       </div>
@@ -192,19 +190,19 @@ export default function TodosPage() {
       {q.isLoading ? (
         <LoadingSpinner />
       ) : q.isError ? (
-        <ErrorState message="Couldn't load the to-do list." onRetry={() => void q.refetch()} />
+        <ErrorState message={t('todo_load_error')} onRetry={() => void q.refetch()} />
       ) : todos.length === 0 ? (
-        <EmptyState icon="checkc" title="Nothing to do" sub="Add a task above — every admin sees the same list." />
+        <EmptyState icon="checkc" title={t('todo_empty')} sub={t('todo_empty_sub')} />
       ) : (
         <>
           <div className="acard" style={{ marginBottom: 18 }}>
             <div className="panelhead">
               <Icon name="checkc" size={17} />
-              <h3>Open ({open.length})</h3>
+              <h3>{t('todo_open_n', { n: open.length })}</h3>
             </div>
             {open.length === 0 ? (
               <div className="muted" style={{ padding: '14px 18px' }}>
-                All done.
+                {t('todo_all_done')}
               </div>
             ) : (
               open.map(row)
@@ -214,7 +212,7 @@ export default function TodosPage() {
             <div className="acard">
               <div className="panelhead">
                 <Icon name="check" size={17} />
-                <h3>Done — last 30 days ({done.length})</h3>
+                <h3>{t('todo_done_n', { n: done.length })}</h3>
               </div>
               {done.map(row)}
             </div>
@@ -225,16 +223,16 @@ export default function TodosPage() {
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)} maxWidth={420}>
           <div style={{ padding: 22 }}>
-            <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Delete this to-do?</h3>
+            <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t('todo_delete_title')}</h3>
             <div className="muted" style={{ fontSize: 13, marginBottom: 6, wordBreak: 'break-word' }}>
-              “{confirmDelete.title}”
+              {t('cmn_quote', { s: confirmDelete.title })}
             </div>
             <div className="faint" style={{ fontSize: 12.5, marginBottom: 18 }}>
-              Every admin shares this list. The deletion is recorded in the activity log.
+              {t('todo_delete_note')}
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className="abtn" onClick={() => setConfirmDelete(null)}>
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 className="abtn primary"
@@ -244,7 +242,7 @@ export default function TodosPage() {
                   setConfirmDelete(null)
                 }}
               >
-                <Icon name="trash" size={14} /> Delete
+                <Icon name="trash" size={14} /> {t('delete')}
               </button>
             </div>
           </div>

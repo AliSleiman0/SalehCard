@@ -21,14 +21,14 @@ export default function ChatbotPage() {
       <PageHead
         back="/"
         title={t('nav_chatbot')}
-        sub="The Help Center's AI assistant: the knowledge it answers customers from, and what they asked. Turn it on or off in Settings."
+        sub={t('bot_sub')}
       />
       <Tabs<Tab>
         value={tab}
         onChange={setTab}
         items={[
-          { k: 'knowledge', label: 'AI knowledge' },
-          { k: 'logs', label: 'Conversations' },
+          { k: 'knowledge', label: t('bot_tab_knowledge') },
+          { k: 'logs', label: t('bot_tab_logs') },
         ]}
       />
       {tab === 'knowledge' && <KnowledgeTab canManage={can('chatbot.manage')} />}

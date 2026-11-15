@@ -16,13 +16,20 @@ import { useOffers, useDeleteOffer } from '../hooks/useOffers'
 import { adaptOffer, type OfferView } from '../lib/adaptOffer'
 import type { OfferStatus } from '../api/offers'
 
-const TYPE_BADGE: Record<string, [string, string]> = {
-  percent: ['st-info', 'Percent'],
-  fixed: ['st-ok', 'Fixed'],
+const TYPE_CLASS: Record<string, string> = {
+  percent: 'st-info',
+  fixed: 'st-ok',
+}
+
+const STATUS_LABEL: Record<OfferStatus, string> = {
+  active: 'promo_status_active',
+  scheduled: 'off_status_scheduled',
+  paused: 'promo_status_paused',
+  expired: 'promo_status_expired',
 }
 
 export default function OffersListPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const can = useCan()
   const canManage = can('offers.manage')
@@ -36,7 +43,9 @@ export default function OffersListPage() {
     status: status || undefined,
   })
 
-  const rows = useMemo(() => (data?.data ?? []).map(adaptOffer), [data])
+  // The valid-period label follows the language, so re-adapt when it changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => (data?.data ?? []).map(adaptOffer), [data, i18n.language])
   const meta = data?.meta
 
   return (
@@ -44,15 +53,15 @@ export default function OffersListPage() {
       <PageHead
         back="/"
         crumbs={[t('grp_catalog'), t('nav_offers')]}
-        title="Offers"
-        sub={meta ? `${meta.total.toLocaleString()} deals` : ''}
+        title={t('nav_offers')}
+        sub={meta ? t('off_deals', { n: meta.total.toLocaleString() }) : ''}
       >
         <button className="abtn" onClick={() => refetch()}>
-          <Icon name="refresh" size={15} /> Refresh
+          <Icon name="refresh" size={15} /> {t('exp_refresh')}
         </button>
         {canManage && (
           <button className="abtn primary" onClick={() => navigate('/offers/new')}>
-            <Icon name="plus" size={15} /> New offer
+            <Icon name="plus" size={15} /> {t('off_new')}
           </button>
         )}
       </PageHead>
@@ -67,37 +76,39 @@ export default function OffersListPage() {
               setPage(1)
             }}
           >
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="paused">Paused</option>
-            <option value="expired">Expired</option>
+            <option value="">{t('promo_all_statuses')}</option>
+            {(Object.keys(STATUS_LABEL) as OfferStatus[]).map((k) => (
+              <option key={k} value={k}>
+                {t(STATUS_LABEL[k])}
+              </option>
+            ))}
           </select>
         </div>
 
         {isLoading ? (
           <LoadingSpinner />
         ) : isError ? (
-          <ErrorState message="Couldn't load offers." onRetry={() => refetch()} />
+          <ErrorState message={t('off_load_error')} onRetry={() => refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No offers found" />
+          <EmptyState title={t('off_empty')} />
         ) : (
           <>
             <div className="tablewrap">
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Product</th>
-                    <th>Discount</th>
-                    <th>Price</th>
-                    <th>Valid period</th>
+                    <th>{t('col_product')}</th>
+                    <th>{t('off_col_discount')}</th>
+                    <th>{t('off_col_price')}</th>
+                    <th>{t('promo_col_period')}</th>
                     <th>{t('status')}</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((o) => {
-                    const [cls, label] = TYPE_BADGE[o.discountType] ?? ['st-mute', o.discountType]
+                    const cls = TYPE_CLASS[o.discountType] ?? 'st-mute'
+                    const label = t(`promo_type_${o.discountType}`, { defaultValue: o.discountType })
                     return (
                       <tr key={o.id} className="clickable" onClick={() => navigate(`/offers/${o.id}/edit`)}>
                         <td>
@@ -165,12 +176,13 @@ function DeleteModal({ offer, onClose }: { offer: OfferView; onClose: () => void
   return (
     <Modal onClose={onClose} maxWidth={420}>
       <div style={{ padding: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10 }}>Delete offer</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10 }}>{t('off_delete_title')}</h3>
         <p style={{ fontSize: 13.5, color: 'var(--text-dim)', marginBottom: 18 }}>
-          Delete the offer on <b>{offer.productName}</b>? This cannot be undone.
+          {t('off_delete_pre')} <b>{offer.productName}</b>
+          {t('promo_delete_post')}
         </p>
         {del.isError && (
-          <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 12 }}>Couldn't delete this offer.</div>
+          <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 12 }}>{t('off_delete_error')}</div>
         )}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button className="abtn" onClick={onClose} disabled={del.isPending}>

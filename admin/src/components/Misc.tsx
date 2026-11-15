@@ -1,4 +1,5 @@
 // Small presentational primitives ported from the prototype: Stars, PayChip, Avatar.
+import { useTranslation } from 'react-i18next'
 
 export function Stars({ n, size = 14 }: { n: number; size?: number }) {
   return (
@@ -27,7 +28,9 @@ const PAY_MAP: Record<string, [string, string]> = {
 }
 
 export function PayChip({ p }: { p: string }) {
-  const [c, label] = PAY_MAP[p] || ['#888', p]
+  const { t } = useTranslation()
+  const [c, brand] = PAY_MAP[p] || ['#888', p]
+  const label = p === 'wallet' ? t('cmn_pay_wallet', { defaultValue: brand }) : brand
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 12.5 }}>
       <span style={{ width: 8, height: 8, borderRadius: 3, background: c, flex: 'none' }} />

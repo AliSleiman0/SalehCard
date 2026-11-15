@@ -3,10 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { Icon, PageHead, Chip, LoadingSpinner, ErrorState } from '@/components'
 import { useGoBack } from '@/lib/goBack'
-import { ApiError } from '@/lib/api-client'
 import { useCan } from '@/stores/auth'
+import { serverErrorText } from '@/features/categories/lib/serverErrorText'
 import { usePromo, useCreatePromo, useUpdatePromo } from '../hooks/usePromos'
 import type { PromoInput, PromoType } from '../api/promos'
+
+// Fixed server sentences sent under a generic code, translated for non-English admins.
+const PROMO_SERVER_MESSAGES: Record<string, string> = {
+  'a promo with this code already exists': 'promo_srv_conflict',
+}
 
 // dateInput converts an ISO timestamp to a yyyy-mm-dd value for <input type=date>.
 function dateInput(iso?: string): string {
@@ -62,7 +67,7 @@ export default function PromoEditPage() {
     return (
       <div className="page">
         <PageHead back="/promos" title={t('nav_promos')} />
-        <ErrorState message="Couldn't load this promo." onRetry={() => refetch()} />
+        <ErrorState message={t('promo_load_one_error')} onRetry={() => refetch()} />
       </div>
     )
   }
@@ -73,19 +78,19 @@ export default function PromoEditPage() {
     const v = Number(value)
     const trimmed = code.trim().toUpperCase()
     if (!trimmed) {
-      setError('Code is required.')
+      setError(t('promo_err_code'))
       return
     }
     if (!Number.isFinite(v) || v <= 0) {
-      setError('Value must be greater than zero.')
+      setError(t('promo_err_value'))
       return
     }
     if (type === 'percent' && v > 100) {
-      setError('Percent value must be between 0 and 100.')
+      setError(t('promo_err_percent'))
       return
     }
     if (startsAt && expiresAt && expiresAt < startsAt) {
-      setError('End date must be after the start date.')
+      setError(t('promo_err_dates'))
       return
     }
     setError('')
@@ -99,7 +104,7 @@ export default function PromoEditPage() {
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       active,
     }
-    const onError = (e: unknown) => setError(e instanceof ApiError ? e.message : 'Save failed.')
+    const onError = (e: unknown) => setError(serverErrorText(e, 'exp_save_error', PROMO_SERVER_MESSAGES))
     if (isNew) {
       create.mutate(input, { onSuccess: () => goBack(), onError })
     } else {
@@ -107,16 +112,15 @@ export default function PromoEditPage() {
     }
   }
 
-  const previewLine =
-    type === 'fixed' ? `$${value || 0} off` : type === 'cashback' ? `$${value || 0} cashback` : `${value || 0}% off`
+  const previewLine = t(`promo_preview_${type}`, { v: value || 0 })
 
   return (
     <div className="page">
       <PageHead
         back="/promos"
-        crumbs={[t('nav_promos'), isNew ? 'New promo' : code]}
-        title={isNew ? 'New promo code' : 'Edit promo'}
-        sub={isNew ? 'Create a discount or cashback campaign' : code}
+        crumbs={[t('nav_promos'), isNew ? t('promo_new') : code]}
+        title={isNew ? t('promo_new_title') : t('promo_edit_title')}
+        sub={isNew ? t('promo_new_sub') : code}
       >
         {canManage && (
           <button className="abtn primary" onClick={save} disabled={saving}>
@@ -132,10 +136,10 @@ export default function PromoEditPage() {
       <div className="formgrid">
         <div className="fieldset">
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Code &amp; value</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('promo_section_code')}</h3>
             <div className="g2">
               <div>
-                <label className="alabel">Code</label>
+                <label className="alabel">{t('promo_col_code')}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input
                     className="afield mono"
@@ -144,33 +148,33 @@ export default function PromoEditPage() {
                     placeholder="SUMMER20"
                     style={{ textTransform: 'uppercase' }}
                   />
-                  <button className="abtn sm" title="Generate" onClick={() => setCode(randomCode())}>
+                  <button className="abtn sm" title={t('promo_generate')} onClick={() => setCode(randomCode())}>
                     <Icon name="refresh" size={14} />
                   </button>
                 </div>
               </div>
               <div>
-                <label className="alabel">Status</label>
+                <label className="alabel">{t('status')}</label>
                 <select
                   className="select"
                   style={{ width: '100%' }}
                   value={active ? 'active' : 'paused'}
                   onChange={(e) => setActive(e.target.value === 'active')}
                 >
-                  <option value="active">Active</option>
-                  <option value="paused">Paused</option>
+                  <option value="active">{t('promo_status_active')}</option>
+                  <option value="paused">{t('promo_status_paused')}</option>
                 </select>
               </div>
             </div>
             <label className="alabel" style={{ marginTop: 16 }}>
-              Discount type
+              {t('promo_discount_type')}
             </label>
             <div className="g3">
               {(
                 [
-                  ['percent', 'Percent %'],
-                  ['fixed', 'Fixed $'],
-                  ['cashback', 'Cashback'],
+                  ['percent', t('promo_chip_percent')],
+                  ['fixed', t('promo_chip_fixed')],
+                  ['cashback', t('promo_type_cashback')],
                 ] as [PromoType, string][]
               ).map(([k, l]) => (
                 <Chip key={k} on={type === k} onClick={() => setType(k)} style={{ justifyContent: 'center', padding: 12 }}>
@@ -180,7 +184,9 @@ export default function PromoEditPage() {
             </div>
             <div className="g2" style={{ marginTop: 16 }}>
               <div>
-                <label className="alabel">Value {type === 'percent' ? '(%)' : '($)'}</label>
+                <label className="alabel">
+                  {t('promo_col_value')} {type === 'percent' ? '(%)' : '($)'}
+                </label>
                 <input
                   className="afield"
                   type="number"
@@ -191,7 +197,7 @@ export default function PromoEditPage() {
                 />
               </div>
               <div>
-                <label className="alabel">Min order amount ($)</label>
+                <label className="alabel">{t('promo_min_order')}</label>
                 <input
                   className="afield"
                   type="number"
@@ -204,8 +210,8 @@ export default function PromoEditPage() {
             </div>
           </div>
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Limits</h3>
-            <label className="alabel">Max total uses (0 = unlimited)</label>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('promo_limits')}</h3>
+            <label className="alabel">{t('promo_max_uses')}</label>
             <input
               className="afield"
               type="number"
@@ -215,26 +221,26 @@ export default function PromoEditPage() {
               onChange={(e) => setMaxUses(e.target.value)}
             />
             <div className="ahint" style={{ marginTop: 8 }}>
-              Per-user limits and category eligibility are coming soon.
+              {t('promo_coming_soon')}
             </div>
           </div>
         </div>
         <div className="fieldset">
           <div className="acard pad">
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Validity</h3>
-            <label className="alabel">Start date</label>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>{t('promo_validity')}</h3>
+            <label className="alabel">{t('promo_start')}</label>
             <input className="afield" type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             <label className="alabel" style={{ marginTop: 12 }}>
-              End date
+              {t('promo_end')}
             </label>
             <input className="afield" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             <div className="ahint" style={{ marginTop: 8 }}>
-              Leave a date empty for no bound.
+              {t('promo_no_bound')}
             </div>
           </div>
           <div className="acard pad" style={{ textAlign: 'center' }}>
             <div className="alabel" style={{ textAlign: 'start' }}>
-              Customer preview
+              {t('promo_preview')}
             </div>
             <div
               style={{
@@ -247,7 +253,7 @@ export default function PromoEditPage() {
               <div className="mono" style={{ fontSize: 22, fontWeight: 800, letterSpacing: '.08em' }}>
                 {code || 'SUMMER20'}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>{previewLine} your order</div>
+              <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>{previewLine}</div>
             </div>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import i18n from '@/i18n/config'
 import { formatDateTime } from '@/lib/utils'
 import type { AdminReview } from '../api/reviews'
 
@@ -22,9 +23,9 @@ export interface ReviewView {
 export function adaptReview(r: AdminReview): ReviewView {
   return {
     id: r.id,
-    product: r.productName || 'Unknown product',
+    product: r.productName || i18n.t('rev_unknown_product', { defaultValue: 'Unknown product' }),
     art: r.art,
-    user: r.userName || 'Unknown',
+    user: r.userName || i18n.t('rev_unknown_user', { defaultValue: 'Unknown' }),
     rating: r.rating,
     body: r.body,
     date: formatDateTime(r.createdAt),
