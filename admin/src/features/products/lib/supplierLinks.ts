@@ -1,3 +1,4 @@
+import i18n from '@/i18n/config'
 import type { SupplierLink, SupplierLinkSync } from '@/types'
 import type { LinkQuote, SupplierLinkInputRow, SupplierLinksInput } from '../api/products'
 
@@ -111,8 +112,8 @@ export function toLinksInput(rows: LinkRow[], rev: number): SupplierLinksInput {
 /** Problems that would make the server refuse the table (shown before save). */
 export function linkIssues(rows: LinkRow[], apiOn: boolean): string[] {
   const out: string[] = []
-  if (apiOn && rows.length === 0) out.push('Link at least one supplier product, or untick "Fulfill via supplier API".')
-  if (rows.length > 0 && rows.filter((r) => r.active).length !== 1) out.push('Choose exactly one active supplier.')
+  if (apiOn && rows.length === 0) out.push(i18n.t('prod_link_issue_none'))
+  if (rows.length > 0 && rows.filter((r) => r.active).length !== 1) out.push(i18n.t('prod_link_issue_active'))
   return out
 }
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Trans, useTranslation } from 'react-i18next'
 import { Icon } from '@/components'
 import { quoteSupplierLinks, type LinkQuote } from '../api/products'
 import {
@@ -50,8 +51,9 @@ export function SupplierLinksTable({
   /** Pre-fills the supplier search (the product title). */
   searchHint: string
 }) {
+  const { t } = useTranslation()
   const [searching, setSearching] = useState(false)
-  const provName = (id: number) => providers.find((p) => p.id === id)?.name ?? `supplier #${id}`
+  const provName = (id: number) => providers.find((p) => p.id === id)?.name ?? t('prod_supplier_n', { id })
 
   const pairs = rows.map((r) => ({ provider: r.provider, upstreamId: r.upstreamId }))
   const quotes = useQuery({
@@ -67,23 +69,24 @@ export function SupplierLinksTable({
     <div>
       {rows.length === 0 ? (
         <div className="faint" style={{ fontSize: 13, padding: '8px 0' }}>
-          No supplier linked yet.
+          {t('prod_links_empty')}
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table className="tbl" aria-label="Supplier links" style={{ width: '100%', fontSize: 13 }}>
+          <table className="tbl" aria-label={t('prod_links_aria')} style={{ width: '100%', fontSize: 13 }}>
             <thead>
               <tr>
-                <th style={{ width: 54 }}>Order</th>
-                <th>Supplier</th>
-                <th>Supplier product</th>
-                <th>Cost{blockUnits > 1 ? ` / ${blockUnits.toLocaleString('en-US')}` : ''}</th>
-                <th>Margin</th>
-                <th>Status</th>
-                <th title="Automatic supplier check: Price = warn about cost changes and pause when it sells at a loss; Stock = take the product off sale / back on with the supplier's stock">
-                  Auto-check
+                <th style={{ width: 54 }}>{t('prod_links_col_order')}</th>
+                <th>{t('prod_links_col_supplier')}</th>
+                <th>{t('prod_links_col_product')}</th>
+                <th>
+                  {t('prod_cost')}
+                  {blockUnits > 1 ? ` / ${blockUnits.toLocaleString('en-US')}` : ''}
                 </th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                <th>{t('prod_margin')}</th>
+                <th>{t('status')}</th>
+                <th title={t('prod_links_autocheck_tip')}>{t('prod_links_autocheck')}</th>
+                <th style={{ textAlign: 'right' }}>{t('actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -108,7 +111,7 @@ export function SupplierLinksTable({
                         <button
                           type="button"
                           className="abtn xs ghost"
-                          aria-label={`Move ${provName(r.provider)} up`}
+                          aria-label={t('prod_move_up', { name: provName(r.provider) })}
                           disabled={i === 0}
                           onClick={() => onChange(moveLink(rows, i, -1))}
                         >
@@ -117,7 +120,7 @@ export function SupplierLinksTable({
                         <button
                           type="button"
                           className="abtn xs ghost"
-                          aria-label={`Move ${provName(r.provider)} down`}
+                          aria-label={t('prod_move_down', { name: provName(r.provider) })}
                           disabled={i === rows.length - 1}
                           onClick={() => onChange(moveLink(rows, i, 1))}
                         >
@@ -143,35 +146,37 @@ export function SupplierLinksTable({
                         <span
                           title={
                             !q
-                              ? 'checking…'
+                              ? t('prod_q_checking')
                               : q.status === 'ok'
                                 ? q.available
-                                  ? 'available at the supplier'
-                                  : 'unavailable at the supplier'
+                                  ? t('prod_q_available')
+                                  : t('prod_q_unavailable')
                                 : q.status === 'unknown'
-                                  ? "not in the supplier's product list"
-                                  : "couldn't check"
+                                  ? t('prod_q_unknown')
+                                  : t('prod_q_failed')
                           }
                           style={{ width: 9, height: 9, borderRadius: 5, background: dot, flex: 'none' }}
                         />
-                        {r.active && <span className="st st-ok">Active</span>}
-                        {!r.enabled && <span className="st st-mute">Disabled</span>}
-                        {q?.status === 'unknown' && <span className="st st-danger">Not in catalog</span>}
-                        {qtyWarn && <span className="st st-warn">Qty range</span>}
-                        {q?.stale && <span className="st st-mute">Old data</span>}
+                        {r.active && <span className="st st-ok">{t('active')}</span>}
+                        {!r.enabled && <span className="st st-mute">{t('prod_link_disabled')}</span>}
+                        {q?.status === 'unknown' && <span className="st st-danger">{t('prod_link_not_in_catalog')}</span>}
+                        {qtyWarn && <span className="st st-warn">{t('prod_link_qty_range')}</span>}
+                        {q?.stale && <span className="st st-mute">{t('prod_link_stale')}</span>}
                         {r.pausedReason === 'loss' && (
                           <span
                             className="st st-danger"
-                            title="The automatic supplier check paused this link: it costs at least our selling price. It un-pauses by itself when the cost drops; making it active un-pauses it now."
+                            title={t('prod_link_paused_tip')}
                           >
-                            Paused: loss
+                            {t('prod_link_paused_loss')}
                           </span>
                         )}
                       </div>
                       {r.sync?.checkedAt && (
                         <div className="faint" style={{ fontSize: 11.5, marginTop: 2 }}>
-                          checked {relativeTimeInline(r.sync.checkedAt)}
-                          {r.sync.costChangedAt ? ` · cost changed ${relativeTimeInline(r.sync.costChangedAt)}` : ''}
+                          {t('prod_link_checked', { when: relativeTimeInline(r.sync.checkedAt) })}
+                          {r.sync.costChangedAt
+                            ? t('prod_link_cost_changed', { when: relativeTimeInline(r.sync.costChangedAt) })
+                            : ''}
                         </div>
                       )}
                     </td>
@@ -179,26 +184,26 @@ export function SupplierLinksTable({
                       <label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginRight: 8, cursor: 'pointer' }}>
                         <input
                           type="checkbox"
-                          aria-label={`Price sync for ${provName(r.provider)} #${r.upstreamId}`}
+                          aria-label={t('prod_price_sync_aria', { name: provName(r.provider), id: r.upstreamId })}
                           checked={r.priceSync}
                           onChange={(e) => onChange(setWatch(rows, i, 'priceSync', e.target.checked))}
                         />
-                        Price
+                        {t('prod_watch_price')}
                       </label>
                       <label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', cursor: 'pointer' }}>
                         <input
                           type="checkbox"
-                          aria-label={`Stock sync for ${provName(r.provider)} #${r.upstreamId}`}
+                          aria-label={t('prod_stock_sync_aria', { name: provName(r.provider), id: r.upstreamId })}
                           checked={r.statusSync}
                           onChange={(e) => onChange(setWatch(rows, i, 'statusSync', e.target.checked))}
                         />
-                        Stock
+                        {t('prod_stock')}
                       </label>
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {!r.active && (
                         <button type="button" className="abtn xs" onClick={() => onChange(makeActive(rows, i))}>
-                          Make active
+                          {t('prod_make_active')}
                         </button>
                       )}{' '}
                       {!r.active && (
@@ -207,13 +212,13 @@ export function SupplierLinksTable({
                           className="abtn xs ghost"
                           onClick={() => onChange(setEnabled(rows, i, !r.enabled))}
                         >
-                          {r.enabled ? 'Disable' : 'Enable'}
+                          {r.enabled ? t('prod_link_disable') : t('prod_link_enable')}
                         </button>
                       )}{' '}
                       <button
                         type="button"
                         className="abtn xs ghost"
-                        aria-label={`Remove ${provName(r.provider)} #${r.upstreamId}`}
+                        aria-label={t('prod_remove_link_aria', { name: provName(r.provider), id: r.upstreamId })}
                         onClick={() => onChange(removeLink(rows, i))}
                       >
                         <Icon name="trash" size={12} />
@@ -228,18 +233,15 @@ export function SupplierLinksTable({
       )}
       {quotes.isError && (
         <div className="ahint" style={{ marginTop: 6, color: 'var(--warn)' }}>
-          Couldn't load live supplier prices right now.
+          {t('prod_quotes_error')}
         </div>
       )}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
         <button type="button" className="abtn sm" onClick={() => setSearching(true)} disabled={rows.length >= 6}>
-          <Icon name="search" size={13} /> Find at all suppliers
+          <Icon name="search" size={13} /> {t('prod_find_all')}
         </button>
         <span className="ahint" style={{ margin: 0 }}>
-          Orders go to the <b>Active</b> supplier. The order of the rows is the backup order. <b>Auto-check</b>:
-          the automatic supplier check watches each ticked link&apos;s cost (warns you, pauses a link that sells at a
-          loss) and stock (takes the product off sale when no supplier has it, back on when one does). It never
-          changes your selling price.
+          <Trans i18nKey="prod_links_hint" components={{ b: <b /> }} />
         </span>
       </div>
       {searching && (

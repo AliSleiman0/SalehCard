@@ -1,11 +1,18 @@
+import i18n from '@/i18n/config'
+import { quoted } from '@/lib/quoted'
 import type { CatalogProductView } from '../api/suppliers'
 
 /** Human summary of the quantities a supplier product accepts ("" when any). */
 export function qtyHint(p: Pick<CatalogProductView, 'qtyMin' | 'qtyMax' | 'qtyValues'>): string {
-  if (p.qtyValues && p.qtyValues.length > 0) return `qty ${p.qtyValues.join(' / ')}`
-  if (p.qtyMin != null && p.qtyMax != null) return `qty ${fmtN(p.qtyMin)}–${fmtN(p.qtyMax)}`
-  if (p.qtyMin != null) return `qty ≥ ${fmtN(p.qtyMin)}`
-  if (p.qtyMax != null) return `qty ≤ ${fmtN(p.qtyMax)}`
+  const range = qtyRange(p)
+  return range ? i18n.t('pick_qty', { range }) : ''
+}
+
+function qtyRange(p: Pick<CatalogProductView, 'qtyMin' | 'qtyMax' | 'qtyValues'>): string {
+  if (p.qtyValues && p.qtyValues.length > 0) return p.qtyValues.join(' / ')
+  if (p.qtyMin != null && p.qtyMax != null) return `${fmtN(p.qtyMin)}–${fmtN(p.qtyMax)}`
+  if (p.qtyMin != null) return `≥ ${fmtN(p.qtyMin)}`
+  if (p.qtyMax != null) return `≤ ${fmtN(p.qtyMax)}`
   return ''
 }
 
@@ -40,12 +47,12 @@ export function pickWarnings(ctx: PickContext): string[] {
   const id = ctx.value.trim()
   if (!id || !ctx.catalog) return []
   const p = ctx.catalog.find((c) => c.upstreamId === id)
-  if (!p) return [`"${id}" is not in this supplier's catalog — the supplier will refuse it (Product Not Found).`]
+  if (!p) return [i18n.t('pick_warn_not_found', { id })]
   const out: string[] = []
-  if (!p.available) out.push('The supplier marks this product unavailable right now.')
-  const hint = qtyHint(p)
+  if (!p.available) out.push(i18n.t('pick_warn_unavailable'))
+  const range = qtyRange(p)
   if (ctx.qty != null && !acceptsQty(p, ctx.qty)) {
-    out.push(`This order sends quantity ${fmtN(ctx.qty)}, but the supplier accepts ${hint.replace(/^qty /, '')}.`)
+    out.push(i18n.t('pick_warn_qty', { n: fmtN(ctx.qty), range }))
   }
   if (ctx.sends) {
     // Imported products store a param's key slugified ("Player ID" → player_id)
@@ -55,18 +62,16 @@ export function pickWarnings(ctx: PickContext): string[] {
     const have = new Set(ctx.sends.map(paramName))
     const missing = (p.params ?? []).filter((k) => paramName(k) !== '' && !have.has(paramName(k)))
     if (missing.length > 0) {
-      out.push(
-        `The supplier asks for ${missing.map((k) => `"${k}"`).join(', ')}, which this order doesn't carry by that name — check the supplier won't refuse it.`,
-      )
+      out.push(i18n.t('pick_warn_params', { names: quoted(missing) }))
     }
   }
   const r = ctx.amountRange
-  if (r && hint) {
+  if (r && range) {
     const outOfRange = [r.min, r.max].some((v) => v != null && !acceptsQty(p, v))
     if (outOfRange) {
-      out.push(
-        `Customers may type ${r.min != null ? fmtN(r.min) : '…'}–${r.max != null ? fmtN(r.max) : '…'}, but the supplier accepts ${hint.replace(/^qty /, '')} — narrow the amount field's min/max.`,
-      )
+      const min = r.min != null ? fmtN(r.min) : '…'
+      const max = r.max != null ? fmtN(r.max) : '…'
+      out.push(i18n.t('pick_warn_amount', { min, max, range }))
     }
   }
   return out
