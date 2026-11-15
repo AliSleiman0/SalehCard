@@ -193,6 +193,11 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 					Kind: supplieralert.KindCostChanged, Key: "cost:" + pid + ":" + l.ID, Message: msg,
 					Provider: l.Provider, ProductID: pid, ProductName: pname, LinkID: l.ID,
 					Data: map[string]any{"oldCost": prev.Cost, "newCost": cp.Price, "currency": cp.Currency, "upstreamId": l.UpstreamID},
+					Args: map[string]string{
+						"product": pname, "supplier": supplierName(env, l.Provider), "per": blockArg(block),
+						"old": money(oldB, rateOK, cp.Currency), "new": money(newB, rateOK, cp.Currency),
+						"pct": fmt.Sprintf("%+.1f", pct),
+					},
 				})
 				res.Changes = append(res.Changes, syncChange{Kind: changeCost, LinkID: l.ID, Provider: l.Provider,
 					Detail: map[string]any{"oldCost": prev.Cost, "newCost": cp.Price, "currency": cp.Currency}})
@@ -234,6 +239,10 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 					pick(env.Preview, "it would be unpaused. Nothing was changed.",
 						"unpaused. The active supplier was not switched back.")),
 				Provider: l.Provider, ProductID: pid, ProductName: pname, LinkID: l.ID,
+				Args: map[string]string{
+					"product": pname, "supplier": supplierName(env, l.Provider),
+					"cost": usd(*snap.CostUSD * block), "sell": usd(sell * block), "per": blockArg(block),
+				},
 			})
 			res.Changes = append(res.Changes, syncChange{Kind: changeRecovered, LinkID: l.ID, Provider: l.Provider,
 				Detail: map[string]any{"costUsd": *snap.CostUSD, "unitSell": sell}})
@@ -264,12 +273,15 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 		l := linkByID(res.Links, ch.LinkID)
 		what := pick(env.Preview, "This supplier would be paused (it is only a backup, so orders are not affected).",
 			"It stays as a backup only while paused.")
+		args := map[string]string{"outcome": "backup"}
 		if l.ID == activeID {
 			if promotedTo != "" {
 				nl := linkByID(res.Links, promotedTo)
 				what = fmt.Sprintf(pick(env.Preview, "Orders would switch to %s (product %s).", "Orders now go to %s (product %s)."),
 					supplierName(env, nl.Provider), nl.UpstreamID)
+				args = map[string]string{"outcome": "switched", "to": supplierName(env, nl.Provider), "toProduct": nl.UpstreamID}
 			} else {
+				args["outcome"] = "offsale"
 				what = pick(env.Preview,
 					"No other supplier can take it, so the product would be taken off sale until the cost drops or you change the price.",
 					"No other supplier can take it — the product is hidden until the cost recovers or you change the price.")
@@ -286,6 +298,10 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 				pname, supplierName(env, l.Provider), usd(cu*block), perBlock(block), usd(sell*block), what),
 			Provider: l.Provider, ProductID: pid, ProductName: pname, LinkID: l.ID,
 			Data: map[string]any{"costUsd": cu, "unitSell": sell, "upstreamId": l.UpstreamID},
+			Args: withArgs(args, map[string]string{
+				"product": pname, "supplier": supplierName(env, l.Provider),
+				"cost": usd(cu * block), "sell": usd(sell * block), "per": blockArg(block),
+			}),
 		})
 	}
 
@@ -358,6 +374,7 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 				"%s would be taken off sale: %s. Nothing was changed — it is still on sale.",
 				"%s was taken off sale: %s. It comes back by itself when that changes."), pname, why),
 			ProductID: pid, ProductName: pname, Data: map[string]any{"reason": res.HideReason},
+			Args: map[string]string{"product": pname, "reason": res.HideReason},
 		})
 		res.Resolve = append(res.Resolve, "shown:"+pid)
 		res.Changes = append(res.Changes, syncChange{Kind: changeHidden, Detail: map[string]any{"reason": res.HideReason}})
@@ -369,6 +386,7 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 				"%s would go back on sale: a linked supplier has it again.",
 				"%s is back on sale: a linked supplier has it again."), pname),
 			ProductID: pid, ProductName: pname,
+			Args: map[string]string{"product": pname},
 		})
 		res.Resolve = append(res.Resolve, "hidden:"+pid)
 		res.Changes = append(res.Changes, syncChange{Kind: changeShown})
@@ -422,6 +440,23 @@ func supplierName(env syncEnv, id int) string {
 		return fmt.Sprintf("%s (#%d)", n, id)
 	}
 	return fmt.Sprintf("supplier #%d", id)
+}
+
+// blockArg is the sale block for alert Args: "1" for a unit, else the
+// number of units with separators ("1,000").
+func blockArg(block float64) string {
+	if block <= 1 {
+		return "1"
+	}
+	return humanizeInt(int64(math.Round(block)))
+}
+
+// withArgs returns a with every entry of b added.
+func withArgs(a, b map[string]string) map[string]string {
+	for k, v := range b {
+		a[k] = v
+	}
+	return a
 }
 
 func perBlock(block float64) string {

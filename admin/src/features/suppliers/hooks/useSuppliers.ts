@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/stores/toast'
+import i18n from '@/i18n/config'
 import {
   listSuppliers,
   getSupplierCatalog,
@@ -66,7 +67,7 @@ export function useAckSupplierAlert() {
       invalidate()
       qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
     },
-    onError: () => toast.error('Could not acknowledge the alert'),
+    onError: () => toast.error(i18n.t('sup_toast_ack_err')),
   })
 }
 
@@ -79,7 +80,7 @@ export function useAckAllSupplierAlerts() {
       invalidate()
       qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
     },
-    onError: () => toast.error('Could not acknowledge the alerts'),
+    onError: () => toast.error(i18n.t('sup_toast_ack_all_err')),
   })
 }
 
@@ -102,7 +103,7 @@ export function useSyncSupplier() {
     mutationFn: (id: number) => syncSupplier(id),
     onSuccess: () => invalidate(),
     onError: (err) =>
-      toast.error(err instanceof Error && err.message ? err.message : "Could not check this supplier's products"),
+      toast.error(err instanceof Error && err.message ? err.message : i18n.t('sup_toast_check_err')),
   })
 }
 
@@ -112,7 +113,7 @@ export function useImportProducts() {
     mutationFn: ({ id, items }: { id: number; items: ImportItem[] }) =>
       importSupplierProducts(id, items),
     onSuccess: () => invalidate(),
-    onError: () => toast.error('Could not import products'),
+    onError: () => toast.error(i18n.t('sup_toast_import_err')),
   })
 }
 
@@ -128,8 +129,8 @@ export function useUpdateSupplierSettings() {
     }) => updateSupplierSettings(id, patch),
     onSuccess: () => {
       invalidate()
-      toast.success('Supplier settings saved')
+      toast.success(i18n.t('sup_toast_saved'))
     },
-    onError: () => toast.error('Could not save supplier settings'),
+    onError: () => toast.error(i18n.t('sup_toast_save_err')),
   })
 }

@@ -97,6 +97,8 @@ export interface SupplierAlert {
   linkId?: string
   orderId?: string
   dryRun?: boolean
+  /** The values in message, so the console can write it in Arabic / Turkish. */
+  args?: Record<string, string>
   count: number
   firstAt: string
   lastAt: string

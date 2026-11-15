@@ -180,6 +180,31 @@ func TestEvaluate_PreviewAlertsSayWould(t *testing.T) {
 	}
 }
 
+// Every alert carries its values as Args so the admin console can write it
+// in Arabic / Turkish.
+func TestEvaluate_AlertsCarryArgs(t *testing.T) {
+	res := evaluateProduct(soulStar(link("a", 10, "3258"), link("b", 11, "1045")), env(map[int]catalogView{
+		10: cat("3258", 0.000130, true, "USD"), // loss → switch to b
+		11: cat("1045", 0.000110, true, "USD"),
+	}))
+	got := res.Alerts[0].Args
+	want := map[string]string{"outcome": "switched", "to": "speedcard (#11)", "toProduct": "1045",
+		"product": "SOUL STAR", "supplier": "jentel (#10)"}
+	for k, v := range want {
+		if got[k] != v {
+			t.Fatalf("loss args[%q] = %q, want %q (all: %v)", k, got[k], v, got)
+		}
+	}
+	if got["cost"] == "" || got["sell"] == "" || got["per"] == "" {
+		t.Fatalf("loss args miss amounts: %v", got)
+	}
+
+	res = evaluateProduct(soulStar(link("a", 10, "3258")), env(map[int]catalogView{10: cat("3258", 0.000110, false, "USD")}))
+	if a := res.Alerts[0]; a.Args["product"] != "SOUL STAR" || a.Args["reason"] != "unavailable" {
+		t.Fatalf("hide args = %v", a.Args)
+	}
+}
+
 func TestEvaluate_LossWithNoBackupHides(t *testing.T) {
 	p := soulStar(link("a", 10, "3258"), link("b", 11, "1045"))
 	res := evaluateProduct(p, env(map[int]catalogView{

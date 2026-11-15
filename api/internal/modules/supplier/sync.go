@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -489,6 +490,9 @@ func (j *SyncJob) fxAlerts(ctx context.Context, env syncEnv, only int, missing m
 			Kind: supplieralert.KindFxMissing, Key: key, Provider: sc.ID,
 			Message: fmt.Sprintf("%s prices are in %s but no USD exchange rate is set, so the loss check is skipped for %d linked product(s). Set the rate in Suppliers → Settings.",
 				supplierName(env, sc.ID), strings.Join(ccys, "/"), n),
+			Args: map[string]string{
+				"supplier": supplierName(env, sc.ID), "currencies": strings.Join(ccys, "/"), "count": strconv.Itoa(n),
+			},
 		}, rep)
 	}
 }

@@ -1,3 +1,4 @@
+import i18next from 'i18next'
 import type { Locale, StockLevel } from '@/types'
 
 export function cn(...classes: (string | false | null | undefined)[]): string {
@@ -32,6 +33,8 @@ export function relativeTime(iso: string): string {
   if (Number.isNaN(then)) return '—'
   const diff = Math.max(0, Date.now() - then)
   const m = Math.floor(diff / 60_000)
+  const lang = i18next.language || 'en'
+  if (!lang.startsWith('en')) return relativeTimeIntl(lang, iso, m)
   if (m < 1) return 'Just now'
   if (m < 60) return `${m}m ago`
   const h = Math.floor(m / 60)
@@ -40,6 +43,18 @@ export function relativeTime(iso: string): string {
   if (d === 1) return 'Yesterday'
   if (d < 7) return `${d}d ago`
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** relativeTime in a non-English admin language ("منذ 5 دقائق", "أمس"). */
+function relativeTimeIntl(lang: string, iso: string, m: number): string {
+  const f = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' })
+  if (m < 1) return f.format(0, 'second')
+  if (m < 60) return f.format(-m, 'minute')
+  const h = Math.floor(m / 60)
+  if (h < 24) return f.format(-h, 'hour')
+  const d = Math.floor(h / 24)
+  if (d < 7) return f.format(-d, 'day')
+  return new Date(iso).toLocaleDateString(lang, { month: 'short', day: 'numeric' })
 }
 
 /** relativeTime for the middle of a sentence ("checked just now"). */
