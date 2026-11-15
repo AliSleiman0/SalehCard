@@ -2227,6 +2227,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Thank you for contacting support.'**
   String get notifComplaintClosedBody;
+
+  /// No description provided for @changePasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordTitle;
+
+  /// No description provided for @changePasswordIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a new password for signing in. Your other signed-in devices stay signed in.'**
+  String get changePasswordIntro;
+
+  /// No description provided for @changePasswordCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get changePasswordCurrent;
+
+  /// No description provided for @changePasswordNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get changePasswordNew;
+
+  /// No description provided for @changePasswordConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm new password'**
+  String get changePasswordConfirm;
+
+  /// No description provided for @changePasswordRules.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 8 characters.'**
+  String get changePasswordRules;
+
+  /// No description provided for @changePasswordShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get changePasswordShow;
+
+  /// No description provided for @changePasswordHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get changePasswordHide;
+
+  /// No description provided for @changePasswordSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordSubmit;
+
+  /// No description provided for @changePasswordDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed'**
+  String get changePasswordDone;
+
+  /// No description provided for @changePasswordErrCurrentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your current password.'**
+  String get changePasswordErrCurrentRequired;
+
+  /// No description provided for @changePasswordErrShort.
+  ///
+  /// In en, this message translates to:
+  /// **'The new password must be at least 8 characters.'**
+  String get changePasswordErrShort;
+
+  /// No description provided for @changePasswordErrLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The new password is too long. Use a shorter one (Arabic letters count double).'**
+  String get changePasswordErrLong;
+
+  /// No description provided for @changePasswordErrMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The two new passwords don\'t match.'**
+  String get changePasswordErrMismatch;
+
+  /// No description provided for @changePasswordErrWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Your current password is incorrect.'**
+  String get changePasswordErrWrong;
+
+  /// No description provided for @changePasswordErrNoPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'This account doesn\'t have a password yet.'**
+  String get changePasswordErrNoPassword;
+
+  /// No description provided for @changePasswordNoPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a password by signing in with an SMS code: sign out, tap \"Sign up\", enter this same phone number, choose a password, then enter the SMS code.'**
+  String get changePasswordNoPasswordHint;
+
+  /// No description provided for @changePasswordErrRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Please wait a minute and try again.'**
+  String get changePasswordErrRateLimited;
+
+  /// No description provided for @changePasswordErrGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change your password. Please try again.'**
+  String get changePasswordErrGeneric;
 }
 
 class _AppLocalizationsDelegate

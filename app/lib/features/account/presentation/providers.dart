@@ -8,6 +8,7 @@ import '../../auth/presentation/controllers/auth_controller.dart';
 import '../data/datasources/profile_remote_data_source.dart';
 import '../data/repositories/profile_repository_impl.dart';
 import '../domain/repositories/profile_repository.dart';
+import '../domain/usecases/change_password.dart';
 import '../domain/usecases/delete_account.dart';
 import '../domain/usecases/get_profile.dart';
 import '../domain/usecases/update_profile.dart';
@@ -131,3 +132,53 @@ class DeleteAccountController extends Notifier<DeleteAccountState> {
 final deleteAccountControllerProvider =
     NotifierProvider<DeleteAccountController, DeleteAccountState>(
         DeleteAccountController.new);
+
+// ---- Change own password ----
+
+final changePasswordUseCaseProvider = Provider<ChangePassword>(
+  (ref) => ChangePassword(ref.watch(profileRepositoryProvider)),
+);
+
+/// Submit state for the change-password screen.
+class ChangePasswordState {
+  const ChangePasswordState({this.submitting = false, this.failure});
+
+  final bool submitting;
+  final Failure? failure;
+}
+
+class ChangePasswordController extends Notifier<ChangePasswordState> {
+  @override
+  ChangePasswordState build() => const ChangePasswordState();
+
+  /// Changes the password via `POST /users/me/password`. Returns `true` on
+  /// success, or `false` with the [Failure] in [state]. The session is kept
+  /// (refusals are 400s, not 401s) and other sessions stay signed in.
+  Future<bool> submit({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (state.submitting) return false;
+    state = const ChangePasswordState(submitting: true);
+    final result = await ref
+        .read(changePasswordUseCaseProvider)
+        .call(currentPassword: currentPassword, newPassword: newPassword);
+    return result.match(
+      (failure) {
+        state = ChangePasswordState(failure: failure);
+        return false;
+      },
+      (_) {
+        state = const ChangePasswordState();
+        return true;
+      },
+    );
+  }
+
+  void reset() => state = const ChangePasswordState();
+}
+
+final changePasswordControllerProvider =
+    NotifierProvider.autoDispose<ChangePasswordController, ChangePasswordState>(
+      ChangePasswordController.new,
+    );

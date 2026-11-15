@@ -18,6 +18,7 @@ const WalletPage = lazy(() => import('@/features/wallet/pages/WalletPage'))
 const OrdersPage = lazy(() => import('@/features/orders/pages/OrdersPage'))
 const OrderDetailPage = lazy(() => import('@/features/orders/pages/OrderDetailPage'))
 const SavedIDsPage = lazy(() => import('@/features/auth/pages/SavedIDsPage'))
+const SecurityPage = lazy(() => import('@/features/auth/pages/SecurityPage'))
 const ResellerDashboardPage = lazy(() => import('@/features/reseller/pages/ResellerDashboardPage'))
 const KycPage = lazy(() => import('@/features/kyc/pages/KycPage'))
 const KycFormPage = lazy(() => import('@/features/kyc/pages/KycFormPage'))
@@ -131,6 +132,14 @@ export default function AppRouter() {
             element={
               <RequireAuth>
                 <SavedIDsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/security"
+            element={
+              <RequireAuth>
+                <SecurityPage />
               </RequireAuth>
             }
           />
