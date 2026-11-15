@@ -12,13 +12,13 @@ function order(over: Partial<AdminOrder>, ff: Partial<AdminOrder['fulfillment']>
 }
 
 describe('rerouteState', () => {
-  it('stuck or ref-less processing supplier orders are eligible', () => {
+  it('any processing supplier order can be re-sent (the server asks for the double-delivery OK)', () => {
     expect(rerouteState(order({}, { supplierStuckAt: '2026-11-13T00:00:00Z', providerRef: 'UP' })).eligible).toBe(true)
     expect(rerouteState(order({}, {})).eligible).toBe(true)
+    expect(rerouteState(order({}, { providerRef: 'UP' })).eligible).toBe(true)
     expect(rerouteState(order({}, {})).fromManual).toBe(false)
   })
-  it('a supplier still working on it or a finished order is not', () => {
-    expect(rerouteState(order({}, { providerRef: 'UP' })).eligible).toBe(false)
+  it('a finished order is not', () => {
     expect(rerouteState(order({ status: 'completed' })).eligible).toBe(false)
   })
   it('a single-line manual account-credit order can be sent via a supplier', () => {

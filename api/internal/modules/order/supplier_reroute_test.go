@@ -80,11 +80,33 @@ func TestReroute_Eligibility(t *testing.T) {
 	ctx := context.Background()
 	in := RerouteInput{ProviderID: 9, UpstreamProductID: "U-900"}
 
-	t.Run("supplier still working (ref, not stuck) → refused", func(t *testing.T) {
-		st, repo, _, _ := newRerouteSUT(&fakeProvider{id: 7}, &fakeProvider{id: 9})
+	t.Run("supplier still working (ref, not stuck) → needs the double-delivery OK", func(t *testing.T) {
+		newP := &fakeProvider{id: 9, res: provider.Result{Reference: "N"}}
+		st, repo, _, rec := newRerouteSUT(&fakeProvider{id: 7}, newP)
 		o := settlerOrder(repo, func(o *Order) { o.Fulfillment.ProviderRef = "UP_1" })
 		_, err := st.Reroute(ctx, o.ID, in, "a")
-		assert.Equal(t, "REROUTE_NOT_STUCK", appCode(err))
+		assert.Equal(t, "REROUTE_NEEDS_ACK", appCode(err))
+		assert.Equal(t, 0, newP.calls)
+
+		ack := in
+		ack.AcknowledgeAtSupplier = true
+		got, err := st.Reroute(ctx, o.ID, ack, "a")
+		require.NoError(t, err)
+		assert.Equal(t, OrderStatusCompleted, got.Status)
+		require.Len(t, got.Fulfillment.SupplierAttempts, 1)
+		assert.Equal(t, "UP_1", got.Fulfillment.SupplierAttempts[0].ProviderRef, "the old attempt stays reconcilable")
+		require.NotEmpty(t, rec.entries)
+		assert.Equal(t, true, rec.entries[0].Summary["acknowledgedAtSupplier"])
+	})
+
+	t.Run("live retry clock counts as at the supplier", func(t *testing.T) {
+		st, repo, _, _ := newRerouteSUT(&fakeProvider{id: 7}, &fakeProvider{id: 9})
+		o := settlerOrder(repo, func(o *Order) {
+			next := time.Now().Add(time.Minute)
+			o.Fulfillment.SupplierNextRetryAt = &next
+		})
+		_, err := st.Reroute(ctx, o.ID, in, "a")
+		assert.Equal(t, "REROUTE_NEEDS_ACK", appCode(err))
 	})
 
 	t.Run("ref-less park (no stuck flag needed) → allowed", func(t *testing.T) {

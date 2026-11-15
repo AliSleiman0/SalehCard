@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   addLink,
   blockCost,
+  fmtCost,
   linkIssues,
   makeActive,
   marginPct,
@@ -79,5 +80,14 @@ describe('cost and margin', () => {
     expect(marginPct(1.23, cost)).toBeCloseTo(10.9, 1)
     expect(blockCost({ ...q, status: 'unknown' }, 10000)).toBeNull()
     expect(blockCost({ ...q, price: 2 }, 0)).toBe(2)
+  })
+})
+
+describe('fmtCost', () => {
+  it('formats a credit balance with the sign before the dollar', () => {
+    expect(fmtCost(-1861.19)).toBe('-$1,861.19')
+    expect(fmtCost(0.47)).toBe('$0.47')
+    expect(fmtCost(0.000123)).toBe('$0.00012')
+    expect(fmtCost(1234.5, 'LBP')).toBe('1,234.5 LBP')
   })
 })
