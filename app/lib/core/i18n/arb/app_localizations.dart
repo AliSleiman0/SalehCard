@@ -1913,8 +1913,14 @@ abstract class AppLocalizations {
   /// No description provided for @helpSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Get quick answers to common questions'**
+  /// **'Ask anything about using the app'**
   String get helpSubtitle;
+
+  /// No description provided for @helpSubtitleSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'re here to help'**
+  String get helpSubtitleSupport;
 
   /// No description provided for @helpGreetingTitle.
   ///
@@ -1925,7 +1931,7 @@ abstract class AppLocalizations {
   /// No description provided for @helpGreeting.
   ///
   /// In en, this message translates to:
-  /// **'Choose a question below to get an instant answer.'**
+  /// **'Our support team is here to help — reach us below.'**
   String get helpGreeting;
 
   /// No description provided for @helpSearchHint.
@@ -1933,24 +1939,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Type your question...'**
   String get helpSearchHint;
-
-  /// No description provided for @helpAllQuestions.
-  ///
-  /// In en, this message translates to:
-  /// **'All questions'**
-  String get helpAllQuestions;
-
-  /// No description provided for @helpNoMatch.
-  ///
-  /// In en, this message translates to:
-  /// **'No matching questions'**
-  String get helpNoMatch;
-
-  /// No description provided for @helpNoAnswer.
-  ///
-  /// In en, this message translates to:
-  /// **'Sorry, I couldn\'t find an answer to that. Try one of the questions above, or contact us below.'**
-  String get helpNoAnswer;
 
   /// No description provided for @helpOtherWays.
   ///
@@ -1979,7 +1967,7 @@ abstract class AppLocalizations {
   /// No description provided for @helpGreetingAi.
   ///
   /// In en, this message translates to:
-  /// **'Choose a question below, or type your own and I\'ll answer it.'**
+  /// **'Type your question about the app and I\'ll answer it.'**
   String get helpGreetingAi;
 
   /// No description provided for @helpThinking.
@@ -2009,8 +1997,14 @@ abstract class AppLocalizations {
   /// No description provided for @helpAiLimit.
   ///
   /// In en, this message translates to:
-  /// **'You\'ve reached the limit for AI answers for now. Try the questions above, or contact us below.'**
+  /// **'You\'ve reached the limit for AI answers for now. Please contact us below.'**
   String get helpAiLimit;
+
+  /// No description provided for @helpAiUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The assistant isn\'t available right now. Please contact our support team below.'**
+  String get helpAiUnavailable;
 
   /// No description provided for @uploadPhoto.
   ///

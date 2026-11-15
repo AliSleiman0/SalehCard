@@ -1,28 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { groupEntries, kbDocChars, type ChatEntry } from './chatbot'
+import { knowledgeChars, paragraphCount } from './chatbot'
 
-const e = (id: string, sortOrder: number, parentId?: string): ChatEntry => ({
-  id,
-  parentId,
-  question: { en: id, ar: '' },
-  answer: { en: 'a', ar: '' },
-  sortOrder,
-  enabled: true,
-  createdAt: '2026-11-13T00:00:00Z',
-  updatedAt: '2026-11-13T00:00:00Z',
-})
-
-describe('groupEntries', () => {
-  it('orders top-level questions with their follow-ups, orphans last', () => {
-    const g = groupEntries([e('b', 2), e('a', 1), e('a2', 2, 'a'), e('a1', 1, 'a'), e('x', 0, 'gone')])
-    expect(g.map((x) => x.top.id)).toEqual(['a', 'b', 'x'])
-    expect(g[0].children.map((c) => c.id)).toEqual(['a1', 'a2'])
-    expect(g[1].children).toEqual([])
+describe('knowledgeChars', () => {
+  it('counts code points of both texts like the server (trimmed, CRLF as one)', () => {
+    expect(knowledgeChars({ general: '  ab\r\ncd  ', androidOnly: 'شحن😀' })).toBe(5 + 4)
   })
 })
 
-describe('kbDocChars', () => {
-  it('counts code points across both languages like the server', () => {
-    expect(kbDocChars({ title: { en: 'ab', ar: 'شحن' }, body: { en: '😀', ar: '' } })).toBe(2 + 3 + 1)
+describe('paragraphCount', () => {
+  it('splits on blank lines and ignores empty ones', () => {
+    expect(paragraphCount('one\nstill one\n\ntwo\r\n  \r\nthree\n\n\n')).toBe(3)
+    expect(paragraphCount('   ')).toBe(0)
   })
 })

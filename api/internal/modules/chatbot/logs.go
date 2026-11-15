@@ -11,7 +11,7 @@ import (
 )
 
 // chatLogTTL is how long AI conversations are kept (for quality review and
-// knowledge-base gap finding). Customers may type personal details, so they
+// knowledge gap finding). Customers may type personal details, so they
 // expire rather than accumulate, and they are never written to the app log.
 const chatLogTTL = 30 * 24 * time.Hour
 
@@ -34,7 +34,7 @@ type ChatLog struct {
 	Question     string        `bson:"question"              json:"question"`
 	Answer       string        `bson:"answer,omitempty"      json:"answer,omitempty"`
 	Outcome      string        `bson:"outcome"               json:"outcome"`
-	SourceIDs    []string      `bson:"sourceIds,omitempty"   json:"sourceIds,omitempty"`
+	Sources      []string      `bson:"sources,omitempty"     json:"sources,omitempty"` // start of each cited knowledge paragraph
 	InputTokens  int           `bson:"inputTokens"           json:"inputTokens"`
 	CachedTokens int           `bson:"cachedTokens"          json:"cachedTokens"`
 	OutputTokens int           `bson:"outputTokens"          json:"outputTokens"`

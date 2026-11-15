@@ -1023,26 +1023,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get helpCenterTitle => 'مركز المساعدة';
 
   @override
-  String get helpSubtitle => 'إجابات سريعة على الأسئلة الشائعة';
+  String get helpSubtitle => 'اسأل أي شيء عن استخدام التطبيق';
+
+  @override
+  String get helpSubtitleSupport => 'نحن هنا لمساعدتك';
 
   @override
   String get helpGreetingTitle => 'مرحباً! 👋 أنا هنا للمساعدة.';
 
   @override
-  String get helpGreeting => 'اختر سؤالاً من الأسفل للحصول على إجابة فورية.';
+  String get helpGreeting => 'فريق الدعم هنا لمساعدتك — تواصل معنا من الأسفل.';
 
   @override
   String get helpSearchHint => 'اكتب سؤالك...';
-
-  @override
-  String get helpAllQuestions => 'كل الأسئلة';
-
-  @override
-  String get helpNoMatch => 'لا توجد أسئلة مطابقة';
-
-  @override
-  String get helpNoAnswer =>
-      'عذراً، لم أجد إجابة لذلك. جرّب أحد الأسئلة أعلاه أو تواصل معنا من الأسفل.';
 
   @override
   String get helpOtherWays => 'طرق أخرى للحصول على المساعدة';
@@ -1057,7 +1050,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get helpSend => 'إرسال';
 
   @override
-  String get helpGreetingAi => 'اختر سؤالاً من الأسفل، أو اكتب سؤالك وسأجيبك.';
+  String get helpGreetingAi => 'اكتب سؤالك عن التطبيق وسأجيبك.';
 
   @override
   String get helpThinking => 'جارٍ التفكير…';
@@ -1073,7 +1066,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get helpAiLimit =>
-      'وصلت إلى الحد المسموح لإجابات الذكاء الاصطناعي حالياً. جرّب الأسئلة أعلاه أو تواصل معنا أدناه.';
+      'وصلت إلى الحد المسموح لإجابات الذكاء الاصطناعي حالياً. تواصل معنا من الأسفل.';
+
+  @override
+  String get helpAiUnavailable =>
+      'المساعد غير متاح حالياً. تواصل مع فريق الدعم من الأسفل.';
 
   @override
   String get uploadPhoto => 'ارفع صورة (رمز QR / باركود)';

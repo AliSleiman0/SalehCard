@@ -2,41 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/regulated_finance.dart';
-import '../../../core/i18n/i18n_string.dart';
 import '../../../core/network/api_envelope.dart';
 import '../../../core/network/providers.dart';
-
-/// One predefined help-bot question and answer (admin-managed quick question).
-/// [parentId] set = a follow-up shown after its parent's answer.
-class ChatEntry {
-  const ChatEntry({
-    required this.id,
-    required this.question,
-    required this.answer,
-    this.parentId,
-    this.keywords = const [],
-    this.sortOrder = 0,
-  });
-
-  final String id;
-  final String? parentId;
-  final I18nString question;
-  final I18nString answer;
-  final List<String> keywords;
-  final int sortOrder;
-
-  factory ChatEntry.fromJson(Map<String, dynamic> json) => ChatEntry(
-    id: json['id'] as String? ?? '',
-    parentId: json['parentId'] as String?,
-    question: I18nString.fromJson(json['question']),
-    answer: I18nString.fromJson(json['answer']),
-    keywords: [
-      for (final k in (json['keywords'] as List<dynamic>? ?? const []))
-        k.toString(),
-    ],
-    sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
-  );
-}
 
 /// The "still need help?" contact from the admin Settings.
 class ChatSupport {
@@ -56,24 +23,17 @@ class ChatSupport {
 }
 
 class ChatbotData {
-  const ChatbotData({
-    this.entries = const [],
-    this.support = const ChatSupport(),
-    this.ai = false,
-  });
+  const ChatbotData({this.support = const ChatSupport(), this.ai = false});
 
-  final List<ChatEntry> entries;
   final ChatSupport support;
 
-  /// Whether typed questions go to the AI assistant (admin Settings toggle +
-  /// a configured provider). Off → the keyword match below is used.
+  /// Whether customers can type questions to the AI assistant (admin Settings
+  /// toggle + a configured provider). Off → the Help Center shows only the
+  /// support contacts. (The server still sends the retired quick questions as
+  /// `entries` for old app builds; this build ignores them.)
   final bool ai;
 
   factory ChatbotData.fromJson(Map<String, dynamic> json) => ChatbotData(
-    entries: [
-      for (final e in (json['entries'] as List<dynamic>? ?? const []))
-        ChatEntry.fromJson(e as Map<String, dynamic>),
-    ],
     support: ChatSupport.fromJson(json['support'] as Map<String, dynamic>?),
     ai: json['ai'] as bool? ?? false,
   );
@@ -127,7 +87,7 @@ class ChatbotRepository {
       data: {
         'question': question,
         'lang': lang,
-        // iOS must never be answered from android-only articles (App Review);
+        // iOS must never be answered from the android-only knowledge (App Review);
         // keyed off the same build scope that hides those features.
         'platform': restrictToRealWorldServices ? 'ios' : 'android',
         'history': [for (final t in history) t.toJson()],

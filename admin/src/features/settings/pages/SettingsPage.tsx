@@ -426,9 +426,9 @@ export default function SettingsPage() {
             <div>
               <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>Answer typed questions with AI</div>
               <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, maxWidth: 520 }}>
-                When on, questions customers type in the help bot are answered by AI, using only the articles in
-                Help bot → Knowledge base. Each question is a small paid call, capped per customer and per day. The
-                quick questions keep working either way.
+                When on, customers can type questions in the Help Center and the AI answers them, using only the
+                text in Help bot → AI knowledge. Each question is a small paid call, capped per customer and per
+                day. When off, the Help Center shows only the support contacts.
               </div>
               {settingsRes?.data?.integrations?.ai && !settingsRes.data.integrations.ai.configured && (
                 <div style={{ color: 'var(--warn)', fontSize: 12.5, fontWeight: 600, marginTop: 8 }}>

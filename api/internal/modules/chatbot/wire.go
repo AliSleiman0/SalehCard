@@ -17,7 +17,7 @@ import (
 // with the name of the adapter actually in use. A misconfigured provider (e.g.
 // azureopenai without a key) degrades to the stub with a warning instead of
 // refusing to boot — the assistant then reports itself off outside development
-// and the apps keep the keyword bot.
+// and the apps show only the support contacts.
 func BuildAssistant(db *mongo.Database, cfg *config.Config) (*Assistant, string) {
 	provider := cfg.LLMProvider
 	model, err := llm.New(llm.Config{
@@ -49,7 +49,7 @@ func BuildAssistant(db *mongo.Database, cfg *config.Config) (*Assistant, string)
 		IPMax: cfg.ChatbotAIIPMax, IPWindow: cfg.ChatbotAIIPWindow,
 		GlobalMax: cfg.ChatbotAIGlobalMax, GlobalWindow: cfg.ChatbotAIGlobalWindow,
 	}
-	a := NewAssistant(NewMongoKBRepository(db), NewMongoLogRepository(db), settings.NewMongoRepository(db),
+	a := NewAssistant(NewMongoKnowledgeRepository(db), NewMongoLogRepository(db), settings.NewMongoRepository(db),
 		model, ratelimit.NewMongoLimiter(db), limits, live)
 	return a, provider
 }

@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -15,19 +16,23 @@ import (
 
 // ---- fakes -----------------------------------------------------------------
 
-type fakeKB struct {
-	docs []KBDoc
-	err  error
+type fakeKnowledge struct {
+	k   *Knowledge
+	err error
 }
 
-func (f *fakeKB) List(context.Context, bool) ([]KBDoc, error) { return f.docs, f.err }
-func (f *fakeKB) Get(context.Context, bson.ObjectID) (*KBDoc, error) {
-	return nil, errNotFound
+func (f *fakeKnowledge) Get(context.Context) (*Knowledge, error) { return f.k, f.err }
+func (f *fakeKnowledge) Save(_ context.Context, k *Knowledge) error {
+	f.k = k
+	return nil
 }
-func (f *fakeKB) Create(context.Context, *KBDoc) error                      { return nil }
-func (f *fakeKB) Replace(context.Context, *KBDoc) error                     { return nil }
-func (f *fakeKB) Delete(context.Context, bson.ObjectID) (*KBDoc, error)     { return nil, errNotFound }
-func (f *fakeKB) InsertIfSlugMissing(context.Context, *KBDoc) (bool, error) { return false, nil }
+func (f *fakeKnowledge) InsertIfMissing(_ context.Context, k *Knowledge) (bool, error) {
+	if f.k != nil {
+		return false, nil
+	}
+	f.k = k
+	return true, nil
+}
 
 type fakeLogs struct{ logs []ChatLog }
 
@@ -74,10 +79,12 @@ func (f *fakeLimiter) Allow(_ context.Context, key string, _ int, _ time.Duratio
 	return f.deny == "" || !strings.HasPrefix(key, f.deny), nil
 }
 
-func testDocs() []KBDoc {
-	return []KBDoc{
-		{ID: bson.NewObjectID(), Title: Text{En: "Wallet top-up", Ar: "شحن المحفظة"}, Body: Text{En: "Go to Wallet → Top up.", Ar: "اذهب إلى المحفظة"}, Enabled: true},
-		{ID: bson.NewObjectID(), Title: Text{En: "Identity verification"}, Body: Text{En: "Upload your ID."}, Enabled: true},
+// testKnowledge has two general paragraphs (s1, s2) and one Android-only (s3
+// on Android).
+func testKnowledge() *Knowledge {
+	return &Knowledge{
+		General:     "Top-ups: go to Wallet → Top up.\n\n  \nVerification: upload your ID.\r\n",
+		AndroidOnly: "Games: enter the player ID.",
 	}
 }
 
@@ -86,14 +93,12 @@ type rig struct {
 	model *fakeModel
 	logs  *fakeLogs
 	lim   *fakeLimiter
-	docs  []KBDoc
 }
 
 func newRig(t *testing.T, aiOn, live bool) *rig {
 	t.Helper()
-	docs := testDocs()
-	r := &rig{model: &fakeModel{}, logs: &fakeLogs{}, lim: &fakeLimiter{}, docs: docs}
-	r.a = NewAssistant(&fakeKB{docs: docs}, r.logs,
+	r := &rig{model: &fakeModel{}, logs: &fakeLogs{}, lim: &fakeLimiter{}}
+	r.a = NewAssistant(&fakeKnowledge{k: testKnowledge()}, r.logs,
 		fakeSettings{s: &settings.Settings{StoreName: "FlashCash Global", ChatbotAIEnabled: aiOn}},
 		r.model, r.lim, Limits{UserMax: 2, IPMax: 2, GlobalMax: 2}, live)
 	return r
@@ -156,7 +161,7 @@ func TestAsk_RateLimitsFailClosed(t *testing.T) {
 
 func TestAsk_AnsweredWithRealSources(t *testing.T) {
 	r := newRig(t, true, true)
-	r.model.content = `{"answerable":true,"answer":"Open Wallet and tap Top up.","sourceIds":["d1"]}`
+	r.model.content = `{"answerable":true,"answer":"Open Wallet and tap Top up.","sourceIds":["s1"]}`
 	res, err := ask(r, "how do I top up?")
 	if err != nil {
 		t.Fatal(err)
@@ -164,15 +169,15 @@ func TestAsk_AnsweredWithRealSources(t *testing.T) {
 	if !res.Answered || res.ShowSupport || res.Answer != "Open Wallet and tap Top up." {
 		t.Fatalf("unexpected result %+v", res)
 	}
-	if len(res.Sources) != 1 || res.Sources[0].ID != r.docs[0].ID.Hex() {
-		t.Fatalf("source must map d1 to the first doc, got %+v", res.Sources)
-	}
 	if res.LogID == "" || len(r.logs.logs) != 1 {
 		t.Fatal("answer must be logged")
 	}
 	l := r.logs.logs[0]
 	if l.Outcome != outcomeAnswered || l.InputTokens != 900 || l.CachedTokens != 512 || l.UserID != "user-1" {
 		t.Errorf("bad log %+v", l)
+	}
+	if len(l.Sources) != 1 || l.Sources[0] != "Top-ups: go to Wallet → Top up." {
+		t.Errorf("log must keep the cited paragraph for the admin, got %q", l.Sources)
 	}
 	if r.model.last.Schema == nil || r.model.last.MaxOutputTokens != maxOutputTokens {
 		t.Error("model must be called with the strict schema and an output cap")
@@ -183,9 +188,10 @@ func TestAsk_HardRuleRejections(t *testing.T) {
 	cases := map[string]string{
 		"model says unanswerable": `{"answerable":false,"answer":"","sourceIds":[]}`,
 		"answer without sources":  `{"answerable":true,"answer":"Sure!","sourceIds":[]}`,
-		"invented source":         `{"answerable":true,"answer":"Bitcoin is $1","sourceIds":["d9"]}`,
-		"mixed real+invented":     `{"answerable":true,"answer":"x","sourceIds":["d1","d7"]}`,
-		"empty answer":            `{"answerable":true,"answer":"  ","sourceIds":["d1"]}`,
+		"invented source":         `{"answerable":true,"answer":"Bitcoin is $1","sourceIds":["s9"]}`,
+		"mixed real+invented":     `{"answerable":true,"answer":"x","sourceIds":["s1","s7"]}`,
+		"empty answer":            `{"answerable":true,"answer":"  ","sourceIds":["s1"]}`,
+		"android-only on iOS":     `{"answerable":true,"answer":"Enter the player ID.","sourceIds":["s3"]}`,
 		"not json":                `Here is a poem about the sea…`,
 	}
 	for name, content := range cases {
@@ -225,12 +231,39 @@ func TestAsk_FilteredAndProviderError(t *testing.T) {
 	}
 }
 
-func TestAsk_NoDocsSkipsTheModel(t *testing.T) {
+func TestAsk_NoKnowledgeSkipsTheModel(t *testing.T) {
+	for name, k := range map[string]*Knowledge{"never saved": nil, "blank": {General: " \n\n "}} {
+		r := newRig(t, true, true)
+		r.a.kb = &fakeKnowledge{k: k}
+		res, err := ask(r, "how do I top up?")
+		if err != nil || res.Answered || r.model.calls != 0 {
+			t.Fatalf("%s: no knowledge must fall back without a paid call: %+v %v calls=%d", name, res, err, r.model.calls)
+		}
+	}
 	r := newRig(t, true, true)
-	r.a.kb = &fakeKB{}
-	res, err := ask(r, "how do I top up?")
-	if err != nil || res.Answered || r.model.calls != 0 {
-		t.Fatalf("empty KB must fall back without a paid call: %+v %v calls=%d", res, err, r.model.calls)
+	r.a.kb = &fakeKnowledge{err: errors.New("db down")}
+	if _, err := ask(r, "how do I top up?"); !errors.Is(err, ErrAIUnavailable) {
+		t.Fatalf("a knowledge read error must be ErrAIUnavailable, got %v", err)
+	}
+}
+
+func TestAsk_AndroidGetsAndroidOnlyKnowledge(t *testing.T) {
+	r := newRig(t, true, true)
+	r.model.content = `{"answerable":true,"answer":"Enter the player ID.","sourceIds":["s3"]}`
+	res, _, err := r.a.Ask(context.Background(), "u", "ip", AskInput{Question: "player id?", Platform: "android"})
+	if err != nil || !res.Answered {
+		t.Fatalf("android may be answered from the android-only text: %+v %v", res, err)
+	}
+	if !strings.Contains(r.model.last.System, "Games: enter the player ID.") {
+		t.Error("android prompt must include the android-only text")
+	}
+	ios := newRig(t, true, true)
+	ios.model.content = `{"answerable":false,"answer":"","sourceIds":[]}`
+	if _, _, err := ios.a.Ask(context.Background(), "u", "ip", AskInput{Question: "player id?", Platform: "ios"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(ios.model.last.System, "player ID") {
+		t.Error("the iOS prompt must never contain the android-only text")
 	}
 }
 
@@ -253,75 +286,135 @@ func TestAsk_ArabicFallbackAndHistory(t *testing.T) {
 		t.Errorf("Arabic fallback expected, got %q", res.Answer)
 	}
 	msgs := r.model.last.Messages
-	if len(msgs) != maxHistoryTurns+1 || msgs[len(msgs)-1].Content != "سؤال" {
-		t.Errorf("history must be capped to %d turns + the question, got %d", maxHistoryTurns, len(msgs))
+	if len(msgs) != maxHistoryTurns+2 || msgs[len(msgs)-2].Content != "سؤال" {
+		t.Fatalf("history must be capped to %d turns + the question + the app-language note, got %d", maxHistoryTurns, len(msgs))
+	}
+	if last := msgs[len(msgs)-1]; last.Role != "system" || !strings.Contains(last.Content, "displayed in Arabic") {
+		t.Errorf("an Arabic app gets the Arabic-names note last, got %+v", last)
+	}
+	en := newRig(t, true, true)
+	en.model.content = `{"answerable":false,"answer":"","sourceIds":[]}`
+	if _, err := ask(en, "q"); err != nil {
+		t.Fatal(err)
+	}
+	if en.model.last.System != r.model.last.System {
+		t.Error("the system prompt must not depend on the language (provider prompt caching)")
+	}
+	if last := en.model.last.Messages[len(en.model.last.Messages)-1]; !strings.Contains(last.Content, "displayed in English") {
+		t.Errorf("an English app gets the English-names note, got %+v", last)
 	}
 }
 
 func TestEnforce_CapsLength(t *testing.T) {
 	long := strings.Repeat("a", maxAnswerRunes+50)
-	ans, _, ok := enforce(`{"answerable":true,"answer":"`+long+`","sourceIds":["d1","d1"]}`, testDocs())
-	if !ok || len([]rune(ans)) != maxAnswerRunes+1 {
-		t.Fatalf("answer must be capped, got ok=%v len=%d", ok, len([]rune(ans)))
+	ans, cited, ok := enforce(`{"answerable":true,"answer":"`+long+`","sourceIds":["s1","s1"]}`, sectionsFor(testKnowledge(), "ios"))
+	if !ok || len([]rune(ans)) != maxAnswerRunes+1 || len(cited) != 1 {
+		t.Fatalf("answer must be capped and sources deduped, got ok=%v len=%d cited=%d", ok, len([]rune(ans)), len(cited))
 	}
 }
 
 func TestBuildSystemPrompt_StableAndGrounded(t *testing.T) {
-	docs := testDocs()
-	a, b := buildSystemPrompt("FlashCash Global", docs), buildSystemPrompt("FlashCash Global", docs)
+	secs := sectionsFor(testKnowledge(), "ios")
+	a, b := buildSystemPrompt("FlashCash Global", secs), buildSystemPrompt("FlashCash Global", secs)
 	if a != b {
 		t.Fatal("prompt must be deterministic (provider prompt caching)")
 	}
-	for _, want := range []string{`<doc id="d1">`, `<doc id="d2">`, "Wallet top-up", "شحن المحفظة", "Upload your ID.", "Answer ONLY from the KNOWLEDGE BASE"} {
+	for _, want := range []string{`<section id="s1">`, `<section id="s2">`, "go to Wallet → Top up.", "Verification: upload your ID.", "Answer ONLY from the KNOWLEDGE"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("prompt missing %q", want)
 		}
 	}
-	if strings.Index(a, "RULES") > strings.Index(a, "KNOWLEDGE BASE:") {
-		t.Error("rules must precede the knowledge base")
+	if strings.Contains(a, `id="s3"`) {
+		t.Error("iOS prompt must not have a third (android-only) section")
+	}
+	if strings.Index(a, "RULES") > strings.Index(a, "KNOWLEDGE:") {
+		t.Error("rules must precede the knowledge")
 	}
 }
 
-func TestKBInputNormalizeAndBudget(t *testing.T) {
-	in := KBInput{Slug: " Wallet-Topup ", Title: Text{En: " Top up "}, Body: Text{Ar: " نص "}, Tags: []string{"A", "a", ""}}
-	out, msg, err := in.normalize()
+func TestSectionsFor_SplitsParagraphs(t *testing.T) {
+	ios := sectionsFor(testKnowledge(), "ios")
+	if len(ios) != 2 || ios[0].Ref != "s1" || ios[1].Text != "Verification: upload your ID." {
+		t.Fatalf("blank lines (incl. whitespace-only and CRLF) split paragraphs: %+v", ios)
+	}
+	if got := sectionsFor(testKnowledge(), "android"); len(got) != 3 || got[2].Ref != "s3" {
+		t.Errorf("android sees the android-only text as s3: %+v", got)
+	}
+	for _, p := range []string{"", "web", "IOS"} {
+		if got := sectionsFor(testKnowledge(), p); len(got) != 2 {
+			t.Errorf("%q is treated as iOS: %+v", p, got)
+		}
+	}
+	if sectionsFor(nil, "android") != nil {
+		t.Error("no knowledge → no sections")
+	}
+}
+
+func TestKnowledgeInputNormalize(t *testing.T) {
+	out, _, err := KnowledgeInput{General: "  a\r\nb  ", AndroidOnly: " c "}.normalize()
+	if err != nil || out.General != "a\nb" || out.AndroidOnly != "c" {
+		t.Fatalf("not normalized: %+v %v", out, err)
+	}
+	over := KnowledgeInput{General: strings.Repeat("x", maxKnowledgeChars-5), AndroidOnly: strings.Repeat("ي", 6)}
+	if _, msg, err := over.normalize(); !errors.Is(err, errInvalid) || !strings.Contains(msg, "24000") {
+		t.Fatalf("both boxes count toward the cap (runes, not bytes): %q %v", msg, err)
+	}
+	if _, _, err := (KnowledgeInput{General: strings.Repeat("ي", maxKnowledgeChars)}).normalize(); err != nil {
+		t.Fatalf("exactly the cap is allowed: %v", err)
+	}
+}
+
+func TestSnippet(t *testing.T) {
+	if got := snippet("a\n  b"); got != "a b" {
+		t.Errorf("whitespace collapsed: %q", got)
+	}
+	if got := []rune(snippet(strings.Repeat("x", 200))); len(got) != 90 {
+		t.Errorf("long paragraphs are cut to 90 runes, got %d", len(got))
+	}
+}
+
+// notOnIOS: what the telecom-only iOS build doesn't sell; forbidden: what it
+// must never mention at all. Only the android-only text may say the former.
+var (
+	notOnIOS  = regexp.MustCompile(`(?i)\bgames?\b|player|gift ?cards?|voucher|pubg|free fire|لعب|اللاعب|بطاقات الهدايا|القسائم`)
+	forbidden = regexp.MustCompile(`(?i)crypto|usdt|usdc|tether|bitcoin|binance|whish|money transfer|كريبتو|عملات رقمية|بيتكوين|تحويل أموال`)
+)
+
+func TestStarterKnowledge(t *testing.T) {
+	in, msg, err := StarterKnowledge.normalize()
 	if err != nil {
-		t.Fatalf("valid input rejected: %s", msg)
+		t.Fatalf("starter knowledge invalid: %s", msg)
 	}
-	if out.Slug != "wallet-topup" || out.Title.En != "Top up" || len(out.Tags) != 1 {
-		t.Errorf("not normalized: %+v", out)
+	if in.chars() > maxKnowledgeChars*3/4 {
+		t.Errorf("starter knowledge uses %d of %d chars — leave admins room", in.chars(), maxKnowledgeChars)
 	}
-	bad := []KBInput{
-		{Title: Text{En: "t"}}, // no body
-		{Body: Text{En: "b"}},  // no title
-		{Slug: "Bad Slug!", Title: Text{En: "t"}, Body: Text{En: "b"}},
-		{Title: Text{En: "t"}, Body: Text{En: strings.Repeat("x", maxKBBodyLen+1)}},
+	if m := notOnIOS.FindString(in.General); m != "" {
+		t.Errorf("the general text reaches iOS but mentions %q — move it to AndroidOnly", m)
 	}
-	for i, b := range bad {
-		if _, _, err := b.normalize(); !errors.Is(err, errInvalid) {
-			t.Errorf("case %d: want errInvalid", i)
+	for _, txt := range []string{in.General, in.AndroidOnly} {
+		if m := forbidden.FindString(txt); m != "" {
+			t.Errorf("starter knowledge mentions %q", m)
 		}
 	}
-	docs := testDocs()
-	docs = append(docs, KBDoc{ID: bson.NewObjectID(), Title: Text{En: "off"}, Body: Text{En: strings.Repeat("x", 100)}, Enabled: false})
-	total := kbUsedChars(docs, nil)
-	if total != docs[0].chars()+docs[1].chars() {
-		t.Errorf("disabled docs must not count toward the budget: %d", total)
-	}
-	if kbUsedChars(docs, &docs[0].ID) != docs[1].chars() {
-		t.Error("the replaced doc must be excluded")
+	if n := len(sectionsFor(&Knowledge{General: in.General}, "ios")); n < 8 {
+		t.Errorf("starter text should be several paragraphs, got %d", n)
 	}
 }
 
-func TestDocsForPlatform(t *testing.T) {
-	docs := testDocs()
-	docs[1].Tags = []string{TagAndroidOnly}
-	if got := docsForPlatform(docs, "android"); len(got) != 2 {
-		t.Errorf("android sees all docs, got %d", len(got))
+func TestSeedKnowledge_NeverOverwrites(t *testing.T) {
+	repo := &fakeKnowledge{}
+	now := time.Now().UTC()
+	if would, err := SeedKnowledge(context.Background(), repo, StarterKnowledge, false, now); err != nil || !would || repo.k != nil {
+		t.Fatalf("dry run reports but writes nothing: %v %v %+v", would, err, repo.k)
 	}
-	for _, p := range []string{"ios", "", "web"} {
-		if got := docsForPlatform(docs, p); len(got) != 1 || got[0].ID != docs[0].ID {
-			t.Errorf("%q must not see android-only docs, got %d", p, len(got))
-		}
+	if ok, err := SeedKnowledge(context.Background(), repo, StarterKnowledge, true, now); err != nil || !ok || repo.k.UpdatedBy != "seed" {
+		t.Fatalf("first apply writes: %v %v", ok, err)
+	}
+	repo.k.General = "edited by admin"
+	if ok, _ := SeedKnowledge(context.Background(), repo, StarterKnowledge, true, now); ok || repo.k.General != "edited by admin" {
+		t.Fatal("a second seed must not overwrite admin edits")
+	}
+	if would, _ := SeedKnowledge(context.Background(), repo, StarterKnowledge, false, now); would {
+		t.Fatal("dry run reports nothing to do once knowledge exists")
 	}
 }

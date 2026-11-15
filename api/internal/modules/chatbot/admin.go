@@ -3,13 +3,13 @@ package chatbot
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
-	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/AliSleiman0/salehcard/api/internal/modules/audit"
@@ -18,209 +18,98 @@ import (
 )
 
 type adminHandler struct {
-	repo Repository
-	kb   KBRepository
-	logs LogRepository
-	rec  audit.Recorder
+	knowledge KnowledgeRepository
+	logs      LogRepository
+	rec       audit.Recorder
 }
 
-// RegisterAdminRoutes mounts the chatbot Q&A management on the /api/admin group.
-// The caller wraps it in the "chatbot" RBAC domain (GET = chatbot.view,
-// mutations = chatbot.manage). Every create / update / delete is audited. The
-// AI assistant's knowledge base (/chatbot/kb) and conversation log
-// (/chatbot/logs) sit under the same domain.
+// RegisterAdminRoutes mounts the AI help assistant's management on the
+// /api/admin group: the knowledge text (GET/PUT /chatbot/knowledge) and the
+// conversation log (GET /chatbot/logs). The caller wraps it in the "chatbot"
+// RBAC domain (GET = chatbot.view, PUT = chatbot.manage); saves are audited.
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	ensureIndexes(db)
-	h := &adminHandler{repo: NewMongoRepository(db), kb: NewMongoKBRepository(db), logs: NewMongoLogRepository(db), rec: rec}
-	r.Get("/chatbot", h.list)
-	r.Post("/chatbot", h.create)
-	r.Put("/chatbot/{id}", h.update)
-	r.Delete("/chatbot/{id}", h.delete)
-
-	r.Get("/chatbot/kb", h.kbList)
-	r.Post("/chatbot/kb", h.kbCreate)
-	r.Put("/chatbot/kb/{id}", h.kbUpdate)
-	r.Delete("/chatbot/kb/{id}", h.kbDelete)
+	h := &adminHandler{knowledge: NewMongoKnowledgeRepository(db), logs: NewMongoLogRepository(db), rec: rec}
+	r.Get("/chatbot/knowledge", h.getKnowledge)
+	r.Put("/chatbot/knowledge", h.putKnowledge)
 	r.Get("/chatbot/logs", h.logsList)
 }
 
 func ensureIndexes(db *mongo.Database) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	for name, fn := range map[string]func(context.Context, *mongo.Database) error{
-		"chatbot_entries": EnsureIndexes, "kb_docs": EnsureKBIndexes, "chat_logs": EnsureLogIndexes,
-	} {
-		if err := fn(ctx, db); err != nil {
-			slog.Warn("chatbot: failed to ensure indexes", "collection", name, "error", err)
-		}
+	if err := EnsureLogIndexes(ctx, db); err != nil {
+		slog.Warn("chatbot: failed to ensure chat_logs indexes", "error", err)
 	}
 }
 
-func actor(r *http.Request) string {
-	c, _ := auth.ClaimsFromContext(r.Context())
-	return auth.ActorLabel(c)
+// knowledgeView is GET/PUT /api/admin/chatbot/knowledge.
+type knowledgeView struct {
+	Knowledge
+	UsedChars int `json:"usedChars"`
+	MaxChars  int `json:"maxChars"`
 }
 
-func parseID(w http.ResponseWriter, r *http.Request) (bson.ObjectID, bool) {
-	id, err := bson.ObjectIDFromHex(chi.URLParam(r, "id"))
-	if err != nil {
-		response.BadRequest(w, "invalid id")
-		return id, false
+func viewOf(k *Knowledge) knowledgeView {
+	if k == nil {
+		k = &Knowledge{}
 	}
-	return id, true
+	return knowledgeView{Knowledge: *k, MaxChars: maxKnowledgeChars,
+		UsedChars: utf8.RuneCountInString(k.General) + utf8.RuneCountInString(k.AndroidOnly)}
 }
 
-func (h *adminHandler) list(w http.ResponseWriter, r *http.Request) {
-	out, err := h.repo.List(r.Context(), false)
+func (h *adminHandler) getKnowledge(w http.ResponseWriter, r *http.Request) {
+	k, err := h.knowledge.Get(r.Context())
 	if err != nil {
 		response.InternalError(w)
 		return
 	}
-	response.OK(w, out)
+	response.OK(w, viewOf(k))
 }
 
-// checkParent enforces the one-level tree: a follow-up's parent must exist and
-// be a top-level question, an entry cannot be its own parent, and an entry that
-// already has follow-ups cannot itself become a follow-up.
-func (h *adminHandler) checkParent(ctx context.Context, self *bson.ObjectID, parent *bson.ObjectID) (string, error) {
-	if parent == nil {
-		return "", nil
-	}
-	if self != nil && *self == *parent {
-		return "a question cannot follow up on itself", errInvalid
-	}
-	p, err := h.repo.Get(ctx, *parent)
-	if errors.Is(err, errNotFound) {
-		return "the parent question does not exist", errInvalid
-	}
-	if err != nil {
-		return "", err
-	}
-	if p.ParentID != nil {
-		return "follow-ups can only be added under a top-level question", errInvalid
-	}
-	if self != nil {
-		has, err := h.repo.HasChildren(ctx, *self)
-		if err != nil {
-			return "", err
-		}
-		if has {
-			return "this question has its own follow-ups, so it must stay top-level", errInvalid
-		}
-	}
-	return "", nil
-}
-
-func (h *adminHandler) decode(w http.ResponseWriter, r *http.Request, self *bson.ObjectID) (Input, *bson.ObjectID, bool) {
-	var raw Input
-	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+func (h *adminHandler) putKnowledge(w http.ResponseWriter, r *http.Request) {
+	var raw KnowledgeInput
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256<<10)).Decode(&raw); err != nil {
 		response.BadRequest(w, "invalid request body")
-		return raw, nil, false
+		return
 	}
-	in, parent, msg, err := raw.normalize()
+	in, msg, err := raw.normalize()
 	if err != nil {
-		response.BadRequest(w, msg)
-		return in, nil, false
-	}
-	if msg, err := h.checkParent(r.Context(), self, parent); err != nil {
-		if errors.Is(err, errInvalid) {
-			response.BadRequest(w, msg)
-		} else {
-			response.InternalError(w)
-		}
-		return in, nil, false
-	}
-	return in, parent, true
-}
-
-func (h *adminHandler) create(w http.ResponseWriter, r *http.Request) {
-	in, parent, ok := h.decode(w, r, nil)
-	if !ok {
+		response.Error(w, http.StatusBadRequest, "KNOWLEDGE_TOO_LONG", msg)
 		return
 	}
-	if n, err := h.repo.Count(r.Context()); err != nil {
-		response.InternalError(w)
-		return
-	} else if n >= maxEntries {
-		response.BadRequest(w, "the chatbot already has the maximum number of questions")
-		return
-	}
-	now := time.Now().UTC()
-	e := Entry{
-		ID: bson.NewObjectID(), ParentID: parent,
-		Question: in.Question, Answer: in.Answer, Keywords: in.Keywords,
-		SortOrder: in.SortOrder, Enabled: in.Enabled,
-		CreatedBy: actor(r), CreatedAt: now, UpdatedAt: now,
-	}
-	if err := h.repo.Create(r.Context(), &e); err != nil {
+	c, _ := auth.ClaimsFromContext(r.Context())
+	k := &Knowledge{General: in.General, AndroidOnly: in.AndroidOnly,
+		UpdatedBy: auth.ActorLabel(c), UpdatedAt: time.Now().UTC()}
+	if err := h.knowledge.Save(r.Context(), k); err != nil {
 		response.InternalError(w)
 		return
 	}
-	h.audit(r, audit.ActionChatbotCreate, &e, nil)
-	response.JSON(w, http.StatusCreated, response.Response{Success: true, Data: e})
+	v := viewOf(k)
+	h.rec.Record(r.Context(), audit.Entry{Action: audit.ActionChatbotKnowledgeUpdate, TargetType: "chatbot_knowledge",
+		TargetID: knowledgeID, Summary: map[string]any{
+			"generalChars": utf8.RuneCountInString(k.General), "androidOnlyChars": utf8.RuneCountInString(k.AndroidOnly)}})
+	response.OK(w, v)
 }
 
-func (h *adminHandler) update(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
-	if !ok {
+const logsPageSize = 50
+
+// logsList is GET /api/admin/chatbot/logs?filter=unanswered|flagged&page=N —
+// the AI conversations, newest first (they expire after 30 days).
+func (h *adminHandler) logsList(w http.ResponseWriter, r *http.Request) {
+	filter := r.URL.Query().Get("filter")
+	if filter != "" && filter != logFilterFlagged && filter != logFilterUnanswered {
+		response.BadRequest(w, "filter must be unanswered or flagged")
 		return
 	}
-	cur, err := h.repo.Get(r.Context(), id)
-	if errors.Is(err, errNotFound) {
-		response.NotFound(w)
-		return
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
 	}
+	items, more, err := h.logs.List(r.Context(), filter, (page-1)*logsPageSize, logsPageSize)
 	if err != nil {
 		response.InternalError(w)
 		return
 	}
-	in, parent, ok := h.decode(w, r, &id)
-	if !ok {
-		return
-	}
-	cur.ParentID = parent
-	cur.Question, cur.Answer, cur.Keywords = in.Question, in.Answer, in.Keywords
-	cur.SortOrder, cur.Enabled = in.SortOrder, in.Enabled
-	cur.UpdatedAt = time.Now().UTC()
-	if err := h.repo.Replace(r.Context(), cur); err != nil {
-		if errors.Is(err, errNotFound) {
-			response.NotFound(w)
-			return
-		}
-		response.InternalError(w)
-		return
-	}
-	h.audit(r, audit.ActionChatbotUpdate, cur, nil)
-	response.OK(w, cur)
-}
-
-// delete removes a question together with its follow-ups (the console asks
-// for confirmation first and says how many follow-ups go with it).
-func (h *adminHandler) delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
-	if !ok {
-		return
-	}
-	gone, children, err := h.repo.DeleteWithChildren(r.Context(), id)
-	if errors.Is(err, errNotFound) {
-		response.NotFound(w)
-		return
-	}
-	if err != nil {
-		response.InternalError(w)
-		return
-	}
-	h.audit(r, audit.ActionChatbotDelete, gone, map[string]any{"followUpsDeleted": children})
-	response.OK(w, map[string]any{"deleted": true, "followUpsDeleted": children})
-}
-
-func (h *adminHandler) audit(r *http.Request, action string, e *Entry, extra map[string]any) {
-	summary := map[string]any{"question": e.Question.En, "questionAr": e.Question.Ar, "enabled": e.Enabled}
-	if e.ParentID != nil {
-		summary["parentId"] = e.ParentID.Hex()
-	}
-	for k, v := range extra {
-		summary[k] = v
-	}
-	h.rec.Record(r.Context(), audit.Entry{Action: action, TargetType: "chatbot", TargetID: e.ID.Hex(), Summary: summary})
+	response.OK(w, map[string]any{"items": items, "page": page, "hasMore": more})
 }

@@ -23,9 +23,10 @@ type Support struct {
 	Whatsapp string `json:"whatsapp,omitempty"`
 }
 
-// PublicView is GET /api/v1/chatbot: the enabled questions plus the support
-// contact (bundled so the storefront needs no separate public settings call).
-// AI reports whether free-typed questions may go to POST /chatbot/ask.
+// PublicView is GET /api/v1/chatbot: the support contact plus whether the AI
+// assistant is on (AI → free-typed questions go to POST /chatbot/ask).
+// Entries are the retired quick questions, served read-only for app builds
+// released before the AI assistant (see the package doc).
 type PublicView struct {
 	Entries []Entry `json:"entries"`
 	Support Support `json:"support"`

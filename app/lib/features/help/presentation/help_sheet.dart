@@ -21,8 +21,8 @@ Future<void> showHelpSheet(BuildContext context) => showModalBottomSheet<void>(
       const FractionallySizedBox(heightFactor: 0.9, child: HelpSheet()),
 );
 
-/// Floating help button; hidden while the admin has added no questions (or
-/// the chatbot endpoint is unreachable).
+/// Floating help button; hidden while the Help Center has nothing to offer
+/// (AI off and no WhatsApp contact) or the chatbot endpoint is unreachable.
 class HelpFab extends ConsumerWidget {
   const HelpFab({super.key});
 
@@ -30,7 +30,7 @@ class HelpFab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final has = ref
         .watch(chatbotProvider)
-        .maybeWhen(data: (d) => d.entries.isNotEmpty, orElse: () => false);
+        .maybeWhen(data: showHelpCenter, orElse: () => false);
     if (!has) return const SizedBox.shrink();
     return FloatingActionButton(
       heroTag: 'help-fab',
@@ -43,26 +43,6 @@ class HelpFab extends ConsumerWidget {
 
 const _robotAsset = 'assets/help/robot.png';
 const _whatsappGreen = Color(0xFF25D366);
-
-/// Icon + tint per inferred question kind (see [helpIconKind]).
-({IconData icon, Color tint}) _kindStyle(HelpIconKind kind) => switch (kind) {
-  HelpIconKind.cart => (
-    icon: Icons.shopping_cart_outlined,
-    tint: const Color(0xFFA56BFF),
-  ),
-  HelpIconKind.wallet => (
-    icon: Icons.account_balance_wallet_outlined,
-    tint: const Color(0xFF4F8BFF),
-  ),
-  HelpIconKind.shield => (
-    icon: Icons.verified_user_outlined,
-    tint: const Color(0xFF2FD47A),
-  ),
-  HelpIconKind.help => (
-    icon: Icons.help_outline_rounded,
-    tint: const Color(0xFFA56BFF),
-  ),
-};
 
 class _Msg {
   const _Msg(
@@ -88,11 +68,10 @@ class _Msg {
       _Msg(fromUser, text, ai: ai, logId: logId, reported: true);
 }
 
-/// The Help Center panel: tap a predefined question card (or type one and
-/// send) → its answer appears as a bot bubble, followed by its follow-up
-/// questions as cards. When the AI assistant is on, typed questions are
-/// answered by it from the admin knowledge base instead of the keyword match.
-/// WhatsApp + complaint escalation sit at the bottom.
+/// The Help Center panel. When the AI assistant is on, the customer types a
+/// question and it is answered from the admin's knowledge (2026-11-15: the
+/// predefined quick questions are gone). When it is off, only the greeting and
+/// the WhatsApp + complaint escalation at the bottom are shown.
 class HelpSheet extends ConsumerStatefulWidget {
   const HelpSheet({super.key});
 
@@ -104,7 +83,6 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
   final _msgs = <_Msg>[];
   final _scroll = ScrollController();
   final _search = TextEditingController();
-  String? _current; // top-level id whose follow-ups are offered
   bool _asking = false; // an AI answer is on its way
   final _lastMsgKey = GlobalKey(); // newest bubble, for _scrollToLatest
 
@@ -115,21 +93,8 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
     super.dispose();
   }
 
-  void _scrollToEnd() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.animateTo(
-          _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  /// Brings the newest bubble to the top of the view. Used for AI turns:
-  /// the question cards still render below the chat, so scrolling to the end
-  /// would push the answer (or the "Thinking…" bubble) out of sight.
+  /// Brings the newest bubble into view (a long answer starts at its top
+  /// rather than being scrolled past).
   void _scrollToLatest() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = _lastMsgKey.currentContext;
@@ -142,35 +107,10 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
     });
   }
 
-  void _ask(ChatEntry e, String locale) {
-    setState(() {
-      _msgs
-        ..add(_Msg(true, e.question.resolve(locale)))
-        ..add(_Msg(false, e.answer.resolve(locale)));
-      _current = e.parentId ?? e.id;
-      _search.clear();
-    });
-    _scrollToEnd();
-  }
-
-  /// Send button / keyboard submit: asks the AI assistant when it is on,
-  /// otherwise answers the best keyword match for the typed question.
-  void _submit(ChatbotData data, String locale, AppLocalizations l10n) {
+  /// Send button / keyboard submit: asks the AI assistant.
+  Future<void> _submit(String locale, AppLocalizations l10n) async {
     final q = _search.text.trim();
     if (q.isEmpty || _asking) return;
-    if (data.ai) {
-      _askAi(q, data.entries, locale, l10n);
-      return;
-    }
-    _localAnswer(q, data.entries, locale, l10n.helpNoAnswer);
-  }
-
-  Future<void> _askAi(
-    String q,
-    List<ChatEntry> all,
-    String locale,
-    AppLocalizations l10n,
-  ) async {
     final history = askHistory([
       for (final m in _msgs)
         if (!m.pending) (fromUser: m.fromUser, text: m.text),
@@ -186,7 +126,6 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
 
     late _Msg reply;
     var revealSupport = false;
-    String? followUpsOf;
     try {
       final r = await ref
           .read(chatbotRepositoryProvider)
@@ -194,20 +133,13 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
       reply = _Msg(false, r.answer, ai: r.answered, logId: r.logId);
       revealSupport = !r.answered || r.showSupport;
     } catch (e) {
-      if (askFailure(e) == AskFailure.limited) {
-        reply = _Msg(false, l10n.helpAiLimit);
-        revealSupport = true;
-      } else {
-        // Assistant off/unavailable: still give the keyword-matched answer.
-        final matches = searchQuestions(all, q);
-        if (matches.isNotEmpty) {
-          reply = _Msg(false, matches.first.answer.resolve(locale));
-          followUpsOf = matches.first.parentId ?? matches.first.id;
-        } else {
-          reply = _Msg(false, l10n.helpNoAnswer);
-          revealSupport = true;
-        }
-      }
+      reply = _Msg(
+        false,
+        askFailure(e) == AskFailure.limited
+            ? l10n.helpAiLimit
+            : l10n.helpAiUnavailable,
+      );
+      revealSupport = true;
     }
     if (!mounted) return;
     setState(() {
@@ -215,7 +147,6 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
       _msgs
         ..removeWhere((m) => m.pending)
         ..add(reply);
-      if (followUpsOf != null) _current = followUpsOf;
     });
     // The contact cards hide while the keyboard is up — drop it so a
     // "can't help" reply lands next to WhatsApp / complaint.
@@ -234,40 +165,12 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
     }
   }
 
-  void _localAnswer(
-    String q,
-    List<ChatEntry> all,
-    String locale,
-    String noAnswer,
-  ) {
-    final matches = searchQuestions(all, q);
-    if (matches.isNotEmpty) {
-      _ask(matches.first, locale);
-      return;
-    }
-    setState(() {
-      _msgs
-        ..add(_Msg(true, q))
-        ..add(_Msg(false, noAnswer));
-      _search.clear();
-    });
-    _scrollToEnd();
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.colors;
     final locale = ref.watch(localeControllerProvider).languageCode;
     final data = ref.watch(chatbotProvider).value ?? const ChatbotData();
-    final all = data.entries;
-    final query = _search.text;
-    final searching = query.trim().isNotEmpty;
-    final suggestions = searching
-        ? searchQuestions(all, query)
-        : _current != null
-        ? followUpQuestions(all, _current!)
-        : topLevelQuestions(all);
     final wa = whatsappUri(data.support.whatsapp);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     // Opened from inside the shell, the shell Scaffold already resizes for the
@@ -297,7 +200,7 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
           ),
           _Header(
             title: l10n.helpCenterTitle,
-            subtitle: l10n.helpSubtitle,
+            subtitle: data.ai ? l10n.helpSubtitle : l10n.helpSubtitleSupport,
             onClose: () => Navigator.pop(context),
           ),
           Divider(height: 1, thickness: 1, color: colors.border),
@@ -347,47 +250,19 @@ class _HelpSheetState extends ConsumerState<HelpSheet> {
                             onReport: () => _report(i),
                           ),
                         ),
-                const SizedBox(height: 6),
-                for (final e in suggestions)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _QuestionCard(
-                      entry: e,
-                      locale: locale,
-                      onTap: () => _ask(e, locale),
-                    ),
-                  ),
-                if (searching && suggestions.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      l10n.helpNoMatch,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: colors.textDim, fontSize: 13.5),
-                    ),
-                  ),
-                if (_current != null && !searching)
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: TextButton.icon(
-                      onPressed: () => setState(() => _current = null),
-                      icon: const Icon(Icons.apps_rounded, size: 18),
-                      label: Text(l10n.helpAllQuestions),
-                    ),
-                  ),
               ],
             ),
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 4, 16, keyboardOpen ? 12 : 4),
-            child: _AskInput(
-              controller: _search,
-              hint: l10n.helpSearchHint,
-              sendLabel: l10n.helpSend,
-              onChanged: () => setState(() {}),
-              onSubmit: () => _submit(data, locale, l10n),
+          if (data.ai)
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, keyboardOpen ? 12 : 4),
+              child: _AskInput(
+                controller: _search,
+                hint: l10n.helpSearchHint,
+                sendLabel: l10n.helpSend,
+                onSubmit: () => _submit(locale, l10n),
+              ),
             ),
-          ),
           if (!keyboardOpen)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -844,100 +719,18 @@ class _UserBubble extends StatelessWidget {
   );
 }
 
-/// A tappable question: tinted icon tile, title, one-line answer summary,
-/// chevron.
-class _QuestionCard extends StatelessWidget {
-  const _QuestionCard({
-    required this.entry,
-    required this.locale,
-    required this.onTap,
-  });
-
-  final ChatEntry entry;
-  final String locale;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final style = _kindStyle(helpIconKind(entry));
-    final subtitle = helpSubtitle(entry.answer.resolve(locale));
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: colors.border),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(14, 14, 10, 14),
-          child: Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: style.tint.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(style.icon, color: style.tint, size: 26),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.question.resolve(locale),
-                      style: TextStyle(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w700,
-                        color: colors.text,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          height: 1.35,
-                          color: colors.textDim,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              // Mirrors itself in RTL.
-              Icon(Icons.chevron_right_rounded, color: colors.textDim),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// The pill "Type your question..." field with a gradient send button.
 class _AskInput extends StatelessWidget {
   const _AskInput({
     required this.controller,
     required this.hint,
     required this.sendLabel,
-    required this.onChanged,
     required this.onSubmit,
   });
 
   final TextEditingController controller;
   final String hint;
   final String sendLabel;
-  final VoidCallback onChanged;
   final VoidCallback onSubmit;
 
   @override
@@ -953,14 +746,25 @@ class _AskInput extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.search_rounded, color: colors.textDim, size: 22),
+          Icon(
+            Icons.chat_bubble_outline_rounded,
+            color: colors.textDim,
+            size: 22,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
-              onChanged: (_) => onChanged(),
               onSubmitted: (_) => onSubmit(),
               textInputAction: TextInputAction.send,
+              maxLength: 500, // the server's question cap
+              buildCounter:
+                  (
+                    _, {
+                    required currentLength,
+                    required isFocused,
+                    maxLength,
+                  }) => null,
               style: TextStyle(fontSize: 15, color: colors.text),
               decoration: InputDecoration(
                 hintText: hint,

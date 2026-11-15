@@ -64,14 +64,7 @@ Widget _app(_FakeApi api, {required bool ai}) => ProviderScope(
   overrides: [
     chatbotProvider.overrideWith(
       (ref) async => ChatbotData(
-        entries: [
-          ChatEntry.fromJson({
-            'id': 'top',
-            'question': {'en': 'Top up wallet'},
-            'answer': {'en': 'Keyword answer: go to Wallet.'},
-            'keywords': ['wallet'],
-          }),
-        ],
+        support: const ChatSupport(whatsapp: '+961 70 123 456'),
         ai: ai,
       ),
     ),
@@ -167,23 +160,42 @@ void main() {
     expect(find.textContaining('reached the limit'), findsOneWidget);
   });
 
-  testWidgets('AI unavailable: falls back to the keyword answer', (
+  testWidgets('AI on, not answerable: shows the fallback and the contacts', (
     tester,
   ) async {
+    final api = _FakeApi()
+      ..askBody = {
+        'logId': 'log2',
+        'answer': 'Sorry, I can only answer questions about using the app.',
+        'answered': false,
+        'showSupport': true,
+      };
+    await tester.pumpWidget(_app(api, ai: true));
+    await tester.pumpAndSettle();
+    await _send(tester, 'write me a poem');
+    expect(find.textContaining('I can only answer'), findsOneWidget);
+    expect(find.textContaining('AI answer'), findsNothing);
+    expect(find.text('WhatsApp'), findsOneWidget);
+  });
+
+  testWidgets('AI unavailable: says so and points at support', (tester) async {
     final api = _FakeApi()..askStatus = 503;
     await tester.pumpWidget(_app(api, ai: true));
     await tester.pumpAndSettle();
     await _send(tester, 'wallet');
-    expect(find.text('Keyword answer: go to Wallet.'), findsOneWidget);
+    expect(find.textContaining("isn't available right now"), findsOneWidget);
     expect(find.textContaining('AI answer'), findsNothing);
+    expect(find.text('WhatsApp'), findsOneWidget);
   });
 
-  testWidgets('AI off: never calls the assistant', (tester) async {
+  testWidgets('AI off: no input, only the support contacts', (tester) async {
     final api = _FakeApi();
     await tester.pumpWidget(_app(api, ai: false));
     await tester.pumpAndSettle();
-    await _send(tester, 'wallet');
-    expect(find.text('Keyword answer: go to Wallet.'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.textContaining('support team is here'), findsOneWidget);
+    expect(find.text("We're here to help"), findsOneWidget);
+    expect(find.text('WhatsApp'), findsOneWidget);
     expect(api.requests.where((r) => r.path == '/chatbot/ask'), isEmpty);
   });
 }
