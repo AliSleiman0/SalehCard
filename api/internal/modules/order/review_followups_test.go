@@ -24,7 +24,8 @@ func TestSettler_StalePassLosesAfterReroute(t *testing.T) {
 	stale := *o // what the settler's list query returned
 	stale.Fulfillment = o.Fulfillment
 
-	_, err := st.Reroute(context.Background(), o.ID, RerouteInput{ProviderID: 9, UpstreamProductID: "U-9"}, "a")
+	// Stuck but holding a supplier ref: it may still deliver late → needs the OK.
+	_, err := st.Reroute(context.Background(), o.ID, RerouteInput{ProviderID: 9, UpstreamProductID: "U-9", AcknowledgeAtSupplier: true}, "a")
 	require.NoError(t, err)
 	require.Equal(t, 1, o.Fulfillment.SupplierAttempt)
 

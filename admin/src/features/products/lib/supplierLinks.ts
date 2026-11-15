@@ -110,9 +110,11 @@ export function marginPct(sell: number, cost: number | null): number | null {
   return ((sell - cost) / sell) * 100
 }
 
-/** "$1.10" / "1,234 LBP" — a cost in the supplier's own currency. */
+/** "$1.10" / "-$1,861.19" / "1,234 LBP" — an amount in the supplier's own
+ *  currency (a credit account's balance is negative). */
 export function fmtCost(v: number, currency?: string): string {
   if (currency && currency !== 'USD') return `${v.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${currency}`
+  if (v < 0) return `-${fmtCost(-v, currency)}`
   if (v > 0 && v < 0.01) return `$${v.toPrecision(2)}`
-  return `$${v.toFixed(2)}`
+  return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
