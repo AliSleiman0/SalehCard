@@ -453,7 +453,8 @@ Verified locally in Chrome against fake suppliers: loss → pause + switch to th
 recovery without switching back, re-show, admin save keeps the sync data, alerts + acknowledge, dashboard
 tile. Still to check:
 
-1. **Prod dry run** (DEVOPS-TODO §26): after a day, read every alert against the supplier panels. Are the
+1. **Prod warning-only day** (DEVOPS-TODO §26): after a day, read every alert against the supplier panels.
+   First confirm the status line's "Last check" shows **more than 0 products checked**. Are the
    costs per block right, and are there no false "hidden" alerts while a supplier is down?
 2. **Settings → USD per 1 LBP** on umanage: the field shows only for non-USD suppliers (none locally). Check
    it saves and the "Rate missing" alert closes on the next pass.
@@ -461,6 +462,9 @@ tile. Still to check:
    with a working "Open order" link.
 4. **Two API instances**: `sync-status` "last run" is per instance. If prod scales out, each instance runs
    the job (writes are guarded, alerts dedupe), but "last run" may show a different instance's pass.
+5. **Stale warnings**: in warning-only mode a "would go off sale" alert doesn't close by itself when the
+   supplier gets stock back (nothing was hidden, so nothing is re-shown). Check its "Last seen" before acting.
+
 ## AI help assistant (feat/ai-chatbot, 2026-11-15)
 
 Verified before the PR: Go unit + Mongo integration tests, `cmd/chateval` against the real deployment (33

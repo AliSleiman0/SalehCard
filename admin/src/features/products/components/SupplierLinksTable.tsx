@@ -80,8 +80,8 @@ export function SupplierLinksTable({
                 <th>Cost{blockUnits > 1 ? ` / ${blockUnits.toLocaleString('en-US')}` : ''}</th>
                 <th>Margin</th>
                 <th>Status</th>
-                <th title="Automatic supplier sync: Price = cost alerts and pause when it sells at a loss; Stock = hide / re-show the product with the supplier's availability">
-                  Sync
+                <th title="Automatic supplier check: Price = warn about cost changes and pause when it sells at a loss; Stock = take the product off sale / back on with the supplier's stock">
+                  Auto-check
                 </th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -162,7 +162,7 @@ export function SupplierLinksTable({
                         {r.pausedReason === 'loss' && (
                           <span
                             className="st st-danger"
-                            title="The supplier sync paused this link: it costs at least our selling price. It un-pauses by itself when the cost drops; making it active un-pauses it now."
+                            title="The automatic supplier check paused this link: it costs at least our selling price. It un-pauses by itself when the cost drops; making it active un-pauses it now."
                           >
                             Paused: loss
                           </span>
@@ -236,10 +236,10 @@ export function SupplierLinksTable({
           <Icon name="search" size={13} /> Find at all suppliers
         </button>
         <span className="ahint" style={{ margin: 0 }}>
-          Orders go to the <b>Active</b> supplier. The order of the rows is the backup order. <b>Sync</b>: the
-          supplier sync watches each ticked link&apos;s cost (alerts, pauses a link that sells at a loss) and
-          stock (hides the product when no supplier has it, shows it again when one does). It never changes your
-          selling price.
+          Orders go to the <b>Active</b> supplier. The order of the rows is the backup order. <b>Auto-check</b>:
+          the automatic supplier check watches each ticked link&apos;s cost (warns you, pauses a link that sells at a
+          loss) and stock (takes the product off sale when no supplier has it, back on when one does). It never
+          changes your selling price.
         </span>
       </div>
       {searching && (

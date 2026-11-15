@@ -42,6 +42,9 @@ type syncEnv struct {
 	FX    func(provider int, currency string) (float64, bool)
 	Names map[int]string // supplier display names
 	Now   time.Time
+	// Preview = warning-only mode (SUPPLIER_SYNC_DRYRUN): nothing is applied,
+	// so alerts say what WOULD happen, in plain words for a non-technical admin.
+	Preview bool
 }
 
 // Sync change kinds (report + audit).
@@ -226,8 +229,10 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 			res.Resolve = append(res.Resolve, "loss:"+pid+":"+l.ID)
 			res.Alerts = append(res.Alerts, supplieralert.Alert{
 				Kind: supplieralert.KindLossRecovered, Key: "recovered:" + pid + ":" + l.ID,
-				Message: fmt.Sprintf("%s: %s is profitable again (cost %s, we sell at %s %s) — unpaused. The active supplier was not switched back.",
-					pname, supplierName(env, l.Provider), usd(*snap.CostUSD*block), usd(sell*block), perBlock(block)),
+				Message: fmt.Sprintf("%s: %s is profitable again (cost %s, we sell at %s %s) — %s",
+					pname, supplierName(env, l.Provider), usd(*snap.CostUSD*block), usd(sell*block), perBlock(block),
+					pick(env.Preview, "it would be unpaused. Nothing was changed.",
+						"unpaused. The active supplier was not switched back.")),
 				Provider: l.Provider, ProductID: pid, ProductName: pname, LinkID: l.ID,
 			})
 			res.Changes = append(res.Changes, syncChange{Kind: changeRecovered, LinkID: l.ID, Provider: l.Provider,
@@ -257,19 +262,27 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 			continue
 		}
 		l := linkByID(res.Links, ch.LinkID)
-		what := "It stays as a backup only while paused."
+		what := pick(env.Preview, "This supplier would be paused (it is only a backup, so orders are not affected).",
+			"It stays as a backup only while paused.")
 		if l.ID == activeID {
 			if promotedTo != "" {
 				nl := linkByID(res.Links, promotedTo)
-				what = fmt.Sprintf("Orders now go to %s (product %s).", supplierName(env, nl.Provider), nl.UpstreamID)
+				what = fmt.Sprintf(pick(env.Preview, "Orders would switch to %s (product %s).", "Orders now go to %s (product %s)."),
+					supplierName(env, nl.Provider), nl.UpstreamID)
 			} else {
-				what = "No other supplier can take it — the product is hidden until the cost recovers or you change the price."
+				what = pick(env.Preview,
+					"No other supplier can take it, so the product would be taken off sale until the cost drops or you change the price.",
+					"No other supplier can take it — the product is hidden until the cost recovers or you change the price.")
 			}
 		}
 		cu, _ := ch.Detail["costUsd"].(float64)
+		format := "%s: %s now costs %s %s but we sell at %s — link paused. %s"
+		if env.Preview {
+			format = "%s: %s now costs %s %s but we sell at %s — that is a loss. %s Nothing was changed yet."
+		}
 		res.Alerts = append(res.Alerts, supplieralert.Alert{
 			Kind: supplieralert.KindLossPaused, Key: "loss:" + pid + ":" + l.ID,
-			Message: fmt.Sprintf("%s: %s now costs %s %s but we sell at %s — link paused. %s",
+			Message: fmt.Sprintf(format,
 				pname, supplierName(env, l.Provider), usd(cu*block), perBlock(block), usd(sell*block), what),
 			Provider: l.Provider, ProductID: pid, ProductName: pname, LinkID: l.ID,
 			Data: map[string]any{"costUsd": cu, "unitSell": sell, "upstreamId": l.UpstreamID},
@@ -293,9 +306,19 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 	// Hide for "unavailable" only when EVERY watched link was checked this
 	// pass and none has the product: one supplier we couldn't reach may
 	// still have it, and the order fallback copes with a refusal.
-	anyKnown, anyUnknown, anyAvail := false, false, false
+	// A link whose stock watch is off counts as available (unless paused
+	// for a loss): the admin chose not to follow its stock, so it must never
+	// be why the product goes off sale. A link that has stock but is paused
+	// for a loss makes the reason "loss", not "nobody has it".
+	anyKnown, anyUnknown, anyAvail, anyLossOnly := false, false, false, false
 	for _, l := range res.Links {
-		if !l.Enabled || l.StatusSyncOff || strings.TrimSpace(l.UpstreamID) == "" {
+		if !l.Enabled || strings.TrimSpace(l.UpstreamID) == "" {
+			continue
+		}
+		if l.StatusSyncOff {
+			if !l.Paused() {
+				anyAvail = true
+			}
 			continue
 		}
 		if !env.Catalogs[l.Provider].Known {
@@ -303,8 +326,12 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 			continue
 		}
 		anyKnown = true
-		if l.Sync != nil && l.Sync.Found && l.Sync.Available && !l.Paused() {
-			anyAvail = true
+		if l.Sync != nil && l.Sync.Found && l.Sync.Available {
+			if l.Paused() {
+				anyLossOnly = true
+			} else {
+				anyAvail = true
+			}
 		}
 	}
 	activeAvail := active != nil && env.Catalogs[active.Provider].Known && active.Sync != nil &&
@@ -312,6 +339,8 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 
 	switch {
 	case lossBlocked:
+		res.HideReason = "loss"
+	case anyKnown && !anyUnknown && !anyAvail && anyLossOnly:
 		res.HideReason = "loss"
 	case anyKnown && !anyUnknown && !anyAvail:
 		res.HideReason = "unavailable"
@@ -325,7 +354,9 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 		}
 		res.Alerts = append(res.Alerts, supplieralert.Alert{
 			Kind: supplieralert.KindProductHidden, Key: "hidden:" + pid,
-			Message:   fmt.Sprintf("%s was taken off sale: %s. It comes back by itself when that changes.", pname, why),
+			Message: fmt.Sprintf(pick(env.Preview,
+				"%s would be taken off sale: %s. Nothing was changed — it is still on sale.",
+				"%s was taken off sale: %s. It comes back by itself when that changes."), pname, why),
 			ProductID: pid, ProductName: pname, Data: map[string]any{"reason": res.HideReason},
 		})
 		res.Resolve = append(res.Resolve, "shown:"+pid)
@@ -334,7 +365,9 @@ func evaluateProduct(p *product.Product, env syncEnv) evalResult {
 		res.Show = true
 		res.Alerts = append(res.Alerts, supplieralert.Alert{
 			Kind: supplieralert.KindProductShown, Key: "shown:" + pid,
-			Message:   fmt.Sprintf("%s is back on sale: a linked supplier has it again.", pname),
+			Message: fmt.Sprintf(pick(env.Preview,
+				"%s would go back on sale: a linked supplier has it again.",
+				"%s is back on sale: a linked supplier has it again."), pname),
 			ProductID: pid, ProductName: pname,
 		})
 		res.Resolve = append(res.Resolve, "hidden:"+pid)
@@ -396,6 +429,14 @@ func perBlock(block float64) string {
 		return "per unit"
 	}
 	return "per " + humanizeInt(int64(math.Round(block)))
+}
+
+// pick returns preview when the job runs warning-only, else live.
+func pick(preview bool, previewText, live string) string {
+	if preview {
+		return previewText
+	}
+	return live
 }
 
 func usd(v float64) string { return fmt.Sprintf("$%s", trimMoney(v)) }

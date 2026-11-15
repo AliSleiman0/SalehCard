@@ -27,12 +27,12 @@ describe('syncSummary', () => {
 
   it('lists what changed, singular and plural', () => {
     expect(syncSummary({ ...base, costChanges: 2, paused: 1, promoted: 1, hidden: 1 })).toBe(
-      '12 products checked · 2 cost changes · 1 link paused (loss) · 1 supplier switched · 1 hidden',
+      '12 products checked · 2 cost changes · 1 supplier paused (loss) · 1 product switched supplier · 1 taken off sale',
     )
   })
 
-  it('flags a dry run and unreachable suppliers', () => {
+  it('flags warning-only mode and unreachable suppliers', () => {
     const r = { ...base, dryRun: true, hidden: 1, suppliers: [{ id: 11, name: 'speedcard', status: 'unavailable' as const }] }
-    expect(syncSummary(r)).toBe("dry run, nothing changed — 12 products checked · 1 hidden · couldn't reach speedcard")
+    expect(syncSummary(r)).toBe("warnings only, nothing changed — 12 products checked · 1 would go off sale · couldn't reach speedcard")
   })
 })

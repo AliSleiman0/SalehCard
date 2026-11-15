@@ -3,6 +3,7 @@ package supplier
 import (
 	"context"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -345,6 +346,12 @@ func TestSyncPass_DryRunChangesNothingCustomerFacing(t *testing.T) {
 	for _, a := range f.openAlerts() {
 		if !a.DryRun {
 			t.Fatalf("alert %s not marked dry run", a.Kind)
+		}
+		// Plain "would …" wording, no jargon prefix (non-technical admin).
+		// A cost change is a fact either way; everything else is a "would".
+		if strings.Contains(strings.ToLower(a.Message), "dry run") ||
+			(a.Kind != supplieralert.KindCostChanged && !strings.Contains(a.Message, "would")) {
+			t.Fatalf("alert %s wording = %q", a.Kind, a.Message)
 		}
 	}
 	if len(f.rec.entries) != 0 {

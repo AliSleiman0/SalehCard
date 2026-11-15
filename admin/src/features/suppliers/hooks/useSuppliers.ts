@@ -102,7 +102,7 @@ export function useSyncSupplier() {
     mutationFn: (id: number) => syncSupplier(id),
     onSuccess: () => invalidate(),
     onError: (err) =>
-      toast.error(err instanceof Error && err.message ? err.message : 'Could not sync supplier catalog'),
+      toast.error(err instanceof Error && err.message ? err.message : "Could not check this supplier's products"),
   })
 }
 

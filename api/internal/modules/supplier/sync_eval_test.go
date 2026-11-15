@@ -154,6 +154,32 @@ func TestEvaluate_LossPausesActiveAndPromotesBackup(t *testing.T) {
 	}
 }
 
+// Warning-only mode words every alert as what WOULD happen, in plain words:
+// the admin is non-technical and nothing was actually changed.
+func TestEvaluate_PreviewAlertsSayWould(t *testing.T) {
+	e := env(map[int]catalogView{
+		10: cat("3258", 0.000130, true, "USD"), // loss
+		11: cat("1045", 0.000110, true, "USD"),
+	})
+	e.Preview = true
+	res := evaluateProduct(soulStar(link("a", 10, "3258"), link("b", 11, "1045")), e)
+	msg := res.Alerts[0].Message
+	if !strings.Contains(msg, "Orders would switch to speedcard (#11)") || !strings.Contains(msg, "Nothing was changed yet") ||
+		strings.Contains(msg, "paused.") || strings.Contains(strings.ToLower(msg), "dry run") {
+		t.Fatalf("preview loss alert = %q", msg)
+	}
+
+	e = env(map[int]catalogView{10: cat("3258", 0.000110, false, "USD")}) // out of stock everywhere
+	e.Preview = true
+	res = evaluateProduct(soulStar(link("a", 10, "3258")), e)
+	if !res.Hide || len(res.Alerts) != 1 {
+		t.Fatalf("want one hide alert, got hide=%v alerts=%v", res.Hide, alertKinds(res))
+	}
+	if msg := res.Alerts[0].Message; msg != "SOUL STAR would be taken off sale: no linked supplier has it available. Nothing was changed — it is still on sale." {
+		t.Fatalf("preview hide alert = %q", msg)
+	}
+}
+
 func TestEvaluate_LossWithNoBackupHides(t *testing.T) {
 	p := soulStar(link("a", 10, "3258"), link("b", 11, "1045"))
 	res := evaluateProduct(p, env(map[int]catalogView{
@@ -280,6 +306,42 @@ func TestEvaluate_StatusSyncOffAndDisabledLinksDontHide(t *testing.T) {
 	}))
 	if res.Hide {
 		t.Fatal("hid via a link whose status watch is off / a disabled link")
+	}
+}
+
+// The active link has its stock watch off and the only watched link is a
+// backup that would be paused for a loss: orders still go to the active
+// supplier, so the product stays on sale.
+func TestEvaluate_UnwatchedActiveLinkKeepsProductOnSale(t *testing.T) {
+	active := link("b", 11, "1045")
+	active.StatusSyncOff = true
+	p := soulStar(active, link("a", 10, "3258"))
+	res := evaluateProduct(p, env(map[int]catalogView{
+		11: cat("1045", 0.000110, true, "USD"),
+		10: cat("3258", 0.000130, true, "USD"), // loss → backup paused
+	}))
+	if res.Hide {
+		t.Fatalf("hid a product whose active supplier is not stock-watched: %v", alertKinds(res))
+	}
+	if !res.Links[1].Paused() {
+		t.Fatal("the losing backup is still paused")
+	}
+}
+
+// Out of stock at the active supplier, in stock at a backup that would sell
+// at a loss: the product goes off sale for the loss, and says so.
+func TestEvaluate_OnlyStockIsAtALossSaysLoss(t *testing.T) {
+	p := soulStar(link("a", 10, "3258"), link("b", 11, "1045"))
+	res := evaluateProduct(p, env(map[int]catalogView{
+		10: cat("3258", 0.000110, false, "USD"), // active: no stock
+		11: cat("1045", 0.000130, true, "USD"),  // backup: stock, but a loss
+	}))
+	if !res.Hide || res.HideReason != "loss" {
+		t.Fatalf("hide=%v reason=%q, want a loss hide", res.Hide, res.HideReason)
+	}
+	last := res.Alerts[len(res.Alerts)-1].Message
+	if !strings.Contains(last, "costs at least our selling price") {
+		t.Fatalf("hide alert = %q", last)
 	}
 }
 
