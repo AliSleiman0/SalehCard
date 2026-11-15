@@ -64,15 +64,21 @@ func TestNormalizeExchangeRates(t *testing.T) {
 }
 
 func TestIntegrationsView_ConfiguredVsLog(t *testing.T) {
-	v := integrationsView("monty", "log")
+	v := integrationsView("monty", "log", "azureopenai")
 	if !v["sms"].Configured {
 		t.Errorf("sms provider %q should be configured", v["sms"].Provider)
 	}
 	if v["push"].Configured {
 		t.Errorf("push provider %q (log) must not be reported configured", v["push"].Provider)
 	}
+	if !v["ai"].Configured {
+		t.Errorf("ai provider %q should be configured", v["ai"].Provider)
+	}
+	if integrationsView("", "", "stub")["ai"].Configured {
+		t.Errorf("ai stub must not be reported configured")
+	}
 	// Empty provider is treated as the inert default → not configured.
-	if integrationsView("", "")["sms"].Configured {
+	if integrationsView("", "", "")["sms"].Configured {
 		t.Errorf("empty provider must not be configured")
 	}
 }

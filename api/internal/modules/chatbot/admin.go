@@ -19,26 +19,40 @@ import (
 
 type adminHandler struct {
 	repo Repository
+	kb   KBRepository
+	logs LogRepository
 	rec  audit.Recorder
 }
 
 // RegisterAdminRoutes mounts the chatbot Q&A management on the /api/admin group.
 // The caller wraps it in the "chatbot" RBAC domain (GET = chatbot.view,
-// mutations = chatbot.manage). Every create / update / delete is audited.
+// mutations = chatbot.manage). Every create / update / delete is audited. The
+// AI assistant's knowledge base (/chatbot/kb) and conversation log
+// (/chatbot/logs) sit under the same domain.
 func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder) {
 	ensureIndexes(db)
-	h := &adminHandler{repo: NewMongoRepository(db), rec: rec}
+	h := &adminHandler{repo: NewMongoRepository(db), kb: NewMongoKBRepository(db), logs: NewMongoLogRepository(db), rec: rec}
 	r.Get("/chatbot", h.list)
 	r.Post("/chatbot", h.create)
 	r.Put("/chatbot/{id}", h.update)
 	r.Delete("/chatbot/{id}", h.delete)
+
+	r.Get("/chatbot/kb", h.kbList)
+	r.Post("/chatbot/kb", h.kbCreate)
+	r.Put("/chatbot/kb/{id}", h.kbUpdate)
+	r.Delete("/chatbot/kb/{id}", h.kbDelete)
+	r.Get("/chatbot/logs", h.logsList)
 }
 
 func ensureIndexes(db *mongo.Database) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := EnsureIndexes(ctx, db); err != nil {
-		slog.Warn("chatbot: failed to ensure indexes", "error", err)
+	for name, fn := range map[string]func(context.Context, *mongo.Database) error{
+		"chatbot_entries": EnsureIndexes, "kb_docs": EnsureKBIndexes, "chat_logs": EnsureLogIndexes,
+	} {
+		if err := fn(ctx, db); err != nil {
+			slog.Warn("chatbot: failed to ensure indexes", "collection", name, "error", err)
+		}
 	}
 }
 

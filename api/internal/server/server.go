@@ -267,7 +267,10 @@ func (s *Server) Routes() {
 	wallet.RegisterRoutes(s.router, s.db, s.cfg, store)
 	promo.RegisterRoutes(s.router, s.db, s.cfg)
 	review.RegisterRoutes(s.router, s.db, s.cfg)
-	chatbot.RegisterRoutes(s.router, s.db)
+	// AI help assistant (knowledge-base answers via the LLM port). aiProvider is
+	// the adapter in use, reported (secret-free) on the admin Settings page.
+	assistant, aiProvider := chatbot.BuildAssistant(s.db, s.cfg)
+	chatbot.RegisterRoutes(s.router, s.db, s.cfg.JWTSecret, assistant)
 	complaint.RegisterRoutes(s.router, s.db, s.cfg, store)
 	kyc.RegisterRoutes(s.router, s.db, s.cfg, store)
 	notification.RegisterRoutes(s.router, s.db, s.cfg)
@@ -354,7 +357,7 @@ func (s *Server) Routes() {
 		domain("expenses", func(g chi.Router) { expense.RegisterAdminRoutes(g, s.db) })
 		domain("kyc", func(g chi.Router) { kyc.RegisterAdminRoutes(g, s.db, rec, ntf) })
 		domain("audit", func(g chi.Router) { audit.RegisterAdminRoutes(g, s.db) })
-		domain("settings", func(g chi.Router) { settings.RegisterAdminRoutes(g, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider) })
+		domain("settings", func(g chi.Router) { settings.RegisterAdminRoutes(g, s.db, rec, s.cfg.SMSProvider, s.cfg.PushProvider, aiProvider) })
 		domain("payments", func(g chi.Router) { payment.RegisterAdminRoutes(g, s.db, paySvc, rec) })
 		domain("bridge", func(g chi.Router) { bridge.RegisterAdminRoutes(g, bridgeReg.Service, bridgeReg.Store, rec) })
 		// Suppliers admin surface (DESIGN-SUPPLIERS.md Phase 3): per-supplier

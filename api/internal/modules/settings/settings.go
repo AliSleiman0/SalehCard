@@ -25,16 +25,19 @@ type adminHandler struct {
 	rec          audit.Recorder
 	smsProvider  string
 	pushProvider string
+	aiProvider   string
 }
 
 // RegisterAdminRoutes wires GET/PUT /api/admin/settings onto r (the /api/admin
 // group, guarded by AdminOnly). Updates are recorded to the audit log via rec.
-func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, smsProvider, pushProvider string) {
+// aiProvider is the active LLM adapter name (after any misconfig fallback).
+func RegisterAdminRoutes(r chi.Router, db *mongo.Database, rec audit.Recorder, smsProvider, pushProvider, aiProvider string) {
 	a := &adminHandler{
 		repo:         NewMongoRepository(db),
 		rec:          rec,
 		smsProvider:  smsProvider,
 		pushProvider: pushProvider,
+		aiProvider:   aiProvider,
 	}
 	r.Get("/settings", a.get)
 	r.Put("/settings", a.update)
@@ -47,7 +50,7 @@ func (a *adminHandler) get(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w)
 		return
 	}
-	response.OK(w, settingsView{Settings: s, Integrations: integrationsView(a.smsProvider, a.pushProvider)})
+	response.OK(w, settingsView{Settings: s, Integrations: integrationsView(a.smsProvider, a.pushProvider, a.aiProvider)})
 }
 
 // update handles PUT /api/admin/settings — validates the editable fields, upserts
@@ -120,5 +123,5 @@ func (a *adminHandler) update(w http.ResponseWriter, r *http.Request) {
 		TargetID:   settingsID,
 		Summary:    map[string]any{"updatedBy": actor},
 	})
-	response.OK(w, settingsView{Settings: s, Integrations: integrationsView(a.smsProvider, a.pushProvider)})
+	response.OK(w, settingsView{Settings: s, Integrations: integrationsView(a.smsProvider, a.pushProvider, a.aiProvider)})
 }

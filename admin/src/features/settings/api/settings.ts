@@ -30,6 +30,8 @@ export interface AdminSettings {
   loyaltyEarnUsdPerPoint: number
   /** Require an SMS second factor for admin logins (off by default). */
   adminSmsTwoFactorEnabled: boolean
+  /** AI help assistant: free-typed help-bot questions answered from the knowledge base (billed). */
+  chatbotAiEnabled: boolean
   /** Currency rates surfaced on the customer top-up screen. */
   exchangeRates: ExchangeRate[]
   updatedAt: string
@@ -50,6 +52,7 @@ export interface SettingsInput {
   loyaltyEnabled?: boolean
   loyaltyEarnUsdPerPoint?: number
   adminSmsTwoFactorEnabled?: boolean
+  chatbotAiEnabled?: boolean
   exchangeRates?: ExchangeRate[]
 }
 
