@@ -443,11 +443,19 @@ Verified locally against a fake Torosfon (shaped like the live replies) in Chrom
 balance, catalog browse/import (account-credit + Player ID field), "Find at all suppliers", completed /
 completed-with-code / pending→settled / rejected→refunded / 500→held once as `search:` (refund + complete need
 the confirm), and fallback jentel(refused)→torosfon. Real Torosfon read-only through the adapter: balance +
-358-product catalog. Live canary (bogus player, $0): referenceId is NOT deduped. Still to check:
+358-product catalog. Live canary (bogus player, $0): referenceId is NOT deduped.
 
-1. **First real order** with a real player id (owner OK): does it complete synchronously, and what is in
-   `order_desc` for a top-up? It becomes the customer's "delivered code" — if it's text like "done", consider
-   dropping it for account-credit lines.
+**Real order DONE 2026-11-17 (owner OK, local stack, web UI):** GOOGLE PLAY 25 TL (#64), Torosfon order
+1511858, completed synchronously, cost $0.4889 (balanceBefore − order_value matched). `order_desc` arrived as a
+JSON **string** `{"replay":["<code>"]}`; the first build showed that raw JSON as the code → fixed
+(`torosfonCodes` unwraps `replay`), re-verified in the web UI against the fake sending the same shape.
+Still to check:
+
+1. **First real game top-up** (a real player id, owner OK): what is in `order_desc` for a top-up (empty?
+   `{"replay":[]}`? text?). Empty/`replay:[]` now yield no code; plain text still shows as the code.
+   Also: imported gift cards (Google Play, iTunes…) are account-credit, so the customer types any
+   Player ID and the success page says "Top-up credited" while showing a code. Decide whether to re-type
+   them as Code/PIN — only after checking Torosfon accepts an empty `player_Id` for a card.
 2. **A real Pending order** settles (Torosfon's status words beyond Completed/Pending/Cancelled are unknown).
 3. **Held orders** (`search:torosfon:…`): after a timeout, check Torosfon's own order list by hand before
    refunding or re-sending — a re-send creates a second order.

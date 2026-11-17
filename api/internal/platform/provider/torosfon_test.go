@@ -349,3 +349,38 @@ func TestTorosfonListProducts_FailureIsNotAnEmptyCatalog(t *testing.T) {
 		t.Fatalf("got %v err %v, want an error (never an empty known catalog)", got, err)
 	}
 }
+
+// TestTorosfonCodes pins the live order_desc shapes (real order 1511858 on
+// 2026-11-17 delivered `{"replay":["…"]}` as a string) so the customer never
+// sees raw JSON as their code.
+func TestTorosfonCodes(t *testing.T) {
+	cases := []struct {
+		name string
+		desc string
+		want []string
+	}{
+		{"empty", "", nil},
+		{"blank", "   ", nil},
+		{"live replay object", `{"replay":["J9ZC-TEST"]}`, []string{"J9ZC-TEST"}},
+		{"replay several", `{"replay":["A","","B"]}`, []string{"A", "B"}},
+		{"replay empty", `{"replay":[]}`, nil},
+		{"other object", `{"note":"done"}`, nil},
+		{"flat array", `["X","Y"]`, []string{"X", "Y"}},
+		{"nested array", `[{"replay":["Z"]}]`, []string{"Z"}},
+		{"plain code", " CODE-XYZ ", []string{"CODE-XYZ"}},
+		{"broken json is text", `{"replay":[`, []string{`{"replay":[`}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := torosfonCodes(tc.desc)
+			if len(got) != len(tc.want) {
+				t.Fatalf("torosfonCodes(%q) = %q, want %q", tc.desc, got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("torosfonCodes(%q) = %q, want %q", tc.desc, got, tc.want)
+				}
+			}
+		})
+	}
+}

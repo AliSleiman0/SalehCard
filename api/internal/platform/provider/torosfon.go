@@ -131,13 +131,30 @@ func torosfonState(status string) string {
 	}
 }
 
-// torosfonCodes turns order_desc ("code or any returned accept data") into the
-// delivered payload.
+// torosfonCodes turns order_desc into the delivered codes. Live (2026-11-17,
+// real Google Play order 1511858) a card arrives as a JSON string
+// `{"replay":["CODE"]}` — the panel's replay shape. Arrays use the panel's
+// flat/nested parsing; any other text is passed through as one code. JSON
+// that decodes but carries no codes yields nil, never the raw JSON.
 func torosfonCodes(desc string) []string {
-	if strings.TrimSpace(desc) == "" {
+	d := strings.TrimSpace(desc)
+	if d == "" {
 		return nil
 	}
-	return []string{strings.TrimSpace(desc)}
+	switch d[0] {
+	case '{':
+		var obj struct {
+			Replay []string `json:"replay"`
+		}
+		if err := json.Unmarshal([]byte(d), &obj); err == nil {
+			return compactStrings(obj.Replay)
+		}
+	case '[':
+		if json.Valid([]byte(d)) {
+			return parseReplayCodes(json.RawMessage(d))
+		}
+	}
+	return []string{d}
 }
 
 // Fulfill places one order:
