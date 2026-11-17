@@ -384,3 +384,42 @@ func TestTorosfonCodes(t *testing.T) {
 		})
 	}
 }
+
+// TestTorosfonFirstFieldValue: the fallback never guesses between several
+// fields (map order is random — the amount could become the player id).
+func TestTorosfonFirstFieldValue(t *testing.T) {
+	cases := []struct {
+		name   string
+		fields map[string]string
+		want   string
+	}{
+		{"none", nil, ""},
+		{"known key wins", map[string]string{"amount": "100000", "player_id": " 42 "}, "42"},
+		{"single field", map[string]string{"field_1": "777"}, "777"},
+		{"single non-empty", map[string]string{"field_1": "777", "note": " "}, "777"},
+		{"ambiguous", map[string]string{"field_1": "777", "amount": "100000"}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := firstFieldValue(tc.fields); got != tc.want {
+				t.Fatalf("firstFieldValue(%v) = %q, want %q", tc.fields, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTorosfonFulfill_NoPlayerIDIsRefusedUnsent: an ambiguous line is a
+// definite refusal and nothing reaches Torosfon.
+func TestTorosfonFulfill_NoPlayerIDIsRefusedUnsent(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++ }))
+	defer srv.Close()
+	tf := newTestTorosfon(srv.URL)
+	in := torosIn()
+	in.PlayerID = ""
+	in.Fields = map[string]string{"field_1": "777", "amount": "100000"}
+	_, err := tf.Fulfill(context.Background(), in)
+	if !errors.Is(err, ErrRefused) || hits != 0 {
+		t.Fatalf("err = %v hits = %d, want ErrRefused and no request", err, hits)
+	}
+}
