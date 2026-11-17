@@ -133,8 +133,8 @@ func TestLoadSuppliers(t *testing.T) {
 	t.Setenv("SUPPLIER_SPEEDCARD_ID", "42")
 
 	cfg := Load()
-	if len(cfg.Suppliers) != 4 {
-		t.Fatalf("Suppliers = %d entries, want 4 (3 panels + umanage)", len(cfg.Suppliers))
+	if len(cfg.Suppliers) != 5 {
+		t.Fatalf("Suppliers = %d entries, want 5 (3 panels + umanage + torosfon)", len(cfg.Suppliers))
 	}
 	byName := map[string]SupplierConfig{}
 	for _, s := range cfg.Suppliers {
@@ -152,6 +152,10 @@ func TestLoadSuppliers(t *testing.T) {
 	// umanage is the telecom supplier (LBP, key/secret auth, provider id 13).
 	if s := byName["umanage"]; s.ID != 13 || s.Kind != "telecom" || s.Currency != "LBP" {
 		t.Errorf("umanage = %+v, want id 13 / telecom / LBP", s)
+	}
+	// torosfon has its own API kind (provider id 14, USD).
+	if s := byName["torosfon"]; s.ID != 14 || s.Kind != "torosfon" || s.Currency != "USD" || s.BaseURL != "https://torosfon-store.com" {
+		t.Errorf("torosfon = %+v, want id 14 / torosfon / USD", s)
 	}
 
 	// Only jentel has a credential set → the sole enabled supplier (umanage has
@@ -174,6 +178,20 @@ func TestUmanageEnabledByCredentials(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("umanage should be enabled when key+secret are set")
+	}
+}
+
+func TestTorosfonEnabledByToken(t *testing.T) {
+	t.Setenv("SUPPLIER_TOROSFON_TOKEN", "tok-t")
+	cfg := Load()
+	var found bool
+	for _, s := range cfg.EnabledSuppliers() {
+		if s.Name == "torosfon" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("torosfon should be enabled when its token is set")
 	}
 }
 

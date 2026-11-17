@@ -82,6 +82,7 @@ Not supplier code — infra work discovered while activating. Prod is moving to 
 | 3 | `/suppliers` admin page + `suppliers` RBAC domain + dashboard signals (backend + frontend) | `0008ddf`, `a6550e6` |
 | 4 | umanage telecom adapter (id 13, LBP, search-by-ref reconciliation) | `0008ddf` |
 | fix | Sync must never auto-publish a hidden imported product (only hide withdrawn ones) | `0435fe6` |
+| 5 | torosfon adapter (id 14, USD, `provider/torosfon.go`; no upstream dedupe → `search:` holds) | `feat/torosfon-supplier` |
 
 All gates green (go build/vet/test 36 pkgs; golangci-lint against `.golangci.yml`; admin
 pnpm build+lint). Full live e2e verified against a **scripted fake panel** — balance probe,
@@ -130,6 +131,10 @@ creds yet.
 - [ ] Set `SUPPLIER_UMANAGE_KEY` + `SUPPLIER_UMANAGE_SECRET` on `salehcard-api` app settings.
       **Blocked: user has not provided umanage creds yet.** Once set + restart, a 4th
       "umanage · telecom" card (LBP) appears automatically.
+
+- [ ] Set `SUPPLIER_TOROSFON_TOKEN` on `salehcard-api` (the client's Torosfon API key; owner OK
+      needed). A "torosfon · torosfon" card (USD) appears after the restart. Then one real canary
+      order with a real player id (see QA-TODO "Torosfon supplier").
 
 ### 2. Supplier-side / out-of-band (USER only — Claude cannot do)
 - [ ] Email each supplier: *"Please allowlist `52.157.69.89` for our API account."* — jentel,

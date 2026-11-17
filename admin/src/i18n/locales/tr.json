@@ -210,6 +210,7 @@
   "sup_none_sub": "Bir tedarikçiyi etkinleştirmek için kimlik bilgisini ayarlayın (SUPPLIER_*_TOKEN / SUPPLIER_UMANAGE_KEY).",
   "sup_kind_panel": "panel",
   "sup_kind_telecom": "telekom",
+  "sup_kind_torosfon": "torosfon",
   "sup_health_ok": "Çalışıyor",
   "sup_health_low_balance": "Düşük bakiye",
   "sup_health_auth_error": "Kimlik doğrulama hatası",

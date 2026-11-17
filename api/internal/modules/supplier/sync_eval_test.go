@@ -460,3 +460,20 @@ func TestTrimMoney(t *testing.T) {
 		}
 	}
 }
+
+// A supplier listing a product at price 0 (torosfon has one, 2026-11-17) is
+// unknown cost, not free: no loss decision, no cost alert, no pause.
+func TestEvaluate_ZeroCostIsNotJudged(t *testing.T) {
+	p := soulStar(link("t", 14, "372"))
+	p.SupplierLinks[0].Sync = prevSync(0.0001, evalNow.Add(-time.Hour))
+	res := evaluateProduct(p, env(map[int]catalogView{14: cat("372", 0, true, "USD")}))
+	if res.Links[0].Paused() || res.Hide {
+		t.Fatal("zero cost must not pause or hide")
+	}
+	if res.Links[0].Sync.CostUSD != nil {
+		t.Fatal("costUsd must stay unknown for a zero price")
+	}
+	if len(res.Alerts) != 0 {
+		t.Fatalf("alerts = %v, want none", alertKinds(res))
+	}
+}

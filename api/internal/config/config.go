@@ -287,10 +287,10 @@ type BridgeConfig struct {
 type SupplierConfig struct {
 	ID       int    // provider-registry id (also Product.FulfillmentProvider)
 	Name     string // slug shown in admin dropdown / logs
-	Kind     string // "panel" (jentel/speedcard/gift4card) | "telecom" (umanage)
+	Kind     string // "panel" (jentel/speedcard/gift4card) | "telecom" (umanage) | "torosfon"
 	Currency string // supplier's own balance currency: "USD" | "LBP"
 	BaseURL  string
-	// Panel auth (Kind == "panel").
+	// Panel / torosfon auth (Kind == "panel" | "torosfon").
 	Token string // api-token header value
 	// Telecom auth (Kind == "telecom", umanage).
 	APIKey    string
@@ -441,6 +441,16 @@ func Load() *Config {
 				APIKey:    os.Getenv("SUPPLIER_UMANAGE_KEY"),
 				APISecret: os.Getenv("SUPPLIER_UMANAGE_SECRET"),
 				StoreID:   getInt("SUPPLIER_UMANAGE_STORE_ID", 0),
+			},
+			{
+				// torosfon-store.com: its own API (provider/torosfon.go), USD,
+				// api-token auth like the panels.
+				Name:     "torosfon",
+				Kind:     "torosfon",
+				Currency: "USD",
+				ID:       getInt("SUPPLIER_TOROSFON_ID", 14),
+				BaseURL:  getEnv("SUPPLIER_TOROSFON_BASE_URL", "https://torosfon-store.com"),
+				Token:    os.Getenv("SUPPLIER_TOROSFON_TOKEN"),
 			},
 		},
 		SupplierSettlerInterval: getDuration("SUPPLIER_SETTLER_INTERVAL", 60*time.Second),

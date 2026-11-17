@@ -210,6 +210,7 @@
   "sup_none_sub": "أضف بيانات اعتماد المورد (SUPPLIER_*_TOKEN / SUPPLIER_UMANAGE_KEY) لتفعيله.",
   "sup_kind_panel": "لوحة",
   "sup_kind_telecom": "اتصالات",
+  "sup_kind_torosfon": "توروس فون",
   "sup_health_ok": "يعمل",
   "sup_health_low_balance": "رصيد منخفض",
   "sup_health_auth_error": "خطأ في الدخول",
