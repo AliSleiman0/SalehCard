@@ -69,7 +69,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 		adapters = append(adapters, provider.NewReference(cfg.FulfillmentMockID))
 	}
 	// Upstream suppliers (jentel/speedcard/gift4card panels — DESIGN-SUPPLIERS.md
-	// Phase 1 — and the umanage telecom reseller — Phase 4): one adapter per
+	// Phase 1 — the umanage telecom reseller — Phase 4 — and torosfon): one adapter per
 	// credential-configured supplier, dispatched on Kind. A misconfigured entry is
 	// skipped, so its id falls back to the parking stub rather than failing boot.
 	for _, sc := range cfg.EnabledSuppliers() {
@@ -116,7 +116,7 @@ func RegisterRoutes(r chi.Router, db *mongo.Database, cfg *config.Config, ntf no
 }
 
 // supplierSpec maps one configured supplier onto the transport-agnostic spec the
-// provider package dispatches on (panel vs telecom).
+// provider package dispatches on (panel / telecom / torosfon).
 func supplierSpec(sc config.SupplierConfig) provider.SupplierSpec {
 	return provider.SupplierSpec{
 		ID:        sc.ID,

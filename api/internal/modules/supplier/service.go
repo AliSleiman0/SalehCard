@@ -351,8 +351,11 @@ func round2(v float64) float64 {
 
 // fulfillmentTypeFor picks the customer-facing fulfillment type for an imported
 // product: panels deliver codes; umanage vouchers are codes, its bundles/credit/
-// recharge are account credits.
+// recharge are account credits; torosfon sells player-id top-ups (credits).
 func fulfillmentTypeFor(kind, productType string) product.FulfillmentType {
+	if kind == "torosfon" {
+		return product.FulfillmentCredit
+	}
 	if kind == "telecom" {
 		if productType == "voucher" {
 			return product.FulfillmentCode

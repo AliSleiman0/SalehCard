@@ -210,6 +210,7 @@
   "sup_none_sub": "Set a supplier credential (SUPPLIER_*_TOKEN / SUPPLIER_UMANAGE_KEY) to enable a supplier.",
   "sup_kind_panel": "panel",
   "sup_kind_telecom": "telecom",
+  "sup_kind_torosfon": "torosfon",
   "sup_health_ok": "OK",
   "sup_health_low_balance": "Low balance",
   "sup_health_auth_error": "Auth error",

@@ -151,12 +151,15 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   the double-refund lock; **delivered codes are never re-pooled on refund**).
   **Payments are wallet-only** — card/usdt are rejected (`PAYMENT_METHOD_UNAVAILABLE`)
   until a real gateway exists; only the wallet ledger moves real balance.
-- **Supplier fulfillment** (`platform/provider` panels jentel/speedcard/gift4card + umanage;
+- **Supplier fulfillment** (`platform/provider` panels jentel/speedcard/gift4card + umanage + torosfon;
   `order/supplier_settler.go`, `supplier_reroute.go`; live since PR #97, fixed in **PR #147**,
   2026-11-14). A product is tied to a supplier by `FulfillmentProvider` + `UpstreamProductID` (the
   supplier's OWN product id), chosen in the product editor from the supplier's live catalog
   (`SupplierProductPicker`; typing a name like "soulchill" gets `109 Product Not Found`). Both are
-  copied onto the order line. **Quantity sent = the typed units on a per-unit line (`OrderItem.Amount`),
+  copied onto the order line. **torosfon** (id 14, `provider/torosfon.go`, `SUPPLIER_TOROSFON_TOKEN`) has
+  its own API and **no upstream dedupe**: its `referenceId` is not idempotent and orders can't be found by
+  it, so an unreadable send (timeout/5xx) becomes ErrPending + a `search:torosfon:` ref (held for a human,
+  never re-sent/refunded/fallen back); classification keys on `data.order_id`, not `success`. **Quantity sent = the typed units on a per-unit line (`OrderItem.Amount`),
   else the cart qty** (`supplierQty`; one shared builder `supplierFulfillInput` for placement, retry
   and reroute). Per-unit pricing is allowed on supplier account-credit products, and a supplier product
   with an amount box but a fixed price is refused on save. Admins can **send an order to a supplier**

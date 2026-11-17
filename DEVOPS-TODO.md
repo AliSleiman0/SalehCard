@@ -508,6 +508,16 @@ resolves to the parking stub with no env, which is exactly today's behavior
    - umanage (telecom): `SUPPLIER_UMANAGE_KEY` + `SUPPLIER_UMANAGE_SECRET`
      (X-API-Key / X-API-Secret). `SUPPLIER_UMANAGE_STORE_ID` optional (resolved
      at boot via GET /stores when 0). Id 13, LBP.
+   - torosfon (torosfon-store.com, own adapter `provider/torosfon.go`):
+     `SUPPLIER_TOROSFON_TOKEN` (the client's API key — a JWT for their
+     customer account, expires ~Feb 2028; sent as the `api-token` header).
+     Id 14, USD, base URL `https://torosfon-store.com`. **No IP allowlist seen**
+     (the dev box was accepted, 2026-11-17). Torosfon does NOT dedupe
+     `referenceId`, so an order whose send can't be read (timeout/5xx) is held as
+     `search:torosfon:…` for a human — check the Orders page for stuck ones.
+     The account is a credit account (balance negative, about −$2,006 on
+     2026-11-17) and is ALSO used by someone else (the balance moved ~$200 that
+     day with no orders from us) — confirm with the client who.
    - Optional settler knobs: `SUPPLIER_SETTLER_INTERVAL` (default 60s),
      `SUPPLIER_SETTLER_GIVEUP` (default 24h).
    A supplier with no credential stays a parking stub → zero risk in setting

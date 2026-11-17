@@ -10,10 +10,10 @@ import "fmt"
 type SupplierSpec struct {
 	ID       int
 	Name     string
-	Kind     string // "panel" | "telecom"
+	Kind     string // "panel" | "telecom" | "torosfon"
 	Currency string // "USD" | "LBP"
 	BaseURL  string
-	// Panel auth.
+	// Panel / torosfon auth.
 	Token string
 	// Telecom (umanage) auth.
 	APIKey    string
@@ -37,6 +37,14 @@ func New(spec SupplierSpec) (Provider, error) {
 			APIKey:    spec.APIKey,
 			APISecret: spec.APISecret,
 			StoreID:   spec.StoreID,
+		})
+	case "torosfon":
+		return NewTorosfon(TorosfonConfig{
+			ID:       spec.ID,
+			Name:     spec.Name,
+			Currency: spec.Currency,
+			BaseURL:  spec.BaseURL,
+			Token:    spec.Token,
 		})
 	case "panel", "":
 		return NewPanel(PanelConfig{
