@@ -168,6 +168,11 @@ func (t *Torosfon) Fulfill(ctx context.Context, in FulfillInput) (Result, error)
 	if player == "" {
 		player = firstFieldValue(in.Fields)
 	}
+	if player == "" {
+		// Never guess: with no clear player id, a wrong field (e.g. the typed
+		// amount) could credit someone else's account. Nothing was sent.
+		return Result{}, refusedf("torosfon %s: order has no player id", t.name)
+	}
 	q := url.Values{}
 	q.Set("amount", strconv.Itoa(in.Qty))
 	q.Set("player_Id", player)
@@ -390,18 +395,24 @@ func isValidationProblem(body []byte) bool {
 	return json.Unmarshal(body, &p) == nil && p.Status == http.StatusBadRequest && len(p.Errors) > 0
 }
 
-// firstFieldValue returns a non-empty field value, preferring common player-id
-// keys, for an order line whose PlayerID snapshot is empty.
+// firstFieldValue picks the player id for an order line whose PlayerID
+// snapshot is empty: a common player-id key, else the only non-empty field.
+// With several candidate fields it returns "" rather than guess — Go map order
+// is random, so "the first field" could be the amount (Fulfill then refuses).
 func firstFieldValue(fields map[string]string) string {
 	for _, k := range []string{"player_id", "playerId", "player", "id"} {
 		if v := strings.TrimSpace(fields[k]); v != "" {
 			return v
 		}
 	}
+	only := ""
 	for _, v := range fields {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
+		if v = strings.TrimSpace(v); v != "" {
+			if only != "" {
+				return ""
+			}
+			only = v
 		}
 	}
-	return ""
+	return only
 }

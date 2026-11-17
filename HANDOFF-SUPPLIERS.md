@@ -82,7 +82,7 @@ Not supplier code — infra work discovered while activating. Prod is moving to 
 | 3 | `/suppliers` admin page + `suppliers` RBAC domain + dashboard signals (backend + frontend) | `0008ddf`, `a6550e6` |
 | 4 | umanage telecom adapter (id 13, LBP, search-by-ref reconciliation) | `0008ddf` |
 | fix | Sync must never auto-publish a hidden imported product (only hide withdrawn ones) | `0435fe6` |
-| 5 | torosfon adapter (id 14, USD, `provider/torosfon.go`; no upstream dedupe → `search:` holds) | `feat/torosfon-supplier` |
+| 5 | torosfon adapter (id 14, USD, `provider/torosfon.go`; no upstream dedupe → `search:` holds) | PR #174 `971595e` (+ replay-code fix), PR #175 player-id guard |
 
 All gates green (go build/vet/test 36 pkgs; golangci-lint against `.golangci.yml`; admin
 pnpm build+lint). Full live e2e verified against a **scripted fake panel** — balance probe,
@@ -132,9 +132,13 @@ creds yet.
       **Blocked: user has not provided umanage creds yet.** Once set + restart, a 4th
       "umanage · telecom" card (LBP) appears automatically.
 
-- [ ] Set `SUPPLIER_TOROSFON_TOKEN` on `salehcard-api` (the client's Torosfon API key; owner OK
-      needed). A "torosfon · torosfon" card (USD) appears after the restart. Then one real canary
-      order with a real player id (see QA-TODO "Torosfon supplier").
+- [x] Set `SUPPLIER_TOROSFON_TOKEN` on `salehcard-api` — **done 2026-11-17** (owner OK). The prod card
+      shows OK (the NAT egress IP is accepted). Linked the same day: SHABAB CHAT → #510 (max amount
+      capped 10M) and LAKA CHAT → #524 (capped 2M), both moved from manual to api, Torosfon only.
+      NOT linked: BULALA (our $1.50/1M is below Torosfon's $7.39/1M cost, an ~80% loss → owner to check
+      the price/units), soul star (broken Draft). A real Google Play order was done on the local stack;
+      a real **game top-up** in prod is still unchecked (QA-TODO "Torosfon supplier").
+- [ ] Delete the Torosfon key file from the owner's Downloads folder (owner deferred).
 
 ### 2. Supplier-side / out-of-band (USER only — Claude cannot do)
 - [ ] Email each supplier: *"Please allowlist `52.157.69.89` for our API account."* — jentel,

@@ -511,13 +511,13 @@ resolves to the parking stub with no env, which is exactly today's behavior
    - torosfon (torosfon-store.com, own adapter `provider/torosfon.go`):
      `SUPPLIER_TOROSFON_TOKEN` (the client's API key — a JWT for their
      customer account, expires ~Feb 2028; sent as the `api-token` header).
-     Id 14, USD, base URL `https://torosfon-store.com`. **No IP allowlist seen**
-     (the dev box was accepted, 2026-11-17). Torosfon does NOT dedupe
+     Id 14, USD, base URL `https://torosfon-store.com`. **SET in prod 2026-11-17**
+     (owner OK); no IP allowlist (both the dev box and the prod NAT IP are accepted). Torosfon does NOT dedupe
      `referenceId`, so an order whose send can't be read (timeout/5xx) is held as
      `search:torosfon:…` for a human — check the Orders page for stuck ones.
-     The account is a credit account (balance negative, about −$2,006 on
-     2026-11-17) and is ALSO used by someone else (the balance moved ~$200 that
-     day with no orders from us) — confirm with the client who.
+     The account is a credit account (balance negative, about −$2,318 at the end
+     of 2026-11-17) and is ALSO used by the client's old website (owner
+     confirmed), so the balance moves without orders from us.
    - Optional settler knobs: `SUPPLIER_SETTLER_INTERVAL` (default 60s),
      `SUPPLIER_SETTLER_GIVEUP` (default 24h).
    A supplier with no credential stays a parking stub → zero risk in setting

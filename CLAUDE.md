@@ -159,7 +159,7 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
   copied onto the order line. **torosfon** (id 14, `provider/torosfon.go`, `SUPPLIER_TOROSFON_TOKEN`) has
   its own API and **no upstream dedupe**: its `referenceId` is not idempotent and orders can't be found by
   it, so an unreadable send (timeout/5xx) becomes ErrPending + a `search:torosfon:` ref (held for a human,
-  never re-sent/refunded/fallen back); classification keys on `data.order_id`, not `success`. **Quantity sent = the typed units on a per-unit line (`OrderItem.Amount`),
+  never re-sent/refunded/fallen back); classification keys on `data.order_id`, not `success`; a card code arrives as a JSON string `{"replay":[...]}` in `order_desc` (unwrapped); an order with no clear player id is refused unsent. **Live in prod since 2026-11-17** (SHABAB + LAKA CHAT linked). **Quantity sent = the typed units on a per-unit line (`OrderItem.Amount`),
   else the cart qty** (`supplierQty`; one shared builder `supplierFulfillInput` for placement, retry
   and reroute). Per-unit pricing is allowed on supplier account-credit products, and a supplier product
   with an amount box but a fixed price is refused on save. Admins can **send an order to a supplier**
@@ -348,6 +348,9 @@ These are **local/dev only** — they live in your local Mongo and do **not** ex
 - **CI/CD**: `.github/workflows/ci.yml` (build/lint/test — note golangci-lint runs, stricter than
   `go vet`) + `deploy.yml` (**auto-deploys to Azure on push to `main`**, path-filtered per
   `api`/`web`/`admin`, via OIDC — no stored secrets). Merging a PR to `main` ships prod.
+  **CI/CD is billed per run (owner pays)**: keep merges to `main` few — combine related work and its
+  docs into ONE PR/merge rather than several small ones, and put `[skip ci]` in the merge subject of a
+  docs-only merge.
   **CI runs only on push to `main`** (in parallel with the deploy), **not on PRs**. Run the gates
   locally before merging, on the branch with the latest `main` merged in: that is the only
   pre-merge check.
