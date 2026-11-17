@@ -437,7 +437,7 @@ The predefined quick questions were retired in favour of the AI knowledge text (
 below); only old app builds and the legacy web panel still show them. Nothing to check here any more.
 
 
-## Torosfon supplier (feat/torosfon-supplier, 2026-11-17)
+## Torosfon supplier (LIVE in prod 2026-11-17: PR #174 + #175)
 
 Verified locally against a fake Torosfon (shaped like the live replies) in Chrome + API: Suppliers card and
 balance, catalog browse/import (account-credit + Player ID field), "Find at all suppliers", completed /
@@ -449,8 +449,11 @@ the confirm), and fallback jentel(refused)→torosfon. Real Torosfon read-only t
 1511858, completed synchronously, cost $0.4889 (balanceBefore − order_value matched). `order_desc` arrived as a
 JSON **string** `{"replay":["<code>"]}`; the first build showed that raw JSON as the code → fixed
 (`torosfonCodes` unwraps `replay`), re-verified in the web UI against the fake sending the same shape.
-Still to check:
+**Prod 2026-11-17:** token set; SHABAB CHAT (#510) and LAKA CHAT (#524) linked, amount max capped to
+Torosfon's (10M / 2M); BULALA not linked (sells below Torosfon's cost). Still to check:
 
+0. **First live customer order** on SHABAB or LAKA: completes, the right ID is credited with the typed
+   amount, the Suppliers card balance drops by about the cost, and the order shows no stray "code".
 1. **First real game top-up** (a real player id, owner OK): what is in `order_desc` for a top-up (empty?
    `{"replay":[]}`? text?). Empty/`replay:[]` now yield no code; plain text still shows as the code.
    Also: imported gift cards (Google Play, iTunes…) are account-credit, so the customer types any
